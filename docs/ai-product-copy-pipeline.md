@@ -269,7 +269,7 @@ cost on the server:
 | 4 Fact check | **The server.** It downloads Claude's pages again and checks every fact. The checker is the same code used for our own AI. |
 
 - **What makes this safe:** Claude sends page **URLs**, not page text. The server reads each page itself, keeps only the maker's site and known sellers, drops a page that shows a different barcode, and then runs the fact check. Claude can't get a fact through that isn't really on the page.
-- **Where the result goes:** a draft stored on the product. The product moves Unpublished → Draft. Staff review it and Publish. The agent never publishes.
+- **Where the result goes:** a draft stored on the product. The product moves Unpublished → Draft. Staff review it, mark it Ready, and Publish when the time is right. The agent never publishes.
 - **Three endpoints:**
   - a backlog list (paged in the DB)
   - one product's Step-1 input, plus the house-style rules, so Claude writes in the same style as our AI
@@ -278,7 +278,10 @@ cost on the server:
 
 ### A9. Shop stages
 
-Unpublished (new, made offline, untouched) → Draft (anyone, AI or staff, working on it) → Published.
+Unpublished (new, made offline, untouched) → Draft (anyone, AI or staff, working on it, not complete) → Ready (complete and checked, waiting for a good time) → Published.
+
+- A Ready product stays Ready when saved again: a small fix doesn't undo the review. "Back to Draft" is a button.
+- Mark ready is allowed even when a publish rule is unmet, with a warning. Publishing it would then show as Pending.
 
 - "Pending" means Published but a publish rule is unmet. It isn't stored; it's worked out each time. The product goes live by itself once the rule is met.
 - Unpublish sends a product back to **Unpublished**, never to Draft. Draft holds only work someone (AI or staff) did that needs review, so the Draft tab is the review list.

@@ -60,10 +60,10 @@ const STICKY_HEAD =
 const COL_COUNT = 11;
 const PAGE_SIZE = 25;
 
-/** Shop stages (owner, 2026-11-07): Unpublished → Draft → Published (live) / Pending. */
+/** Shop stages (owner, 2026-11-07): Unpublished → Draft → Ready → Published (live) / Pending. */
 type TabKey = "all" | ProductStatus["kind"];
-const TAB_KEYS: TabKey[] = ["all", "unpublished", "draft", "live", "pending"];
-const TAB_LABEL: Record<TabKey, string> = { all: "All", unpublished: "Unpublished", draft: "Draft", live: "Published", pending: "Pending" };
+const TAB_KEYS: TabKey[] = ["all", "unpublished", "draft", "ready", "live", "pending"];
+const TAB_LABEL: Record<TabKey, string> = { all: "All", unpublished: "Unpublished", draft: "Draft", ready: "Ready", live: "Published", pending: "Pending" };
 // Persist the list view (page / filters / scroll) per browser tab so leaving for
 // a product's Edit page and coming back (Esc → router.back) returns to the same
 // place instead of resetting to page 1.
@@ -92,6 +92,10 @@ function StatusBadge({ status, claudeDraft }: { status: ProductStatus; claudeDra
     ) : status.kind === "pending" ? (
         <Badge variant="outline" className="gap-1 border-amber-200 bg-amber-50 text-amber-700" title={`Needs ${status.missing.join(", ").toLowerCase()}`}>
             <AlertCircle className="size-3" /> Pending
+        </Badge>
+    ) : status.kind === "ready" ? (
+        <Badge variant="outline" className="gap-1 border-violet-200 bg-violet-50 text-violet-700" title="Complete — waiting to be published">
+            <CheckCircle2 className="size-3" /> Ready
         </Badge>
     ) : status.kind === "draft" ? (
         <Badge variant="outline" className="gap-1 border-sky-200 bg-sky-50 text-sky-700">
@@ -178,7 +182,7 @@ export default function EcommerceProductsPage() {
     // One status per product, shared by the tab counts, the tab filter and the rows.
     const statusOf = useMemo(() => new Map(products.map((p) => [p.id, productStatus(p, rules)])), [products, rules]);
     const counts = useMemo(() => {
-        const c: Record<TabKey, number> = { all: products.length, unpublished: 0, draft: 0, live: 0, pending: 0 };
+        const c: Record<TabKey, number> = { all: products.length, unpublished: 0, draft: 0, ready: 0, live: 0, pending: 0 };
         for (const st of statusOf.values()) c[st.kind]++;
         return c;
     }, [products, statusOf]);
@@ -271,16 +275,18 @@ export default function EcommerceProductsPage() {
             return n;
         });
     const clearSelection = () => setSelected(new Set());
-    const runBulk = async (action: "publish" | "unpublish") => {
+    const runBulk = async (action: "publish" | "unpublish" | "ready") => {
         const ids = [...selected];
         if (ids.length === 0) return;
         setBulkBusy(true);
         try {
-            const { data } = await axios.post<{ published: number; pending: number; unpublished: number }>(
+            const { data } = await axios.post<{ published: number; pending: number; unpublished: number; ready?: number }>(
                 "/api/ecommerce/products/bulk",
                 { ids, action }
             );
-            if (action === "publish") {
+            if (action === "ready") {
+                toast.success(`${data.ready ?? 0} marked ready — publish when the time is right`);
+            } else if (action === "publish") {
                 toast.success(
                     `Published ${data.published}` +
                     (data.pending ? ` · ${data.pending} pending (live by themselves once their publish rules are met)` : "")
@@ -299,15 +305,19 @@ export default function EcommerceProductsPage() {
 
     // One-click publish / unpublish straight from the row.
     const [publishing, setPublishing] = useState<Set<number>>(new Set());
-    const togglePublish = async (p: ShopProductAdmin, next: boolean) => {
+    const moveStage = async (p: ShopProductAdmin, shopStatus: "PUBLISHED" | "UNPUBLISHED" | "READY") => {
         setPublishing((s) => new Set(s).add(p.id));
         try {
             const { data } = await axios.patch<ShopProductAdmin>(`/api/ecommerce/products/${p.id}`, {
-                shopStatus: next ? "PUBLISHED" : "UNPUBLISHED",
+                shopStatus,
             });
             setProducts((prev) => prev.map((x) => (x.id === p.id ? data : x)));
             patchCachedAdminProduct(data);
-            toast.success(!next ? "Unpublished — off the shop" : data.isListedInShop ? "Published — live in the shop" : "Published — pending until its publish rules are met");
+            toast.success(
+                shopStatus === "UNPUBLISHED" ? "Unpublished — off the shop"
+                    : shopStatus === "READY" ? "Marked ready — publish when the time is right"
+                        : data.isListedInShop ? "Published — live in the shop" : "Published — pending until its publish rules are met",
+            );
         } catch (e: unknown) {
             const msg =
                 axios.isAxiosError(e) && e.response?.data && typeof e.response.data === "object"
@@ -339,7 +349,7 @@ export default function EcommerceProductsPage() {
                 <div>
                     <h1 className="text-2xl font-semibold tracking-tight">Products</h1>
                     <p className="text-muted-foreground text-sm">
-                        One catalogue across shop, POS and Sale vouchers. Unpublished → Draft (being worked on) → Published; a published product missing a publish rule waits as Pending.
+                        One catalogue across shop, POS and Sale vouchers. Unpublished → Draft (being worked on) → Ready (complete, waiting) → Published; a published product missing a publish rule waits as Pending.
                     </p>
                 </div>
                 <Button asChild variant="outline" size="sm">
@@ -408,6 +418,9 @@ export default function EcommerceProductsPage() {
             {selected.size > 0 ? (
                 <div className="border-primary/30 bg-primary/5 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm">
                     <span className="font-medium">{selected.size} selected</span>
+                    <Button size="sm" variant="outline" disabled={bulkBusy} onClick={() => void runBulk("ready")}>
+                        Mark ready
+                    </Button>
                     <Button size="sm" disabled={bulkBusy} onClick={() => void runBulk("publish")}>
                         Publish
                     </Button>
@@ -516,8 +529,17 @@ export default function EcommerceProductsPage() {
                                                 {status.kind === "draft" ? (
                                                     <Button
                                                         size="sm"
+                                                        variant="outline"
                                                         disabled={publishing.has(p.id)}
-                                                        onClick={() => void togglePublish(p, true)}
+                                                        onClick={() => void moveStage(p, "READY")}
+                                                    >
+                                                        {publishing.has(p.id) ? "…" : "Mark ready"}
+                                                    </Button>
+                                                ) : status.kind === "ready" ? (
+                                                    <Button
+                                                        size="sm"
+                                                        disabled={publishing.has(p.id)}
+                                                        onClick={() => void moveStage(p, "PUBLISHED")}
                                                     >
                                                         {publishing.has(p.id) ? "…" : "Publish"}
                                                     </Button>
@@ -526,7 +548,7 @@ export default function EcommerceProductsPage() {
                                                         size="sm"
                                                         variant="outline"
                                                         disabled={publishing.has(p.id)}
-                                                        onClick={() => void togglePublish(p, false)}
+                                                        onClick={() => void moveStage(p, "UNPUBLISHED")}
                                                     >
                                                         {publishing.has(p.id) ? "…" : "Unpublish"}
                                                     </Button>
@@ -575,7 +597,9 @@ export default function EcommerceProductsPage() {
                                                                 : status.kind === "pending"
                                                                     ? `Pending — needs ${status.missing.join(", ").toLowerCase()}; goes live by itself once added`
                                                                     : status.kind === "draft"
-                                                                        ? `Draft — being worked on${status.missing.length ? `; still needs ${status.missing.join(", ").toLowerCase()}` : ""}. Publish when done.`
+                                                                        ? `Draft — being worked on${status.missing.length ? `; still needs ${status.missing.join(", ").toLowerCase()}` : ""}. Mark ready when complete.`
+                                                                        : status.kind === "ready"
+                                                                            ? `Ready — complete, waiting to be published${status.missing.length ? `; publishing now would wait as Pending (needs ${status.missing.join(", ").toLowerCase()})` : ""}.`
                                                                         : "Unpublished — not worked on yet. Any shop save moves it to Draft."
                                                         }
                                                     />

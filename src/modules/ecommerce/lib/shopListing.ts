@@ -28,7 +28,7 @@ export type ShopListingInput = {
 };
 
 /** Every stage, for zod (`z.enum(SHOP_STATUSES)`). */
-export const SHOP_STATUSES = ["UNPUBLISHED", "DRAFT", "PUBLISHED"] as const satisfies readonly ShopStatus[];
+export const SHOP_STATUSES = ["UNPUBLISHED", "DRAFT", "READY", "PUBLISHED"] as const satisfies readonly ShopStatus[];
 
 export type ShopListingDecision = {
     /** Live in the shop right now: PUBLISHED and the publish rules met. */

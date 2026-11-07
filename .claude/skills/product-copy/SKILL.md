@@ -118,4 +118,4 @@ Never list a kind that makes no sense for the product. Leave `photos` out if you
 
 ## After
 
-Report a short table: product · result (draft / stopped on clash) · specs kept · unsure count · flags. Remind the owner the drafts wait on **E-Commerce → Products → Draft** (a ✨ mark on the row): open, review, Save, then Publish.
+Report a short table: product · result (draft / stopped on clash) · specs kept · unsure count · flags. Remind the owner the drafts wait on **E-Commerce → Products → Draft** (a ✨ mark on the row): open, review, Save, then **Mark ready** — and Publish when the time is right.

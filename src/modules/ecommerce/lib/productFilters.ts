@@ -8,7 +8,7 @@ import { shopQualification, type ShopPublishRules } from "@/modules/ecommerce/li
 export type StockFilter = "all" | "in" | "out" | "untracked";
 export type ActiveFilter = "all" | "active" | "inactive";
 /** Shop stage (owner, 2026-11-07); "pending" = published but a publish rule unmet. */
-export type StatusFilter = "all" | "unpublished" | "draft" | "live" | "pending";
+export type StatusFilter = "all" | "unpublished" | "draft" | "ready" | "live" | "pending";
 export type PhotoFilter = "all" | "none" | "one" | "has" | "2" | "3" | "5"; // "has" = 1 or more (kept for saved filters)
 export type DescriptionFilter = "all" | "has" | "missing";
 
@@ -63,10 +63,11 @@ export function productStatus(p: ShopProductAdmin, rules: ShopPublishRules): Pro
     );
     if (p.shopStatus === "UNPUBLISHED") return { kind: "unpublished", missing: q.missing };
     if (p.shopStatus === "DRAFT") return { kind: "draft", missing: q.missing };
+    if (p.shopStatus === "READY") return { kind: "ready", missing: q.missing };
     return p.isListedInShop && q.qualified ? { kind: "live", missing: [] } : { kind: "pending", missing: q.missing };
 }
 
-const STAGES: string[] = ["unpublished", "draft", "live", "pending"] satisfies ProductStatus["kind"][];
+const STAGES: string[] = ["unpublished", "draft", "ready", "live", "pending"] satisfies ProductStatus["kind"][];
 
 /** Gallery photos, or 1 when only the main image is set — the same rule the shop-ready check uses. */
 export const productPhotoCount = (p: ShopProductAdmin) => p.galleryUrls.length || (p.imageUrl ? 1 : 0);

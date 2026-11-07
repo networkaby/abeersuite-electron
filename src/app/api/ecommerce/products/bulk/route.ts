@@ -12,12 +12,13 @@ import { resolveShopListing } from "@/modules/ecommerce/lib/shopListing";
 // - publish: every id becomes PUBLISHED. Those meeting the publish rules go live;
 //   the rest are Pending and go live by themselves once fixed. A live product
 //   with no slug gets one (same as the single-product save).
+// - ready: Draft work complete — READY, waiting for a good time (not live).
 // - unpublish: back to UNPUBLISHED and off the shop. Draft is only for work
 //   someone (AI or staff) did that needs review (owner, 2026-11-07).
 
 const schema = z.object({
     ids: z.array(z.coerce.number().int().positive()).min(1).max(5000),
-    action: z.enum(["publish", "unpublish"]),
+    action: z.enum(["publish", "unpublish", "ready"]),
 });
 
 export async function POST(req: Request) {
@@ -28,6 +29,14 @@ export async function POST(req: Request) {
     const { ids, action } = data;
 
     try {
+        // Mark ready: the work is complete, waiting to be published. Never live.
+        if (action === "ready") {
+            const res = await prisma.invProduct.updateMany({
+                where: { id: { in: ids } },
+                data: { shopStatus: "READY", isListedInShop: false },
+            });
+            return NextResponse.json({ published: 0, pending: 0, unpublished: 0, ready: res.count });
+        }
         if (action === "unpublish") {
             const res = await prisma.invProduct.updateMany({
                 where: { id: { in: ids } },

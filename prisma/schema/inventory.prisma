@@ -244,6 +244,7 @@ model InvNamingConfig {
 enum ShopStatus {
   UNPUBLISHED
   DRAFT
+  READY
   PUBLISHED
 }
 
@@ -327,8 +328,9 @@ model InvProduct {
   /// (shopListing.ts). Computed on every shop save — never set on its own.
   isListedInShop          Boolean @default(false)
   /// Staff's stage for the online shop (owner, 2026-11-07): UNPUBLISHED (new,
-  /// made at a counter, untouched) → DRAFT (anyone, AI or staff, working on it)
-  /// → PUBLISHED. "Pending" is PUBLISHED with a publish rule unmet — not stored.
+  /// made at a counter, untouched) → DRAFT (anyone, AI or staff, working on it,
+  /// not complete) → READY (complete, waiting for a good time) → PUBLISHED.
+  /// "Pending" is PUBLISHED with a publish rule unmet — not stored.
   shopStatus              ShopStatus @default(UNPUBLISHED)
   /// Claude's (Cowork) Verified draft waiting for staff, server-checked — a
   /// ProductCopy (aiProductCopy.ts). Cleared when staff save or discard it.

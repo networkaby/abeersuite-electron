@@ -400,6 +400,8 @@ export default function ProductForm({
         rules
     );
     const qualified = qualification.qualified;
+    // Mark ready with a rule unmet is allowed — the toast says what publishing would wait for.
+    const readyNote = qualified ? "" : `Marked ready — still needs ${qualification.missing.join(", ").toLowerCase()}, so publishing would wait as Pending`;
     // Shop stage (owner, 2026-11-07): a new product starts as Draft once saved here.
     const shopStatus = initial?.shopStatus ?? "UNPUBLISHED";
     const claudeDraft = (initial?.copyDraft ?? null) as ProductCopy | null;
@@ -464,7 +466,8 @@ export default function ProductForm({
     };
 
     /** Save; Publish / Unpublish also move the stage (Unpublish = back to Unpublished). */
-    const submit = async (stage?: "PUBLISHED" | "UNPUBLISHED") => {
+    const submit = async (stage?: "PUBLISHED" | "UNPUBLISHED" | "READY" | "DRAFT") => {
+
         if (!name.trim()) { toast.error("Name is required"); return; }
         if (!sku.trim() && !initial?.id) { toast.error("SKU is required"); return; }
         const specs = Object.fromEntries(specPairs.filter((x) => x.k.trim()).map((x) => [x.k.trim(), x.v.trim()]));
@@ -514,7 +517,9 @@ export default function ProductForm({
             toast.success(
                 stage === "PUBLISHED"
                     ? saved.isListedInShop ? "Published — live in the shop" : "Published — pending until Shop readiness is met"
-                    : stage === "UNPUBLISHED" ? "Unpublished — off the shop" : "Saved",
+                    : stage === "UNPUBLISHED" ? "Unpublished — off the shop"
+                        : stage === "READY" ? readyNote || "Marked ready — publish when the time is right"
+                            : stage === "DRAFT" ? "Back to Draft" : "Saved",
             );
             onSaved?.(res.data);
         } catch (e: unknown) {
@@ -869,6 +874,18 @@ export default function ProductForm({
                         {busy ? "Saving…" : submitLabel}
                     </Button>
                     {initial?.id && shopStatus === "DRAFT" ? (
+                        <Button type="button" variant="outline" onClick={() => void submit("READY")} disabled={busy}
+                            title="Save — the work is complete; publish later">
+                            Mark ready
+                        </Button>
+                    ) : null}
+                    {initial?.id && shopStatus === "READY" ? (
+                        <Button type="button" variant="outline" onClick={() => void submit("DRAFT")} disabled={busy}
+                            title="Save — more work needed">
+                            Back to Draft
+                        </Button>
+                    ) : null}
+                    {initial?.id && (shopStatus === "DRAFT" || shopStatus === "READY") ? (
                         <Button type="button" variant="outline" onClick={() => void submit("PUBLISHED")} disabled={busy}
                             title={qualified ? "Save and go live in the shop" : "Save and publish — waits as Pending until Shop readiness is met"}>
                             Publish
@@ -885,6 +902,8 @@ export default function ProductForm({
                             ? "Unpublished — saving moves it to Draft."
                             : shopStatus === "DRAFT"
                                 ? "Draft — being worked on."
+                                : shopStatus === "READY"
+                                    ? `Ready — complete, waiting to be published${qualified ? "" : `; needs ${qualification.missing.join(", ").toLowerCase()}`}.`
                                 : qualified
                                     ? "Published — live in the shop."
                                     : `Pending — needs ${qualification.missing.join(", ").toLowerCase()}.`}
