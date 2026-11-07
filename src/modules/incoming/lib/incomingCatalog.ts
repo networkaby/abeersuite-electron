@@ -3,7 +3,7 @@
  * Plain data, shared by the server check (incomingApi.ts) and the page.
  */
 
-export type IncomingId = "COWORK" | "PRODUCT_COPY" | "CRON" | "CALLS" | "SHIPROCKET" | "META_WA_VERIFY" | "META_WA_APP";
+export type IncomingId = "COWORK" | "PRODUCT_COPY" | "PRICE_WATCH" | "CRON" | "CALLS" | "SHIPROCKET" | "META_WA_VERIFY" | "META_WA_APP";
 
 export type IncomingDef = {
     label: string;
@@ -57,6 +57,16 @@ export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
             "POST /api/agent/products/{id}/compatibility",
             "POST /api/agent/read-page",
         ],
+    },
+    // Its own key too (owner: "dont mix all") — read only, it can change nothing.
+    PRICE_WATCH: {
+        label: "Claude — Price watch",
+        about: "Claude (the /price-watch skill, by hand or on a schedule) reads our shop price, MRP and stock — and the last purchase cost only when asked — then compares them with Amazon.in, Flipkart and the maker and writes the report itself. Read only: it never changes a price.",
+        howSent: "Header  x-api-key: <key>",
+        envVar: null,
+        closedWhenUnset: true,
+        canGenerate: true,
+        paths: ["GET /api/agent/prices"],
     },
     CRON: {
         label: "cron-job.org (timed jobs)",
