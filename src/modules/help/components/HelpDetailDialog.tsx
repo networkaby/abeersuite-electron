@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import UserAvatar from "@/shared/components/UserAvatar";
 import {
-    INQUIRY_LABEL, OUTCOME_LABEL, helpCustomerName, helpTitle,
+    INQUIRY_LABEL, INQUIRY_TYPES, OUTCOME_LABEL, helpCustomerName, helpTitle,
     type HelpDetailDto, type HelpStage,
 } from "../lib/types";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
@@ -609,7 +609,16 @@ export default function HelpDetailDialog({
                                         )}
                                         <div className="flex items-center justify-between py-2">
                                             <span className="text-muted-foreground">Priority</span>
-                                            {priority && (
+                                            {canEdit && !isClosed ? (
+                                                <Select value={ticket.priority} onValueChange={(v) => { if (v !== ticket.priority) patch({ priority: v }, "Priority updated"); }} disabled={busy}>
+                                                    <SelectTrigger className="h-8 w-48 text-xs"><SelectValue /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {["LOW", "MEDIUM", "HIGH", "URGENT"].map((p) => (
+                                                            <SelectItem key={p} value={p}>{PRIORITY_META[p]?.label ?? p}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            ) : priority && (
                                                 <Badge className={`text-[11px] ${priority.color ?? ""}`}>
                                                     {priority.label}
                                                 </Badge>
@@ -617,9 +626,18 @@ export default function HelpDetailDialog({
                                         </div>
                                         <div className="flex items-center justify-between pt-2">
                                             <span className="text-muted-foreground">Inquiry Type</span>
-                                            <span className="font-medium text-foreground">
-                                                {ticket.inquiryType ? INQUIRY_LABEL[ticket.inquiryType] : "—"}
-                                            </span>
+                                            {canEdit && !isClosed ? (
+                                                <Select value={ticket.inquiryType ?? "OTHER"} onValueChange={(v) => { if (v !== ticket.inquiryType) patch({ inquiryType: v }, "Inquiry type updated"); }} disabled={busy}>
+                                                    <SelectTrigger className="h-8 w-48 text-xs"><SelectValue /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {INQUIRY_TYPES.map((i) => <SelectItem key={i.value} value={i.value}>{i.label}</SelectItem>)}
+                                                    </SelectContent>
+                                                </Select>
+                                            ) : (
+                                                <span className="font-medium text-foreground">
+                                                    {ticket.inquiryType ? INQUIRY_LABEL[ticket.inquiryType] : "—"}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
