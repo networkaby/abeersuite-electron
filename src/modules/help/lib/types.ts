@@ -112,6 +112,8 @@ export interface HelpLogDto {
     note: string | null;
     createdAt: string;
     author: HelpActor;
+    /** The WhatsApp photo / file behind this line (signed short-lived links). */
+    media?: { mediaUrl: string | null; downloadUrl: string | null; mediaType: string | null; fileName: string | null } | null;
 }
 
 export interface HelpDetailDto extends HelpDto {

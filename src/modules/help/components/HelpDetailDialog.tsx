@@ -29,6 +29,7 @@ import {
 } from "../lib/types";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { useValueChange } from "@/shared/hooks/useValueChange";
+import { MessageMedia } from "@/modules/crm/components/MessageMedia";
 
 export default function HelpDetailDialog({
     ticketId,
@@ -350,6 +351,11 @@ export default function HelpDetailDialog({
                                                             <p className="mt-1.5 whitespace-pre-wrap text-sm text-foreground/90 leading-relaxed">
                                                                 {l.note}
                                                             </p>
+                                                        )}
+                                                        {l.media && (
+                                                            <div className="mt-2 w-fit max-w-full [&_img]:max-h-56 [&_video]:max-h-56">
+                                                                <MessageMedia m={l.media} />
+                                                            </div>
                                                         )}
                                                     </div>
                                                 </div>

@@ -41,6 +41,7 @@ import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { MessageMedia, type MediaInfo } from "@/modules/crm/components/MessageMedia";
 
 interface Ticket {
     id: number;
@@ -107,6 +108,8 @@ interface Ticket {
         visibility: string;
         // Structured record on the log row — slip logs carry their frozen copy;
         // bill logs carry the linked voucher + payment split.
+        /** The WhatsApp photo / file behind this line (signed short-lived links). */
+        media?: MediaInfo | null;
         data?: {
             shippingSlip?: { seq?: number; partyName?: string };
             bill?: { voucherId: number; voucherRef: string; voucherType: string; status: "full" | "partial" | "credit" };
@@ -554,6 +557,11 @@ export default function TicketDetailPage() {
                                                     ) : (
                                                         <p className="mt-1 text-sm text-muted-foreground">{text}</p>
                                                     ))}
+                                                    {log.media && (
+                                                        <div className="mt-2 w-fit max-w-full [&_img]:max-h-56 [&_video]:max-h-56">
+                                                            <MessageMedia m={log.media} />
+                                                        </div>
+                                                    )}
                                                     {/* Slip logs carry their frozen copy — open the service slip or the packet label. */}
                                                     {log.data?.shippingSlip && (
                                                         <div className="mt-1 flex flex-wrap items-center gap-3">

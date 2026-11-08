@@ -235,6 +235,7 @@ export async function attachConversationToTicket(conversationId: number, ticketI
             direction: isOut ? "OUT" : "IN",
             occurredAt: m.occurredAt,
             userId: m.sentByUserId ?? undefined,
+            messageId: m.id,
         });
     }
     await prisma.message.updateMany({ where: { id: { in: loose.map((m) => m.id) } }, data: { ticketId } });
@@ -578,6 +579,8 @@ async function logMessageToTicket(args: {
     direction: "IN" | "OUT";
     occurredAt?: Date;
     userId?: number;
+    /** The Message row — lets the ticket timeline show its photo / file. */
+    messageId?: number;
 }): Promise<void> {
     if (!args.ticketId || !args.text) return;
     try {
@@ -590,6 +593,7 @@ async function logMessageToTicket(args: {
                 visibility: "PUBLIC",
                 note: `${prefix}${args.text}`,
                 author: { userName: args.authorName, userId: args.userId, channel: "WHATSAPP" },
+                ...(args.messageId ? { data: { messageId: args.messageId } } : {}),
                 createdAt: args.occurredAt ?? new Date(),
             },
         });
@@ -809,7 +813,7 @@ export async function ingestInbound(
         }
 
         try {
-            await prisma.message.create({
+            const row = await prisma.message.create({
                 data: {
                     channel: "WHATSAPP",
                     direction: "IN",
@@ -842,6 +846,7 @@ export async function ingestInbound(
                     text,
                     direction: "IN",
                     occurredAt: at,
+                    messageId: row.id,
                 });
             }
             if (conv) await touchConversation(conv.id, at);
@@ -1024,7 +1029,9 @@ export async function sendReply(args: { phone: string; text: string; userId: num
             authorName: staffUser?.name ?? "Staff",
             text: args.text || (media ? `[${waMediaTypeFor(media.type)}]` : "Message"),
             direction: "OUT",
+            occurredAt: at,
             userId: args.userId,
+            messageId: row.id,
         });
     }
     // A reply answers what the customer wrote: their messages are read for the
@@ -1309,4 +1316,40 @@ async function raiseTicketClaimed(a: {
         else await tx.message.update({ where: { id: msg.id }, data: { ticketId } });
         return { ticketId, existing: false };
     });
+}
+
+/** A WhatsApp photo / file shown on a ticket timeline line (signed 1-hour links). */
+export type LogMedia = { mediaUrl: string | null; downloadUrl: string | null; mediaType: string | null; fileName: string | null };
+
+/**
+ * The attachment behind each WhatsApp line of one ticket's timeline, by log id.
+ * One read: the ticket's messages that carry a file. A line points at its
+ * message by `data.messageId`; older lines (written before that) are matched
+ * by time, since a WhatsApp line is stamped with its message's time.
+ */
+export async function ticketLogMedia(
+    ticketId: number,
+    logs: { id: number; createdAt: Date; author: unknown; data?: unknown }[],
+): Promise<Map<number, LogMedia>> {
+    const out = new Map<number, LogMedia>();
+    const wa = logs.filter((l) => (l.author as { channel?: string } | null)?.channel === "WHATSAPP");
+    if (!wa.length) return out;
+    const files = await prisma.message.findMany({
+        where: { ticketId, mediaKey: { not: null } },
+        select: { id: true, occurredAt: true, mediaKey: true, mediaType: true, fileName: true },
+    });
+    if (!files.length) return out;
+    const byId = new Map(files.map((f) => [f.id, f]));
+    const byTime = new Map(files.map((f) => [f.occurredAt.getTime(), f]));
+    for (const l of wa) {
+        const id = (l.data as { messageId?: number } | null)?.messageId;
+        const f = (id != null ? byId.get(id) : undefined) ?? byTime.get(l.createdAt.getTime());
+        if (!f) continue;
+        out.set(l.id, {
+            mediaUrl: mediaLink(f.mediaKey),
+            downloadUrl: mediaLink(f.mediaKey, f.fileName, true),
+            mediaType: f.mediaType, fileName: f.fileName,
+        });
+    }
+    return out;
 }

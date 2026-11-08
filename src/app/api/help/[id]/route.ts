@@ -7,22 +7,24 @@ import { updateHelpSchema } from "@/shared/lib/schemas/helpSchema";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { HELP_TICKET_SELECT, flattenHelp } from "../route";
 import { parseNumericId } from "@/shared/lib/api/parseNumericId";
+import { ticketLogMedia, type LogMedia } from "@/modules/message/lib/customerMessages";
 
 // Help ticket + its timeline (TicketLog rows — advise notes, stage moves, close).
 const HELP_DETAIL_SELECT = {
     ...HELP_TICKET_SELECT,
     logs: {
         orderBy: { createdAt: "desc" as const },
-        select: { id: true, kind: true, note: true, createdAt: true, author: true },
+        select: { id: true, kind: true, note: true, createdAt: true, author: true, data: true },
     },
 } as const;
 
 type LogRow = { id: number; kind: string; note: string | null; createdAt: Date; author: unknown };
 
-function flattenHelpDetail(t: { logs: LogRow[] } & Parameters<typeof flattenHelp>[0]) {
+/** A WhatsApp line's photo / file rides on its log row (see ticketLogMedia). */
+function flattenHelpDetail(t: { logs: LogRow[] } & Parameters<typeof flattenHelp>[0], media: Map<number, LogMedia> = new Map()) {
     return {
         ...flattenHelp(t),
-        logs: t.logs.map((l) => ({ id: l.id, kind: l.kind, note: l.note, createdAt: l.createdAt, author: l.author })),
+        logs: t.logs.map((l) => ({ id: l.id, kind: l.kind, note: l.note, createdAt: l.createdAt, author: l.author, media: media.get(l.id) ?? null })),
     };
 }
 
@@ -34,7 +36,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     try {
         const t = await prisma.ticket.findUnique({ where: { id }, select: HELP_DETAIL_SELECT });
         if (!t || !t.help) return NextResponse.json({ error: "Help ticket not found" }, { status: 404 });
-        return NextResponse.json(flattenHelpDetail(t));
+        return NextResponse.json(flattenHelpDetail(t, await ticketLogMedia(id, t.logs)));
     } catch (e) {
         return handleApiError(e, "Failed to fetch help ticket");
     }

@@ -57,7 +57,7 @@ export async function GET() {
                 where: { direction: "IN", spam: false, phone: { not: null }, occurredAt: { gte: from } },
                 orderBy: { occurredAt: "desc" },
                 take: SCAN,
-                select: { id: true, phone: true, body: true, senderName: true, occurredAt: true, mediaKey: true, mediaType: true, fileName: true, mediaSize: true },
+                select: { id: true, phone: true, body: true, senderName: true, occurredAt: true, ticketId: true, mediaKey: true, mediaType: true, fileName: true, mediaSize: true },
             }),
             prisma.message.findMany({
                 where: { direction: "NOTE", kind: { not: "ticket" }, seenAt: null, phone: { not: null }, occurredAt: { gte: new Date(now - MESSAGE_REPLY_WINDOW_MS) } },
@@ -80,6 +80,12 @@ export async function GET() {
             }),
         ]);
         const closedAt = new Map(closes.map((g) => [g.phone, g._max.closedAt?.getTime() ?? 0]));
+        // Staff work on the chat's ticket (a note, a stage move, an edit) answers
+        // it too — the ticket already carries the customer's message. Only rows
+        // a staff member wrote count; the customer's own WhatsApp lines do not.
+        for (const [phone, at] of await ticketWorkByPhone(inRows, from)) {
+            if (at > (contact.get(phone) ?? 0)) contact.set(phone, at);
+        }
 
         const byPhone = new Map<string, Chat>();
         const chatOf = (phone: string, id: number, at: Date) => {
@@ -144,4 +150,27 @@ export async function GET() {
     } catch (e) {
         return handleApiError(e, "Failed to load message alerts");
     }
+}
+
+/** Newest staff-written ticket log per phone, over the tickets its messages belong to. */
+async function ticketWorkByPhone(rows: { phone: string | null; ticketId: number | null }[], since: Date): Promise<Map<string, number>> {
+    const phonesOf = new Map<number, Set<string>>();
+    for (const r of rows) {
+        if (r.ticketId == null || !r.phone) continue;
+        if (!phonesOf.has(r.ticketId)) phonesOf.set(r.ticketId, new Set());
+        phonesOf.get(r.ticketId)!.add(r.phone);
+    }
+    const out = new Map<string, number>();
+    if (!phonesOf.size) return out;
+    const logs = await prisma.ticketLog.findMany({
+        where: { ticketId: { in: [...phonesOf.keys()] }, createdAt: { gte: since } },
+        select: { ticketId: true, createdAt: true, author: true },
+    });
+    for (const l of logs) {
+        const a = (l.author ?? {}) as { userId?: number | null; channel?: string };
+        if (a.userId == null || a.channel === "WHATSAPP") continue;
+        const t = l.createdAt.getTime();
+        for (const phone of phonesOf.get(l.ticketId!) ?? []) if (t > (out.get(phone) ?? 0)) out.set(phone, t);
+    }
+    return out;
 }
