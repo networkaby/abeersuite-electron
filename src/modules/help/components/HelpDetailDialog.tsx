@@ -31,6 +31,7 @@ import {
 } from "../lib/types";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { useValueChange } from "@/shared/hooks/useValueChange";
+import { usePositionPicker } from "@/shared/hooks";
 import { MessageMedia } from "@/modules/crm/components/MessageMedia";
 import { groupTicketChat } from "@/modules/message/lib/ticketChatRuns";
 import { TicketChatRunCard } from "@/modules/message/components/TicketChatRun";
@@ -135,6 +136,7 @@ export default function HelpDetailDialog({
         }
     };
 
+    const { positions } = usePositionPicker();
     const isClosed = Boolean(ticket?.ticketStatus.isTerminal);
     const moveStages = ticket?.nextStages ?? [];
     // Stage dropdown = where the ticket is + the working stages it may move to
@@ -560,9 +562,32 @@ export default function HelpDetailDialog({
                                     <div className="space-y-2 pt-1 text-xs divide-y">
                                         <div className="flex items-center justify-between pb-2">
                                             <span className="text-muted-foreground">Assigned Seat</span>
-                                            <span className="font-medium text-foreground">
-                                                {ticket.assignedPosition?.title ?? "Unassigned"}
-                                            </span>
+                                            {canEdit && !isClosed ? (
+                                                // Any stage: pick a seat, saves at once. Its holders get an Inbox notice.
+                                                <Select
+                                                    value={ticket.assignedPositionId ?? "__none__"}
+                                                    onValueChange={(v) => {
+                                                        const next = v === "__none__" ? null : v;
+                                                        if (next !== (ticket.assignedPositionId ?? null)) patch({ assignedPositionId: next }, next ? "Assigned" : "Unassigned");
+                                                    }}
+                                                    disabled={busy}
+                                                >
+                                                    <SelectTrigger className="h-8 w-48 text-xs"><SelectValue placeholder="Unassigned" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="__none__">Unassigned</SelectItem>
+                                                        {ticket.assignedPositionId && !positions.some((p) => p.id === ticket.assignedPositionId) && (
+                                                            <SelectItem value={ticket.assignedPositionId}>{ticket.assignedPosition?.title ?? ticket.assignedPositionId}</SelectItem>
+                                                        )}
+                                                        {positions.map((p) => (
+                                                            <SelectItem key={p.id} value={p.id}>{p.title}{p.branchName ? ` · ${p.branchName}` : ""}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            ) : (
+                                                <span className="font-medium text-foreground">
+                                                    {ticket.assignedPosition?.title ?? "Unassigned"}
+                                                </span>
+                                            )}
                                         </div>
                                         {ticket.assignedPosition?.holders && ticket.assignedPosition.holders.length > 0 && (
                                             <div className="flex items-center justify-between py-2">

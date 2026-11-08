@@ -344,6 +344,21 @@ export async function createSystemInboxNotifications({
     link?: string;
 }) {
     const userIds = await findUserIdsHoldingRoles(roleIds, { excludeUserId: actorUserId });
+    await createSystemInboxNotificationsForUsers({ userIds, title, body, link });
+}
+
+/** Same SYSTEM notice, to an explicit list of users (e.g. a seat's holders). */
+export async function createSystemInboxNotificationsForUsers({
+    userIds,
+    title,
+    body,
+    link,
+}: {
+    userIds: number[];
+    title: string;
+    body: string;
+    link?: string;
+}) {
     if (userIds.length === 0) return;
 
     // The room may not exist yet for a user who has never opened the inbox.
