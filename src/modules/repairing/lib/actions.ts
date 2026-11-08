@@ -149,13 +149,13 @@ const isRepairTemplate = (k: string): k is RepairKind => k in REPAIR_KINDS;
  *  email templates (Workflow → Statuses), after the response. Once per
  *  (template, ticket) — moving in twice never messages twice. Every move path
  *  calls this; it never throws and never slows the move. */
-export async function messageOnStatusEntry(ticketId: number, statusId: string, userId: number): Promise<void> {
+export async function messageOnStatusEntry(ticketId: number, statusId: string, userId: number, author?: Prisma.InputJsonValue): Promise<void> {
     try {
         const st = await prisma.ticketStatus.findUnique({ where: { id: statusId }, select: { waTemplate: true, emailTemplate: true } });
         const wa = st?.waTemplate ?? null;
         const em = st?.emailTemplate ?? null;
         if (!wa && !em) return;
-        const ctx: ActionRunContext = { ticketId, status: statusId, workerId: "", deviceId: null, userId, outcome: null, author: await buildActorSnapshot(userId) };
+        const ctx: ActionRunContext = { ticketId, status: statusId, workerId: "", deviceId: null, userId, outcome: null, author: author ?? await buildActorSnapshot(userId) };
         after(async () => {
             if (wa && isRepairTemplate(wa)) {
                 // manual: send on the template's approval alone, and leave the email to the email dropdown.

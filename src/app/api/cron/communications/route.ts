@@ -7,6 +7,7 @@ import { runPostReminders } from "@/modules/campaigns/lib/postReminders";
 import { runScheduledCampaigns } from "@/modules/campaigns/lib/sendCampaign";
 import { runGooglePosts } from "@/modules/campaigns/lib/googlePosts";
 import { syncGoogleReviews } from "@/modules/reviews/lib/googleReviews";
+import { runStatusAutoMoves } from "@/modules/repairing/lib/autoMoveTickets";
 import { requireIncomingKey } from "@/modules/incoming/lib/incomingApi";
 
 export const runtime = "nodejs";
@@ -25,6 +26,7 @@ export const maxDuration = 300;
  * own, so the post reminders that follow no longer count them as waiting for a
  * hand share.
  * New and changed Google reviews are copied in for CRM → Reviews alongside.
+ * Tickets left long enough in a status with an auto-move rule move on (autoMoveTickets.ts).
  * Backup is not part of this: Vercel's nightly cron owns it.
  *
  * CRON_SECRET is optional, as for /api/cron/due-reminders — blank counts as absent.
@@ -55,7 +57,7 @@ export async function GET(req: Request) {
         out.instagramPosts = { error: (e as Error)?.message ?? String(e) };
     }
 
-    const jobs = { googleReviews: syncGoogleReviews, dueReminders: runDueReminders, emailReminders: runEmailReminders, postReminders: runPostReminders, campaigns: runScheduledCampaigns };
+    const jobs = { googleReviews: syncGoogleReviews, dueReminders: runDueReminders, emailReminders: runEmailReminders, postReminders: runPostReminders, campaigns: runScheduledCampaigns, statusAutoMoves: () => runStatusAutoMoves() };
     const settled = await Promise.allSettled(Object.values(jobs).map((run) => run()));
     Object.keys(jobs).forEach((name, i) => {
         const r = settled[i];

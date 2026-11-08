@@ -4160,6 +4160,8 @@ CREATE TABLE IF NOT EXISTS "TicketStatus" (
     "waTemplate" TEXT,
     "emailTemplate" TEXT,
     "resolveTimeHours" INTEGER,
+    "autoMoveAfterDays" INTEGER,
+    "autoMoveToId" TEXT,
     "resolveGroupId" TEXT,
     "workId" TEXT,
     "startWorkerId" TEXT,
@@ -4187,6 +4189,10 @@ ALTER TABLE "TicketStatus" ADD COLUMN IF NOT EXISTS "emailTemplate" TEXT;
 ALTER TABLE "TicketStatus" ALTER COLUMN "emailTemplate" DROP NOT NULL;
 ALTER TABLE "TicketStatus" ADD COLUMN IF NOT EXISTS "resolveTimeHours" INTEGER;
 ALTER TABLE "TicketStatus" ALTER COLUMN "resolveTimeHours" DROP NOT NULL;
+ALTER TABLE "TicketStatus" ADD COLUMN IF NOT EXISTS "autoMoveAfterDays" INTEGER;
+ALTER TABLE "TicketStatus" ALTER COLUMN "autoMoveAfterDays" DROP NOT NULL;
+ALTER TABLE "TicketStatus" ADD COLUMN IF NOT EXISTS "autoMoveToId" TEXT;
+ALTER TABLE "TicketStatus" ALTER COLUMN "autoMoveToId" DROP NOT NULL;
 ALTER TABLE "TicketStatus" ADD COLUMN IF NOT EXISTS "resolveGroupId" TEXT;
 ALTER TABLE "TicketStatus" ALTER COLUMN "resolveGroupId" DROP NOT NULL;
 ALTER TABLE "TicketStatus" ADD COLUMN IF NOT EXISTS "workId" TEXT;
@@ -7498,6 +7504,13 @@ END $$;
 -- AddForeignKey
 DO $$ BEGIN
     ALTER TABLE "OrgDefaults" ADD CONSTRAINT "OrgDefaults_shippingPoolGroupId_fkey" FOREIGN KEY ("shippingPoolGroupId") REFERENCES "AccountGroup"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "TicketStatus" ADD CONSTRAINT "TicketStatus_autoMoveToId_fkey" FOREIGN KEY ("autoMoveToId") REFERENCES "TicketStatus"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;

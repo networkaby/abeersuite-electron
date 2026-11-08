@@ -24,6 +24,8 @@ const ticketStatusPatchSchema = z.object({
     emailTemplate: z.string().trim().max(40).optional().nullable(),
     resolveTimeHours: z.coerce.number().int().nonnegative().nullable().optional(),
     resolveGroupId: z.string().trim().optional().nullable(),
+    autoMoveAfterDays: z.coerce.number().int().min(1).max(365).nullable().optional(),
+    autoMoveToId: z.string().trim().optional().nullable(),
 });
 
 export async function PATCH(req: Request, { params }: Params) {
@@ -49,6 +51,17 @@ export async function PATCH(req: Request, { params }: Params) {
             }
         }
 
+        // Auto-move target: another status on the same pipeline.
+        if (body.autoMoveToId) {
+            const [self, target] = await Promise.all([
+                prisma.ticketStatus.findUnique({ where: { id }, select: { pipelineId: true } }),
+                prisma.ticketStatus.findUnique({ where: { id: body.autoMoveToId }, select: { pipelineId: true } }),
+            ]);
+            if (!self || !target || body.autoMoveToId === id || target.pipelineId !== self.pipelineId) {
+                return NextResponse.json({ error: "Auto-move must go to another status of this pipeline." }, { status: 422 });
+            }
+        }
+
         const status = await prisma.ticketStatus.update({
             where: { id },
             data: {
@@ -68,6 +81,8 @@ export async function PATCH(req: Request, { params }: Params) {
                 emailTemplate: "emailTemplate" in body ? (body.emailTemplate || null) : undefined,
                 resolveTimeHours: "resolveTimeHours" in body ? (body.resolveTimeHours ?? null) : undefined,
                 resolveGroupId: "resolveGroupId" in body ? (body.resolveGroupId ?? null) : undefined,
+                autoMoveAfterDays: "autoMoveAfterDays" in body ? (body.autoMoveAfterDays ?? null) : undefined,
+                autoMoveToId: "autoMoveToId" in body ? (body.autoMoveToId || null) : undefined,
             },
         });
         return NextResponse.json(status);

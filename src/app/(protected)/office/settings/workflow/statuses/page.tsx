@@ -79,6 +79,8 @@ interface TicketStatus {
     emailTemplate: string | null;
     resolveTimeHours: number | null;
     resolveGroupId?: string | null;
+    autoMoveAfterDays: number | null;
+    autoMoveToId: string | null;
     pipelineId: string | null;
     fromTransitions: { toStatusId: string; to: { label: string } }[];
     _count: { tickets: number };
@@ -103,6 +105,8 @@ interface StatusForm {
     resolveTimeDays: string;
     resolveTimeHoursPart: string;
     resolveGroupId: string;
+    autoMoveAfterDays: string;
+    autoMoveToId: string;
 }
 
 // "76" → "3d 4h" (drops the zero side: "3d" or "4h" alone) — for the read-only SLA badge.
@@ -117,7 +121,7 @@ function formatResolveTime(totalHours: number): string {
 const EMPTY_FORM: StatusForm = {
     label: "", color: "bg-gray-100 text-gray-600", order: 0, isTerminal: false, isEntryPoint: false,
     workId: "", warrantyScope: "any", actionLabel: "", leavePrompt: "", announceOnEntry: false, etaText: "", waTemplate: "", emailTemplate: "",
-    resolveTimeDays: "", resolveTimeHoursPart: "", resolveGroupId: "",
+    resolveTimeDays: "", resolveTimeHoursPart: "", resolveGroupId: "", autoMoveAfterDays: "", autoMoveToId: "",
 };
 
 export default function StatusesPage() {
@@ -198,6 +202,8 @@ export default function StatusesPage() {
             resolveTimeDays: status.resolveTimeHours != null ? String(Math.floor(status.resolveTimeHours / 24)) : "",
             resolveTimeHoursPart: status.resolveTimeHours != null ? String(status.resolveTimeHours % 24) : "",
             resolveGroupId: status.resolveGroupId ?? "",
+            autoMoveAfterDays: status.autoMoveAfterDays != null ? String(status.autoMoveAfterDays) : "",
+            autoMoveToId: status.autoMoveToId ?? "",
         });
     };
 
@@ -205,6 +211,13 @@ export default function StatusesPage() {
         if (!editModalId) return;
         if (!editForm.label.trim()) {
             toast.error("Label is required");
+            return;
+        }
+        // Auto-move needs both halves, or neither.
+        const autoDays = editForm.autoMoveAfterDays.trim() === "" ? null : Math.min(365, Math.max(1, Number(editForm.autoMoveAfterDays)));
+        const autoTo = editForm.autoMoveToId || null;
+        if ((autoDays == null) !== (autoTo == null)) {
+            toast.error("Auto-move needs both the days and the status to move to");
             return;
         }
         setSavingEdit(true);
@@ -230,6 +243,8 @@ export default function StatusesPage() {
                 emailTemplate: editForm.emailTemplate || null,
                 resolveTimeHours,
                 resolveGroupId: editForm.resolveGroupId || null,
+                autoMoveAfterDays: autoDays,
+                autoMoveToId: autoTo,
             });
             toast.success("Status updated");
             setEditModalId(null);
@@ -655,6 +670,38 @@ export default function StatusesPage() {
                                     Where an overdue ticket with no work shows. Blank = none.
                                 </p>
                             </div>
+                        </div>
+
+                        {/* ── Auto-move ──────────────────────────────────── */}
+                        <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Auto-move</p>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-sm text-muted-foreground">After</span>
+                                <Input
+                                    type="text"
+                                    inputMode="numeric"
+                                    className="w-20"
+                                    value={editForm.autoMoveAfterDays}
+                                    onChange={(e) => setEditForm((prev) => ({ ...prev, autoMoveAfterDays: e.target.value.replace(/[^0-9]/g, "").slice(0, 3) }))}
+                                    placeholder="—"
+                                />
+                                <span className="text-sm text-muted-foreground">days, move to</span>
+                                <Select value={editForm.autoMoveToId || "__none__"} onValueChange={(value) => setEditForm((prev) => ({ ...prev, autoMoveToId: value === "__none__" ? "" : value }))}>
+                                    <SelectTrigger className="w-44">
+                                        <SelectValue placeholder="Select status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="__none__">— never —</SelectItem>
+                                        {statuses.filter((s) => s.id !== editModalId).map((s) => (
+                                            <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                Moves by itself, no one clicks (e.g. Resolved → Closed after 7 days = no repeat complaint).
+                                Skipped while the customer has written since. Runs every 30 min, 8 AM–8 PM. Blank = never.
+                            </p>
                         </div>
 
                         </div>

@@ -50,6 +50,15 @@ model TicketStatus {
   // many hours is "needs attention" — surfaced (overdue-first) in the Work Inbox.
   // null = no SLA on this status. Measured from Ticket.statusEnteredAt.
   resolveTimeHours Int?
+  // Auto-move (owner, 2026-11-08): a ticket left in this status for autoMoveAfterDays
+  // days moves to autoMoveToId by itself — e.g. Resolved → Closed after 7 days, "no
+  // repeat complaint = fixed". Swept by /api/cron/communications (autoMoveTickets.ts).
+  // Skipped while the customer has written since the ticket entered the status.
+  // Both null = never. FK SetNull: deleting the target just switches it off.
+  autoMoveAfterDays Int?
+  autoMoveToId      String?
+  autoMoveTo        TicketStatus?      @relation("StatusAutoMove", fields: [autoMoveToId], references: [id], onDelete: SetNull)
+  autoMoveFrom      TicketStatus[]     @relation("StatusAutoMove")
   // Fallback WorkGroup tag for the Resolve-time badge, used only when this status's
   // active worker carries no Work (and so no groups) to inherit from.
   resolveGroupId  String?
