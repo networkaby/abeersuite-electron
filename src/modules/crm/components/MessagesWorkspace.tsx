@@ -178,6 +178,9 @@ function Ticks({ m }: { m: ThreadMessage }) {
     return <span className="inline-flex items-center gap-1"><Check className="size-3" /> sent</span>;
 }
 
+/** Back-to-back bubbles from one side within this gap read as one run. */
+const BUBBLE_RUN_GAP_MS = 30 * 60 * 1000;
+
 export default function MessagesWorkspace({ canReply, canTicket, customers = true, openPhone }: {
     canReply: boolean;
     canTicket: boolean;
@@ -861,20 +864,26 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                                 }
                                 const out = it.direction === "OUT";
                                 const link = billLink(it.billKind, it.billRefId);
+                                // Same sender straight after: tuck under the bubble above, no repeat tag.
+                                const prev = thread.items[i - 1];
+                                const cont = !!prev && prev.type !== "call" && !conversationStarts.has(i)
+                                    && prev.direction === it.direction && prev.ticketId === it.ticketId
+                                    && Math.abs(new Date(it.at).getTime() - new Date(prev.at).getTime()) <= BUBBLE_RUN_GAP_MS;
                                 return (
-                                    <div key={`m${it.id}`} className={cn("flex", out ? "justify-end" : "justify-start")}>
+                                    <div key={`m${it.id}`} className={cn("flex", out ? "justify-end" : "justify-start", cont && "-mt-1.5")}>
                                         <div
                                             className={cn(
                                                 "max-w-[78%] rounded-2xl px-3 py-1.5 text-sm shadow-xs",
                                                 out
-                                                    ? "rounded-tr-xs bg-[#dcf8c6] text-stone-900 dark:bg-[#005c4b] dark:text-stone-100"
-                                                    : "rounded-tl-xs bg-white text-stone-900 border border-stone-200/60 dark:bg-[#202c33] dark:text-stone-100 dark:border-white/5",
+                                                    ? "bg-[#dcf8c6] text-stone-900 dark:bg-[#005c4b] dark:text-stone-100"
+                                                    : "bg-white text-stone-900 border border-stone-200/60 dark:bg-[#202c33] dark:text-stone-100 dark:border-white/5",
+                                                !cont && (out ? "rounded-tr-xs" : "rounded-tl-xs"),
                                                 it.ticketId && "ring-1 ring-sky-400",
                                             )}
                                         >
-                                            {(it.ticketId || it.billKind) && (
+                                            {((it.ticketId && !cont) || it.billKind) && (
                                                 <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[11px]">
-                                                    {it.ticketId && (
+                                                    {it.ticketId && !cont && (
                                                         <span className="inline-flex items-center gap-0.5 rounded bg-sky-100 px-1 py-0.5 text-[10px] font-medium text-sky-800 dark:bg-sky-950 dark:text-sky-300">
                                                             <Ticket className="size-3" /> #{it.ticketId}
                                                         </span>
