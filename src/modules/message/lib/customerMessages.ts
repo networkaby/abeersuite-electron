@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import type { Prisma } from "@/generated/prisma/client";
 import { closingForAccounts } from "@/modules/accountancy/lib/aggregateLedger";
 import { phoneMatchKey, phoneKeyVariants } from "@/shared/lib/format";
 import { getHelpPipeline } from "@/modules/help/lib/helpPipeline";
@@ -224,9 +225,10 @@ export async function attachConversationToTicket(conversationId: number, ticketI
     const staffIds = Array.from(new Set(loose.map((m) => m.sentByUserId).filter((v): v is number => v != null)));
     const staff = staffIds.length ? await prisma.user.findMany({ where: { id: { in: staffIds } }, select: { id: true, name: true } }) : [];
     const staffName = new Map(staff.map((u) => [u.id, u.name]));
-    for (const m of loose) {
+    // One write for the whole history: all lines go in, or none do.
+    const rows = loose.filter((m) => m.body).map((m) => {
         const isOut = m.direction === "OUT";
-        await logMessageToTicket({
+        return ticketLogRow({
             ticketId,
             authorName: isOut
                 ? (m.sentByUserId != null ? staffName.get(m.sentByUserId) ?? "Staff" : "System")
@@ -237,6 +239,11 @@ export async function attachConversationToTicket(conversationId: number, ticketI
             userId: m.sentByUserId ?? undefined,
             messageId: m.id,
         });
+    });
+    try {
+        if (rows.length) await prisma.ticketLog.createMany({ data: rows });
+    } catch (e) {
+        console.error("[messages] could not copy the chat into ticket", ticketId, e);
     }
     await prisma.message.updateMany({ where: { id: { in: loose.map((m) => m.id) } }, data: { ticketId } });
 }
@@ -572,7 +579,7 @@ async function routeInbound(args: {
  * Record a message directly into the ticket's activity timeline (TicketLog).
  * Keeps ticket history authoritative and informative across repairs, deals, and helpdesk.
  */
-async function logMessageToTicket(args: {
+type TicketLine = {
     ticketId: number;
     authorName: string;
     text: string;
@@ -581,22 +588,26 @@ async function logMessageToTicket(args: {
     userId?: number;
     /** The Message row — lets the ticket timeline show its photo / file. */
     messageId?: number;
-}): Promise<void> {
+};
+
+/** One WhatsApp line for a ticket's timeline, ready to save. */
+function ticketLogRow(args: TicketLine): Prisma.TicketLogCreateManyInput {
+    const prefix = args.direction === "OUT" ? `💬 WhatsApp (Staff - ${args.authorName}): ` : `💬 WhatsApp (${args.authorName}): `;
+    return {
+        ticketId: args.ticketId,
+        kind: "NOTE",
+        visibility: "PUBLIC",
+        note: `${prefix}${args.text}`,
+        author: { userName: args.authorName, userId: args.userId, channel: "WHATSAPP" },
+        ...(args.messageId ? { data: { messageId: args.messageId } } : {}),
+        createdAt: args.occurredAt ?? new Date(),
+    };
+}
+
+async function logMessageToTicket(args: TicketLine): Promise<void> {
     if (!args.ticketId || !args.text) return;
     try {
-        const isOut = args.direction === "OUT";
-        const prefix = isOut ? `💬 WhatsApp (Staff - ${args.authorName}): ` : `💬 WhatsApp (${args.authorName}): `;
-        await prisma.ticketLog.create({
-            data: {
-                ticketId: args.ticketId,
-                kind: "NOTE",
-                visibility: "PUBLIC",
-                note: `${prefix}${args.text}`,
-                author: { userName: args.authorName, userId: args.userId, channel: "WHATSAPP" },
-                ...(args.messageId ? { data: { messageId: args.messageId } } : {}),
-                createdAt: args.occurredAt ?? new Date(),
-            },
-        });
+        await prisma.ticketLog.create({ data: ticketLogRow(args) });
     } catch (e) {
         // Non-blocking log creation
         console.error("[messages] could not log message to ticket", e);
