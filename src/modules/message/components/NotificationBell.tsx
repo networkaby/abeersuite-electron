@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Bell } from "lucide-react";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
@@ -26,6 +27,10 @@ export default function NotificationBell() {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [open, setOpen] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
+    const panelRef = useRef<HTMLDivElement>(null);
+    // The sidebar clips anything that spills out of it, so the panel is drawn on
+    // document.body at the bell's screen position and kept inside the window.
+    const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
     // The badge number rides the shared sidebar poll — no timer of its own. The
     // list itself (25 rows of message text) is only fetched when the panel is
@@ -55,11 +60,31 @@ export default function NotificationBell() {
 
     useEffect(() => {
         const handler = (e: MouseEvent) => {
-            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+            const t = e.target as Node;
+            if (ref.current?.contains(t) || panelRef.current?.contains(t)) return;
+            setOpen(false);
         };
         document.addEventListener("mousedown", handler);
         return () => document.removeEventListener("mousedown", handler);
     }, []);
+
+    useEffect(() => {
+        if (!open) return;
+        const place = () => {
+            const r = ref.current?.getBoundingClientRect();
+            if (!r) return;
+            const width = 320;
+            const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
+            setPos({ top: r.bottom + 4, left });
+        };
+        place();
+        window.addEventListener("resize", place);
+        window.addEventListener("scroll", place, true);
+        return () => {
+            window.removeEventListener("resize", place);
+            window.removeEventListener("scroll", place, true);
+        };
+    }, [open]);
 
     // Both mark-read paths tell the shared store to recount, so the badge drops at
     // once rather than waiting for the next poll.
@@ -91,8 +116,12 @@ export default function NotificationBell() {
                 )}
             </Button>
 
-            {open && (
-                <div className="absolute left-0 top-full z-50 mt-1 w-80 rounded-lg border border-border bg-card shadow">
+            {open && pos && createPortal(
+                <div
+                    ref={panelRef}
+                    style={{ top: pos.top, left: pos.left }}
+                    className="fixed z-[100] w-80 rounded-lg border border-border bg-card shadow"
+                >
                     <div className="flex items-center justify-between border-b border-border bg-muted px-4 py-3">
                         <span className="text-sm font-semibold text-foreground">Notifications</span>
                         {unread > 0 && (
@@ -128,7 +157,8 @@ export default function NotificationBell() {
                             ))
                         )}
                     </div>
-                </div>
+                </div>,
+                document.body,
             )}
         </div>
     );
