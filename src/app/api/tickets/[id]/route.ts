@@ -16,7 +16,7 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
-import { ticketLogMedia } from "@/modules/message/lib/customerMessages";
+import { ticketLogAvatars, ticketLogMedia } from "@/modules/message/lib/customerMessages";
 
 const ticketUpdateSchema = z.object({
     status: z.string().trim().optional(),
@@ -72,7 +72,7 @@ export async function GET(
                                 account: {
                                     select: {
                                         id: true, name: true,
-                                        person: { select: { phones: selectPrimaryPhone } },
+                                        person: { select: { id: true, phones: selectPrimaryPhone } },
                                         company: { select: { phones: selectPrimaryPhone } },
                                     },
                                 },
@@ -123,10 +123,13 @@ export async function GET(
             : null;
 
         const centre = serviceCentreName(ticket.context);
-        const media = await ticketLogMedia(ticket.id, ticket.logs);
+        const [logs, media] = await Promise.all([
+            ticketLogAvatars(ticket.logs, acct?.person?.id ?? null),
+            ticketLogMedia(ticket.id, ticket.logs),
+        ]);
         return NextResponse.json({
             ...ticket,
-            logs: ticket.logs.map((l) => ({ ...l, media: media.get(l.id) ?? null })),
+            logs: logs.map((l) => ({ ...l, media: media.get(l.id) ?? null })),
             ...(repair ?? {}),
             device,
             serviceCenter: centre ? { name: centre } : null,

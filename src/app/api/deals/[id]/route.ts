@@ -8,6 +8,7 @@ import { assertDealStatus } from "@/modules/deals/lib/dealsPipeline";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { DEAL_TICKET_SELECT, flattenDeal } from "../route";
 import { parseNumericId } from "@/shared/lib/api/parseNumericId";
+import { ticketLogAvatars, ticketLogMedia, type LogMedia } from "@/modules/message/lib/customerMessages";
 
 // Deal + its activity timeline. Activities are TicketLog rows now; we map `note` back
 // to the old `body` field the deals UI expects.
@@ -16,17 +17,18 @@ const DEAL_DETAIL_SELECT = {
     notes: true,
     logs: {
         orderBy: { createdAt: "desc" as const },
-        select: { id: true, kind: true, note: true, dueAt: true, doneAt: true, createdAt: true, author: true },
+        select: { id: true, kind: true, note: true, dueAt: true, doneAt: true, createdAt: true, author: true, data: true },
     },
 } as const;
 
 type LogRow = { id: number; kind: string; note: string | null; dueAt: Date | null; doneAt: Date | null; createdAt: Date; author: unknown };
 
-function flattenDealDetail(t: { notes: string | null; logs: LogRow[] } & Parameters<typeof flattenDeal>[0]) {
+/** A WhatsApp line's photo / file rides on its activity (see ticketLogMedia). */
+function flattenDealDetail(t: { notes: string | null; logs: LogRow[] } & Parameters<typeof flattenDeal>[0], media: Map<number, LogMedia> = new Map()) {
     return {
         ...flattenDeal(t),
         notes: t.notes,
-        activities: t.logs.map((l) => ({ id: l.id, kind: l.kind, body: l.note, dueAt: l.dueAt, doneAt: l.doneAt, createdAt: l.createdAt, author: l.author })),
+        activities: t.logs.map((l) => ({ id: l.id, kind: l.kind, body: l.note, dueAt: l.dueAt, doneAt: l.doneAt, createdAt: l.createdAt, author: l.author, media: media.get(l.id) ?? null })),
     };
 }
 
@@ -38,7 +40,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     try {
         const lead = await prisma.ticket.findUnique({ where: { id }, select: DEAL_DETAIL_SELECT });
         if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
-        return NextResponse.json(flattenDealDetail(lead));
+        const [logs, media] = await Promise.all([
+            ticketLogAvatars(lead.logs, lead.deal?.personId ?? null),
+            ticketLogMedia(id, lead.logs),
+        ]);
+        return NextResponse.json(flattenDealDetail({ ...lead, logs }, media));
     } catch (e) {
         return handleApiError(e, "Failed to fetch lead");
     }

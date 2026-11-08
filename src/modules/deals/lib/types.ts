@@ -17,6 +17,8 @@ export interface DealActor {
     avatarUrl?: string | null;
     positionId?: string | null;
     positionTitle?: string | null;
+    /** "WHATSAPP" on lines the WhatsApp code wrote (see ticketChatRuns). */
+    channel?: string;
 }
 
 export interface DealPositionHolder {
@@ -56,6 +58,8 @@ export interface DealActivityDto {
     doneAt: string | null;
     createdAt: string;
     author: DealActor;
+    /** The WhatsApp photo / file behind this line (signed short-lived links). */
+    media?: { mediaUrl: string | null; downloadUrl: string | null; mediaType: string | null; fileName: string | null } | null;
 }
 
 export interface DealDto {

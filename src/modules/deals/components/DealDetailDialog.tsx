@@ -32,6 +32,8 @@ import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { useValueChange } from "@/shared/hooks/useValueChange";
 import { partyProfileHref } from "@/shared/lib/parties";
 import { cn } from "@/shared/lib/format/utils";
+import { groupTicketChat } from "@/modules/message/lib/ticketChatRuns";
+import { AutoMessageIcon, TicketChatRunBody } from "@/modules/message/components/TicketChatRun";
 
 const ACTIVITY_KINDS: { kind: Exclude<DealActivityKind, "SYSTEM">; label: string; icon: typeof StickyNote }[] = [
     { kind: "NOTE", label: "Note", icon: StickyNote },
@@ -441,7 +443,26 @@ export default function DealDetailDialog({
                                         </div>
                                     ) : (
                                         <div className="relative pl-6 space-y-3.5 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-muted">
-                                            {deal.activities.map((a) => {
+                                            {groupTicketChat(deal.activities).map((item) => {
+                                                // A sender's back-to-back WhatsApp messages: one card, each line with its time.
+                                                if (item.kind === "chat") {
+                                                    return (
+                                                        <div key={item.key} className={cn(
+                                                            "relative rounded-xl border p-3.5 text-sm",
+                                                            item.auto ? "border-dashed bg-muted/40 py-2.5" : item.staff ? "border-primary/30 bg-primary/5" : "bg-background/60",
+                                                        )}>
+                                                            <span className="absolute -left-[29px] top-3.5 ring-2 ring-background rounded-full">
+                                                                {item.auto ? <AutoMessageIcon size={24} /> : (
+                                                                    <span className="flex size-6 items-center justify-center rounded-full bg-green-100 text-green-600 dark:bg-green-950 dark:text-green-400">
+                                                                        <MessageCircle className="size-3" />
+                                                                    </span>
+                                                                )}
+                                                            </span>
+                                                            <TicketChatRunBody run={item} />
+                                                        </div>
+                                                    );
+                                                }
+                                                const a = item.log;
                                                 if (a.kind === "SYSTEM") {
                                                     return (
                                                         <div key={a.id} className="relative flex items-center gap-2 text-xs italic text-muted-foreground py-1">

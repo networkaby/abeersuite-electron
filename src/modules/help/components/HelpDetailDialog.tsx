@@ -21,7 +21,7 @@ import { PRIORITY_META } from "@/shared/lib/constants/badges";
 import {
     Pencil, Trash2, ArrowRightLeft, Wrench, Network, Loader2, RotateCcw,
     ArrowLeft, X, Phone, Mail, Clock, MessageSquare, CheckCircle2, FileText,
-    MessageCircle, Bot,
+
 } from "lucide-react";
 import UserAvatar from "@/shared/components/UserAvatar";
 import {
@@ -30,8 +30,9 @@ import {
 } from "../lib/types";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { useValueChange } from "@/shared/hooks/useValueChange";
-import { MessageMedia, captionOf } from "@/modules/crm/components/MessageMedia";
-import { groupTimeline } from "@/modules/help/lib/groupTimeline";
+import { MessageMedia } from "@/modules/crm/components/MessageMedia";
+import { groupTicketChat } from "@/modules/message/lib/ticketChatRuns";
+import { TicketChatRunCard } from "@/modules/message/components/TicketChatRun";
 
 export default function HelpDetailDialog({
     ticketId,
@@ -327,45 +328,8 @@ export default function HelpDetailDialog({
                                         </div>
                                     ) : (
                                         <div className="space-y-3 pt-1">
-                                            {groupTimeline(ticket.logs).map((item) => item.kind === "chat" ? (
-                                                // Messages the app sent by itself stay quiet so people's messages stand out.
-                                                <div key={item.key} className={`flex gap-3 rounded-lg border p-3.5 text-sm ${item.auto ? "border-dashed bg-muted/40 py-2.5 text-muted-foreground" : item.staff ? "border-primary/30 bg-primary/5" : "bg-background/60"}`}>
-                                                    {item.auto ? (
-                                                        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground" title="Sent automatically by AbeerSuite">
-                                                            <Bot size={16} />
-                                                        </span>
-                                                    ) : (
-                                                        <UserAvatar avatarUrl={item.lines[0].log.author?.avatarUrl} name={item.name} sizePx={32} className="mt-0.5" />
-                                                    )}
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="mb-1.5 flex items-center justify-between gap-2 text-xs">
-                                                            <span className={item.auto ? "font-medium text-muted-foreground" : "font-medium text-foreground"}>
-                                                                {item.auto ? "Automatic message" : item.name}
-                                                                {item.staff && !item.auto && <span className="ml-1.5 font-normal text-muted-foreground">· staff reply</span>}
-                                                            </span>
-                                                            <span className="inline-flex items-center gap-1 rounded bg-green-500/10 px-1.5 py-0.5 text-[11px] text-green-700 dark:text-green-400">
-                                                                <MessageCircle size={11} /> WhatsApp · {formatDateTime(item.lines[0].log.createdAt).split(",")[0]}
-                                                            </span>
-                                                        </div>
-                                                        <div className="space-y-1">
-                                                            {item.lines.map(({ log, text }) => (
-                                                                <div key={log.id}>
-                                                                    <div className="flex items-baseline justify-between gap-3">
-                                                                        <p className={`whitespace-pre-wrap break-words text-sm ${item.auto ? "text-muted-foreground" : "text-foreground/90"}`}>{log.media ? captionOf(text, true) : text}</p>
-                                                                        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground" title={formatDateTime(log.createdAt)}>
-                                                                            {new Date(log.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false })}
-                                                                        </span>
-                                                                    </div>
-                                                                    {log.media && (
-                                                                        <div className="mt-1 w-fit max-w-full [&_img]:max-h-56 [&_video]:max-h-56">
-                                                                            <MessageMedia m={log.media} />
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                            {groupTicketChat(ticket.logs).map((item) => item.kind === "chat" ? (
+                                                <TicketChatRunCard key={item.key} run={item} />
                                             ) : ((l) => (
                                                 <div key={l.id} className="relative flex gap-3 rounded-lg border bg-background/60 p-3.5 text-sm transition-colors">
                                                     <UserAvatar

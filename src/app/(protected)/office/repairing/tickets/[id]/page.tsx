@@ -11,6 +11,7 @@ import {
     Check, X, MessageSquare, RefreshCw, ArrowRight, CornerUpLeft, Flag,
     GitBranch, ExternalLink, Bug, Truck, ChevronDown, Receipt, Pencil, Trash2,
     type LucideIcon,
+    MessageCircle,
 } from "lucide-react";
 import { useDeleteWithConfirm } from "@/shared/hooks";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -42,6 +43,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { MessageMedia, type MediaInfo } from "@/modules/crm/components/MessageMedia";
+import { groupTicketChat } from "@/modules/message/lib/ticketChatRuns";
+import { AutoMessageIcon, TicketChatRunBody } from "@/modules/message/components/TicketChatRun";
 
 interface Ticket {
     id: number;
@@ -116,7 +119,7 @@ interface Ticket {
         } | null;
         createdAt: string;
         // Actor is a frozen JSON snapshot now (no User FK) — see ActorSnapshot.
-        author?: { userId?: number; userName?: string; avatarUrl?: string | null; positionTitle?: string | null } | null;
+        author?: { userId?: number; userName?: string; avatarUrl?: string | null; positionTitle?: string | null; channel?: string } | null;
         ticketStatus: { label: string; color: string };
         ticketWorker?: { label: string; color: string } | null;
     }[];
@@ -502,7 +505,28 @@ export default function TicketDetailPage() {
                                 <p className="text-sm text-muted-foreground">No history yet.</p>
                             ) : (
                                 <div className="relative">
-                                    {ticket.logs.map((log, idx) => {
+                                    {groupTicketChat(ticket.logs).map((item, gi, items) => {
+                                        // A sender's back-to-back WhatsApp messages: one row, each line with its time.
+                                        if (item.kind === "chat") {
+                                            const last = gi === items.length - 1;
+                                            return (
+                                                <div key={item.key} className="relative flex gap-3 pb-4 last:pb-0">
+                                                    {!last && <span className="absolute bottom-0 left-[13px] top-7 w-px bg-border" aria-hidden />}
+                                                    {item.auto ? (
+                                                        <span className="relative z-10 mt-0.5"><AutoMessageIcon size={26} /></span>
+                                                    ) : (
+                                                        <span className="relative z-10 mt-0.5 flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-green-100 text-green-600 dark:bg-green-950 dark:text-green-400">
+                                                            <MessageCircle size={13} />
+                                                        </span>
+                                                    )}
+                                                    <div className={`min-w-0 flex-1 rounded-md border px-3 py-2 ${item.auto ? "border-dashed bg-muted/40" : item.staff ? "border-primary/30 bg-primary/5" : "border-border bg-background"}`}>
+                                                        <TicketChatRunBody run={item} />
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+                                        const log = item.log;
+                                        const idx = ticket.logs.indexOf(log);
                                         const kind = classifyLog(log.note);
                                         const meta = KIND_META[kind];
                                         const Icon = meta.icon;
@@ -512,7 +536,7 @@ export default function TicketDetailPage() {
                                         const isHuman = kind === "note" || ((kind === "success" || kind === "fail") && !!text);
                                         const prev = ticket.logs[idx - 1];                       // newer entry above
                                         const showStatus = !prev || prev.status !== log.status;  // collapse repeated stage label
-                                        const isLast = idx === ticket.logs.length - 1;
+                                        const isLast = gi === items.length - 1;
                                         return (
                                             <div key={log.id} className="relative flex gap-3 pb-4 last:pb-0">
                                                 {!isLast && <span className="absolute bottom-0 left-[13px] top-7 w-px bg-border" aria-hidden />}

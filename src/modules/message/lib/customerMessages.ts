@@ -1364,3 +1364,30 @@ export async function ticketLogMedia(
     }
     return out;
 }
+
+type LogAuthor = { userId?: number | null; userName?: string; avatarUrl?: string | null; channel?: string };
+
+/**
+ * Lines written by the WhatsApp code carry only a name and staff id, not a
+ * photo. Fill the current photo in at read time — staff by id, the customer's
+ * own lines from their Person record — so old lines get it too. Two small reads. Shared by the help, repair and deal ticket screens.
+ */
+export async function ticketLogAvatars<T extends { author: unknown }>(logs: T[], personId: number | null): Promise<T[]> {
+    const authorOf = (l: T) => (l.author ?? {}) as LogAuthor;
+    const missing = logs.filter((l) => !authorOf(l).avatarUrl);
+    if (!missing.length) return logs;
+    const staffIds = [...new Set(missing.map((l) => authorOf(l).userId).filter((v): v is number => v != null))];
+    const customerLines = personId != null && missing.some((l) => { const a = authorOf(l); return a.channel === "WHATSAPP" && a.userId == null && a.userName !== "System"; });
+    const [users, person] = await Promise.all([
+        staffIds.length ? prisma.user.findMany({ where: { id: { in: staffIds } }, select: { id: true, avatarUrl: true } }) : [],
+        customerLines ? prisma.person.findUnique({ where: { id: personId! }, select: { avatarUrl: true } }) : null,
+    ]);
+    const photo = new Map(users.map((u) => [u.id, u.avatarUrl]));
+    return logs.map((l) => {
+        const a = authorOf(l);
+        if (a.avatarUrl) return l;
+        const url = a.userId != null ? photo.get(a.userId)
+            : a.channel === "WHATSAPP" && a.userName !== "System" ? person?.avatarUrl : null;
+        return url ? { ...l, author: { ...a, avatarUrl: url } } : l;
+    });
+}
