@@ -4,7 +4,7 @@
 // own parameters (arguments, filled in on the worker) and an output. The runtime
 // behaviour lives server-side in actions.ts (RUN_HANDLERS, keyed by `type`).
 
-export type ActionFieldKind = "pipeline" | "status" | "text" | "schedule";
+export type ActionFieldKind = "pipeline" | "status" | "text" | "schedule" | "wa_template" | "email_template";
 
 export type ActionTypeDef = {
     type: string;
@@ -30,11 +30,18 @@ export const ACTION_TYPES: ActionTypeDef[] = [
         fields: [{ key: "statusId", label: "Target status", kind: "status" }],
     },
     {
-        type: "email",
-        label: "Send email (stub)",
-        description: "Emails the ticket's customer. Stub for now — logs the email as an activity; real provider wires in later.",
-        output: "An email activity (message-id later)",
-        fields: [{ key: "subject", label: "Subject", kind: "text" }],
+        type: "send_whatsapp_template",
+        label: "Send WhatsApp template",
+        description: "Sends the customer one of your own WhatsApp templates (Settings → WhatsApp Templates → Your templates). Goes only when it is approved and switched on; once per ticket.",
+        output: "A WhatsApp message, once per ticket",
+        fields: [{ key: "template", label: "Template", kind: "wa_template" }],
+    },
+    {
+        type: "send_email_template",
+        label: "Send email template",
+        description: "Emails the customer one of your own email templates (Settings → Email Templates → Your templates), to a verified email only. Goes only when it is switched on; once per ticket.",
+        output: "An email, once per ticket",
+        fields: [{ key: "template", label: "Template", kind: "email_template" }],
     },
     {
         type: "retry",

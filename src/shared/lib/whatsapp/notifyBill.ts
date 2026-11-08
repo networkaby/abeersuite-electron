@@ -13,6 +13,9 @@ import {
     WA_TEMPLATE_LABEL,
     autoKindForVoucherType,
     fillBody,
+    sampleValuesFor,
+    type CustomTemplateKind,
+    type WaAnyKind,
     type WaFieldValues,
     type WaTemplateKind,
 } from "./billTemplates";
@@ -424,7 +427,7 @@ async function notifyTicketHelp(ticketId: number): Promise<NotifyResult> {
 
 /** Claim the (kind, refId) row, then send push + WhatsApp side by side. */
 async function deliver(d: {
-    kind: WaTemplateKind;
+    kind: WaAnyKind;
     refId: number;
     linkCode: string;
     personId: number | null;
@@ -466,7 +469,7 @@ export type WaOutcome = { status: string; messageId?: string; error?: string };
  *  customer's Messages thread. No claim row — `deliver` above claims one per
  *  document; a due reminder logs its own (dueReminders.ts). */
 export async function sendPushAndWhatsApp(d: {
-    kind: WaTemplateKind;
+    kind: WaAnyKind;
     refId: number;
     linkCode: string;
     personId: number | null;
@@ -497,7 +500,7 @@ export async function sendPushAndWhatsApp(d: {
     return { mobile, push, wa };
 }
 
-async function sendWhatsApp(kind: WaTemplateKind, linkCode: string, mobile: string | null, values: WaFieldValues, headerImage?: string): Promise<WaOutcome> {
+async function sendWhatsApp(kind: WaAnyKind, linkCode: string, mobile: string | null, values: WaFieldValues, headerImage?: string): Promise<WaOutcome> {
     if (!mobile) return { status: "no-mobile" };
     const tpl = await getApprovedWaTemplate(kind);
     if (!tpl) {
@@ -521,6 +524,66 @@ async function sendWhatsApp(kind: WaTemplateKind, linkCode: string, mobile: stri
         return { status: "sent", messageId };
     } catch (e) {
         return { status: "failed", error: (e instanceof Error ? e.message : String(e)).slice(0, 500) };
+    }
+}
+
+// ── Workflow: "Send WhatsApp / email template" on a worker ───────────────────
+
+export type TicketCustomer = { personId: number | null; name: string; phones: PhoneRow[]; emails: EmailRow[] };
+
+/** The ticket's customer, whatever the pipeline: the repaired device's owner,
+ *  else the deal's or help ticket's person / company / typed phone. */
+export async function loadTicketCustomer(ticketId: number): Promise<TicketCustomer | null> {
+    const party = { select: { id: true, name: true, phones: phonesSelect, emails: emailsSelect } } as const;
+    const t = await prisma.ticket.findUnique({
+        where: { id: ticketId },
+        select: {
+            repair: { select: { device: { select: { account: { select: partySelect } } } } },
+            deal: { select: { contactName: true, phone: true, personId: true, person: party, company: party } },
+            help: { select: { contactName: true, phone: true, personId: true, person: party, company: party } },
+        },
+    });
+    if (!t) return null;
+    const acc = t.repair?.device?.account;
+    const owner = acc?.person ?? acc?.company;
+    if (acc && owner) return { personId: acc.personId, name: owner.name, phones: owner.phones, emails: owner.emails };
+    const c = t.deal ?? t.help;
+    if (!c) return null;
+    const p = c.person ?? c.company;
+    const phones = p?.phones.length ? p.phones : c.phone ? [{ phone: c.phone, isPrimary: true, verifiedAt: null }] : [];
+    return { personId: c.personId ?? null, name: c.contactName || p?.name || "Customer", phones, emails: p?.emails ?? [] };
+}
+
+/** Values a custom template can use on a ticket: customer, shop, app. */
+export function ticketTemplateValues(kind: CustomTemplateKind, customer: TicketCustomer): WaFieldValues {
+    return { ...sampleValuesFor(kind), customer: customer.name, shop: getOrganisation().brandName, app: WA_APP_LINK };
+}
+
+/** Send one of staff's own WhatsApp templates to a ticket's customer. Only an
+ *  approved, switched-on template goes; once per (template, ticket). No app
+ *  notification — the wording is staff's own, not a document announcement. */
+export async function notifyTicketTemplate(kind: CustomTemplateKind, ticketId: number): Promise<NotifyResult> {
+    try {
+        if (IS_COUNTER_PC) return { status: "skipped", reason: "counter" };
+        const approved = await getApprovedWaTemplate(kind);
+        if (!approved) return { status: "skipped", reason: "template not approved or switched off" };
+        const c = await loadTicketCustomer(ticketId);
+        if (!c) return { status: "skipped", reason: "no customer" };
+        if (!pickMobile(c.phones)) return { status: "skipped", reason: "no customer mobile" };
+        const values = ticketTemplateValues(kind, c);
+        return await deliver({
+            kind,
+            refId: ticketId,
+            linkCode: `t${ticketId}`,
+            personId: null,
+            phones: c.phones,
+            values,
+            push: { title: "", body: "" },
+            summary: fillBody(approved.draft.body, values).slice(0, 200),
+        });
+    } catch (e) {
+        console.error(`[notify-template] ${kind} ticket ${ticketId} failed`, e);
+        return { status: "skipped", reason: "error" };
     }
 }
 

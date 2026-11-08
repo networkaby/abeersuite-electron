@@ -4,7 +4,9 @@ import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { spawnChild } from "./spawnChild";
 import { isKnownActionType } from "./actionTypes";
 import { after } from "next/server";
-import { notifyRepair } from "@/shared/lib/whatsapp/notifyBill";
+import { notifyRepair, notifyTicketTemplate, type NotifyResult } from "@/shared/lib/whatsapp/notifyBill";
+import { notifyTicketEmail } from "@/shared/lib/email/notifyEmail";
+import { isCustomKind } from "@/shared/lib/whatsapp/billTemplates";
 
 // ── Worker action runtime (6th power) ─────────────────────────────────────────
 // Actions are read-only CODE hooks (catalog in actionTypes.ts). A worker carries an
@@ -69,18 +71,19 @@ const RUN_HANDLERS: Record<string, RunHandler> = {
         });
     },
 
-    // Email the ticket's customer — STUB (logs the email). args: { subject }.
-    async email(ctx, config) {
-        const subject = str(config, "subject") ?? "(no subject)";
-        const ticket = await prisma.ticket.findUnique({
-            where: { id: ctx.ticketId },
-            select: { repair: { select: { device: { select: { account: { select: { person: { select: { name: true } }, company: { select: { name: true } } } } } } } } },
-        });
-        const acc = ticket?.repair?.device?.account;
-        const to = acc?.person?.name ?? acc?.company?.name ?? "customer";
-        await prisma.ticketLog.create({
-            data: { ticketId: ctx.ticketId, status: ctx.status, note: `📧 Email to ${to} — "${subject}" (stub)`, author: ctx.author },
-        });
+    // One of staff's own templates to the ticket's customer, after the
+    // response; once per (template, ticket). args: { template } = CUSTOM_<id>.
+    async send_whatsapp_template(ctx, config) {
+        const kind = str(config, "template");
+        if (!kind || !isCustomKind(kind)) return;
+        const label = await templateName("wa", kind);
+        after(async () => logTemplate(ctx, "WhatsApp", label, await notifyTicketTemplate(kind, ctx.ticketId)));
+    },
+    async send_email_template(ctx, config) {
+        const kind = str(config, "template");
+        if (!kind || !isCustomKind(kind)) return;
+        const label = await templateName("email", kind);
+        after(async () => logTemplate(ctx, "Email", label, await notifyTicketEmail(kind, ctx.ticketId)));
     },
 
     // Snooze the ticket and re-surface it in the Work Inbox after the interval — a
@@ -114,6 +117,22 @@ async function logNotify(ctx: ActionRunContext, what: string, r: { status: strin
         r.status === "sent" ? `📲 Customer told: ${what} (app + WhatsApp)`
             : r.status === "already" ? `📲 ${what} message was already sent`
                 : `📲 ${what} message not sent — ${r.reason ?? "skipped"}`;
+    await prisma.ticketLog.create({ data: { ticketId: ctx.ticketId, status: ctx.status, note, author: ctx.author } });
+}
+
+async function templateName(channel: "wa" | "email", kind: string): Promise<string> {
+    const row = channel === "wa"
+        ? await prisma.whatsAppTemplate.findUnique({ where: { kind }, select: { name: true } })
+        : await prisma.emailTemplate.findUnique({ where: { kind }, select: { name: true } });
+    return row?.name ?? "template";
+}
+
+async function logTemplate(ctx: ActionRunContext, channel: string, name: string, r: NotifyResult) {
+    const icon = channel === "Email" ? "📧" : "📲";
+    const note =
+        r.status === "sent" ? `${icon} ${channel} sent: "${name}"`
+            : r.status === "already" ? `${icon} ${channel} "${name}" was already sent`
+                : `${icon} ${channel} "${name}" not sent — ${r.reason ?? "skipped"}`;
     await prisma.ticketLog.create({ data: { ticketId: ctx.ticketId, status: ctx.status, note, author: ctx.author } });
 }
 

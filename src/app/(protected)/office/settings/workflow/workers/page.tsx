@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { isCustomKind } from "@/shared/lib/whatsapp/billTemplates";
 import { toast } from "sonner";
 import { Check, ChevronRight, Copy, CornerUpLeft, GitBranch, GitMerge, Lock, Pencil, Plus, RefreshCw, Trash2, X, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -200,6 +201,8 @@ function WorkerFormModal({
     workers: Worker[];
     pipelines: Pipeline[];
 }) {
+    const templates = useCustomTemplates(open);
+
     // A worker belongs to exactly one parent status. Changing it re-keys the
     // single auto-advance entry (triggerMap) onto the new status.
     const setParentStatus = (value: string) => {
@@ -687,6 +690,18 @@ function WorkerFormModal({
                                                         {statuses.map((s) => (<SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>))}
                                                     </SelectContent>
                                                 </Select>
+                                            ) : field.kind === "wa_template" || field.kind === "email_template" ? (
+                                                <Select value={action.config[field.key] || "__none__"} onValueChange={(v) => setActionConfig(i, field.key, v === "__none__" ? "" : v)}>
+                                                    <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="Pick a template" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {(field.kind === "wa_template" ? templates.wa : templates.email).map((t) => (
+                                                            <SelectItem key={t.kind} value={t.kind}>{t.name}{t.ready ? "" : ` (${t.why})`}</SelectItem>
+                                                        ))}
+                                                        {(field.kind === "wa_template" ? templates.wa : templates.email).length === 0 && (
+                                                            <div className="px-2 py-1.5 text-xs text-muted-foreground">No templates yet — add one under Settings → {field.kind === "wa_template" ? "WhatsApp" : "Email"} Templates.</div>
+                                                        )}
+                                                    </SelectContent>
+                                                </Select>
                                             ) : (
                                                 <Input className="h-8 flex-1" value={action.config[field.key] ?? ""} onChange={(e) => setActionConfig(i, field.key, e.target.value)} placeholder={field.label} />
                                             )}
@@ -713,6 +728,33 @@ function WorkerFormModal({
             </DialogContent>
         </Dialog>
     );
+}
+
+type TemplateOption = { kind: string; name: string; ready: boolean; why: string };
+
+/** Staff's own WhatsApp / email templates for the worker actions' picker —
+ *  read once when the dialog opens. A template not ready yet is still listed,
+ *  with the reason, so it can be picked now and switched on later. */
+function useCustomTemplates(open: boolean) {
+    const [list, setList] = useState<{ wa: TemplateOption[]; email: TemplateOption[] }>({ wa: [], email: [] });
+    useEffect(() => {
+        if (!open) return;
+        type Row = { kind: string; name: string | null; enabled: boolean; approved?: unknown };
+        const own = (rows: Row[]) => rows.filter((t) => isCustomKind(t.kind));
+        Promise.all([
+            axios.get("/api/settings/whatsapp-templates").catch(() => ({ data: { templates: [] } })),
+            axios.get("/api/settings/email-templates").catch(() => ({ data: { templates: [] } })),
+        ]).then(([wa, em]) => setList({
+            wa: own(wa.data.templates).map((t) => ({
+                kind: t.kind,
+                name: t.name ?? "Untitled",
+                ready: t.enabled && !!t.approved,
+                why: !t.approved ? "not approved yet" : "switched off",
+            })),
+            email: own(em.data.templates).map((t) => ({ kind: t.kind, name: t.name ?? "Untitled", ready: t.enabled, why: "switched off" })),
+        }));
+    }, [open]);
+    return list;
 }
 
 export default function WorkersPage() {

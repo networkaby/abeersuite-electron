@@ -2,7 +2,8 @@ import "server-only";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
-import { loadRepairMessage, loadVoucherMessage, type EmailRow, type NotifyResult } from "@/shared/lib/whatsapp/notifyBill";
+import { loadRepairMessage, loadTicketCustomer, loadVoucherMessage, ticketTemplateValues, type EmailRow, type NotifyResult } from "@/shared/lib/whatsapp/notifyBill";
+import type { CustomTemplateKind } from "@/shared/lib/whatsapp/billTemplates";
 import {
     EMAIL_TEMPLATE_KINDS,
     PORTAL_URL,
@@ -15,6 +16,7 @@ import {
     unsubscribeLine,
     type EmailFieldValues,
     type EmailTemplateDraft,
+    type EmailAnyKind,
     type EmailTemplateKind,
 } from "./emailTemplates";
 import { getEmailTemplate, type EmailSendState } from "./emailTemplateStore";
@@ -37,7 +39,7 @@ import { isOptedOut, unsubscribeUrl } from "./unsubscribe";
  * Never throws.
  */
 export async function sendTemplatedEmail(d: {
-    kind: EmailTemplateKind;
+    kind: EmailAnyKind;
     refId: number;
     emails: EmailRow[];
     /** Loaded only once the cheap checks pass. */
@@ -165,4 +167,17 @@ function pickEmail(emails: EmailRow[]): string | null {
     const ok = emails.filter((e) => e.verifiedAt && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.email));
     ok.sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary));
     return ok[0]?.email ?? null;
+}
+
+/** Workflow "Send email template": one of staff's own email templates to the
+ *  ticket's customer (verified email only). Once per (template, ticket). */
+export async function notifyTicketEmail(kind: CustomTemplateKind, ticketId: number): Promise<NotifyResult> {
+    try {
+        const c = await loadTicketCustomer(ticketId);
+        if (!c) return { status: "skipped", reason: "no customer" };
+        return sendTemplatedEmail({ kind, refId: ticketId, emails: c.emails, values: ticketTemplateValues(kind, c) });
+    } catch (e) {
+        console.error(`[notify-email] ${kind} ticket ${ticketId} failed`, e);
+        return { status: "skipped", reason: "error" };
+    }
 }
