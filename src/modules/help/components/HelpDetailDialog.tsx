@@ -136,6 +136,11 @@ export default function HelpDetailDialog({
 
     const isClosed = Boolean(ticket?.ticketStatus.isTerminal);
     const moveStages = ticket?.nextStages ?? [];
+    // Stage dropdown = where the ticket is + the working stages it may move to
+    // (final stages sit on the Move To buttons below).
+    const stageOptions = ticket
+        ? stages.filter((s) => s.id === ticket.status || moveStages.some((m) => m.id === s.id && !m.isTerminal))
+        : [];
     const priority = ticket ? (PRIORITY_META[ticket.priority] ?? PRIORITY_META.MEDIUM) : null;
     const customer = ticket ? helpCustomerName(ticket) : "";
 
@@ -389,7 +394,7 @@ export default function HelpDetailDialog({
                                                 <Select value={ticket.status} onValueChange={(v) => patch({ status: v }, "Stage updated")} disabled={busy}>
                                                     <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                                                     <SelectContent>
-                                                        {stages.filter((s) => !s.isTerminal).map((s) => (
+                                                        {stageOptions.map((s) => (
                                                             <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
                                                         ))}
                                                     </SelectContent>

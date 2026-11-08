@@ -121,6 +121,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (!target || target.pipelineId !== existing.pipelineId) {
                 return NextResponse.json({ error: "Invalid stage for Help Desk pipeline" }, { status: 400 });
             }
+            // A working stage may move only along its "Transitions To" list (Workflow →
+            // Statuses). Reopening a closed ticket is the one exception — final stages
+            // carry no transitions, and Reopen must still work.
+            if (!existing.ticketStatus?.isTerminal) {
+                const allowed = await prisma.statusTransition.findUnique({
+                    where: { fromStatusId_toStatusId: { fromStatusId: existing.status, toStatusId: targetStatus } },
+                    select: { id: true },
+                });
+                if (!allowed) {
+                    return NextResponse.json({ error: `This stage cannot move to "${target.label}"` }, { status: 400 });
+                }
+            }
             closedAt = target.isTerminal ? new Date() : null;
             reopening = Boolean(existing.ticketStatus?.isTerminal) && !target.isTerminal;
             notes.push(reopening ? "Reopened" : `Moved to "${target.label}"`);
