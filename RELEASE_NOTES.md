@@ -23,6 +23,10 @@ Every counter should install this one. It adds new fields to products for the on
 - Better maker photos: up to 8 photos are found on a maker's page instead of 1, and sites that block reading are handled.
 - Fact check is stricter: a number counts only with its proper unit, and short brands like HP and LG are recognised.
 
+## WhatsApp
+
+- WhatsApp chat popups now stay on screen: one chat is open and the others sit as strips below it.
+
 ## Price Watch
 
 - New read-only **Price Watch**: compares our prices with Amazon.in and Flipkart (and the maker's MRP) and reports which ones need attention. It never changes a price.
