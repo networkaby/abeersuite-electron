@@ -691,7 +691,7 @@ function WorkerFormModal({
                                                     </SelectContent>
                                                 </Select>
                                             ) : field.kind === "wa_template" || field.kind === "email_template" ? (
-                                                <Select value={action.config[field.key] || "__none__"} onValueChange={(v) => setActionConfig(i, field.key, v === "__none__" ? "" : v)}>
+                                                <Select value={action.config[field.key] || undefined} onValueChange={(v) => setActionConfig(i, field.key, v === "__none__" ? "" : v)}>
                                                     <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="Pick a template" /></SelectTrigger>
                                                     <SelectContent>
                                                         {(field.kind === "wa_template" ? templates.wa : templates.email).map((t) => (

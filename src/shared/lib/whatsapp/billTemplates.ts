@@ -36,8 +36,8 @@ export type WaTemplateKind = (typeof WA_TEMPLATE_KINDS)[number];
 
 // ── Custom templates ────────────────────────────────────────────────────────
 // Staff's own templates, added on Settings → WhatsApp / Email Templates. They
-// have no event of their own, so nothing sends them by itself — staff will
-// pick them when sending by hand (chat, campaigns, 3-dot menu: not built yet).
+// have no event of their own: a Workflow worker action sends them (actions.ts).
+// Picking one by hand (chat, campaigns, 3-dot menu) is not built yet.
 // The row's kind is CUSTOM_<id>; its label is the row's own name.
 
 export type CustomTemplateKind = `CUSTOM_${string}`;
@@ -56,7 +56,7 @@ export function newCustomKind(): CustomTemplateKind {
     return `CUSTOM_${Date.now().toString(36).toUpperCase()}`;
 }
 export const CUSTOM_NAME_MAX = 40;
-export const CUSTOM_TEMPLATE_WHEN = "Your own template — never sent by itself. Picking it when sending by hand comes in a later update.";
+export const CUSTOM_TEMPLATE_WHEN = "A Workflow worker with the action \"Send WhatsApp template\" / \"Send email template\" set to this template is completed. Never sent by itself otherwise.";
 
 /** Label for any kind: a custom one shows its own name. */
 export function waKindLabel(kind: WaAnyKind, name?: string | null): string {
