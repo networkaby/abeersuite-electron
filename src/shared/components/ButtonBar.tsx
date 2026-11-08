@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useResizable } from "@/shared/hooks/useResizable";
+import { useHoverPeek } from "@/shared/hooks/useHoverPeek";
 import { usePanelStore } from "@/store/panelStore";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import axios from "axios";
-import { PanelRightClose, PanelRightOpen } from "lucide-react";
+import { PanelRightClose, PanelRightOpen, Pin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { BUTTON_BAR_ACTIONS } from "@/shared/lib/constants/quickActions";
 import { type ModuleCreateAction } from "@/shared/lib/constants/nav";
@@ -75,7 +76,10 @@ export default function ButtonBar({ user }: { user?: UserType }) {
     // usePanelStore's own `persist` middleware is the single source of truth for
     // bar mode (localStorage key "panel-store") — no separate bridge needed.
     const { barMode, setBarMode } = usePanelStore();
-    const collapsed = barMode === "collapsed";
+    const hoverMode = barMode === "hover";
+    const { peeking, onMouseEnter: onPeekEnter, onMouseLeave: onPeekLeave } = useHoverPeek(hoverMode);
+    // Hover mode shows the rail until the mouse rests on it, then the full bar.
+    const collapsed = barMode === "collapsed" || (hoverMode && !peeking);
     const isHidden = barMode === "hidden";
     const [moreOpen, setMoreOpen] = useState(false);
     // GL voucher opened in place over the office (left-click); right-click → new window.
@@ -186,8 +190,12 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                 className="dark chrome-surface relative flex h-full flex-col border-l border-border-strong bg-surface-rail shrink-0 overflow-hidden text-foreground"
                 style={{
                     width: isHidden ? 0 : collapsed ? 64 : barWidth,
-                    transition: barDragging ? "none" : "width 0.3s ease",
+                    transition: barDragging ? "none" : "width 0.3s ease, margin 0.3s ease",
+                    // Peeking floats over the page: the layout keeps only the 64px rail.
+                    ...(peeking ? { marginLeft: 64 - barWidth, zIndex: 40, boxShadow: "-4px 0 16px rgb(0 0 0 / 0.25)" } : null),
                 }}
+                onMouseEnter={onPeekEnter}
+                onMouseLeave={onPeekLeave}
             >
 
                 {/* Drag-to-resize handle — left edge, expanded only; stays outside the slide wrapper */}
@@ -220,21 +228,21 @@ export default function ButtonBar({ user }: { user?: UserType }) {
                         {collapsed ? (
                             <button
                                 type="button"
-                                title="Expand action bar"
-                                onClick={() => setBarMode("expanded")}
+                                title={hoverMode ? "Keep action bar open" : "Open on mouse-over"}
+                                onClick={() => setBarMode(hoverMode ? "expanded" : "hover")}
                                 className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                             >
-                                <PanelRightOpen size={15} />
+                                {hoverMode ? <Pin size={14} /> : <PanelRightOpen size={15} />}
                             </button>
                         ) : (
 
                             <button
                                 type="button"
-                                title="Collapse action bar"
-                                onClick={() => setBarMode("collapsed")}
+                                title={hoverMode ? "Keep action bar open" : "Collapse action bar"}
+                                onClick={() => setBarMode(hoverMode ? "expanded" : "collapsed")}
                                 className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
                             >
-                                <PanelRightClose size={14} />
+                                {hoverMode ? <Pin size={14} /> : <PanelRightClose size={14} />}
                             </button>
 
                         )}

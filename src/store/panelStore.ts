@@ -1,8 +1,9 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export type PanelMode = "expanded" | "collapsed" | "hidden";
-type VisibleMode = "expanded" | "collapsed";
+/** "hover" = narrow rail that floats open over the page while the mouse is on it. */
+export type PanelMode = "expanded" | "collapsed" | "hover" | "hidden";
+type VisibleMode = "expanded" | "collapsed" | "hover";
 
 interface PanelStore {
     sidebarMode: PanelMode;

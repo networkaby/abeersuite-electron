@@ -2,6 +2,7 @@
 
 import { useState, useEffect, type CSSProperties, type ReactNode } from "react";
 import { useResizable } from "@/shared/hooks/useResizable";
+import { useHoverPeek } from "@/shared/hooks/useHoverPeek";
 import { usePanelStore } from "@/store/panelStore";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -13,7 +14,7 @@ import axios from "axios";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
     Settings, ChevronDown, LogOut, LayoutDashboard,
-    PanelLeftClose, PanelLeftOpen, Sun, Moon, ShieldCheck, RefreshCw,
+    PanelLeftClose, PanelLeftOpen, Pin, Sun, Moon, ShieldCheck, RefreshCw,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -146,7 +147,10 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     // usePanelStore's own `persist` middleware is the single source of truth for
     // sidebar mode (localStorage key "panel-store") — no separate bridge needed.
     const { sidebarMode, setSidebarMode } = usePanelStore();
-    const collapsed = sidebarMode === "collapsed";
+    const hoverMode = sidebarMode === "hover";
+    const { peeking, onMouseEnter: onPeekEnter, onMouseLeave: onPeekLeave } = useHoverPeek(hoverMode);
+    // Hover mode shows the rail until the mouse rests on it, then the full panel.
+    const collapsed = sidebarMode === "collapsed" || (hoverMode && !peeking);
     const isHidden = sidebarMode === "hidden";
 
     const {
@@ -497,8 +501,12 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
             className="dark chrome-surface relative flex h-full flex-col border-r border-border-strong bg-surface-rail shrink-0 overflow-hidden text-foreground"
             style={{
                 width: isHidden ? 0 : collapsed ? 64 : sidebarWidth,
-                transition: sidebarDragging ? "none" : "width 0.3s ease",
+                transition: sidebarDragging ? "none" : "width 0.3s ease, margin 0.3s ease",
+                // Peeking floats over the page: the layout keeps only the 64px rail.
+                ...(peeking ? { marginRight: 64 - sidebarWidth, zIndex: 40, boxShadow: "4px 0 16px rgb(0 0 0 / 0.25)" } : null),
             }}
+            onMouseEnter={onPeekEnter}
+            onMouseLeave={onPeekLeave}
             // One handler for every sidebar link — same right-click menu the
             // Quick Actions bar shows.
             onContextMenu={onNavContextMenu}
@@ -535,11 +543,11 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                         <div className="flex flex-col items-center gap-2">
                             <button
                                 type="button"
-                                title="Expand sidebar"
-                                onClick={() => setSidebarMode("expanded")}
+                                title={hoverMode ? "Keep sidebar open" : "Open on mouse-over"}
+                                onClick={() => setSidebarMode(hoverMode ? "expanded" : "hover")}
                                 className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                             >
-                                <PanelLeftOpen size={15} />
+                                {hoverMode ? <Pin size={14} /> : <PanelLeftOpen size={15} />}
                             </button>
                             <button
                                 type="button"
@@ -578,11 +586,11 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                     </button>
                                     <button
                                         type="button"
-                                        title="Collapse sidebar"
-                                        onClick={() => setSidebarMode("collapsed")}
+                                        title={hoverMode ? "Keep sidebar open" : "Collapse sidebar"}
+                                        onClick={() => setSidebarMode(hoverMode ? "expanded" : "collapsed")}
                                         className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                                     >
-                                        <PanelLeftClose size={14} />
+                                        {hoverMode ? <Pin size={14} /> : <PanelLeftClose size={14} />}
                                     </button>
                                 </div>
                             </div>

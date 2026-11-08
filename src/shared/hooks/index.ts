@@ -35,3 +35,4 @@ export { useWaSendStates, sendOnWhatsApp, type WaSendStates, type WaSendTarget }
 export { useSessionState, useLocalState, useSessionScroll } from "./useSessionState";
 export { useDraggableFab } from "./useDraggableFab";
 export { useObjectUrls } from "./useObjectUrls";
+export { useHoverPeek } from "./useHoverPeek";
