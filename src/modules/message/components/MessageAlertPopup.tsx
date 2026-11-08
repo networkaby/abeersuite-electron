@@ -314,6 +314,11 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
         ro.observe(el);
         return () => ro.disconnect();
     }, [place.minimised, hasCards, hasStack]);
+    // A moved card's real height, so its top is kept on screen too.
+    const [cardH, setCardH] = useState<Record<string, number>>({});
+    const measureCard = (phone: string) => (el: HTMLDivElement | null) => {
+        if (el && el.offsetHeight !== cardH[phone]) setCardH((m) => ({ ...m, [phone]: el.offsetHeight }));
+    };
     // The stack shows one chat open; the rest are name strips above it.
     const [front, setFront] = useState<string | null>(null);
 
@@ -603,9 +608,9 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
             )}
             {!place.minimised && shown.filter((a) => cards[a.phone]).map((a) => {
                 // A card moved on its own; kept on screen if the window shrank.
-                const sp = clampSpot(cards[a.phone], 384, 140);
+                const sp = clampSpot(cards[a.phone], 384, (cardH[a.phone] ?? 140) + 8);
                 return (
-                    <div key={a.phone} style={{ right: sp.right, bottom: sp.bottom }} className="fixed z-[60] w-96 max-w-[calc(100vw-1rem)]">
+                    <div key={a.phone} ref={measureCard(a.phone)} style={{ right: sp.right, bottom: sp.bottom }} className="fixed z-[60] max-h-[calc(100vh-1rem)] w-96 max-w-[calc(100vw-1rem)] overflow-y-auto">
                         {renderCard(a)}
                     </div>
                 );
