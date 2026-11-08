@@ -287,6 +287,8 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
         });
     }, [items, dismissed, me, now]);
     const hasCards = visible.length > 0;
+    // The stack box mounts only when some chat sits in it — measure it then too.
+    const hasStack = visible.slice(0, MAX_CARDS).some((a) => !cards[a.phone]);
 
     // A moved card's spot lasts only while its chat is waiting. Dropped while
     // rendering (nothing fetched yet → every saved spot is kept); the copy in
@@ -311,7 +313,9 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
         const ro = new ResizeObserver(() => setBoxH(el.offsetHeight));
         ro.observe(el);
         return () => ro.disconnect();
-    }, [place.minimised, hasCards]);
+    }, [place.minimised, hasCards, hasStack]);
+    // The stack shows one chat open; the rest are name strips above it.
+    const [front, setFront] = useState<string | null>(null);
 
     // Sound + a Windows notification for each message that newly reaches this
     // person. The first answer after mount only primes the set — a reload must
@@ -607,8 +611,27 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
                 );
             })}
             {stacked.length > 0 && !place.minimised && (
-                <div ref={boxRef} style={{ right: place.right, bottom: Math.max(0, Math.min(place.bottom, (typeof window === "undefined" ? 0 : window.innerHeight) - boxH - 8)) }} className="fixed z-[60] flex w-96 max-w-[calc(100vw-1rem)] flex-col gap-2">
-                    {stacked.map(renderCard)}
+                <div ref={boxRef} style={{ right: place.right, bottom: Math.max(0, Math.min(place.bottom, (typeof window === "undefined" ? 0 : window.innerHeight) - boxH - 8)) }} className="fixed z-[60] flex max-h-[calc(100vh-1rem)] w-96 max-w-[calc(100vw-1rem)] flex-col gap-1 overflow-y-auto">
+                    {(() => {
+                        // The open chat is the first layer; every other chat is a strip below it.
+                        const openPhone = stacked.some((x) => x.phone === front) ? front : stacked[0].phone;
+                        return [...stacked.filter((x) => x.phone === openPhone), ...stacked.filter((x) => x.phone !== openPhone)];
+                    })().map((a, i) => {
+                        if (i === 0) return renderCard(a);
+                        return (
+                            <button
+                                key={a.phone}
+                                onClick={() => setFront(a.phone)}
+                                className="flex shrink-0 items-center gap-2 rounded-lg border border-green-300 bg-background px-3 py-1.5 text-left shadow dark:border-green-800"
+                                title="Open this chat"
+                            >
+                                <MessageCircle className="size-4 shrink-0 text-green-600" />
+                                <span className="min-w-0 flex-1 truncate text-sm font-semibold">{a.name}</span>
+                                {a.count > 1 && <span className="rounded-full bg-green-600 px-1.5 text-[11px] text-white">{a.count}</span>}
+                                {a.waiting && <span className="text-[11px] text-amber-600">waiting</span>}
+                            </button>
+                        );
+                    })}
                     {more > 0 && (
                         <button onClick={() => router.push(href)} className="self-end rounded-md bg-green-600 px-2 py-1 text-xs text-white shadow">
                             +{more} more waiting
