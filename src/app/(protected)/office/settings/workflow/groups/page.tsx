@@ -4,11 +4,10 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
-import { Lock, Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,9 +16,11 @@ import { badgeColor } from "@/shared/lib/format/entityColor";
 import { ColorPicker, randomColor } from "@/shared/components/ColorPicker";
 
 interface Work { id: string; label: string; color: string; }
-interface WorkGroup { id: string; name: string; label: string; color: string; order: number; permissionId: string | null; works: Work[]; }
-type FormValues = { name: string; label: string; color: string; gated: boolean };
-const BLANK: FormValues = { name: "", label: "", color: "bg-gray-100 text-gray-600", gated: false };
+interface WorkGroup { id: string; name: string; label: string; color: string; order: number; works: Work[]; }
+// No "Gated" option: nothing grants or enforces a group permission (the Role page
+// has no row for it, the Work Inbox never checks it). Gate the individual works instead.
+type FormValues = { name: string; label: string; color: string };
+const BLANK: FormValues = { name: "", label: "", color: "bg-gray-100 text-gray-600" };
 
 // Module-scope so it keeps a stable identity across the page's re-renders (a dialog
 // defined inside the page component remounts on every keystroke → input loses focus).
@@ -49,10 +50,6 @@ function GroupDialog({ open, onOpenChange, form, setForm, id, onSave, saving }: 
                         <Label>Color</Label>
                         <ColorPicker value={form.color} onChange={(c) => setForm({ ...form, color: c })} />
                     </div>
-                    <label className="flex items-center gap-2 text-sm">
-                        <Checkbox checked={form.gated} onCheckedChange={(c) => setForm({ ...form, gated: c === true })} />
-                        Gated <span className="text-xs text-muted-foreground">(only roles you grant the permission to can see this group&apos;s tickets in the Work Inbox)</span>
-                    </label>
                 </div>
                 <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
@@ -141,15 +138,8 @@ export default function WorkGroupsPage() {
                                             <div key={g.id} className="space-y-2 rounded-md border p-3">
                                                 <div className="flex items-center gap-3">
                                                     <span className="text-sm font-medium">{g.name || g.label}</span>
-                                                    {g.permissionId ? (
-                                                        <Badge variant="outline" className="gap-1 text-amber-700">
-                                                            <Lock size={11} /> Gated
-                                                        </Badge>
-                                                    ) : (
-                                                        <Badge variant="outline" className="text-muted-foreground">Ungated</Badge>
-                                                    )}
                                                     <span className="ml-auto text-xs text-muted-foreground">{g.works.length} work{g.works.length !== 1 ? "s" : ""}</span>
-                                                    <Button type="button" size="sm" variant="outline" onClick={() => { setEditId(g.id); setEditForm({ name: g.name, label: g.label, color: g.color, gated: !!g.permissionId }); }}><Pencil size={13} /> Edit</Button>
+                                                    <Button type="button" size="sm" variant="outline" onClick={() => { setEditId(g.id); setEditForm({ name: g.name, label: g.label, color: g.color }); }}><Pencil size={13} /> Edit</Button>
                                                     <Button type="button" size="icon-sm" variant="destructive" onClick={() => remove(g.id)} disabled={deletingId === g.id} title="Delete (works keep, ungrouped)"><Trash2 size={13} /></Button>
                                                 </div>
                                                 {g.works.length > 0 && <div className="flex flex-wrap gap-1.5">{g.works.map((w) => <Badge key={w.id} {...badgeColor(w.color)}>{w.label}</Badge>)}</div>}
