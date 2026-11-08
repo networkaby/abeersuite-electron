@@ -814,7 +814,7 @@ export default function TicketDetailPage() {
                                 <NotebookPen size={15} /> Add Note
                             </Button>
 
-                            <RepairWhatsAppButtons ticketId={ticket.id} className={actionBtnBase} />
+                            <RepairWhatsAppButtons ticketId={ticket.id} status={ticket.status} className={actionBtnBase} />
 
                             {canTransfer && !ticket.ticketStatus.isTerminal && (
                                 <Button onClick={() => setShowTransferModal(true)} variant="outline" className={actionBtnBase} disabled={workInProgress}>

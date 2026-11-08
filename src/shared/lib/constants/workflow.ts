@@ -43,6 +43,19 @@ export const WORKFLOW_STATUS = {
      *   S3 "Repairing" · S5 "Received Back" · S6 "Ready"
      */
     readyToBill: ["S6"] as string[],
+
+    /**
+     * Repair pipeline (P1) statuses where the manual "WhatsApp: Repair received"
+     * button is offered — the intake stage only. Seed label: S1 "Received".
+     */
+    repairReceived: ["S1"] as string[],
+
+    /**
+     * Repair pipeline (P1) statuses where the manual "WhatsApp: Repair ready"
+     * button is offered — the device is done and waiting for the customer.
+     * Seed label: S6 "Ready".
+     */
+    repairReady: ["S6"] as string[],
 } as const;
 
 export type WorkflowStatusRole = keyof typeof WORKFLOW_STATUS;
