@@ -1,3 +1,4 @@
+import type { WorkArg } from "@/modules/repairing/lib/ticketSources";
 export type HelpPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 export type HelpInquiryType = "PRICE" | "AVAILABILITY" | "TECH_INFO" | "WARRANTY" | "OTHER";
 export type HelpOutcome =
@@ -20,13 +21,6 @@ export const INQUIRY_LABEL: Record<HelpInquiryType, string> = Object.fromEntries
     INQUIRY_TYPES.map((i) => [i.value, i.label]),
 ) as Record<HelpInquiryType, string>;
 
-/** Non-convert close outcomes offered as buttons (convert outcomes are set by the
- *  convert flow, not chosen here). */
-export const CLOSE_OUTCOMES: { value: HelpOutcome; label: string; hint: string }[] = [
-    { value: "RESOLVED_INFO", label: "Resolved (info given)", hint: "Advice / price / info given, nothing more to do" },
-    { value: "NOT_FEASIBLE", label: "Not feasible", hint: "We don't handle this / not available & can't be arranged" },
-    { value: "CUSTOMER_DECLINED", label: "Customer declined", hint: "Customer chose not to proceed" },
-];
 export const OUTCOME_LABEL: Record<HelpOutcome, string> = {
     NOT_FEASIBLE: "Not feasible",
     CUSTOMER_DECLINED: "Customer declined",
@@ -116,8 +110,29 @@ export interface HelpLogDto {
     media?: { mediaUrl: string | null; downloadUrl: string | null; mediaType: string | null; fileName: string | null } | null;
 }
 
+interface HelpRouteTarget { id: string; label: string }
+
+/** The ticket's current sub-step (worker) — drives the shared WorkActions buttons. */
+export interface HelpWorkerDto {
+    id: string;
+    label: string;
+    color: string;
+    actionLabel: string | null;
+    work: {
+        label: string; successLabel: string | null; failLabel: string | null; startLabel: string | null;
+        prompt: string | null; successPopup: boolean; failPopup: boolean; args: WorkArg[] | null;
+    } | null;
+    successWorker: HelpRouteTarget | null;
+    failWorker: HelpRouteTarget | null;
+    successStatus: HelpRouteTarget | null;
+    failStatus: HelpRouteTarget | null;
+}
+
 export interface HelpDetailDto extends HelpDto {
     logs: HelpLogDto[];
+    ticketWorker: HelpWorkerDto | null;
+    /** Stages this ticket may move to — its stage's "Transitions To" list. */
+    nextStages: { id: string; label: string; isTerminal: boolean }[];
 }
 
 /** Best display name for a help ticket's customer (existing party or walk-in). */

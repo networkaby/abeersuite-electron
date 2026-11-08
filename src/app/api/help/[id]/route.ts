@@ -9,10 +9,26 @@ import { HELP_TICKET_SELECT, flattenHelp } from "../route";
 import { parseNumericId } from "@/shared/lib/api/parseNumericId";
 import { ticketLogAvatars, ticketLogMedia, type LogMedia } from "@/modules/message/lib/customerMessages";
 import { messageOnStatusEntry } from "@/modules/repairing/lib/actions";
+import { findEntryWorker } from "@/modules/repairing/lib/entryWorker";
+import { OUTCOME_LABEL, type HelpOutcome } from "@/modules/help/lib/types";
+
+// The current sub-step (worker) + what its Work asks for — same shape the repair
+// ticket page feeds to WorkActions, so Help reuses the one workflow engine.
+const HELP_WORKER_SELECT = {
+    select: {
+        id: true, label: true, color: true, actionLabel: true,
+        work: { select: { label: true, successLabel: true, failLabel: true, startLabel: true, prompt: true, successPopup: true, failPopup: true, args: true } },
+        successWorker: { select: { id: true, label: true } },
+        failWorker: { select: { id: true, label: true } },
+        successStatus: { select: { id: true, label: true } },
+        failStatus: { select: { id: true, label: true } },
+    },
+} as const;
 
 // Help ticket + its timeline (TicketLog rows — advise notes, stage moves, close).
 const HELP_DETAIL_SELECT = {
     ...HELP_TICKET_SELECT,
+    ticketWorker: HELP_WORKER_SELECT,
     logs: {
         orderBy: { createdAt: "desc" as const },
         select: { id: true, kind: true, note: true, createdAt: true, author: true, data: true },
@@ -22,9 +38,10 @@ const HELP_DETAIL_SELECT = {
 type LogRow = { id: number; kind: string; note: string | null; createdAt: Date; author: unknown };
 
 /** A WhatsApp line's photo / file rides on its log row (see ticketLogMedia). */
-function flattenHelpDetail(t: { logs: LogRow[] } & Parameters<typeof flattenHelp>[0], media: Map<number, LogMedia> = new Map()) {
+function flattenHelpDetail(t: { logs: LogRow[]; ticketWorker: unknown } & Parameters<typeof flattenHelp>[0], media: Map<number, LogMedia> = new Map()) {
     return {
         ...flattenHelp(t),
+        ticketWorker: t.ticketWorker ?? null,
         logs: t.logs.map((l) => ({ id: l.id, kind: l.kind, note: l.note, createdAt: l.createdAt, author: l.author, media: media.get(l.id) ?? null })),
     };
 }
@@ -37,8 +54,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     try {
         const t = await prisma.ticket.findUnique({ where: { id }, select: HELP_DETAIL_SELECT });
         if (!t || !t.help) return NextResponse.json({ error: "Help ticket not found" }, { status: 404 });
-        const [logs, media] = await Promise.all([ticketLogAvatars(t.logs, t.help.personId), ticketLogMedia(id, t.logs)]);
-        return NextResponse.json(flattenHelpDetail({ ...t, logs }, media));
+        const [logs, media, moves] = await Promise.all([
+            ticketLogAvatars(t.logs, t.help.personId),
+            ticketLogMedia(id, t.logs),
+            // The stage's "Transitions To" list (Workflow → Statuses) = the move buttons.
+            prisma.statusTransition.findMany({
+                where: { fromStatusId: t.status },
+                select: { to: { select: { id: true, label: true, isTerminal: true, order: true } } },
+            }),
+        ]);
+        const nextStages = moves.map((m) => m.to).sort((a, b) => a.order - b.order);
+        return NextResponse.json({ ...flattenHelpDetail({ ...t, logs }, media), nextStages });
     } catch (e) {
         return handleApiError(e, "Failed to fetch help ticket");
     }
@@ -80,7 +106,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (!closed) return NextResponse.json({ error: "Help Desk pipeline has no Closed stage" }, { status: 503 });
             targetStatus = closed.id;
             closedAt = new Date();
-            notes.push(`Closed — ${data.outcome.replace(/_/g, " ").toLowerCase()}`);
+            notes.push(`Closed — ${OUTCOME_LABEL[data.outcome as HelpOutcome]}`);
         }
 
         // Plain stage move → validate the target belongs to this pipeline; stamp/clear
@@ -134,9 +160,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             ...(reopening ? { outcome: null } : {}),
         };
 
+        // Entering a stage starts its hand-picked first step (TicketStatus.startWorker),
+        // exactly as a repair ticket does; a stage with none clears the old step.
+        const statusChanging = Boolean(targetStatus && targetStatus !== existing.status);
+        const entryWorker = statusChanging ? await findEntryWorker(targetStatus!) : null;
+
         const t = await prisma.ticket.update({
             where: { id },
             data: {
+                ...(statusChanging ? { workerId: entryWorker?.id ?? null, statusEnteredAt: new Date() } : {}),
                 ...(data.subject !== undefined ? { title: data.subject } : {}),
                 ...(data.inquiryType !== undefined ? { category: data.inquiryType } : {}),
                 ...(data.priority !== undefined ? { priority: data.priority } : {}),
@@ -164,7 +196,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             }
         }
 
-        if (targetStatus && targetStatus !== existing.status) await messageOnStatusEntry(id, targetStatus, user.id);
+        if (statusChanging) await messageOnStatusEntry(id, targetStatus!, user.id);
         return NextResponse.json(flattenHelp(t));
     } catch (e) {
         return handleApiError(e, "Failed to update help ticket");

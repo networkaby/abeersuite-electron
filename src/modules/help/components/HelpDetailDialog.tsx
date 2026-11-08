@@ -20,12 +20,12 @@ import {
 import { PRIORITY_META } from "@/shared/lib/constants/badges";
 import {
     Pencil, Trash2, ArrowRightLeft, Wrench, Network, Loader2, RotateCcw,
-    ArrowLeft, X, Phone, Mail, Clock, MessageSquare, CheckCircle2, FileText,
+    ArrowLeft, ArrowRight, X, Phone, Mail, Clock, MessageSquare, CheckCircle2, FileText,
 
 } from "lucide-react";
 import UserAvatar from "@/shared/components/UserAvatar";
 import {
-    CLOSE_OUTCOMES, INQUIRY_LABEL, OUTCOME_LABEL, helpCustomerName, helpTitle,
+    INQUIRY_LABEL, OUTCOME_LABEL, helpCustomerName, helpTitle,
     type HelpDetailDto, type HelpStage,
 } from "../lib/types";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
@@ -33,6 +33,7 @@ import { useValueChange } from "@/shared/hooks/useValueChange";
 import { MessageMedia } from "@/modules/crm/components/MessageMedia";
 import { groupTicketChat } from "@/modules/message/lib/ticketChatRuns";
 import { TicketChatRunCard } from "@/modules/message/components/TicketChatRun";
+import WorkActions from "@/modules/repairing/components/WorkActions";
 
 export default function HelpDetailDialog({
     ticketId,
@@ -99,6 +100,9 @@ export default function HelpDetailDialog({
         }
     };
 
+    // A step's Success / Unsuccess moved the ticket — re-read it and the board.
+    const refreshAfterStep = () => { void load(); onChanged(); };
+
     const convert = async (body: Record<string, unknown>) => {
         if (ticketId == null) return;
         setBusy(true);
@@ -131,6 +135,7 @@ export default function HelpDetailDialog({
     };
 
     const isClosed = Boolean(ticket?.ticketStatus.isTerminal);
+    const moveStages = ticket?.nextStages ?? [];
     const priority = ticket ? (PRIORITY_META[ticket.priority] ?? PRIORITY_META.MEDIUM) : null;
     const customer = ticket ? helpCustomerName(ticket) : "";
 
@@ -391,27 +396,62 @@ export default function HelpDetailDialog({
                                                 </Select>
                                             </div>
 
-                                            {/* Close with outcome */}
-                                            <div className="space-y-2 pt-2 border-t">
-                                                <Label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Close Ticket</Label>
-                                                <p className="text-xs text-muted-foreground">Select an outcome to resolve and close this ticket:</p>
-                                                <div className="flex flex-col gap-1.5">
-                                                    {CLOSE_OUTCOMES.map((o) => (
-                                                        <Button
-                                                            key={o.value}
-                                                            size="sm"
-                                                            variant="outline"
-                                                            className="justify-start text-xs h-8 border hover:bg-muted/60"
-                                                            disabled={busy}
-                                                            title={o.hint}
-                                                            onClick={() => patch({ outcome: o.value }, "Ticket closed")}
-                                                        >
-                                                            <CheckCircle2 className="size-3.5 mr-2 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                                                            <span>{o.label}</span>
-                                                        </Button>
-                                                    ))}
+                                            {/* Current sub-step — only when the stage has a workflow set up
+                                                in Workflow settings; otherwise nothing shows. */}
+                                            {ticket.ticketWorker?.work && (
+                                                <div className="space-y-2 pt-2 border-t">
+                                                    <Label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Current Step</Label>
+                                                    <p className="text-sm font-medium text-foreground">{ticket.ticketWorker.label}</p>
+                                                    {ticket.ticketWorker.actionLabel && (
+                                                        <p className="text-xs font-medium text-primary">→ {ticket.ticketWorker.actionLabel}</p>
+                                                    )}
+                                                    <div className="flex flex-wrap gap-2">
+                                                        <WorkActions
+                                                            ticketId={ticket.id}
+                                                            workLabel={ticket.ticketWorker.work.label}
+                                                            successLabel={ticket.ticketWorker.work.successLabel}
+                                                            failLabel={ticket.ticketWorker.work.failLabel}
+                                                            startLabel={ticket.ticketWorker.work.startLabel}
+                                                            prompt={ticket.ticketWorker.work.prompt}
+                                                            successPopup={ticket.ticketWorker.work.successPopup}
+                                                            failPopup={ticket.ticketWorker.work.failPopup}
+                                                            args={ticket.ticketWorker.work.args ?? []}
+                                                            successTarget={ticket.ticketWorker.successWorker}
+                                                            failTarget={ticket.ticketWorker.failWorker}
+                                                            successStatusTarget={ticket.ticketWorker.successStatus}
+                                                            failStatusTarget={ticket.ticketWorker.failStatus}
+                                                            isOwned
+                                                            isOwnerMe
+                                                            onChanged={refreshAfterStep}
+                                                        />
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            )}
+
+                                            {/* Move — one button per stage in this stage's "Transitions To"
+                                                list (Workflow → Statuses), so the stage name is the action. */}
+                                            {moveStages.length > 0 && (
+                                                <div className="space-y-2 pt-2 border-t">
+                                                    <Label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Move To</Label>
+                                                    <div className="flex flex-col gap-1.5">
+                                                        {moveStages.map((s) => (
+                                                            <Button
+                                                                key={s.id}
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="justify-start text-xs h-8 border hover:bg-muted/60"
+                                                                disabled={busy}
+                                                                onClick={() => patch({ status: s.id }, `Moved to ${s.label}`)}
+                                                            >
+                                                                {s.isTerminal
+                                                                    ? <CheckCircle2 className="size-3.5 mr-2 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                                                    : <ArrowRight className="size-3.5 mr-2 text-muted-foreground shrink-0" />}
+                                                                <span>{s.label}</span>
+                                                            </Button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 
@@ -421,7 +461,7 @@ export default function HelpDetailDialog({
                                             <div>
                                                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground block">Status</span>
                                                 <span className="text-sm font-medium text-foreground">
-                                                    Closed{ticket.outcome ? ` — ${OUTCOME_LABEL[ticket.outcome]}` : ""}
+                                                    {ticket.ticketStatus.label}{ticket.outcome ? ` — ${OUTCOME_LABEL[ticket.outcome]}` : ""}
                                                 </span>
                                                 {ticket.closedAt && (
                                                     <span className="text-xs text-muted-foreground block mt-0.5">
