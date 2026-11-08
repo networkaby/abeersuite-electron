@@ -2,49 +2,62 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { isCustomKind } from "@/shared/lib/whatsapp/billTemplates";
+import { isWaKind, waKindLabel } from "@/shared/lib/whatsapp/billTemplates";
+import { emailKindLabel, isEmailAnyKind, isSecurityKind } from "@/shared/lib/email/emailTemplates";
 
-/** One choice in a "which template" dropdown (Workflow statuses / workers). */
+/** One choice in a "which template" dropdown. */
 export type TemplateOption = { kind: string; name: string; ready: boolean; why: string };
+export type TemplateChannel = "whatsapp" | "email";
 
-/** Built-in kinds a workflow may also send — they fill device / job no / link
- *  from the repair ticket itself. */
-const REPAIR_KINDS: Record<string, string> = { REPAIR_RECEIVED: "Repair received", REPAIR_READY: "Repair ready" };
+/** Kinds that cannot be sent from somewhere else: the auto-reply menu is not a
+ *  Meta template, the UPI request needs its own QR, and sign-in codes are
+ *  private to the person signing in. */
+const NOT_PICKABLE = new Set(["TICKET_AUTO_REPLY", "PAY_REQUEST"]);
 
-type Row = { kind: string; name: string | null; enabled: boolean; autoSend?: boolean; approved?: unknown };
+type Row = { kind: string; name: string | null; enabled: boolean; approved?: unknown };
 
-/**
- * WhatsApp and email templates for the Workflow pickers, read once when `open`
- * turns true. `withRepair` adds Repair received / Repair ready on top of staff's
- * own templates. A template not ready yet is still listed, with the reason, so
- * a stage can be set up now and the template switched on later.
- */
-export function useMessageTemplateOptions(open: boolean, withRepair = false) {
-    const [list, setList] = useState<{ wa: TemplateOption[]; email: TemplateOption[] }>({ wa: [], email: [] });
-    useEffect(() => {
-        if (!open) return;
-        const keep = (t: Row) => isCustomKind(t.kind) || (withRepair && t.kind in REPAIR_KINDS);
-        const label = (t: Row) => REPAIR_KINDS[t.kind] ?? t.name ?? "Untitled";
-        Promise.all([
-            axios.get("/api/settings/whatsapp-templates").catch(() => ({ data: { templates: [] as Row[] } })),
-            axios.get("/api/settings/email-templates").catch(() => ({ data: { templates: [] as Row[] } })),
-        ]).then(([wa, em]) =>
-            setList({
-                wa: (wa.data.templates as Row[]).filter(keep).map((t) => ({
-                    kind: t.kind,
-                    name: label(t),
-                    ready: t.enabled && !!t.approved,
-                    why: !t.approved ? "not approved yet" : "switched off",
-                })),
-                email: (em.data.templates as Row[]).filter(keep).map((t) => ({
-                    kind: t.kind,
-                    name: label(t),
-                    // A built-in repair email also needs its Auto send on.
-                    ready: t.enabled && (isCustomKind(t.kind) || t.autoSend !== false),
-                    why: !t.enabled ? "switched off" : "auto send off",
-                })),
+// One read per channel per minute, shared by every picker on the screen.
+const TTL_MS = 60_000;
+const cache = new Map<TemplateChannel, { at: number; promise: Promise<TemplateOption[]> }>();
+
+function load(channel: TemplateChannel): Promise<TemplateOption[]> {
+    const hit = cache.get(channel);
+    if (hit && Date.now() - hit.at < TTL_MS) return hit.promise;
+    const url = channel === "whatsapp" ? "/api/settings/whatsapp-templates" : "/api/settings/email-templates";
+    const promise = axios
+        .get<{ templates: Row[] }>(url)
+        .then(({ data }) =>
+            data.templates.flatMap((t): TemplateOption[] => {
+                if (NOT_PICKABLE.has(t.kind)) return [];
+                if (channel === "whatsapp") {
+                    if (!isWaKind(t.kind)) return [];
+                    return [{ kind: t.kind, name: waKindLabel(t.kind, t.name), ready: t.enabled && !!t.approved, why: !t.approved ? "not approved yet" : "switched off" }];
+                }
+                if (!isEmailAnyKind(t.kind) || isSecurityKind(t.kind)) return [];
+                return [{ kind: t.kind, name: emailKindLabel(t.kind, t.name), ready: t.enabled, why: "switched off" }];
             }),
-        );
-    }, [open, withRepair]);
+        )
+        .catch(() => {
+            cache.delete(channel);
+            return [];
+        });
+    cache.set(channel, { at: Date.now(), promise });
+    return promise;
+}
+
+/** Every WhatsApp or email template that can be sent from elsewhere (built-in
+ *  and staff's own), read when `enabled` turns true. A template not ready yet
+ *  is still listed, with the reason, so it can be picked now and switched on
+ *  later. */
+export function useMessageTemplateOptions(channel: TemplateChannel, enabled = true): TemplateOption[] {
+    const [list, setList] = useState<TemplateOption[]>([]);
+    useEffect(() => {
+        if (!enabled) return;
+        let live = true;
+        void load(channel).then((l) => live && setList(l));
+        return () => {
+            live = false;
+        };
+    }, [channel, enabled]);
     return list;
 }

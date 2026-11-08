@@ -13,8 +13,7 @@ import {
     WA_TEMPLATE_LABEL,
     autoKindForVoucherType,
     fillBody,
-    sampleValuesFor,
-    type CustomTemplateKind,
+    isCustomKind,
     type WaAnyKind,
     type WaFieldValues,
     type WaTemplateKind,
@@ -428,6 +427,9 @@ async function notifyTicketHelp(ticketId: number): Promise<NotifyResult> {
 /** Claim the (kind, refId) row, then send push + WhatsApp side by side. */
 async function deliver(d: {
     kind: WaAnyKind;
+    /** BillNotification key when it must differ from `kind` — a built-in kind
+     *  sent for a ticket, whose refId would clash with a voucher id. */
+    claimKind?: string;
     refId: number;
     linkCode: string;
     personId: number | null;
@@ -441,7 +443,7 @@ async function deliver(d: {
     // document stops here instead of messaging the customer twice.
     try {
         await prisma.billNotification.create({
-            data: { kind: d.kind, refId: d.refId, personId: d.personId, pushStatus: "pending", waStatus: "pending" },
+            data: { kind: d.claimKind ?? d.kind, refId: d.refId, personId: d.personId, pushStatus: "pending", waStatus: "pending" },
         });
     } catch {
         return { status: "already" };
@@ -450,7 +452,7 @@ async function deliver(d: {
     const { mobile, push, wa } = await sendPushAndWhatsApp(d);
 
     await prisma.billNotification.update({
-        where: { kind_refId: { kind: d.kind, refId: d.refId } },
+        where: { kind_refId: { kind: d.claimKind ?? d.kind, refId: d.refId } },
         data: {
             mobile,
             pushStatus: push.status,
@@ -529,7 +531,15 @@ async function sendWhatsApp(kind: WaAnyKind, linkCode: string, mobile: string | 
 
 // ── Workflow: "Send WhatsApp / email template" on a worker ───────────────────
 
-export type TicketCustomer = { personId: number | null; name: string; phones: PhoneRow[]; emails: EmailRow[] };
+export type TicketCustomer = {
+    personId: number | null;
+    name: string;
+    phones: PhoneRow[];
+    emails: EmailRow[];
+    /** Every field filled from the ticket. A field a ticket has no value for
+     *  (amount, balances) is "—" — Meta refuses an empty parameter. */
+    values: WaFieldValues;
+};
 
 /** The ticket's customer, whatever the pipeline: the repaired device's owner,
  *  else the deal's or help ticket's person / company / typed phone. */
@@ -538,31 +548,44 @@ export async function loadTicketCustomer(ticketId: number): Promise<TicketCustom
     const t = await prisma.ticket.findUnique({
         where: { id: ticketId },
         select: {
-            repair: { select: { device: { select: { account: { select: partySelect } } } } },
+            title: true,
+            createdAt: true,
+            repair: { select: { device: { select: { type: true, brand: true, model: true, account: { select: partySelect } } } } },
             deal: { select: { contactName: true, phone: true, personId: true, person: party, company: party } },
             help: { select: { contactName: true, phone: true, personId: true, person: party, company: party } },
         },
     });
     if (!t) return null;
-    const acc = t.repair?.device?.account;
+    const dev = t.repair?.device;
+    const values = (name: string): WaFieldValues => ({
+        customer: name,
+        billNo: `#${ticketId}`,
+        amount: "—",
+        date: day.format(t.createdAt),
+        device: [dev?.brand, dev?.model].filter(Boolean).join(" ") || dev?.type || "—",
+        subject: t.title || "—",
+        prevBalance: "—",
+        balance: "—",
+        shop: getOrganisation().brandName,
+        link: `${WA_BILL_LINK_BASE}t${ticketId}`,
+        app: WA_APP_LINK,
+    });
+    const acc = dev?.account;
     const owner = acc?.person ?? acc?.company;
-    if (acc && owner) return { personId: acc.personId, name: owner.name, phones: owner.phones, emails: owner.emails };
+    if (acc && owner) return { personId: acc.personId, name: owner.name, phones: owner.phones, emails: owner.emails, values: values(owner.name) };
     const c = t.deal ?? t.help;
     if (!c) return null;
     const p = c.person ?? c.company;
     const phones = p?.phones.length ? p.phones : c.phone ? [{ phone: c.phone, isPrimary: true, verifiedAt: null }] : [];
-    return { personId: c.personId ?? null, name: c.contactName || p?.name || "Customer", phones, emails: p?.emails ?? [] };
+    const name = c.contactName || p?.name || "Customer";
+    return { personId: c.personId ?? null, name, phones, emails: p?.emails ?? [], values: values(name) };
 }
 
-/** Values a custom template can use on a ticket: customer, shop, app. */
-export function ticketTemplateValues(kind: CustomTemplateKind, customer: TicketCustomer): WaFieldValues {
-    return { ...sampleValuesFor(kind), customer: customer.name, shop: getOrganisation().brandName, app: WA_APP_LINK };
-}
-
-/** Send one of staff's own WhatsApp templates to a ticket's customer. Only an
- *  approved, switched-on template goes; once per (template, ticket). No app
- *  notification — the wording is staff's own, not a document announcement. */
-export async function notifyTicketTemplate(kind: CustomTemplateKind, ticketId: number): Promise<NotifyResult> {
+/** Send any WhatsApp template (built-in or staff's own) to a ticket's
+ *  customer, filled from the ticket. Only an approved, switched-on template
+ *  goes; once per (template, ticket). No app notification. Repair received /
+ *  ready go through notifyRepair instead (it adds the app notification). */
+export async function notifyTicketTemplate(kind: WaAnyKind, ticketId: number): Promise<NotifyResult> {
     try {
         if (IS_COUNTER_PC) return { status: "skipped", reason: "counter" };
         const approved = await getApprovedWaTemplate(kind);
@@ -570,9 +593,10 @@ export async function notifyTicketTemplate(kind: CustomTemplateKind, ticketId: n
         const c = await loadTicketCustomer(ticketId);
         if (!c) return { status: "skipped", reason: "no customer" };
         if (!pickMobile(c.phones)) return { status: "skipped", reason: "no customer mobile" };
-        const values = ticketTemplateValues(kind, c);
+        const values = c.values;
         return await deliver({
             kind,
+            claimKind: ticketClaimKind(kind),
             refId: ticketId,
             linkCode: `t${ticketId}`,
             personId: null,
@@ -585,6 +609,13 @@ export async function notifyTicketTemplate(kind: CustomTemplateKind, ticketId: n
         console.error(`[notify-template] ${kind} ticket ${ticketId} failed`, e);
         return { status: "skipped", reason: "error" };
     }
+}
+
+/** Claim key for a template sent for a TICKET: a built-in kind's refId is
+ *  normally a voucher id, so it gets its own key; repair and custom kinds are
+ *  already keyed by ticket. */
+export function ticketClaimKind(kind: string): string {
+    return isCustomKind(kind) || kind === "REPAIR_RECEIVED" || kind === "REPAIR_READY" ? kind : `TICKET:${kind}`;
 }
 
 /** Primary verified mobile first, then any verified, then any — 10-digit Indian only. */

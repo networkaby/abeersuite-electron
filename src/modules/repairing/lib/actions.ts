@@ -5,8 +5,9 @@ import { spawnChild } from "./spawnChild";
 import { isKnownActionType } from "./actionTypes";
 import { after } from "next/server";
 import { notifyRepair, notifyTicketTemplate, type NotifyResult } from "@/shared/lib/whatsapp/notifyBill";
-import { notifyRepairEmail, notifyTicketEmail } from "@/shared/lib/email/notifyEmail";
-import { isCustomKind } from "@/shared/lib/whatsapp/billTemplates";
+import { notifyTicketEmail } from "@/shared/lib/email/notifyEmail";
+import { isWaKind, waKindLabel } from "@/shared/lib/whatsapp/billTemplates";
+import { emailKindLabel, isEmailAnyKind } from "@/shared/lib/email/emailTemplates";
 
 // ── Worker action runtime (6th power) ─────────────────────────────────────────
 // Actions are read-only CODE hooks (catalog in actionTypes.ts). A worker carries an
@@ -76,13 +77,13 @@ const RUN_HANDLERS: Record<string, RunHandler> = {
     // response; once per (template, ticket). args: { template } = CUSTOM_<id>.
     async send_whatsapp_template(ctx, config) {
         const kind = str(config, "template");
-        if (!kind || !isCustomKind(kind)) return;
+        if (!kind || !isWaKind(kind)) return;
         const label = await templateName("wa", kind);
         after(async () => logTemplate(ctx, "WhatsApp", label, await notifyTicketTemplate(kind, ctx.ticketId)));
     },
     async send_email_template(ctx, config) {
         const kind = str(config, "template");
-        if (!kind || !isCustomKind(kind)) return;
+        if (!kind || !isEmailAnyKind(kind)) return;
         const label = await templateName("email", kind);
         after(async () => logTemplate(ctx, "Email", label, await notifyTicketEmail(kind, ctx.ticketId)));
     },
@@ -125,7 +126,8 @@ async function templateName(channel: "wa" | "email", kind: string): Promise<stri
     const row = channel === "wa"
         ? await prisma.whatsAppTemplate.findUnique({ where: { kind }, select: { name: true } })
         : await prisma.emailTemplate.findUnique({ where: { kind }, select: { name: true } });
-    return row?.name ?? "template";
+    if (channel === "wa") return isWaKind(kind) ? waKindLabel(kind, row?.name) : "template";
+    return isEmailAnyKind(kind) ? emailKindLabel(kind, row?.name) : "template";
 }
 
 async function logTemplate(ctx: ActionRunContext, channel: string, name: string, r: NotifyResult) {
@@ -158,12 +160,10 @@ export async function messageOnStatusEntry(ticketId: number, statusId: string, u
             if (wa && isRepairTemplate(wa)) {
                 // manual: send on the template's approval alone, and leave the email to the email dropdown.
                 await logTemplate(ctx, "WhatsApp", REPAIR_KINDS[wa], await notifyRepair(wa, ticketId, { manual: true }));
-            } else if (wa && isCustomKind(wa)) {
+            } else if (wa && isWaKind(wa)) {
                 await logTemplate(ctx, "WhatsApp", await templateName("wa", wa), await notifyTicketTemplate(wa, ticketId));
             }
-            if (em && isRepairTemplate(em)) {
-                await logTemplate(ctx, "Email", REPAIR_KINDS[em], await notifyRepairEmail(em, ticketId));
-            } else if (em && isCustomKind(em)) {
+            if (em && isEmailAnyKind(em)) {
                 await logTemplate(ctx, "Email", await templateName("email", em), await notifyTicketEmail(em, ticketId));
             }
         });

@@ -2,8 +2,7 @@ import "server-only";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
-import { loadRepairMessage, loadTicketCustomer, loadVoucherMessage, ticketTemplateValues, type EmailRow, type NotifyResult } from "@/shared/lib/whatsapp/notifyBill";
-import type { CustomTemplateKind } from "@/shared/lib/whatsapp/billTemplates";
+import { loadRepairMessage, loadTicketCustomer, loadVoucherMessage, ticketClaimKind, type EmailRow, type NotifyResult } from "@/shared/lib/whatsapp/notifyBill";
 import {
     EMAIL_TEMPLATE_KINDS,
     PORTAL_URL,
@@ -13,6 +12,7 @@ import {
     hasAutoSendSwitch,
     isDocEmailKind,
     isMarketingKind,
+    isSecurityKind,
     unsubscribeLine,
     type EmailFieldValues,
     type EmailTemplateDraft,
@@ -41,6 +41,8 @@ import { isOptedOut, unsubscribeUrl } from "./unsubscribe";
 export async function sendTemplatedEmail(d: {
     kind: EmailAnyKind;
     refId: number;
+    /** EmailNotification key when it must differ from `kind` (see ticketClaimKind). */
+    claimKind?: string;
     emails: EmailRow[];
     /** Loaded only once the cheap checks pass. */
     values: EmailFieldValues | (() => Promise<EmailFieldValues | NotifyResult>);
@@ -61,10 +63,11 @@ export async function sendTemplatedEmail(d: {
         const values = typeof d.values === "function" ? await d.values() : d.values;
         if ("status" in values) return values as NotifyResult;
 
-        if (!(await claim(kind, refId, to))) return { status: "already" };
+        const key = d.claimKind ?? kind;
+        if (!(await claim(key, refId, to))) return { status: "already" };
         const out = await sendFilled(to, tpl.draft, values as EmailFieldValues, marketing ? unsubscribeUrl(to) : undefined);
         await prisma.emailNotification.update({
-            where: { kind_refId: { kind, refId } },
+            where: { kind_refId: { kind: key, refId } },
             data: { status: out.error ? "failed" : "sent", error: out.error ?? null },
         });
         return out.error ? { status: "skipped", reason: "send failed" } : { status: "sent" };
@@ -169,13 +172,16 @@ function pickEmail(emails: EmailRow[]): string | null {
     return ok[0]?.email ?? null;
 }
 
-/** Workflow "Send email template": one of staff's own email templates to the
- *  ticket's customer (verified email only). Once per (template, ticket). */
-export async function notifyTicketEmail(kind: CustomTemplateKind, ticketId: number): Promise<NotifyResult> {
+/** Workflow: any email template (built-in or staff's own, never a sign-in
+ *  code) to the ticket's customer, filled from the ticket; verified email only.
+ *  Goes when the template is on (its Auto send does not apply — the workflow
+ *  chose it). Once per (template, ticket). */
+export async function notifyTicketEmail(kind: EmailAnyKind, ticketId: number): Promise<NotifyResult> {
     try {
+        if (isSecurityKind(kind)) return { status: "skipped", reason: "a sign-in code cannot be sent from a ticket" };
         const c = await loadTicketCustomer(ticketId);
         if (!c) return { status: "skipped", reason: "no customer" };
-        return sendTemplatedEmail({ kind, refId: ticketId, emails: c.emails, values: ticketTemplateValues(kind, c) });
+        return sendTemplatedEmail({ kind, refId: ticketId, claimKind: ticketClaimKind(kind), emails: c.emails, values: c.values, manual: true });
     } catch (e) {
         console.error(`[notify-email] ${kind} ticket ${ticketId} failed`, e);
         return { status: "skipped", reason: "error" };

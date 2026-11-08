@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
-import { useMessageTemplateOptions } from "@/modules/settings/hooks/useMessageTemplateOptions";
+import { MessageTemplatePicker } from "@/modules/settings/components/MessageTemplatePicker";
 import { toast } from "sonner";
 import { Check, ChevronRight, Copy, CornerUpLeft, GitBranch, GitMerge, Lock, Pencil, Plus, RefreshCw, Trash2, X, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -201,7 +201,6 @@ function WorkerFormModal({
     workers: Worker[];
     pipelines: Pipeline[];
 }) {
-    const templates = useMessageTemplateOptions(open);
 
     // A worker belongs to exactly one parent status. Changing it re-keys the
     // single auto-advance entry (triggerMap) onto the new status.
@@ -691,17 +690,12 @@ function WorkerFormModal({
                                                     </SelectContent>
                                                 </Select>
                                             ) : field.kind === "wa_template" || field.kind === "email_template" ? (
-                                                <Select value={action.config[field.key] || undefined} onValueChange={(v) => setActionConfig(i, field.key, v === "__none__" ? "" : v)}>
-                                                    <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="Pick a template" /></SelectTrigger>
-                                                    <SelectContent>
-                                                        {(field.kind === "wa_template" ? templates.wa : templates.email).map((t) => (
-                                                            <SelectItem key={t.kind} value={t.kind}>{t.name}{t.ready ? "" : ` (${t.why})`}</SelectItem>
-                                                        ))}
-                                                        {(field.kind === "wa_template" ? templates.wa : templates.email).length === 0 && (
-                                                            <div className="px-2 py-1.5 text-xs text-muted-foreground">No templates yet — add one under Settings → {field.kind === "wa_template" ? "WhatsApp" : "Email"} Templates.</div>
-                                                        )}
-                                                    </SelectContent>
-                                                </Select>
+                                                <MessageTemplatePicker
+                                                    channel={field.kind === "wa_template" ? "whatsapp" : "email"}
+                                                    value={action.config[field.key] ?? ""}
+                                                    onChange={(v) => setActionConfig(i, field.key, v)}
+                                                    className="h-8 flex-1"
+                                                />
                                             ) : (
                                                 <Input className="h-8 flex-1" value={action.config[field.key] ?? ""} onChange={(e) => setActionConfig(i, field.key, e.target.value)} placeholder={field.label} />
                                             )}

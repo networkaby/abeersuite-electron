@@ -40,7 +40,7 @@ import {
 } from "@/components/ui/table";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { useValueChange } from "@/shared/hooks/useValueChange";
-import { useMessageTemplateOptions } from "@/modules/settings/hooks/useMessageTemplateOptions";
+import { MessageTemplatePicker } from "@/modules/settings/components/MessageTemplatePicker";
 
 interface Pipeline {
     id: string;
@@ -130,7 +130,6 @@ export default function StatusesPage() {
 
     // One full "Edit status" dialog covers basics, flags, work (optional), and prompts.
     const [editModalId, setEditModalId] = useState<string | null>(null);
-    const templates = useMessageTemplateOptions(editModalId != null, true);
     const [editForm, setEditForm] = useState<StatusForm>(EMPTY_FORM);
     const [savingEdit, setSavingEdit] = useState(false);
 
@@ -548,15 +547,16 @@ export default function StatusesPage() {
             </Dialog>
 
             <Dialog open={!!editModalId && !!editStatus} onOpenChange={(isOpen) => { if (!isOpen) setEditModalId(null); }}>
-                <DialogContent className="sm:max-w-3xl max-h-[88vh] overflow-y-auto">
+                <DialogContent className="sm:max-w-5xl max-h-[96vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Edit status</DialogTitle>
-                        <DialogDescription>
+                        <DialogDescription className="sr-only">
                             {editStatus ? `Configure “${editStatus.label}” (${editStatus.id}) — basics, flags, work, and crossing prompts.` : ""}
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-5">
+                    <div className="grid gap-3 md:grid-cols-2 md:items-start">
+                        <div className="space-y-3">
                         {/* ── Basics ─────────────────────────────────────── */}
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-2">
@@ -604,7 +604,7 @@ export default function StatusesPage() {
                                 </label>
                             </div>
                             <p className="text-xs text-muted-foreground">
-                                Entry point = where new tickets land. Terminal = a close-out stage with no further moves.
+                                Entry = new tickets land here. Terminal = close-out, no further moves.
                             </p>
                         </div>
 
@@ -636,8 +636,7 @@ export default function StatusesPage() {
                                 <span className="text-sm text-muted-foreground">hours</span>
                             </div>
                             <p className="text-xs text-muted-foreground">
-                                A ticket sitting here longer than this is flagged
-                                {" "}<span className="font-medium text-foreground">Needs attention</span> in the Work Inbox. Blank = no SLA.
+                                Longer than this = <span className="font-medium text-foreground">Needs attention</span>. Blank = no SLA.
                             </p>
                             <div className="space-y-2 pt-1">
                                 <Label>Group <span className="font-normal text-muted-foreground">(optional)</span></Label>
@@ -653,13 +652,15 @@ export default function StatusesPage() {
                                     </SelectContent>
                                 </Select>
                                 <p className="text-xs text-muted-foreground">
-                                    Which group this ticket shows under if it goes overdue with no work attached. Blank = none.
+                                    Where an overdue ticket with no work shows. Blank = none.
                                 </p>
                             </div>
                         </div>
 
+                        </div>
+                        <div className="space-y-3">
                         {/* ── Work & access ──────────────────────────────── */}
-                        <div className="space-y-4 rounded-md border border-border bg-muted/30 p-3">
+                        <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
                             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Work &amp; access</p>
 
                             <div className="space-y-2">
@@ -675,13 +676,14 @@ export default function StatusesPage() {
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                <p className="text-xs text-muted-foreground">
-                                    {selectedWork?.permissionId
-                                        ? `Only staff with the “${selectedWork.label}” work permission can move a ticket to this status. Admin always bypasses.`
-                                        : "Ungated — any staff can move a ticket to this status."}
-                                </p>
+                                {selectedWork?.permissionId && (
+                                    <p className="text-xs text-muted-foreground">
+                                        Only staff with the “{selectedWork.label}” work permission can move a ticket here. Admin always bypasses.
+                                    </p>
+                                )}
                             </div>
 
+                            <div className="grid gap-3 sm:grid-cols-2">
                             <div className="space-y-2">
                                 <Label>Warranty scope</Label>
                                 <Select
@@ -707,10 +709,11 @@ export default function StatusesPage() {
                                     placeholder="e.g. New ticket received — assign a technician"
                                 />
                             </div>
+                            </div>
                         </div>
 
                         {/* ── Crossing prompts ───────────────────────────── */}
-                        <div className="space-y-4 rounded-md border border-border bg-muted/30 p-3">
+                        <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
                             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                 Crossing prompts
                             </p>
@@ -723,11 +726,12 @@ export default function StatusesPage() {
                                     placeholder="e.g. Did you back up the device before moving on?"
                                 />
                                 <p className="text-xs text-muted-foreground">
-                                    Shown as a confirmation in the move dialog when a ticket <em>leaves</em> this status. Blank = no prompt.
+                                    Confirmation shown when a ticket <em>leaves</em> this status. Blank = none.
                                 </p>
                             </div>
 
                             <div className="space-y-2">
+                                <div className="flex items-center gap-2">
                                 <label className="flex cursor-pointer items-center gap-2">
                                     <Checkbox
                                         checked={editForm.announceOnEntry}
@@ -735,52 +739,48 @@ export default function StatusesPage() {
                                     />
                                     <span className="text-sm">Announce to customer on entry</span>
                                 </label>
+                                    <Input
+                                        className="ml-auto h-8 w-36"
+                                        aria-label="Estimated time (ETA)"
+                                        title="Estimated time — the duration in the announcement. Blank = none."
+                                        value={editForm.etaText}
+                                        onChange={(e) => setEditForm((prev) => ({ ...prev, etaText: e.target.value }))}
+                                        placeholder="ETA, e.g. 2 days"
+                                        disabled={!editForm.announceOnEntry}
+                                    />
+                                </div>
                                 <p className="text-xs text-muted-foreground">
-                                    Posts a public timeline message when a ticket <em>enters</em> this status:
+                                    Public timeline note:
                                     {" "}<span className="font-medium text-foreground">
                                         “{editForm.label || editStatus?.label || "Status"} is started{editForm.etaText.trim() ? ` and will take ${editForm.etaText.trim()}` : ""}”
                                     </span>
                                 </p>
                             </div>
 
-                            <div className="space-y-2">
-                                <Label>Estimated time (ETA)</Label>
-                                <Input
-                                    value={editForm.etaText}
-                                    onChange={(e) => setEditForm((prev) => ({ ...prev, etaText: e.target.value }))}
-                                    placeholder="e.g. 2 days"
-                                    disabled={!editForm.announceOnEntry}
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                    The “Y” in the announcement. Blank = announce without a duration.
-                                </p>
-                            </div>
 
+
+                        </div>
+                        {/* ── Customer messages on entry ─────────────────── */}
+                        <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Customer messages</p>
                             <div className="grid gap-3 sm:grid-cols-2">
                             {(["waTemplate", "emailTemplate"] as const).map((key) => {
-                                const options = key === "waTemplate" ? templates.wa : templates.email;
                                 return (
                                     <div key={key} className="space-y-2">
                                         <Label>{key === "waTemplate" ? "WhatsApp on entry" : "Email on entry"} <span className="font-normal text-muted-foreground">(optional)</span></Label>
-                                        <Select
-                                            value={editForm[key] || "__none__"}
-                                            onValueChange={(v) => setEditForm((prev) => ({ ...prev, [key]: v === "__none__" ? "" : v }))}
-                                        >
-                                            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="__none__">— none —</SelectItem>
-                                                {options.map((t) => (
-                                                    <SelectItem key={t.kind} value={t.kind}>{t.name}{t.ready ? "" : ` (${t.why})`}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                        <MessageTemplatePicker
+                                            channel={key === "waTemplate" ? "whatsapp" : "email"}
+                                            value={editForm[key]}
+                                            onChange={(v) => setEditForm((prev) => ({ ...prev, [key]: v }))}
+                                        />
                                     </div>
                                 );
                             })}
                             </div>
                             <p className="text-xs text-muted-foreground">
-                                Sent to the customer when a ticket <em>enters</em> this status — once per ticket. Templates live in Settings → WhatsApp / Email Templates.
+                                Sent when a ticket <em>enters</em> this status, once per ticket.
                             </p>
+                        </div>
                         </div>
                     </div>
 

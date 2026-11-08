@@ -32,14 +32,14 @@ export const ACTION_TYPES: ActionTypeDef[] = [
     {
         type: "send_whatsapp_template",
         label: "Send WhatsApp template",
-        description: "Sends the customer one of your own WhatsApp templates (Settings → WhatsApp Templates → Your templates). Goes only when it is approved and switched on; once per ticket.",
+        description: "Sends the customer any WhatsApp template (Settings → WhatsApp Templates), filled from the ticket. Goes only when it is approved and switched on; once per ticket.",
         output: "A WhatsApp message, once per ticket",
         fields: [{ key: "template", label: "Template", kind: "wa_template" }],
     },
     {
         type: "send_email_template",
         label: "Send email template",
-        description: "Emails the customer one of your own email templates (Settings → Email Templates → Your templates), to a verified email only. Goes only when it is switched on; once per ticket.",
+        description: "Emails the customer any email template (Settings → Email Templates), filled from the ticket, to a verified email only. Goes only when it is switched on; once per ticket.",
         output: "An email, once per ticket",
         fields: [{ key: "template", label: "Template", kind: "email_template" }],
     },
