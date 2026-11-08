@@ -11,7 +11,6 @@ import {
     isSecurityKind,
     type EmailAnyKind,
     type EmailTemplateDraft,
-    type EmailTemplateKind,
 } from "./emailTemplates";
 
 /**
