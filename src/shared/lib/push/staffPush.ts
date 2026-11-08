@@ -109,13 +109,15 @@ export type StaffNotice = { title: string; body: string; url: string; tag: strin
 
 /**
  * One notice to every registered staff device — for reminders that are nobody's
- * chat (a post due to be shared). `url` is an office path; the phone app opens it
- * in its browser view. Returns how many devices took it. Never throws.
+ * chat (a post due to be shared) — or, with `userIds`, only to those people's
+ * devices (a ticket assigned to their seat). `url` is an office path; the phone
+ * app opens it in its browser view. Returns how many devices took it. Never throws.
  */
-export async function pushNoticesToStaff(notices: StaffNotice[]): Promise<number> {
+export async function pushNoticesToStaff(notices: StaffNotice[], userIds?: number[]): Promise<number> {
     if (!notices.length || !(isFcmConfigured() || isWebPushConfigured())) return 0;
     try {
-        const live = await liveStaffDevices();
+        const only = userIds ? new Set(userIds) : null;
+        const live = (await liveStaffDevices()).filter((d) => !only || only.has(d.userId));
         const dead: number[] = [];
         let sent = 0;
         await Promise.all(

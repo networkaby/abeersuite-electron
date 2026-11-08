@@ -8,7 +8,7 @@ import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
 import { canOpenPage } from "@/shared/lib/auth/pageAccess";
 import { passesWorkGate } from "@/modules/repairing/lib/workGate";
 import { passesOverdueGate, restrictedOverdueStatusIds } from "@/modules/repairing/lib/workRoleGrants";
-import { slaEnteredAt, slaOverdueMs, workLessSlaCandidates } from "@/modules/repairing/lib/resolveTimeSla";
+import { slaEnteredAt, slaOverdueMs, workLessInboxCandidates, showWorkLessRow } from "@/modules/repairing/lib/resolveTimeSla";
 import LiveRefresh from "@/shared/components/LiveRefresh";
 
 // The Work Inbox: every active ticket sitting in a work-bearing worker, as one
@@ -69,6 +69,9 @@ export default async function AssignmentsPage() {
      
     const nowDate = new Date();
     const now = nowDate.getTime();
+    // My seats — tickets assigned to them show here from the moment they're assigned.
+    const myPositionIds = (await prisma.userPosition.findMany({ where: { userId }, select: { positionId: true } })).map((p) => p.positionId);
+    const mySeats = new Set(myPositionIds);
 
     const [tickets, doneLogs, works, slaCandidates] = await Promise.all([
         prisma.ticket.findMany({
@@ -122,9 +125,10 @@ export default async function AssignmentsPage() {
         // query above can never see them. Overdue ones still need chasing, so they
         // surface here as notices under the status' resolveGroup ("OverDue").
         prisma.ticket.findMany({
-            where: workLessSlaCandidates(nowDate),
+            where: workLessInboxCandidates(nowDate, myPositionIds),
             orderBy: { updatedAt: "asc" },
             include: {
+                assignedPosition: { select: { title: true } },
                 ticketStatus: {
                     select: {
                         label: true, color: true, resolveTimeHours: true,
@@ -303,10 +307,10 @@ export default async function AssignmentsPage() {
     // A status can limit its overdue notices to ticked roles (Edit status → Resolve time).
     const restrictedOverdue = await restrictedOverdueStatusIds();
     const slaItems: WorkInboxItem[] = slaCandidates
-        .filter((t) => passesOverdueGate(resolvedUser, t.status, restrictedOverdue))
         .map((t) => ({ t, overdueByMs: slaOverdueMs(t, t.ticketStatus?.resolveTimeHours, now) }))
-        .filter(({ overdueByMs }) => overdueByMs > 0)
+        .filter(({ t, overdueByMs }) => showWorkLessRow(t, overdueByMs, mySeats, passesOverdueGate(resolvedUser, t.status, restrictedOverdue)))
         .map(({ t, overdueByMs }) => {
+            const overdue = overdueByMs > 0;
             const device = t.repair?.device ?? null;
             const acct = device?.account ?? null;
             const noteLog = t.logs.find((l) => l.note && !SYSTEM_NOTE.test(l.note));
@@ -341,14 +345,17 @@ export default async function AssignmentsPage() {
                 phone: acct?.person?.phones?.[0]?.phone ?? acct?.company?.phones?.[0]?.phone ?? null,
                 device: `${device?.brand ?? ""} ${device?.model ?? ""}`.trim(),
                 title: itemTitle(`${device?.brand ?? ""} ${device?.model ?? ""}`.trim(), t.title, t.notes, t.account?.name, t.id),
-                assignee: null,
+                // Assigned to my seat → shows as mine (the "Mine" filter keys on it).
+                assignee: t.assignedPositionId && mySeats.has(t.assignedPositionId)
+                    ? { id: userId, name: (session?.user as { name?: string } | undefined)?.name ?? t.assignedPosition?.title ?? "Me" }
+                    : null,
                 answer: null,
                 answeredBy: null,
                 snoozed: false,
                 wakeLabel: null,
                 ageLabel: timeAgo(slaEnteredAt(t)),
-                needsAttention: true,
-                overdueLabel: formatDuration(overdueByMs),
+                needsAttention: overdue,
+                overdueLabel: overdue ? formatDuration(overdueByMs) : null,
             };
         });
 

@@ -41,3 +41,36 @@ export function workLessSlaCandidates(now: Date): Prisma.TicketWhereInput {
         ],
     };
 }
+
+/**
+ * Work-less candidates the Work Inbox shows: the overdue path above, plus any
+ * active ticket assigned to one of `myPositionIds` — those show to their seat
+ * from the moment they are assigned, overdue or not.
+ */
+export function workLessInboxCandidates(now: Date, myPositionIds: string[]): Prisma.TicketWhereInput {
+    if (myPositionIds.length === 0) return workLessSlaCandidates(now);
+    return {
+        OR: [
+            workLessSlaCandidates(now),
+            {
+                AND: [
+                    { ticketStatus: { isTerminal: false } },
+                    { assignedPositionId: { in: myPositionIds } },
+                    { OR: [{ workerId: null }, { ticketWorker: { workId: null } }] },
+                    { OR: [{ wakeAt: null }, { wakeAt: { lte: now } }] },
+                ],
+            },
+        ],
+    };
+}
+
+/** Which work-less rows a user sees: theirs (assigned to their seat) always; others only when overdue. */
+export function showWorkLessRow(
+    t: { assignedPositionId: string | null },
+    overdueByMs: number,
+    mine: Set<string>,
+    passesOverdueGate: boolean,
+): boolean {
+    if (t.assignedPositionId && mine.has(t.assignedPositionId)) return true;
+    return overdueByMs > 0 && passesOverdueGate;
+}

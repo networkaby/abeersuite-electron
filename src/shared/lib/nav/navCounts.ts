@@ -4,7 +4,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { ResolvedUser } from "@/shared/lib/auth/permissions";
 import { passesWorkGate } from "@/modules/repairing/lib/workGate";
 import { passesOverdueGate, restrictedOverdueStatusIds } from "@/modules/repairing/lib/workRoleGrants";
-import { slaOverdueMs, workLessSlaCandidates } from "@/modules/repairing/lib/resolveTimeSla";
+import { slaOverdueMs, workLessInboxCandidates, showWorkLessRow } from "@/modules/repairing/lib/resolveTimeSla";
 import { getUnreadTotal, getNotificationUnread } from "@/modules/message/lib/inbox";
 import {
     PIPELINE_NAV_SURFACES,
@@ -99,6 +99,8 @@ export async function hasNavCountsChangedSince(userId: number, since: Date): Pro
 export async function getNavCounts(user: ResolvedUser): Promise<NavCounts> {
     const now = new Date();
 
+    const myPositionIds = (await prisma.userPosition.findMany({ where: { userId: user.id }, select: { positionId: true } })).map((p) => p.positionId);
+    const mySeats = new Set(myPositionIds);
     const [{ works, pipelines }, seenRows, slaCandidates, restrictedOverdue] = await Promise.all([
         getNavMasters(),
         prisma.userSurfaceSeen.findMany({
@@ -109,9 +111,9 @@ export async function getNavCounts(user: ResolvedUser): Promise<NavCounts> {
         // so the badge must count them. Overdue is a JS decision — Prisma cannot compare
         // `now - statusEnteredAt` against a column — hence the small candidate fetch.
         prisma.ticket.findMany({
-            where: workLessSlaCandidates(now),
+            where: workLessInboxCandidates(now, myPositionIds),
             select: {
-                id: true, status: true, statusEnteredAt: true, updatedAt: true,
+                id: true, status: true, assignedPositionId: true, statusEnteredAt: true, updatedAt: true,
                 ticketStatus: { select: { resolveTimeHours: true } },
             },
         }),
@@ -119,8 +121,7 @@ export async function getNavCounts(user: ResolvedUser): Promise<NavCounts> {
     ]);
 
     const slaOverdue = slaCandidates.filter(
-        (t) => slaOverdueMs(t, t.ticketStatus?.resolveTimeHours, now.getTime()) > 0
-            && passesOverdueGate(user, t.status, restrictedOverdue)
+        (t) => showWorkLessRow(t, slaOverdueMs(t, t.ticketStatus?.resolveTimeHours, now.getTime()), mySeats, passesOverdueGate(user, t.status, restrictedOverdue))
     );
 
     const seenBySurface = new Map(seenRows.map((r) => [r.surface, r.seenAt]));

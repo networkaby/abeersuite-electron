@@ -12,6 +12,7 @@ import { messageOnStatusEntry } from "@/modules/repairing/lib/actions";
 import { findEntryWorker } from "@/modules/repairing/lib/entryWorker";
 import { OUTCOME_LABEL, type HelpOutcome } from "@/modules/help/lib/types";
 import { createSystemInboxNotificationsForUsers } from "@/modules/message/lib/inbox";
+import { pushNoticesToStaff } from "@/shared/lib/push/staffPush";
 
 // The current sub-step (worker) + what its Work asks for — same shape the repair
 // ticket page feeds to WorkActions, so Help reuses the one workflow engine.
@@ -218,12 +219,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 where: { positionId: data.assignedPositionId, userId: { not: user.id } },
                 select: { userId: true },
             });
-            await createSystemInboxNotificationsForUsers({
-                userIds: [...new Set(holders.map((h) => h.userId))],
+            const userIds = [...new Set(holders.map((h) => h.userId))];
+            const notice = {
                 title: `Help ticket #${id} assigned to you`,
                 body: `${t.title ?? "Help ticket"} — assigned to ${assignedSeatTitle}`,
-                link: `/office/help?ticket=${id}`,
-            });
+                url: `/office/help?ticket=${id}`,
+            };
+            await createSystemInboxNotificationsForUsers({ userIds, title: notice.title, body: notice.body, link: notice.url });
+            // Phone / browser push too, so they hear about it with the app closed.
+            await pushNoticesToStaff([{ ...notice, tag: `help-assign-${id}` }], userIds);
         }
         return NextResponse.json(flattenHelp(t));
     } catch (e) {
