@@ -3,16 +3,11 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { isWaKind, waKindLabel } from "@/shared/lib/whatsapp/billTemplates";
-import { emailKindLabel, isEmailAnyKind, isSecurityKind } from "@/shared/lib/email/emailTemplates";
+import { emailKindLabel, isEmailAnyKind } from "@/shared/lib/email/emailTemplates";
 
 /** One choice in a "which template" dropdown. */
 export type TemplateOption = { kind: string; name: string; ready: boolean; why: string };
 export type TemplateChannel = "whatsapp" | "email";
-
-/** Kinds that cannot be sent from somewhere else: the auto-reply menu is not a
- *  Meta template, the UPI request needs its own QR, and sign-in codes are
- *  private to the person signing in. */
-const NOT_PICKABLE = new Set(["TICKET_AUTO_REPLY", "PAY_REQUEST"]);
 
 type Row = { kind: string; name: string | null; enabled: boolean; approved?: unknown };
 
@@ -28,12 +23,11 @@ function load(channel: TemplateChannel): Promise<TemplateOption[]> {
         .get<{ templates: Row[] }>(url)
         .then(({ data }) =>
             data.templates.flatMap((t): TemplateOption[] => {
-                if (NOT_PICKABLE.has(t.kind)) return [];
                 if (channel === "whatsapp") {
                     if (!isWaKind(t.kind)) return [];
                     return [{ kind: t.kind, name: waKindLabel(t.kind, t.name), ready: t.enabled && !!t.approved, why: !t.approved ? "not approved yet" : "switched off" }];
                 }
-                if (!isEmailAnyKind(t.kind) || isSecurityKind(t.kind)) return [];
+                if (!isEmailAnyKind(t.kind)) return [];
                 return [{ kind: t.kind, name: emailKindLabel(t.kind, t.name), ready: t.enabled, why: "switched off" }];
             }),
         )
@@ -45,8 +39,9 @@ function load(channel: TemplateChannel): Promise<TemplateOption[]> {
     return promise;
 }
 
-/** Every WhatsApp or email template that can be sent from elsewhere (built-in
- *  and staff's own), read when `enabled` turns true. A template not ready yet
+/** Every WhatsApp or email template, built-in and staff's own — no rules of
+ *  its own; a screen that wants fewer filters the list itself. Read when
+ *  `enabled` turns true. A template not ready yet
  *  is still listed, with the reason, so it can be picked now and switched on
  *  later. */
 export function useMessageTemplateOptions(channel: TemplateChannel, enabled = true): TemplateOption[] {
