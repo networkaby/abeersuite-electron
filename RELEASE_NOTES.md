@@ -1,32 +1,34 @@
-# v1.17.0
+# v1.17.1
 
-This version marks the new online-shop and product-copy features that arrived in v1.16.27, and adds a small WhatsApp fix. Counters already on v1.16.27 can install it when convenient — there is no rush.
+Every counter should install this one. It brings your own WhatsApp and email templates, smarter ticket workflows and a cleaner WhatsApp view on tickets. It also adds a few new settings to the database, so counters update first — a counter on an older version pauses its sync until it updates.
 
-## New in 1.17 (arrived with v1.16.27)
+## Your own message templates
 
-### Online shop — product stages
+- Staff can now add their own WhatsApp and email templates next to the built-in ones. Custom templates cannot be deleted by mistake.
+- The template picker shows only templates that are ready to send — never sign-in codes.
 
-- Every product shows where it stands for the online shop: **Unpublished**, **Ready** or **Published** (Published with a rule not yet met shows as **Pending**).
-- **Ready** means the work on a product is complete and checked, but it is waiting for a good time to go live.
-- Edits to a product's shop page wait in a separate **draft copy** — the shop keeps showing the last finished version until staff press **Save as ready**.
-- **Unpublish** moves a product back to Ready, so its finished work is not lost.
+## Ticket workflow
 
-### Online shop — product pages
+- A status can send a WhatsApp and/or email template to the customer when a ticket enters it.
+- A status can move a ticket on by itself after a set number of days — for example Resolved → Closed after 7 days.
+- Choose which roles see a status's overdue tickets, and who may do a gated work, right on the Work form.
+- Worker steps can send your own WhatsApp / email templates. A UPI payment request from a ticket is skipped with a clear reason when it cannot be sent.
 
-- **Works with**: printers list their inks, razors their blades, and so on, taken from each product's Compatible Models — and customers can search by them.
-- Products list: right-click on Edit, Edit product, Preview or the product name to open it in a new window.
+## Help, repair and deal tickets
 
-### Product copy by Claude
+- The current stage is shown clearly in the header and the stage dropdown, and is never blank.
+- Move To buttons follow the stage's allowed next stages, on Help and now on Deals too.
+- Assign a seat, change priority and inquiry type right on the ticket. The seat holder gets an Inbox notice and the ticket shows in their Work Inbox at once.
+- Deals: edit the seat and follow-up date on the deal itself.
+- Repair: WhatsApp "received" / "ready" buttons appear only on their own stage.
 
-- Claude prepares product copy (name, description, highlights, specs, warranty, brand, collections, shipping weight and parcel size) as a **draft for staff** — it never publishes and never overwrites what staff have written.
-- Claude leaves notes on anything in our data that looks wrong.
-- Product copy has its own key in Incoming API, apart from reviews and posts.
-- Up to 8 maker photos are found on a maker's page instead of 1, and a stricter fact check.
+## WhatsApp on tickets and messages
 
-### Price Watch
+- Back-to-back WhatsApp messages read as one run; automatic messages look quiet on the timeline, with the writer's photo.
+- WhatsApp photos open in a zoom viewer; ticket timelines show chat photos.
+- Linking a chat to a ticket copies its history faster.
+- WhatsApp popups and the notification panel stay usable over open dialogs and are no longer clipped by the sidebar.
 
-- Read-only **Price Watch** compares our prices with Amazon.in and Flipkart (and the maker's MRP) and reports which ones need attention. It never changes a price.
+## Screen layout
 
-## Fixed in this version
-
-- A WhatsApp chat card you drag to a new place now stays fully on screen, even when the chat is tall.
+- New third side-panel mode: a slim rail that opens when you hover over it.
