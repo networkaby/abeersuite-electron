@@ -13,6 +13,7 @@ import {
     WA_TEMPLATE_LABEL,
     autoKindForVoucherType,
     fillBody,
+    hasImageHeader,
     isCustomKind,
     type WaAnyKind,
     type WaFieldValues,
@@ -588,6 +589,8 @@ export async function loadTicketCustomer(ticketId: number): Promise<TicketCustom
 export async function notifyTicketTemplate(kind: WaAnyKind, ticketId: number): Promise<NotifyResult> {
     try {
         if (IS_COUNTER_PC) return { status: "skipped", reason: "counter" };
+        // The picker lists every template; what cannot work from a ticket is refused here, with the reason.
+        if (hasImageHeader(kind)) return { status: "skipped", reason: "a UPI payment request needs its own QR — send it from POS" };
         const approved = await getApprovedWaTemplate(kind);
         if (!approved) return { status: "skipped", reason: "template not approved or switched off" };
         const c = await loadTicketCustomer(ticketId);
