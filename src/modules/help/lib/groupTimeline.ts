@@ -1,7 +1,7 @@
 import type { HelpLogDto } from "./types";
 
 /** Lines from one WhatsApp sender in a row, shown as one card. */
-export type ChatRun = { kind: "chat"; key: string; name: string; staff: boolean; lines: { log: HelpLogDto; text: string }[] };
+export type ChatRun = { kind: "chat"; key: string; name: string; staff: boolean; /** Sent by the app itself (auto-reply, bill, ticket menu) — no person wrote it. */ auto: boolean; lines: { log: HelpLogDto; text: string }[] };
 export type TimelineItem = { kind: "log"; log: HelpLogDto } | ChatRun;
 
 /** A new card starts after this much quiet between two lines of a run. */
@@ -28,7 +28,7 @@ export function groupTimeline(logs: HelpLogDto[]): TimelineItem[] {
         if (run && run.staff === staff && run.name === name && Math.abs(lastAt - at) <= RUN_GAP_MS) {
             run.lines.push({ log, text });
         } else {
-            run = { kind: "chat", key: `chat-${log.id}`, name, staff, lines: [{ log, text }] };
+            run = { kind: "chat", key: `chat-${log.id}`, name, staff, auto: staff && name === "System", lines: [{ log, text }] };
             out.push(run);
         }
         lastAt = at;
