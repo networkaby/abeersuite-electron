@@ -28,6 +28,33 @@ function flattenHelpDetail(t: { logs: LogRow[] } & Parameters<typeof flattenHelp
     };
 }
 
+type Author = { userId?: number | null; userName?: string; avatarUrl?: string | null; channel?: string };
+
+/**
+ * Lines written by the WhatsApp code carry only a name and staff id, not a
+ * photo. Fill the current photo in at read time — staff by id, the customer's
+ * own lines from their Person record — so old lines get it too. Two small reads.
+ */
+async function withAvatars<T extends LogRow>(logs: T[], personId: number | null): Promise<T[]> {
+    const authorOf = (l: T) => (l.author ?? {}) as Author;
+    const missing = logs.filter((l) => !authorOf(l).avatarUrl);
+    if (!missing.length) return logs;
+    const staffIds = [...new Set(missing.map((l) => authorOf(l).userId).filter((v): v is number => v != null))];
+    const customerLines = personId != null && missing.some((l) => { const a = authorOf(l); return a.channel === "WHATSAPP" && a.userId == null && a.userName !== "System"; });
+    const [users, person] = await Promise.all([
+        staffIds.length ? prisma.user.findMany({ where: { id: { in: staffIds } }, select: { id: true, avatarUrl: true } }) : [],
+        customerLines ? prisma.person.findUnique({ where: { id: personId! }, select: { avatarUrl: true } }) : null,
+    ]);
+    const photo = new Map(users.map((u) => [u.id, u.avatarUrl]));
+    return logs.map((l) => {
+        const a = authorOf(l);
+        if (a.avatarUrl) return l;
+        const url = a.userId != null ? photo.get(a.userId)
+            : a.channel === "WHATSAPP" && a.userName !== "System" ? person?.avatarUrl : null;
+        return url ? { ...l, author: { ...a, avatarUrl: url } } : l;
+    });
+}
+
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requireAuth();
     if (response) return response;
@@ -36,7 +63,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     try {
         const t = await prisma.ticket.findUnique({ where: { id }, select: HELP_DETAIL_SELECT });
         if (!t || !t.help) return NextResponse.json({ error: "Help ticket not found" }, { status: 404 });
-        return NextResponse.json(flattenHelpDetail(t, await ticketLogMedia(id, t.logs)));
+        const [logs, media] = await Promise.all([withAvatars(t.logs, t.help.personId), ticketLogMedia(id, t.logs)]);
+        return NextResponse.json(flattenHelpDetail({ ...t, logs }, media));
     } catch (e) {
         return handleApiError(e, "Failed to fetch help ticket");
     }
