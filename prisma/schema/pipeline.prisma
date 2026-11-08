@@ -41,6 +41,11 @@ model TicketStatus {
   leavePrompt     String?
   announceOnEntry Boolean            @default(false)
   etaText         String?
+  // Customer message when a ticket ENTERS this status (owner, 2026-11-08): a
+  // WhatsApp template kind (REPAIR_RECEIVED / REPAIR_READY / CUSTOM_<id>) and an
+  // email template kind. Null = nothing. Once per (template, ticket).
+  waTemplate      String?
+  emailTemplate   String?
   // Resolve-time SLA (hours). A ticket sitting in this status longer than this
   // many hours is "needs attention" — surfaced (overdue-first) in the Work Inbox.
   // null = no SLA on this status. Measured from Ticket.statusEnteredAt.

@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/table";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { useValueChange } from "@/shared/hooks/useValueChange";
+import { useMessageTemplateOptions } from "@/modules/settings/hooks/useMessageTemplateOptions";
 
 interface Pipeline {
     id: string;
@@ -74,6 +75,8 @@ interface TicketStatus {
     leavePrompt: string | null;
     announceOnEntry: boolean;
     etaText: string | null;
+    waTemplate: string | null;
+    emailTemplate: string | null;
     resolveTimeHours: number | null;
     resolveGroupId?: string | null;
     pipelineId: string | null;
@@ -93,6 +96,8 @@ interface StatusForm {
     leavePrompt: string;
     announceOnEntry: boolean;
     etaText: string;
+    waTemplate: string;
+    emailTemplate: string;
     // Resolve time entered as days + hours (UI convenience) — combined into total
     // hours only when saving. resolveTimeHoursPart is the 0–23 remainder.
     resolveTimeDays: string;
@@ -111,7 +116,7 @@ function formatResolveTime(totalHours: number): string {
 
 const EMPTY_FORM: StatusForm = {
     label: "", color: "bg-gray-100 text-gray-600", order: 0, isTerminal: false, isEntryPoint: false,
-    workId: "", warrantyScope: "any", actionLabel: "", leavePrompt: "", announceOnEntry: false, etaText: "",
+    workId: "", warrantyScope: "any", actionLabel: "", leavePrompt: "", announceOnEntry: false, etaText: "", waTemplate: "", emailTemplate: "",
     resolveTimeDays: "", resolveTimeHoursPart: "", resolveGroupId: "",
 };
 
@@ -125,6 +130,7 @@ export default function StatusesPage() {
 
     // One full "Edit status" dialog covers basics, flags, work (optional), and prompts.
     const [editModalId, setEditModalId] = useState<string | null>(null);
+    const templates = useMessageTemplateOptions(editModalId != null, true);
     const [editForm, setEditForm] = useState<StatusForm>(EMPTY_FORM);
     const [savingEdit, setSavingEdit] = useState(false);
 
@@ -188,6 +194,8 @@ export default function StatusesPage() {
             leavePrompt: status.leavePrompt ?? "",
             announceOnEntry: status.announceOnEntry ?? false,
             etaText: status.etaText ?? "",
+            waTemplate: status.waTemplate ?? "",
+            emailTemplate: status.emailTemplate ?? "",
             resolveTimeDays: status.resolveTimeHours != null ? String(Math.floor(status.resolveTimeHours / 24)) : "",
             resolveTimeHoursPart: status.resolveTimeHours != null ? String(status.resolveTimeHours % 24) : "",
             resolveGroupId: status.resolveGroupId ?? "",
@@ -219,6 +227,8 @@ export default function StatusesPage() {
                 leavePrompt: editForm.leavePrompt.trim() || null,
                 announceOnEntry: editForm.announceOnEntry,
                 etaText: editForm.etaText.trim() || null,
+                waTemplate: editForm.waTemplate || null,
+                emailTemplate: editForm.emailTemplate || null,
                 resolveTimeHours,
                 resolveGroupId: editForm.resolveGroupId || null,
             });
@@ -745,6 +755,30 @@ export default function StatusesPage() {
                                     The “Y” in the announcement. Blank = announce without a duration.
                                 </p>
                             </div>
+
+                            {(["waTemplate", "emailTemplate"] as const).map((key) => {
+                                const options = key === "waTemplate" ? templates.wa : templates.email;
+                                return (
+                                    <div key={key} className="space-y-2">
+                                        <Label>{key === "waTemplate" ? "WhatsApp on entry" : "Email on entry"} <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                                        <Select
+                                            value={editForm[key] || "__none__"}
+                                            onValueChange={(v) => setEditForm((prev) => ({ ...prev, [key]: v === "__none__" ? "" : v }))}
+                                        >
+                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="__none__">— none —</SelectItem>
+                                                {options.map((t) => (
+                                                    <SelectItem key={t.kind} value={t.kind}>{t.name}{t.ready ? "" : ` (${t.why})`}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                );
+                            })}
+                            <p className="text-xs text-muted-foreground">
+                                Sent to the customer when a ticket <em>enters</em> this status — once per ticket. Templates live in Settings → WhatsApp / Email Templates.
+                            </p>
                         </div>
                     </div>
 

@@ -12,6 +12,7 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { addInterval } from "@/shared/lib/format/addInterval";
+import { messageOnStatusEntry } from "@/modules/repairing/lib/actions";
 
 const workerUpdateSchema = z.object({
     // The outcome target is EITHER a worker (route within/around the stage) OR a
@@ -170,6 +171,7 @@ export async function PATCH(
                     await spawnChild({ parentId: ticketId, parentStatus: statusId, parentWorkerId: newWorkerId, spawnPipelineId: landing.spawnPipelineId, deviceId: ticket.repair?.deviceId ?? null, userId }).catch(() => { /* never blocks the move */ });
                 }
             }
+            if (statusId !== ticket.status) await messageOnStatusEntry(ticketId, statusId, userId);
             await reconcileParentFromChild(ticketId, userId).catch(() => { /* best-effort */ });
             // 6th power — the completed worker's action chain, filtered by outcome.
             if (outcome && prevWorkerId) {

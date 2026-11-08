@@ -8,6 +8,7 @@ import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { HELP_TICKET_SELECT, flattenHelp } from "../route";
 import { parseNumericId } from "@/shared/lib/api/parseNumericId";
 import { ticketLogAvatars, ticketLogMedia, type LogMedia } from "@/modules/message/lib/customerMessages";
+import { messageOnStatusEntry } from "@/modules/repairing/lib/actions";
 
 // Help ticket + its timeline (TicketLog rows — advise notes, stage moves, close).
 const HELP_DETAIL_SELECT = {
@@ -163,6 +164,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             }
         }
 
+        if (targetStatus && targetStatus !== existing.status) await messageOnStatusEntry(id, targetStatus, user.id);
         return NextResponse.json(flattenHelp(t));
     } catch (e) {
         return handleApiError(e, "Failed to update help ticket");

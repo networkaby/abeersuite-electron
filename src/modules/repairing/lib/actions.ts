@@ -5,7 +5,7 @@ import { spawnChild } from "./spawnChild";
 import { isKnownActionType } from "./actionTypes";
 import { after } from "next/server";
 import { notifyRepair, notifyTicketTemplate, type NotifyResult } from "@/shared/lib/whatsapp/notifyBill";
-import { notifyTicketEmail } from "@/shared/lib/email/notifyEmail";
+import { notifyRepairEmail, notifyTicketEmail } from "@/shared/lib/email/notifyEmail";
 import { isCustomKind } from "@/shared/lib/whatsapp/billTemplates";
 
 // ── Worker action runtime (6th power) ─────────────────────────────────────────
@@ -69,6 +69,7 @@ const RUN_HANDLERS: Record<string, RunHandler> = {
         await prisma.ticketLog.create({
             data: { ticketId: ctx.ticketId, status: statusId, note: `Action: moved to ${target.label}`, author: ctx.author },
         });
+        await messageOnStatusEntry(ctx.ticketId, statusId, ctx.userId);
     },
 
     // One of staff's own templates to the ticket's customer, after the
@@ -134,6 +135,41 @@ async function logTemplate(ctx: ActionRunContext, channel: string, name: string,
             : r.status === "already" ? `${icon} ${channel} "${name}" was already sent`
                 : `${icon} ${channel} "${name}" not sent — ${r.reason ?? "skipped"}`;
     await prisma.ticketLog.create({ data: { ticketId: ctx.ticketId, status: ctx.status, note, author: ctx.author } });
+}
+
+// ── Status entry: the status' own WhatsApp / email template ──────────────────
+
+const REPAIR_KINDS = { REPAIR_RECEIVED: "Repair received", REPAIR_READY: "Repair ready" } as const;
+type RepairKind = keyof typeof REPAIR_KINDS;
+const isRepairTemplate = (k: string): k is RepairKind => k in REPAIR_KINDS;
+
+/** A ticket just ENTERED `statusId`: send that status' chosen WhatsApp and
+ *  email templates (Workflow → Statuses), after the response. Once per
+ *  (template, ticket) — moving in twice never messages twice. Every move path
+ *  calls this; it never throws and never slows the move. */
+export async function messageOnStatusEntry(ticketId: number, statusId: string, userId: number): Promise<void> {
+    try {
+        const st = await prisma.ticketStatus.findUnique({ where: { id: statusId }, select: { waTemplate: true, emailTemplate: true } });
+        const wa = st?.waTemplate ?? null;
+        const em = st?.emailTemplate ?? null;
+        if (!wa && !em) return;
+        const ctx: ActionRunContext = { ticketId, status: statusId, workerId: "", deviceId: null, userId, outcome: null, author: await buildActorSnapshot(userId) };
+        after(async () => {
+            if (wa && isRepairTemplate(wa)) {
+                // manual: send on the template's approval alone, and leave the email to the email dropdown.
+                await logTemplate(ctx, "WhatsApp", REPAIR_KINDS[wa], await notifyRepair(wa, ticketId, { manual: true }));
+            } else if (wa && isCustomKind(wa)) {
+                await logTemplate(ctx, "WhatsApp", await templateName("wa", wa), await notifyTicketTemplate(wa, ticketId));
+            }
+            if (em && isRepairTemplate(em)) {
+                await logTemplate(ctx, "Email", REPAIR_KINDS[em], await notifyRepairEmail(em, ticketId));
+            } else if (em && isCustomKind(em)) {
+                await logTemplate(ctx, "Email", await templateName("email", em), await notifyTicketEmail(em, ticketId));
+            }
+        });
+    } catch (e) {
+        console.error(`[status-message] ticket ${ticketId} → ${statusId} failed`, e);
+    }
 }
 
 type ChainEntry = { type: string; on: ActionOn; config: Record<string, unknown> };

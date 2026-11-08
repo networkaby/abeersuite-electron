@@ -17,6 +17,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { ticketLogAvatars, ticketLogMedia } from "@/modules/message/lib/customerMessages";
+import { messageOnStatusEntry } from "@/modules/repairing/lib/actions";
 
 const ticketUpdateSchema = z.object({
     status: z.string().trim().optional(),
@@ -297,6 +298,8 @@ export async function PUT(
                     },
                 });
             }
+            // The entered status' own WhatsApp / email template (not on undo / back).
+            if (!("restoreWorkerId" in body)) await messageOnStatusEntry(ticket.id, body.status, userId);
             // If this change took a CHILD ticket onto a worker that signals its
             // parent, reconcile the parent (fire its Success / Unsuccess route).
             await reconcileParentFromChild(ticket.id, userId).catch(() => { /* best-effort */ });

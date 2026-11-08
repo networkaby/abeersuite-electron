@@ -4,7 +4,7 @@ import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
 import { resolveTicketSource, type TicketLike } from "./ticketSources";
 import { runServerTool } from "./toolRegistry";
-import { runWorkerActions } from "./actions";
+import { messageOnStatusEntry, runWorkerActions } from "./actions";
 import { spawnChild } from "./spawnChild";
 import { findEntryWorker } from "./entryWorker";
 
@@ -148,6 +148,7 @@ export async function autoAdvance(ticketId: number, userId: number): Promise<Aut
             }
         });
 
+        if (newStatus !== ticket.status) await messageOnStatusEntry(ticketId, newStatus, userId);
         // 5th power: landing worker may spawn a child pipeline (best-effort).
         if (newWorkerId) {
             const landing = await prisma.ticketWorker.findUnique({ where: { id: newWorkerId }, select: { spawnPipelineId: true } });

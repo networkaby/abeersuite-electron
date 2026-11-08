@@ -14,6 +14,7 @@ import { serviceCentreName } from "@/modules/repairing/lib/serviceCentre";
 import { nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { parseSince } from "@/shared/lib/prisma/counterMode";
 import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
+import { messageOnStatusEntry } from "@/modules/repairing/lib/actions";
 
 const createTicketSchema = z.object({
     sourceShopOrderId: z.coerce.number().int().positive().optional(),
@@ -274,6 +275,7 @@ export async function POST(req: Request) {
             await autoAdvance(ticket.id, user.id).catch(() => { /* never blocks create */ });
         }
 
+        await messageOnStatusEntry(ticket.id, ticket.status, user.id);
         return NextResponse.json({ ...flattenRepair(ticket), workerId: entrySub?.id ?? null });
     } catch (e) {
         return handleApiError(e, "Failed to create ticket");

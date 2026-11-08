@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
-import { isCustomKind } from "@/shared/lib/whatsapp/billTemplates";
+import { useMessageTemplateOptions } from "@/modules/settings/hooks/useMessageTemplateOptions";
 import { toast } from "sonner";
 import { Check, ChevronRight, Copy, CornerUpLeft, GitBranch, GitMerge, Lock, Pencil, Plus, RefreshCw, Trash2, X, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -201,7 +201,7 @@ function WorkerFormModal({
     workers: Worker[];
     pipelines: Pipeline[];
 }) {
-    const templates = useCustomTemplates(open);
+    const templates = useMessageTemplateOptions(open);
 
     // A worker belongs to exactly one parent status. Changing it re-keys the
     // single auto-advance entry (triggerMap) onto the new status.
@@ -728,33 +728,6 @@ function WorkerFormModal({
             </DialogContent>
         </Dialog>
     );
-}
-
-type TemplateOption = { kind: string; name: string; ready: boolean; why: string };
-
-/** Staff's own WhatsApp / email templates for the worker actions' picker —
- *  read once when the dialog opens. A template not ready yet is still listed,
- *  with the reason, so it can be picked now and switched on later. */
-function useCustomTemplates(open: boolean) {
-    const [list, setList] = useState<{ wa: TemplateOption[]; email: TemplateOption[] }>({ wa: [], email: [] });
-    useEffect(() => {
-        if (!open) return;
-        type Row = { kind: string; name: string | null; enabled: boolean; approved?: unknown };
-        const own = (rows: Row[]) => rows.filter((t) => isCustomKind(t.kind));
-        Promise.all([
-            axios.get("/api/settings/whatsapp-templates").catch(() => ({ data: { templates: [] } })),
-            axios.get("/api/settings/email-templates").catch(() => ({ data: { templates: [] } })),
-        ]).then(([wa, em]) => setList({
-            wa: own(wa.data.templates).map((t) => ({
-                kind: t.kind,
-                name: t.name ?? "Untitled",
-                ready: t.enabled && !!t.approved,
-                why: !t.approved ? "not approved yet" : "switched off",
-            })),
-            email: own(em.data.templates).map((t) => ({ kind: t.kind, name: t.name ?? "Untitled", ready: t.enabled, why: "switched off" })),
-        }));
-    }, [open]);
-    return list;
 }
 
 export default function WorkersPage() {

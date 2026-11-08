@@ -4157,6 +4157,8 @@ CREATE TABLE IF NOT EXISTS "TicketStatus" (
     "leavePrompt" TEXT,
     "announceOnEntry" BOOLEAN NOT NULL DEFAULT false,
     "etaText" TEXT,
+    "waTemplate" TEXT,
+    "emailTemplate" TEXT,
     "resolveTimeHours" INTEGER,
     "resolveGroupId" TEXT,
     "workId" TEXT,
@@ -4179,6 +4181,10 @@ ALTER TABLE "TicketStatus" ALTER COLUMN "leavePrompt" DROP NOT NULL;
 ALTER TABLE "TicketStatus" ADD COLUMN IF NOT EXISTS "announceOnEntry" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "TicketStatus" ADD COLUMN IF NOT EXISTS "etaText" TEXT;
 ALTER TABLE "TicketStatus" ALTER COLUMN "etaText" DROP NOT NULL;
+ALTER TABLE "TicketStatus" ADD COLUMN IF NOT EXISTS "waTemplate" TEXT;
+ALTER TABLE "TicketStatus" ALTER COLUMN "waTemplate" DROP NOT NULL;
+ALTER TABLE "TicketStatus" ADD COLUMN IF NOT EXISTS "emailTemplate" TEXT;
+ALTER TABLE "TicketStatus" ALTER COLUMN "emailTemplate" DROP NOT NULL;
 ALTER TABLE "TicketStatus" ADD COLUMN IF NOT EXISTS "resolveTimeHours" INTEGER;
 ALTER TABLE "TicketStatus" ALTER COLUMN "resolveTimeHours" DROP NOT NULL;
 ALTER TABLE "TicketStatus" ADD COLUMN IF NOT EXISTS "resolveGroupId" TEXT;
