@@ -8,6 +8,7 @@ import { extractApiError } from "@/shared/lib/api";
 import { formatDateTime } from "@/shared/lib/format";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { badgeColor } from "@/shared/lib/format/entityColor";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -141,6 +142,7 @@ export default function HelpDetailDialog({
     const stageOptions = ticket
         ? stages.filter((s) => s.id === ticket.status || moveStages.some((m) => m.id === s.id && !m.isTerminal))
         : [];
+    const stageChip = ticket ? badgeColor(ticket.ticketStatus.color) : null;
     const priority = ticket ? (PRIORITY_META[ticket.priority] ?? PRIORITY_META.MEDIUM) : null;
     const customer = ticket ? helpCustomerName(ticket) : "";
 
@@ -179,8 +181,8 @@ export default function HelpDetailDialog({
                                     {priority.label}
                                 </Badge>
                             )}
-                            {ticket && (
-                                <span className={`rounded-md px-2 py-0.5 text-xs font-semibold shrink-0 ${ticket.ticketStatus.color}`}>
+                            {ticket && stageChip && (
+                                <span className={`rounded-md px-2 py-0.5 text-xs font-semibold shrink-0 ${stageChip.className}`} style={stageChip.style}>
                                     {ticket.ticketStatus.label}
                                 </span>
                             )}
@@ -385,14 +387,22 @@ export default function HelpDetailDialog({
                                 {/* Stage & Resolution Card */}
                                 <div className="rounded-xl border bg-card p-5 shadow-sm space-y-4">
                                     <h3 className="font-semibold text-sm text-foreground">Stage & Resolution</h3>
+                                    {ticket && stageChip && (
+                                        <div className="space-y-1">
+                                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Current stage</p>
+                                            <span className={`inline-block rounded-md px-3 py-1.5 text-base font-semibold ${stageChip.className}`} style={stageChip.style}>
+                                                {ticket.ticketStatus.label}
+                                            </span>
+                                        </div>
+                                    )}
 
                                     {canEdit && !isClosed && (
                                         <div className="space-y-4">
                                             {/* Stage */}
                                             <div className="space-y-1.5">
-                                                <Label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Stage</Label>
-                                                <Select value={ticket.status} onValueChange={(v) => patch({ status: v }, "Stage updated")} disabled={busy}>
-                                                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                                                <Label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Change stage</Label>
+                                                <Select value={ticket.status} onValueChange={(v) => { if (v !== ticket.status) patch({ status: v }, "Stage updated"); }} disabled={busy}>
+                                                    <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
                                                     <SelectContent>
                                                         {stageOptions.map((s) => (
                                                             <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
