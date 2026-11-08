@@ -11,7 +11,7 @@ import {
     toMetaBody,
     type WaFieldValues,
     type WaTemplateDraft,
-    type WaTemplateKind,
+    type WaAnyKind,
 } from "./billTemplates";
 
 /**
@@ -111,7 +111,7 @@ async function sampleQrPng(): Promise<Uint8Array> {
 /** Meta's component list for a draft — optional photo header, body, the
  *  optional URL buttons and a Call us button (last, so the View button
  *  stays index 0 when sending). */
-async function components(kind: WaTemplateKind, draft: WaTemplateDraft) {
+async function components(kind: WaAnyKind, draft: WaTemplateDraft) {
     const order = bodyFieldOrder(draft.body);
     const samples = sampleValuesFor(kind);
     const list: unknown[] = [];
@@ -147,7 +147,7 @@ async function components(kind: WaTemplateKind, draft: WaTemplateDraft) {
 
 /** Send a draft to Meta for approval. Meta answers PENDING (or sometimes
  *  APPROVED straight away for a clean utility template). */
-export async function submitTemplate(kind: WaTemplateKind, name: string, draft: WaTemplateDraft): Promise<{ id: string; status: string }> {
+export async function submitTemplate(kind: WaAnyKind, name: string, draft: WaTemplateDraft): Promise<{ id: string; status: string }> {
     const r = await graph<{ id: string; status: string }>(
         `${process.env.META_WA_BUSINESS_ACCOUNT_ID}/message_templates`,
         { method: "POST", body: { name, language: LANG, category: "UTILITY", components: await components(kind, draft) } },

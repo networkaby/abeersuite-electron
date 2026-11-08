@@ -34,6 +34,38 @@ export const WA_TEMPLATE_KINDS = [
 ] as const;
 export type WaTemplateKind = (typeof WA_TEMPLATE_KINDS)[number];
 
+// ── Custom templates ────────────────────────────────────────────────────────
+// Staff's own templates, added on Settings → WhatsApp / Email Templates. They
+// have no event of their own, so nothing sends them by itself — staff will
+// pick them when sending by hand (chat, campaigns, 3-dot menu: not built yet).
+// The row's kind is CUSTOM_<id>; its label is the row's own name.
+
+export type CustomTemplateKind = `CUSTOM_${string}`;
+/** A built-in kind or a custom one. */
+export type WaAnyKind = WaTemplateKind | CustomTemplateKind;
+
+const CUSTOM_KIND_RE = /^CUSTOM_[A-Z0-9]{4,24}$/;
+export function isCustomKind(kind: string): kind is CustomTemplateKind {
+    return CUSTOM_KIND_RE.test(kind);
+}
+export function isWaKind(kind: string): kind is WaAnyKind {
+    return (WA_TEMPLATE_KINDS as readonly string[]).includes(kind) || isCustomKind(kind);
+}
+/** A fresh id — base-36 time, so the list keeps the order they were added in. */
+export function newCustomKind(): CustomTemplateKind {
+    return `CUSTOM_${Date.now().toString(36).toUpperCase()}`;
+}
+export const CUSTOM_NAME_MAX = 40;
+export const CUSTOM_TEMPLATE_WHEN = "Your own template — never sent by itself. Picking it when sending by hand comes in a later update.";
+
+/** Label for any kind: a custom one shows its own name. */
+export function waKindLabel(kind: WaAnyKind, name?: string | null): string {
+    return isCustomKind(kind) ? name?.trim() || "Untitled template" : WA_TEMPLATE_LABEL[kind];
+}
+export function waKindWhen(kind: WaAnyKind): string {
+    return isCustomKind(kind) ? CUSTOM_TEMPLATE_WHEN : WA_TEMPLATE_WHEN[kind];
+}
+
 export const WA_TEMPLATE_LABEL: Record<WaTemplateKind, string> = {
     SALE: "Sale bill",
     RECEIPT: "Receipt",
@@ -72,8 +104,8 @@ export const WA_TEMPLATE_WHEN: Record<WaTemplateKind, string> = {
 
 /** Auto send starts on for every kind except Estimate — staff often make rough
  *  quotes, so an estimate goes only when someone presses Send. */
-export function autoSendDefault(kind: WaTemplateKind): boolean {
-    return kind !== "ESTIMATE" && kind !== "PAY_REQUEST";
+export function autoSendDefault(kind: WaAnyKind): boolean {
+    return kind !== "ESTIMATE" && kind !== "PAY_REQUEST" && !isCustomKind(kind);
 }
 
 /** UniversalVoucher type → the template that announces it. A PAYMENT is a
@@ -107,19 +139,19 @@ export function waSendHint(state: WaSendState | undefined): string | null {
 /** Kinds whose template carries a photo header — the UPI QR of a payment
  *  request (served by /portal/b/<code>/qr). Fixed per kind, not part of the
  *  editable draft. */
-export function hasImageHeader(kind: WaTemplateKind): boolean {
+export function hasImageHeader(kind: WaAnyKind): boolean {
     return kind === "PAY_REQUEST";
 }
 
 /** Repair kinds announce a ticket, not a voucher — their refId is Ticket.id. */
-export function isRepairKind(kind: WaTemplateKind): boolean {
+export function isRepairKind(kind: WaAnyKind): boolean {
     return kind === "REPAIR_RECEIVED" || kind === "REPAIR_READY";
 }
 
 /** Due reminders announce a party's whole balance, not one document — their
  *  refId is the party's Account id and Campaigns → Due Reminders decides when
  *  they go, not the Auto send switch. */
-export function isDueKind(kind: WaTemplateKind): kind is "DUE_SOFT" | "DUE_FIRM" {
+export function isDueKind(kind: WaAnyKind): kind is "DUE_SOFT" | "DUE_FIRM" {
     return kind === "DUE_SOFT" || kind === "DUE_FIRM";
 }
 
@@ -154,9 +186,12 @@ const HELP_FIELDS = new Set<string>(["customer", "subject", "billNo", "shop", "l
 const AUTO_REPLY_FIELDS = new Set<string>(["customer", "shop"]);
 /** A UPI payment request: {billNo} is the bill / note the cashier typed, may be blank. */
 const PAY_FIELDS = new Set<string>(["customer", "amount", "billNo", "shop"]);
+/** A custom template has no document behind it — only what every customer has. */
+const CUSTOM_FIELDS = new Set<string>(["customer", "shop", "app"]);
 
 /** Fields a kind can fill: a repair has a device and no money; a voucher the reverse. */
-export function fieldsFor(kind: WaTemplateKind): readonly (typeof WA_FIELDS)[number][] {
+export function fieldsFor(kind: WaAnyKind): readonly (typeof WA_FIELDS)[number][] {
+    if (isCustomKind(kind)) return WA_FIELDS.filter((f) => CUSTOM_FIELDS.has(f.key));
     if (isDueKind(kind)) return WA_FIELDS.filter((f) => DUE_FIELDS.has(f.key));
     if (kind === "DEAL_CREATED") return WA_FIELDS.filter((f) => DEAL_FIELDS.has(f.key));
     if (kind === "HELP_CREATED") return WA_FIELDS.filter((f) => HELP_FIELDS.has(f.key));
@@ -340,6 +375,13 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
     },
 };
 
+/** Starting wording of a new custom template. No View button — there is no document to open. */
+export const CUSTOM_TEMPLATE_DEFAULT: WaTemplateDraft = {
+    body: "Dear {customer}, greetings from {shop}." + HELP_LINE,
+    viewButton: null,
+    appButton: "Open in app",
+};
+
 /** Bill link and app link — the button URLs Meta approves. The bill button's
  *  last part is the voucher id, the one variable Meta allows in a URL button. */
 export const WA_BILL_LINK_BASE = `${COMPANY_DETAILS.sites.shop}/portal/b/`;
@@ -390,7 +432,8 @@ const SAMPLE_DOC_NO: Record<WaTemplateKind, string> = {
     PAY_REQUEST: "",
 };
 
-export function sampleValuesFor(kind: WaTemplateKind): WaFieldValues {
+export function sampleValuesFor(kind: WaAnyKind): WaFieldValues {
+    if (isCustomKind(kind)) return BASE_SAMPLES;
     const v = { ...BASE_SAMPLES, billNo: SAMPLE_DOC_NO[kind] };
     // Money in brings the balance down; everything else adds to it.
     if (kind === "RECEIPT") return { ...v, prevBalance: "₹3,750.00 due", balance: "₹2,500.00 due" };
@@ -399,7 +442,7 @@ export function sampleValuesFor(kind: WaTemplateKind): WaFieldValues {
 }
 
 /** Problems Meta would reject the draft for — empty means fine. */
-export function checkBody(draft: WaTemplateDraft, kind?: WaTemplateKind): string[] {
+export function checkBody(draft: WaTemplateDraft, kind?: WaAnyKind): string[] {
     const errs: string[] = [];
     const body = draft.body.trim();
     if (!body) return ["Message is empty."];
@@ -411,8 +454,9 @@ export function checkBody(draft: WaTemplateDraft, kind?: WaTemplateKind): string
     if (kind) {
         const allowed = new Set<string>(fieldsFor(kind).map((f) => f.key));
         for (const k of bodyFieldOrder(body)) {
-            if (!allowed.has(k)) errs.push(`{${k}} has no value for a ${WA_TEMPLATE_LABEL[kind]} message — remove it.`);
+            if (!allowed.has(k)) errs.push(`{${k}} has no value in this template — remove it.`);
         }
+        if (isCustomKind(kind) && draft.viewButton?.trim()) errs.push("A custom template has no document to open — remove the View button.");
     }
     if (/^\{\w+\}/.test(body)) errs.push("The message cannot start with a field — put a word before it.");
     if (/\{\w+\}[.!\s]*$/.test(body)) errs.push("The message cannot end with a field — put a word after it.");

@@ -13,9 +13,10 @@ import { Textarea } from "@/components/ui/textarea";
 import {
     EMAIL_BODY_MAX,
     EMAIL_SUBJECT_MAX,
+    CUSTOM_EMAIL_DEFAULT,
     EMAIL_TEMPLATE_DEFAULTS,
-    EMAIL_TEMPLATE_LABEL,
-    EMAIL_TEMPLATE_WHEN,
+    emailKindLabel,
+    emailKindWhen,
     UNSUBSCRIBE_SAMPLE_URL,
     EMAIL_KIND_GROUPS,
     checkEmailDraft,
@@ -26,9 +27,13 @@ import {
     unsubscribeLine,
     emailFieldsFor,
     emailSampleValues,
+    type EmailAnyKind,
     type EmailTemplateDraft,
-    type EmailTemplateKind,
 } from "@/shared/lib/email/emailTemplates";
+import { isCustomKind } from "@/shared/lib/whatsapp/billTemplates";
+import { AddTemplateButton, CustomTemplateHeader } from "./CustomTemplateControls";
+
+const API = "/api/settings/email-templates";
 import type { EmailTemplateView } from "@/shared/lib/email/emailTemplateStore";
 import { useValueChange } from "@/shared/hooks/useValueChange";
 
@@ -36,7 +41,7 @@ type Props = { initialTemplates: EmailTemplateView[]; sendReady: boolean };
 
 export function EmailTemplatesPanel({ initialTemplates, sendReady }: Props) {
     const [templates, setTemplates] = useState(initialTemplates);
-    const [kind, setKind] = useState<EmailTemplateKind>(initialTemplates[0]?.kind ?? "SALE");
+    const [kind, setKind] = useState<EmailAnyKind>(initialTemplates[0]?.kind ?? "SALE");
     const current = templates.find((t) => t.kind === kind)!;
 
     const [enabled, setEnabled] = useState(current.enabled);
@@ -63,6 +68,9 @@ export function EmailTemplatesPanel({ initialTemplates, sendReady }: Props) {
         draft.body !== current.draft.body;
     const errors = useMemo(() => checkEmailDraft(draft, kind), [draft, kind]);
     const samples = emailSampleValues(kind);
+    const custom = isCustomKind(kind);
+    const customs = templates.filter((t) => isCustomKind(t.kind));
+    const replace = (t: EmailTemplateView) => setTemplates((list) => list.map((x) => (x.kind === t.kind ? t : x)));
 
     function insertField(key: string) {
         const el = target === "subject" ? subjectRef.current : bodyRef.current;
@@ -81,8 +89,8 @@ export function EmailTemplatesPanel({ initialTemplates, sendReady }: Props) {
         setBusy("save");
         try {
             const { data } = await axios.put(`/api/settings/email-templates/${kind}`, { enabled, autoSend, ...draft });
-            setTemplates((list) => list.map((x) => (x.kind === kind ? data.template : x)));
-            toast.success(`Saved ${EMAIL_TEMPLATE_LABEL[kind]} email`);
+            replace(data.template);
+            toast.success(`Saved ${emailKindLabel(kind, current.name)} email`);
         } catch (e) {
             toast.error(extractApiError(e, "Save failed"));
         } finally {
@@ -109,7 +117,7 @@ export function EmailTemplatesPanel({ initialTemplates, sendReady }: Props) {
                 {EMAIL_KIND_GROUPS.map((g) => (
                     <div key={g.title} className="space-y-1">
                         <p className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">{g.title}</p>
-                        {templates.filter((t) => g.kinds.includes(t.kind)).map((t) => (
+                        {templates.filter((t) => (g.kinds as readonly string[]).includes(t.kind)).map((t) => (
                             <button
                                 key={t.kind}
                                 type="button"
@@ -118,7 +126,7 @@ export function EmailTemplatesPanel({ initialTemplates, sendReady }: Props) {
                                     t.kind === kind ? "border-primary bg-primary/5 font-medium" : "hover:bg-muted"
                                 }`}
                             >
-                                <span>{EMAIL_TEMPLATE_LABEL[t.kind]}</span>
+                                <span>{emailKindLabel(t.kind, t.name)}</span>
                                 <span className={`text-xs ${t.enabled ? "text-emerald-600" : "text-muted-foreground"}`}>
                                     {isSecurityKind(t.kind) ? "Always" : t.enabled ? "On" : "Off"}
                                 </span>
@@ -126,6 +134,29 @@ export function EmailTemplatesPanel({ initialTemplates, sendReady }: Props) {
                         ))}
                     </div>
                 ))}
+                <div className="space-y-1">
+                    <p className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Your templates</p>
+                    {customs.map((t) => (
+                        <button
+                            key={t.kind}
+                            type="button"
+                            onClick={() => setKind(t.kind)}
+                            className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm ${
+                                t.kind === kind ? "border-primary bg-primary/5 font-medium" : "hover:bg-muted"
+                            }`}
+                        >
+                            <span>{emailKindLabel(t.kind, t.name)}</span>
+                            <span className={`text-xs ${t.enabled ? "text-emerald-600" : "text-muted-foreground"}`}>{t.enabled ? "On" : "Off"}</span>
+                        </button>
+                    ))}
+                    <AddTemplateButton<EmailTemplateView>
+                        apiBase={API}
+                        onCreated={(t) => {
+                            setTemplates((list) => [...list, t]);
+                            setKind(t.kind);
+                        }}
+                    />
+                </div>
             </div>
 
             {/* Editor */}
@@ -135,8 +166,19 @@ export function EmailTemplatesPanel({ initialTemplates, sendReady }: Props) {
                         Email sending is not set up on this server — <code>RESEND_API_KEY</code> or <code>EMAIL_FROM</code> is missing.
                     </p>
                 )}
+                {custom && (
+                    <CustomTemplateHeader<EmailTemplateView>
+                        apiBase={API}
+                        template={current}
+                        onRenamed={replace}
+                        onDeleted={(k) => {
+                            setKind("SALE");
+                            setTemplates((list) => list.filter((x) => x.kind !== k));
+                        }}
+                    />
+                )}
                 <p className="text-xs text-muted-foreground">
-                    <b>Sent when:</b> {EMAIL_TEMPLATE_WHEN[kind]}
+                    <b>Sent when:</b> {emailKindWhen(kind)}
                 </p>
                 <div className="flex flex-wrap items-center gap-3">
                     {!isSecurityKind(kind) && (
@@ -192,7 +234,7 @@ export function EmailTemplatesPanel({ initialTemplates, sendReady }: Props) {
                         {busy === "save" ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
                         Save
                     </Button>
-                    <Button variant="ghost" onClick={() => setDraft(EMAIL_TEMPLATE_DEFAULTS[kind])} disabled={busy !== null}>
+                    <Button variant="ghost" onClick={() => setDraft(isCustomKind(kind) ? CUSTOM_EMAIL_DEFAULT : EMAIL_TEMPLATE_DEFAULTS[kind])} disabled={busy !== null}>
                         Reset to default wording
                     </Button>
                 </div>

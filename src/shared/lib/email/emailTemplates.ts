@@ -23,8 +23,11 @@ import {
     WA_TEMPLATE_LABEL,
     WA_TEMPLATE_WHEN,
     autoKindForVoucherType,
+    CUSTOM_TEMPLATE_WHEN,
     fieldsFor,
+    isCustomKind,
     sampleValuesFor,
+    type CustomTemplateKind,
     type WaTemplateKind,
 } from "@/shared/lib/whatsapp/billTemplates";
 
@@ -50,10 +53,12 @@ export type SecurityEmailKind = (typeof SECURITY_KINDS)[number];
 
 export const EMAIL_TEMPLATE_KINDS = [...SHARED_KINDS, ...SHOP_KINDS, ...SECURITY_KINDS] as const;
 export type EmailTemplateKind = (typeof EMAIL_TEMPLATE_KINDS)[number];
+/** A built-in kind or a custom one (CUSTOM_<id>, see billTemplates). */
+export type EmailAnyKind = EmailTemplateKind | CustomTemplateKind;
 
-const isShared = (k: EmailTemplateKind): k is SharedKind => (SHARED_KINDS as readonly string[]).includes(k);
+const isShared = (k: EmailAnyKind): k is SharedKind => (SHARED_KINDS as readonly string[]).includes(k);
 
-export function isSecurityKind(kind: EmailTemplateKind): kind is SecurityEmailKind {
+export function isSecurityKind(kind: EmailAnyKind): kind is SecurityEmailKind {
     return (SECURITY_KINDS as readonly string[]).includes(kind);
 }
 
@@ -70,17 +75,30 @@ export const OTP_MINUTES = Math.round(OTP_CODE_TTL_MS / 60_000);
 export function isEmailKind(kind: string): kind is EmailTemplateKind {
     return (EMAIL_TEMPLATE_KINDS as readonly string[]).includes(kind);
 }
+/** Built-in or custom — what the settings routes accept. */
+export function isEmailAnyKind(kind: string): kind is EmailAnyKind {
+    return isEmailKind(kind) || isCustomKind(kind);
+}
+/** Label for any kind: a custom one shows its own name. */
+export function emailKindLabel(kind: EmailAnyKind, name?: string | null): string {
+    return isCustomKind(kind) ? name?.trim() || "Untitled template" : EMAIL_TEMPLATE_LABEL[kind];
+}
+export function emailKindWhen(kind: EmailAnyKind): string {
+    return isCustomKind(kind) ? CUSTOM_TEMPLATE_WHEN : EMAIL_TEMPLATE_WHEN[kind];
+}
 
 /** Promotional: skipped for anyone who unsubscribed, and always carries the
  *  unsubscribe line. Bills, receipts, repairs and dues are not — a customer
  *  cannot opt out of their own documents. */
-export function isMarketingKind(kind: EmailTemplateKind): boolean {
-    return kind === "CART_ABANDONED" || kind === "WELCOME";
+// A custom template may well be an offer, so it counts as marketing — the
+// unsubscribe line rides along and an unsubscribed customer is skipped.
+export function isMarketingKind(kind: EmailAnyKind): boolean {
+    return kind === "CART_ABANDONED" || kind === "WELCOME" || isCustomKind(kind);
 }
 
 /** Only a document / repair kind goes "on a save", so only those have an Auto
  *  send switch; the rest are sent by their own trigger whenever switched on. */
-export function hasAutoSendSwitch(kind: EmailTemplateKind): boolean {
+export function hasAutoSendSwitch(kind: EmailAnyKind): boolean {
     // (Security kinds are not shared kinds, so they never get one.)
     return isShared(kind) && kind !== "DUE_SOFT" && kind !== "DUE_FIRM";
 }
@@ -100,8 +118,8 @@ export function emailKindForVoucherType(type: string): DocEmailKind | null {
 }
 
 /** Estimates start off, as on WhatsApp — staff make rough quotes. */
-export function emailAutoSendDefault(kind: EmailTemplateKind): boolean {
-    return kind !== "ESTIMATE";
+export function emailAutoSendDefault(kind: EmailAnyKind): boolean {
+    return kind !== "ESTIMATE" && !isCustomKind(kind);
 }
 
 /** Hours a cart / unpaid online order waits before its one reminder. */
@@ -156,16 +174,16 @@ const OWN_FIELDS: Record<Exclude<EmailTemplateKind, SharedKind>, readonly string
     STAFF_PASSWORD_RESET: ["code", "minutes", "shop"],
 };
 
-export function emailFieldsFor(kind: EmailTemplateKind): readonly EmailField[] {
-    if (isShared(kind)) return fieldsFor(kind);
+export function emailFieldsFor(kind: EmailAnyKind): readonly EmailField[] {
+    if (isShared(kind) || isCustomKind(kind)) return fieldsFor(kind);
     const keys = new Set(OWN_FIELDS[kind]);
     return EMAIL_FIELDS.filter((f) => keys.has(f.key));
 }
 
 const BASE_SAMPLES = Object.fromEntries(EMAIL_FIELDS.map((f) => [f.key, f.sample])) as Record<EmailFieldKey, string>;
 
-export function emailSampleValues(kind: EmailTemplateKind): EmailFieldValues {
-    if (isShared(kind)) return { ...BASE_SAMPLES, ...sampleValuesFor(kind) };
+export function emailSampleValues(kind: EmailAnyKind): EmailFieldValues {
+    if (isShared(kind) || isCustomKind(kind)) return { ...BASE_SAMPLES, ...sampleValuesFor(kind) };
     if (kind === "PAYMENT_PENDING") return { ...BASE_SAMPLES, billNo: "#3108", link: `${SHOP_URL}/portal/orders` };
     if (kind === "WELCOME") return { ...BASE_SAMPLES, link: `${SHOP_URL}/portal` };
     return BASE_SAMPLES;
@@ -190,6 +208,12 @@ const LINKS = "\n\nView it online: {link}\nGet our app: {app}";
 const doc = (noLabel: string, amountLabel = "Amount") =>
     `${noLabel}: {billNo}\nDate: {date}\n${amountLabel}: Rs {amount}`;
 const BALANCE = "\n\nPrevious balance: {prevBalance}\nBalance now: {balance}";
+
+/** Starting wording of a new custom email template. */
+export const CUSTOM_EMAIL_DEFAULT: EmailTemplateDraft = {
+    subject: "A message from {shop}",
+    body: `Dear {customer},\n\nWrite your message here.${SIGN_OFF}`,
+};
 
 export const EMAIL_TEMPLATE_DEFAULTS: Record<EmailTemplateKind, EmailTemplateDraft> = {
     SALE: {
@@ -260,7 +284,7 @@ export const EMAIL_TEMPLATE_DEFAULTS: Record<EmailTemplateKind, EmailTemplateDra
 };
 
 /** Problems with a draft — empty means fine. */
-export function checkEmailDraft(draft: EmailTemplateDraft, kind: EmailTemplateKind): string[] {
+export function checkEmailDraft(draft: EmailTemplateDraft, kind: EmailAnyKind): string[] {
     const errs: string[] = [];
     if (!draft.subject.trim()) errs.push("Subject is empty.");
     if (!draft.body.trim()) errs.push("Message is empty.");
@@ -273,7 +297,7 @@ export function checkEmailDraft(draft: EmailTemplateDraft, kind: EmailTemplateKi
     for (const m of `${draft.subject}\n${draft.body}`.matchAll(FIELD_RE)) {
         if (seen.has(m[1])) continue;
         seen.add(m[1]);
-        if (!allowed.has(m[1])) errs.push(`{${m[1]}} is not a field for a ${EMAIL_TEMPLATE_LABEL[kind]} email — use the buttons to insert one.`);
+        if (!allowed.has(m[1])) errs.push(`{${m[1]}} is not a field for this email — use the buttons to insert one.`);
     }
     return errs;
 }

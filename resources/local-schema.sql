@@ -3623,6 +3623,7 @@ ALTER TABLE "MessageClaim" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "WhatsAppTemplate" (
     "kind" TEXT NOT NULL,
+    "name" TEXT,
     "enabled" BOOLEAN NOT NULL DEFAULT false,
     "autoSend" BOOLEAN NOT NULL DEFAULT true,
     "body" TEXT NOT NULL,
@@ -3644,6 +3645,8 @@ CREATE TABLE IF NOT EXISTS "WhatsAppTemplate" (
     CONSTRAINT "WhatsAppTemplate_pkey" PRIMARY KEY ("kind")
 );
 ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "kind" TEXT NOT NULL;
+ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "name" TEXT;
+ALTER TABLE "WhatsAppTemplate" ALTER COLUMN "name" DROP NOT NULL;
 ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "enabled" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "autoSend" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "body" TEXT NOT NULL;
@@ -3711,6 +3714,7 @@ ALTER TABLE "BillNotification" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3)
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "EmailTemplate" (
     "kind" TEXT NOT NULL,
+    "name" TEXT,
     "enabled" BOOLEAN NOT NULL DEFAULT false,
     "autoSend" BOOLEAN NOT NULL DEFAULT true,
     "subject" TEXT NOT NULL,
@@ -3720,6 +3724,8 @@ CREATE TABLE IF NOT EXISTS "EmailTemplate" (
     CONSTRAINT "EmailTemplate_pkey" PRIMARY KEY ("kind")
 );
 ALTER TABLE "EmailTemplate" ADD COLUMN IF NOT EXISTS "kind" TEXT NOT NULL;
+ALTER TABLE "EmailTemplate" ADD COLUMN IF NOT EXISTS "name" TEXT;
+ALTER TABLE "EmailTemplate" ALTER COLUMN "name" DROP NOT NULL;
 ALTER TABLE "EmailTemplate" ADD COLUMN IF NOT EXISTS "enabled" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "EmailTemplate" ADD COLUMN IF NOT EXISTS "autoSend" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "EmailTemplate" ADD COLUMN IF NOT EXISTS "subject" TEXT NOT NULL;

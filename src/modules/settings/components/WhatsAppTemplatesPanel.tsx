@@ -13,18 +13,22 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
-    WA_TEMPLATE_LABEL,
-    WA_TEMPLATE_WHEN,
     WA_CALL_BUTTON,
+    isCustomKind,
+    waKindLabel,
+    waKindWhen,
     fieldsFor,
     sampleValuesFor,
     checkBody,
     fillBody,
     isDueKind,
     hasImageHeader,
+    type WaAnyKind,
     type WaTemplateDraft,
-    type WaTemplateKind,
 } from "@/shared/lib/whatsapp/billTemplates";
+import { AddTemplateButton, CustomTemplateHeader } from "./CustomTemplateControls";
+
+const API = "/api/settings/whatsapp-templates";
 import type { WaTemplateView } from "@/shared/lib/whatsapp/waTemplateStore";
 import { useValueChange } from "@/shared/hooks/useValueChange";
 
@@ -43,7 +47,7 @@ type Props = {
 
 export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sendReady }: Props) {
     const [templates, setTemplates] = useState(initialTemplates);
-    const [kind, setKind] = useState<WaTemplateKind>(initialTemplates[0]?.kind ?? "SALE");
+    const [kind, setKind] = useState<WaAnyKind>(initialTemplates[0]?.kind ?? "SALE");
     const current = templates.find((t) => t.kind === kind)!;
 
     const [enabled, setEnabled] = useState(current.enabled);
@@ -78,6 +82,8 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
     function replace(t: WaTemplateView) {
         setTemplates((list) => list.map((x) => (x.kind === t.kind ? t : x)));
     }
+    const custom = isCustomKind(kind);
+    const label = waKindLabel(kind, current.name);
 
     function insertField(key: string) {
         const el = bodyRef.current;
@@ -102,7 +108,7 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
                 appButton: appBtn,
             });
             replace(data.template);
-            toast.success(`Saved ${WA_TEMPLATE_LABEL[kind]} template`);
+            toast.success(`Saved ${label} template`);
             return true;
         } catch (e) {
             toast.error(extractApiError(e, "Save failed"));
@@ -168,18 +174,21 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
 
     return (
         <div className="grid gap-4 lg:grid-cols-[200px_1fr_320px]">
-            {/* Kinds */}
+            {/* Kinds — built-in first, then staff's own under their heading */}
             <div className="space-y-1">
-                {templates.map((t) => (
+                {templates.map((t, i) => (
+                    <div key={t.kind} className="space-y-1">
+                    {isCustomKind(t.kind) && !isCustomKind(templates[i - 1]?.kind ?? "") && (
+                        <p className="px-1 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Your templates</p>
+                    )}
                     <button
-                        key={t.kind}
                         type="button"
                         onClick={() => setKind(t.kind)}
                         className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm ${
                             t.kind === kind ? "border-primary bg-primary/5 font-medium" : "hover:bg-muted"
                         }`}
                     >
-                        <span>{WA_TEMPLATE_LABEL[t.kind]}</span>
+                        <span>{waKindLabel(t.kind, t.name)}</span>
                         <span className={`text-xs ${
                             t.kind === "TICKET_AUTO_REPLY"
                                 ? (t.autoSend ? "text-emerald-600" : "text-muted-foreground")
@@ -190,7 +199,17 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
                                 : (t.enabled && t.approved ? "On" : "Off")}
                         </span>
                     </button>
+                    </div>
                 ))}
+                <div className="pt-2">
+                    <AddTemplateButton<WaTemplateView>
+                        apiBase={API}
+                        onCreated={(t) => {
+                            setTemplates((list) => [...list, t]);
+                            setKind(t.kind);
+                        }}
+                    />
+                </div>
             </div>
 
             {/* Editor */}
@@ -200,8 +219,19 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
                         Sending for approval is not set up on this server — <code>META_WA_BUSINESS_ACCOUNT_ID</code> is missing.
                     </p>
                 )}
+                {custom && (
+                    <CustomTemplateHeader<WaTemplateView>
+                        apiBase={API}
+                        template={current}
+                        onRenamed={replace}
+                        onDeleted={(k) => {
+                            setKind("SALE");
+                            setTemplates((list) => list.filter((x) => x.kind !== k));
+                        }}
+                    />
+                )}
                 <p className="text-xs text-muted-foreground">
-                    <b>Sent when:</b> {WA_TEMPLATE_WHEN[kind]}
+                    <b>Sent when:</b> {waKindWhen(kind)}
                 </p>
                 <div className="flex flex-wrap items-center gap-3">
                     <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${status.className}`}>{status.text}</span>
@@ -219,7 +249,7 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
                         </label>
                     )}
                     {/* Due reminders go by Campaigns → Due Reminders' rules, not on a save. */}
-                    {!isDueKind(current.kind) && (
+                    {!isDueKind(current.kind) && !custom && (
                         <label
                             className={`flex items-center gap-2 text-sm ${current.kind === "TICKET_AUTO_REPLY" ? "ml-auto" : ""}`}
                             title="On: goes by itself when the document is saved. Off: only from the 3-dot menu's Send on WhatsApp."
@@ -274,7 +304,7 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
 
                 {current.kind !== "TICKET_AUTO_REPLY" && (
                     <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="space-y-1.5">
+                        {!custom && <div className="space-y-1.5">
                             <Label htmlFor="wa-view">&ldquo;View&rdquo; button (opens the document)</Label>
                             <Input
                                 id="wa-view"
@@ -284,7 +314,7 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
                                 onChange={(e) => setDraft({ ...draft, viewButton: e.target.value })}
                                 disabled={locked}
                             />
-                        </div>
+                        </div>}
                         <div className="space-y-1.5">
                             <Label htmlFor="wa-app">&ldquo;Get the app&rdquo; button</Label>
                             <Input

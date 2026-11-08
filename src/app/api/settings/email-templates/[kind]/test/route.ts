@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest } from "@/shared/lib/api";
-import { emailSampleValues, isEmailKind } from "@/shared/lib/email/emailTemplates";
+import { emailSampleValues, isEmailAnyKind } from "@/shared/lib/email/emailTemplates";
 import { getEmailTemplate } from "@/shared/lib/email/emailTemplateStore";
 import { sendFilled } from "@/shared/lib/email/notifyEmail";
 import { isEmailConfigured } from "@/shared/lib/email/sendEmail";
@@ -18,7 +18,7 @@ export async function POST(req: Request, { params }: RouteCtx) {
     if (response) return response;
 
     const { kind } = await params;
-    if (!isEmailKind(kind)) return NextResponse.json({ error: "Unknown template kind" }, { status: 404 });
+    if (!isEmailAnyKind(kind)) return NextResponse.json({ error: "Unknown template kind" }, { status: 404 });
     const { data, error } = await validateRequest(req, schema);
     if (error) return error;
     if (!isEmailConfigured()) return NextResponse.json({ error: "Email sending is not set up on this server." }, { status: 422 });

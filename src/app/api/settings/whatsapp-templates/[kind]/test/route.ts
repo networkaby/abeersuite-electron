@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest } from "@/shared/lib/api";
 import { normalizeMobile10 } from "@/shared/lib/auth/portalIdentifier";
-import { WA_BILL_LINK_BASE, WA_TEMPLATE_KINDS, hasImageHeader, sampleValuesFor, type WaTemplateKind } from "@/shared/lib/whatsapp/billTemplates";
+import { WA_BILL_LINK_BASE, hasImageHeader, isWaKind, sampleValuesFor } from "@/shared/lib/whatsapp/billTemplates";
 import { encodeUpiPayCode } from "@/modules/pos/lib/upiPayLink";
 import { listWaTemplates } from "@/shared/lib/whatsapp/waTemplateStore";
 import { isBillSendConfigured, sendBillTemplate } from "@/shared/lib/whatsapp/metaTemplates";
@@ -20,7 +20,7 @@ export async function POST(req: Request, { params }: RouteCtx) {
     if (response) return response;
 
     const { kind } = await params;
-    if (!WA_TEMPLATE_KINDS.includes(kind as WaTemplateKind)) {
+    if (!isWaKind(kind)) {
         return NextResponse.json({ error: "Unknown template kind" }, { status: 404 });
     }
     const { data, error } = await validateRequest(req, schema);
@@ -34,13 +34,13 @@ export async function POST(req: Request, { params }: RouteCtx) {
     if (!t?.approved) return NextResponse.json({ error: "Nothing approved yet — a test can only use an approved template." }, { status: 422 });
 
     // A photo-header kind (UPI payment request) needs a real, signed sample QR.
-    const payCode = hasImageHeader(kind as WaTemplateKind) ? encodeUpiPayCode({ vpa: "shop@upi", amount: 1250, note: "" }) : null;
+    const payCode = hasImageHeader(kind) ? encodeUpiPayCode({ vpa: "shop@upi", amount: 1250, note: "" }) : null;
     try {
         await sendBillTemplate({
             mobile10,
             name: t.approved.name,
             approved: t.approved,
-            values: sampleValuesFor(kind as WaTemplateKind),
+            values: sampleValuesFor(kind),
             linkCode: payCode ?? "0",
             headerImage: payCode ? `${WA_BILL_LINK_BASE}${payCode}/qr` : undefined,
         });

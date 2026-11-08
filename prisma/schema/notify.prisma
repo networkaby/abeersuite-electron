@@ -15,6 +15,8 @@
 /// ({customer}, {billNo}, …) which billTemplates.ts turns into Meta's {{1}} slots.
 model WhatsAppTemplate {
   kind          String    @id
+  /// Staff's own name for a custom template (kind CUSTOM_<id>); null = built-in.
+  name          String?
   enabled       Boolean   @default(false)
   /// Send by itself when the document is saved. Off = only staff's "Send on
   /// WhatsApp" (3-dot menu). Estimates start off (billTemplates WA_AUTO_SEND_DEFAULT).
@@ -77,6 +79,8 @@ model BillNotification {
 /// One email kind ("SALE" | "CART_ABANDONED" | …). A missing row = the code default, off.
 model EmailTemplate {
   kind      String   @id
+  /// Staff's own name for a custom template (kind CUSTOM_<id>); null = built-in.
+  name      String?
   enabled   Boolean  @default(false)
   /// Send by itself when the document is posted. Off = only staff's "Send email".
   autoSend  Boolean  @default(true)

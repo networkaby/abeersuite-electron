@@ -2,10 +2,14 @@ import "server-only";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { WhatsAppTemplate } from "@/generated/prisma/client";
 import {
+    CUSTOM_TEMPLATE_DEFAULT,
     WA_TEMPLATE_DEFAULTS,
     WA_TEMPLATE_KINDS,
     autoSendDefault,
     checkBody,
+    isCustomKind,
+    newCustomKind,
+    type WaAnyKind,
     type WaSendState,
     type WaTemplateDraft,
     type WaTemplateKind,
@@ -21,7 +25,9 @@ import { fetchTemplateStatus, isTemplateApiConfigured, submitTemplate } from "./
  */
 
 export type WaTemplateView = {
-    kind: WaTemplateKind;
+    kind: WaAnyKind;
+    /** Staff's name for a custom template; null on a built-in one. */
+    name: string | null;
     enabled: boolean;
     autoSend: boolean;
     draft: WaTemplateDraft;
@@ -32,12 +38,14 @@ export type WaTemplateView = {
     approved: (WaTemplateDraft & { name: string; at: string | null }) | null;
 };
 
-function toView(kind: WaTemplateKind, r: WhatsAppTemplate | undefined): WaTemplateView {
+function toView(kind: WaAnyKind, r: WhatsAppTemplate | undefined): WaTemplateView {
     if (!r) {
-        return { kind, enabled: false, autoSend: autoSendDefault(kind), draft: WA_TEMPLATE_DEFAULTS[kind], status: "DRAFT", rejectReason: null, metaName: null, submittedAt: null, approved: null };
+        const draft = isCustomKind(kind) ? CUSTOM_TEMPLATE_DEFAULT : WA_TEMPLATE_DEFAULTS[kind];
+        return { kind, name: null, enabled: false, autoSend: autoSendDefault(kind), draft, status: "DRAFT", rejectReason: null, metaName: null, submittedAt: null, approved: null };
     }
     return {
         kind,
+        name: r.name,
         enabled: r.enabled,
         autoSend: r.autoSend,
         draft: { body: r.body, viewButton: r.viewButton, appButton: r.appButton },
@@ -54,7 +62,8 @@ function toView(kind: WaTemplateKind, r: WhatsAppTemplate | undefined): WaTempla
 export async function listWaTemplates(): Promise<WaTemplateView[]> {
     const rows = await prisma.whatsAppTemplate.findMany();
     const byKind = new Map(rows.map((r) => [r.kind, r]));
-    return WA_TEMPLATE_KINDS.map((k) => toView(k, byKind.get(k)));
+    const custom = rows.filter((r) => isCustomKind(r.kind)).sort((a, b) => a.kind.localeCompare(b.kind));
+    return [...WA_TEMPLATE_KINDS.map((k) => toView(k, byKind.get(k))), ...custom.map((r) => toView(r.kind as WaAnyKind, r))];
 }
 
 /** Every kind, after asking Meta about any still waiting for approval — so
@@ -68,7 +77,7 @@ export async function listWaTemplatesFresh(): Promise<WaTemplateView[]> {
     return listWaTemplates();
 }
 
-async function getOne(kind: WaTemplateKind): Promise<WaTemplateView> {
+async function getOne(kind: WaAnyKind): Promise<WaTemplateView> {
     const r = await prisma.whatsAppTemplate.findUnique({ where: { kind } });
     return toView(kind, r ?? undefined);
 }
@@ -76,9 +85,9 @@ async function getOne(kind: WaTemplateKind): Promise<WaTemplateView> {
 // ── Sender cache ────────────────────────────────────────────────────────────
 const TTL_MS = 60_000;
 type Cached = { autoSend: boolean; state: WaSendState; approved: { name: string; draft: WaTemplateDraft } | null };
-const cache = new Map<WaTemplateKind, { at: number; value: Cached }>();
+const cache = new Map<WaAnyKind, { at: number; value: Cached }>();
 
-async function cached(kind: WaTemplateKind): Promise<Cached> {
+async function cached(kind: WaAnyKind): Promise<Cached> {
     const hit = cache.get(kind);
     if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
     const v = await getOne(kind);
@@ -92,7 +101,7 @@ async function cached(kind: WaTemplateKind): Promise<Cached> {
 }
 
 /** The approved copy bills are sent with; null when switched off or never approved. */
-export async function getApprovedWaTemplate(kind: WaTemplateKind) {
+export async function getApprovedWaTemplate(kind: WaAnyKind) {
     return (await cached(kind)).approved;
 }
 
@@ -117,8 +126,9 @@ export async function waSendStates(): Promise<Record<WaTemplateKind, WaSendState
 
 /** Save the wording. A changed wording goes back to DRAFT; bills keep using
  *  the last approved copy until the new one is approved. */
-export async function saveWaTemplate(kind: WaTemplateKind, input: { enabled: boolean; autoSend: boolean; draft: WaTemplateDraft }): Promise<WaTemplateView> {
+export async function saveWaTemplate(kind: WaAnyKind, input: { enabled: boolean; autoSend: boolean; draft: WaTemplateDraft }): Promise<WaTemplateView> {
     const cur = await getOne(kind);
+    if (isCustomKind(kind) && cur.name == null) throw new WaTemplateError("This template has been deleted.");
     const d = input.draft;
     const changed = d.body !== cur.draft.body || d.viewButton !== cur.draft.viewButton || d.appButton !== cur.draft.appButton;
     // The approval that comes back is for the copy Meta holds — an edit now
@@ -144,12 +154,39 @@ export async function saveWaTemplate(kind: WaTemplateKind, input: { enabled: boo
 
 export class WaTemplateError extends Error {}
 
+// ── Custom templates ────────────────────────────────────────────────────────
+
+/** Add a custom template with the starting wording; staff edit it from there. */
+export async function createCustomWaTemplate(name: string): Promise<WaTemplateView> {
+    const kind = newCustomKind();
+    const d = CUSTOM_TEMPLATE_DEFAULT;
+    await prisma.whatsAppTemplate.create({
+        data: { kind, name: name.trim(), enabled: false, autoSend: false, body: d.body, viewButton: d.viewButton, appButton: d.appButton },
+    });
+    return getOne(kind);
+}
+
+export async function renameCustomWaTemplate(kind: WaAnyKind, name: string): Promise<WaTemplateView> {
+    if (!isCustomKind(kind)) throw new WaTemplateError("A built-in template cannot be renamed.");
+    await prisma.whatsAppTemplate.update({ where: { kind }, data: { name: name.trim() } });
+    return getOne(kind);
+}
+
+/** Remove a custom template. Its copy stays on Meta's side (Meta keeps the
+ *  name reserved anyway); nothing here sends it any more. */
+export async function deleteCustomWaTemplate(kind: WaAnyKind): Promise<void> {
+    if (!isCustomKind(kind)) throw new WaTemplateError("A built-in template cannot be deleted.");
+    await prisma.whatsAppTemplate.deleteMany({ where: { kind } });
+    cache.delete(kind);
+}
+
 /** Send the saved draft to Meta under a fresh versioned name. */
-export async function submitWaTemplate(kind: WaTemplateKind): Promise<WaTemplateView> {
+export async function submitWaTemplate(kind: WaAnyKind): Promise<WaTemplateView> {
     if (!isTemplateApiConfigured()) {
         throw new WaTemplateError("WhatsApp template sending is not set up — META_WA_BUSINESS_ACCOUNT_ID or META_WA_ACCESS_TOKEN is missing.");
     }
     const cur = await getOne(kind);
+    if (isCustomKind(kind) && cur.name == null) throw new WaTemplateError("This template has been deleted.");
     const errs = checkBody(cur.draft, kind);
     if (errs.length) throw new WaTemplateError(errs.join(" "));
 
@@ -175,7 +212,7 @@ export async function submitWaTemplate(kind: WaTemplateKind): Promise<WaTemplate
 }
 
 /** Ask Meta where the submitted copy stands; on APPROVED it becomes the one bills use. */
-export async function refreshWaTemplate(kind: WaTemplateKind): Promise<WaTemplateView> {
+export async function refreshWaTemplate(kind: WaAnyKind): Promise<WaTemplateView> {
     const cur = await getOne(kind);
     if (!cur.metaName || cur.status !== "PENDING" || !isTemplateApiConfigured()) return cur;
     const s = await fetchTemplateStatus(cur.metaName);
@@ -188,7 +225,7 @@ export async function refreshWaTemplate(kind: WaTemplateKind): Promise<WaTemplat
     return getOne(kind);
 }
 
-async function markApproved(kind: WaTemplateKind, name: string, d: WaTemplateDraft) {
+async function markApproved(kind: WaAnyKind, name: string, d: WaTemplateDraft) {
     await prisma.whatsAppTemplate.update({
         where: { kind },
         data: {
