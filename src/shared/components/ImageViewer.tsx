@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { Dialog as DialogPrimitive } from "radix-ui";
 import { Download, RotateCw, X, ZoomIn, ZoomOut } from "lucide-react";
 
 const MIN = 1;
@@ -27,14 +27,6 @@ export function ImageViewer({ src, alt, downloadUrl, fileName, onClose }: {
     const drag = useRef<{ x: number; y: number; px: number; py: number; moved: boolean } | null>(null);
     const stage = useRef<HTMLDivElement>(null);
     const [dragging, setDragging] = useState(false);
-
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === "Escape") { e.stopPropagation(); onClose(); }
-        };
-        window.addEventListener("keydown", onKey, true);
-        return () => window.removeEventListener("keydown", onKey, true);
-    }, [onClose]);
 
     // Mirrors scale + pos for handlers; every write goes through zoomTo / pan.
     const view = useRef({ scale: 1, x: 0, y: 0 });
@@ -70,10 +62,21 @@ export function ImageViewer({ src, alt, downloadUrl, fileName, onClose }: {
 
     const btn = "flex size-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/25 transition-colors";
 
-    return createPortal(
-        <div className="fixed inset-0 z-[1000] flex flex-col bg-black/90" role="dialog" aria-modal="true" aria-label={alt ?? "Photo"}>
-            <div className="flex items-center justify-end gap-2 p-3">
-                <span className="mr-auto truncate text-sm text-white/70">{fileName ?? alt ?? ""}</span>
+    // Its own Radix dialog: inside a modal (the ticket dialog) a plain portal is
+    // click-blocked by that modal; a nested dialog stacks above it and Esc
+    // closes only this layer.
+    return (
+        <DialogPrimitive.Root open onOpenChange={(o) => { if (!o) onClose(); }}>
+        <DialogPrimitive.Portal>
+        <DialogPrimitive.Content
+            className="fixed inset-0 z-[1000] flex h-dvh w-screen flex-col bg-black/95 outline-none"
+            aria-describedby={undefined}
+            onOpenAutoFocus={(e) => e.preventDefault()}
+        >
+            <DialogPrimitive.Title className="sr-only">{alt ?? "Photo"}</DialogPrimitive.Title>
+            {/* Bottom-centre bar, kept away from the window's own close button top-right. */}
+            <div className="order-last mx-auto mb-3 mt-2 flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 shadow-lg">
+                {(fileName ?? alt) && <span className="max-w-48 truncate text-xs text-white/70">{fileName ?? alt}</span>}
                 <span className="w-12 text-center text-xs tabular-nums text-white/70">{Math.round(scale * 100)}%</span>
                 <button type="button" className={btn} title="Zoom out" onClick={() => zoomTo(scale / STEP)}><ZoomOut className="size-4" /></button>
                 <button type="button" className={btn} title="Zoom in" onClick={() => zoomTo(scale * STEP)}><ZoomIn className="size-4" /></button>
@@ -81,11 +84,11 @@ export function ImageViewer({ src, alt, downloadUrl, fileName, onClose }: {
                 {downloadUrl && (
                     <a href={downloadUrl} download={fileName ?? "image.jpg"} className={btn} title="Download"><Download className="size-4" /></a>
                 )}
-                <button type="button" className={btn} title="Close (Esc)" onClick={onClose}><X className="size-5" /></button>
+                <DialogPrimitive.Close className={btn} title="Close (Esc)"><X className="size-5" /></DialogPrimitive.Close>
             </div>
             <div
                 ref={stage}
-                className={`relative flex-1 select-none overflow-hidden ${scale > 1 ? "cursor-grab active:cursor-grabbing" : ""}`}
+                className={`relative min-h-0 flex-1 select-none overflow-hidden ${scale > 1 ? "cursor-grab active:cursor-grabbing" : ""}`}
                 onPointerDown={(e) => {
                     drag.current = { x: e.clientX, y: e.clientY, px: pos.x, py: pos.y, moved: false };
                     e.currentTarget.setPointerCapture(e.pointerId);
@@ -116,14 +119,15 @@ export function ImageViewer({ src, alt, downloadUrl, fileName, onClose }: {
                     src={src}
                     alt={alt ?? "Photo"}
                     draggable={false}
-                    className="absolute left-1/2 top-1/2 max-h-full max-w-full"
+                    className="absolute left-1/2 top-1/2 max-w-[100vw] max-h-[calc(100dvh-5rem)]"
                     style={{
                         transform: `translate(-50%, -50%) translate(${pos.x}px, ${pos.y}px) scale(${scale}) rotate(${rot}deg)`,
                         transition: dragging ? "none" : "transform 120ms ease-out",
                     }}
                 />
             </div>
-        </div>,
-        document.body,
+        </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+        </DialogPrimitive.Root>
     );
 }
