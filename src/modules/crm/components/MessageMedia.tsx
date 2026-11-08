@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { Download, FileText } from "lucide-react";
+import { ImageViewer } from "@/shared/components/ImageViewer";
 
 /**
  * One WhatsApp attachment inside a chat bubble. Links are short-lived signed
@@ -22,6 +24,7 @@ function sizeLabel(n: number | null | undefined): string {
 }
 
 export function MessageMedia({ m }: { m: MediaInfo }) {
+    const [viewing, setViewing] = useState(false);
     const type = m.mediaType ?? "";
     if (!m.mediaUrl) {
         // A file we could not keep (too large, or storage was off when it came).
@@ -30,10 +33,14 @@ export function MessageMedia({ m }: { m: MediaInfo }) {
     if (type.startsWith("image/")) {
         return (
             <div className="relative group inline-block">
-                <a href={m.mediaUrl} target="_blank" rel="noreferrer" className="block">
+                {/* Opens the zoom viewer on the page — no new tab, no download. */}
+                <button type="button" onClick={() => setViewing(true)} className="block cursor-zoom-in" title="View photo">
                     {/* eslint-disable-next-line @next/next/no-img-element -- signed, expiring R2 link; next/image would cache it */}
                     <img src={m.mediaUrl} alt={m.fileName ?? "Photo"} className="max-h-64 max-w-full rounded-md object-contain" loading="lazy" />
-                </a>
+                </button>
+                {viewing && (
+                    <ImageViewer src={m.mediaUrl} alt={m.fileName ?? "Photo"} downloadUrl={m.downloadUrl} fileName={m.fileName} onClose={() => setViewing(false)} />
+                )}
                 {m.downloadUrl && (
                     <a
                         href={m.downloadUrl}
