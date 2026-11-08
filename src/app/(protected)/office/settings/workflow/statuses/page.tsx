@@ -765,7 +765,7 @@ export default function StatusesPage() {
                                             value={editForm[key] || "__none__"}
                                             onValueChange={(v) => setEditForm((prev) => ({ ...prev, [key]: v === "__none__" ? "" : v }))}
                                         >
-                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="__none__">— none —</SelectItem>
                                                 {options.map((t) => (
