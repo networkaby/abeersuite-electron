@@ -6,9 +6,11 @@ import { useMessageTemplateOptions, type TemplateChannel, type TemplateOption } 
 const NONE = "__none__";
 
 /**
- * Pick one WhatsApp or email template — every built-in and custom one, each
- * marked when it would not go yet. "" means none. Impartial: it lists all;
- * a screen that wants fewer passes `filter`.
+ * Pick one WhatsApp or email template, built-in or custom. "" means none.
+ * Offers only templates that are ready to send (on, and approved for
+ * WhatsApp) and never a sign-in code email (owner, 2026-11-08). A saved
+ * choice that has since gone off still shows, with the reason, so staff see
+ * why nothing goes. A screen that wants fewer still passes `filter`.
  */
 export function MessageTemplatePicker({
     channel,
@@ -27,8 +29,9 @@ export function MessageTemplatePicker({
     filter?: (t: TemplateOption) => boolean;
 }) {
     const all = useMessageTemplateOptions(channel);
-    const options = filter ? all.filter(filter) : all;
-    // A saved kind not in the list (deleted, or not loaded yet) still shows.
+    const options = all.filter((t) => t.ready && !t.sensitive && (!filter || filter(t)));
+    // The saved choice, when it is no longer offered (gone off, or not loaded yet).
+    const saved = value && !options.some((o) => o.kind === value) ? all.find((o) => o.kind === value) : undefined;
     const missing = value && !options.some((o) => o.kind === value);
     return (
         <Select value={value || NONE} onValueChange={(v) => onChange(v === NONE ? "" : v)}>
@@ -37,7 +40,7 @@ export function MessageTemplatePicker({
             </SelectTrigger>
             <SelectContent>
                 <SelectItem value={NONE}>{noneLabel}</SelectItem>
-                {missing && <SelectItem value={value}>{value}</SelectItem>}
+                {missing && <SelectItem value={value}>{saved ? `${saved.name} (${saved.why})` : value}</SelectItem>}
                 {options.map((t) => (
                     <SelectItem key={t.kind} value={t.kind}>
                         {t.name}
