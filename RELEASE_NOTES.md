@@ -1,33 +1,28 @@
-# v1.16.26
+# v1.16.27
 
-An important update — it carries a database change, so every counter must take it before the office site is updated. The counter will show the countdown and restart itself at a free moment. Until a counter is updated, its sync pauses once the office side changes. It also fixes a sync stop that some counters showed as "Copy incomplete".
+Every counter should install this one. It adds new fields to products for the online shop, so the counter must update **before** the office site is updated — until it does, its sync pauses.
 
-## Sync
+## Online shop — product stages
 
-- A value that moves from one row to another (for example a name or code handed from one group to another) no longer stops that table from syncing on the counter.
+- Every product now shows where it stands for the online shop: **Unpublished**, **Ready** or **Published** (Published with a rule not yet met shows as **Pending**).
+- **Ready** means the work on a product is complete and checked, but it is waiting for a good time to go live.
+- Edits to a product's shop page now wait in a separate **draft copy** — the shop keeps showing the last finished version until staff press **Save as ready**.
+- **Unpublish** now moves a product back to Ready, so its finished work is not lost.
+- Every product that is live in the shop today stays live.
 
-## Accounts and books
+## Online shop — product pages
 
-- Ledgers now take the branch from the voucher itself, so the ledger and the Day Book always show the same branch (the old per-line branch, often blank, is removed).
-- Bill amounts in the books are read from the ledger entries, so an edited bill never shows an old total.
-- **Payment voucher:** a scan-to-pay UPI QR can be shown for the party.
-- **Loans Book:** new **Charge Interest** button; it picks this loan's own last interest ledger by default.
+- **Works with**: printers now list their inks, razors their blades, and so on, taken from each product's Compatible Models — and customers can search by them.
+- Products list: right-click on Edit, Edit product, Preview or the product name to open it in a new window.
 
-## Staff attendance and payroll
+## Product copy by Claude
 
-- **Bulk mark** on the attendance register — wider form, W / H switch, and an Auto option. It never overwrites days the counter recorded unless you choose to.
-- Off days can be marked W or H by hand; a legend and Help button explain Auto, manual and late.
-- An Auto holiday is no longer paid as Absent.
-- Payroll has a friendlier period picker and a read-only **See on Auto** comparison.
+- Claude can now prepare product copy (name, description, highlights, specs, warranty, brand, collections, shipping weight and parcel size) as a **draft for staff** — it never publishes and never overwrites what staff have written.
+- Claude leaves notes on anything in our data that looks wrong.
+- Product copy has its own key in Incoming API, apart from reviews and posts.
+- Better maker photos: up to 8 photos are found on a maker's page instead of 1, and sites that block reading are handled.
+- Fact check is stricter: a number counts only with its proper unit, and short brands like HP and LG are recognised.
 
-## Inventory
+## Price Watch
 
-- Product groups and Collections show an **Items** count (subgroups included); tapping it opens Products filtered to that group. Both screens keep their scroll position on Back.
-
-## Online shop
-
-- New **/shop** browse page; every new group and collection gets its own link automatically.
-- Search suggestions as you type, results in order of best match, and "did you mean" for spelling slips.
-- Best sellers, Buy again and Recently viewed are built from real orders and visits; product pages show related items and "bought together".
-- The catalog is one clean grid with tidier filters; category tiles and banners open the right page instead of dead links.
-- Customize Home can set how many category, collection and brand tiles show.
+- New read-only **Price Watch**: compares our prices with Amazon.in and Flipkart (and the maker's MRP) and reports which ones need attention. It never changes a price.
