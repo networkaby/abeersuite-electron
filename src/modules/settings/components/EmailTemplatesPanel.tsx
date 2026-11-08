@@ -171,10 +171,6 @@ export function EmailTemplatesPanel({ initialTemplates, sendReady }: Props) {
                         apiBase={API}
                         template={current}
                         onRenamed={replace}
-                        onDeleted={(k) => {
-                            setKind("SALE");
-                            setTemplates((list) => list.filter((x) => x.kind !== k));
-                        }}
                     />
                 )}
                 <p className="text-xs text-muted-foreground">

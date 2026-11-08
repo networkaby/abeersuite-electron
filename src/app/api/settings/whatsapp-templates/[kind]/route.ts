@@ -4,7 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest } from "@/shared/lib/api";
 import { isWaKind } from "@/shared/lib/whatsapp/billTemplates";
 import { CUSTOM_NAME_MAX } from "@/shared/lib/whatsapp/billTemplates";
-import { WaTemplateError, deleteCustomWaTemplate, renameCustomWaTemplate, saveWaTemplate } from "@/shared/lib/whatsapp/waTemplateStore";
+import { WaTemplateError, renameCustomWaTemplate, saveWaTemplate } from "@/shared/lib/whatsapp/waTemplateStore";
 
 type RouteCtx = { params: Promise<{ kind: string }> };
 
@@ -55,22 +55,6 @@ export async function PATCH(req: Request, { params }: RouteCtx) {
     if (error) return error;
     try {
         return NextResponse.json({ template: await renameCustomWaTemplate(kind, data.name) });
-    } catch (e) {
-        if (e instanceof WaTemplateError) return NextResponse.json({ error: e.message }, { status: 409 });
-        throw e;
-    }
-}
-
-// DELETE /api/settings/whatsapp-templates/[kind] — remove a custom template.
-export async function DELETE(_req: Request, { params }: RouteCtx) {
-    const { response } = await requirePermission("settings:manage");
-    if (response) return response;
-
-    const { kind } = await params;
-    if (!isWaKind(kind)) return NextResponse.json({ error: "Unknown template kind" }, { status: 404 });
-    try {
-        await deleteCustomWaTemplate(kind);
-        return NextResponse.json({ ok: true });
     } catch (e) {
         if (e instanceof WaTemplateError) return NextResponse.json({ error: e.message }, { status: 409 });
         throw e;

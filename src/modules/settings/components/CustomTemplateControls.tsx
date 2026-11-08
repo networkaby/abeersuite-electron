@@ -3,7 +3,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Check, Loader2, Plus, Trash2, X } from "lucide-react";
+import { Check, Loader2, Plus, X } from "lucide-react";
 import { extractApiError } from "@/shared/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,8 +11,9 @@ import { CUSTOM_NAME_MAX } from "@/shared/lib/whatsapp/billTemplates";
 
 /**
  * Staff's own templates on Settings → WhatsApp / Email Templates: the "Add
- * template" box under the list, and the name + Delete row on top of a custom
- * template's editor. Both pages share this; `apiBase` picks the channel.
+ * template" box under the list, and the name row on top of a custom
+ * template's editor. No delete (owner, 2026-11-08) — workflow stages may
+ * point at a custom template. Both pages share this; `apiBase` picks the channel.
  */
 
 type Named = { kind: string; name: string | null };
@@ -75,16 +76,14 @@ export function CustomTemplateHeader<T extends Named>({
     apiBase,
     template,
     onRenamed,
-    onDeleted,
 }: {
     apiBase: string;
     template: T;
     onRenamed: (t: T) => void;
-    onDeleted: (kind: string) => void;
 }) {
     const [name, setName] = useState(template.name ?? "");
     const [shownKind, setShownKind] = useState(template.kind);
-    const [busy, setBusy] = useState<null | "rename" | "delete">(null);
+    const [busy, setBusy] = useState(false);
 
     // Another template picked — show its name.
     if (shownKind !== template.kind) {
@@ -94,27 +93,14 @@ export function CustomTemplateHeader<T extends Named>({
     const changed = name.trim() !== "" && name.trim() !== (template.name ?? "");
 
     async function rename() {
-        setBusy("rename");
+        setBusy(true);
         try {
             const { data } = await axios.patch(`${apiBase}/${template.kind}`, { name: name.trim() });
             onRenamed(data.template);
         } catch (e) {
             toast.error(extractApiError(e, "Rename failed"));
         } finally {
-            setBusy(null);
-        }
-    }
-
-    async function remove() {
-        if (!window.confirm(`Delete the template "${template.name}"? This cannot be undone.`)) return;
-        setBusy("delete");
-        try {
-            await axios.delete(`${apiBase}/${template.kind}`);
-            onDeleted(template.kind);
-            toast.success("Template deleted");
-        } catch (e) {
-            toast.error(extractApiError(e, "Delete failed"));
-            setBusy(null);
+            setBusy(false);
         }
     }
 
@@ -129,15 +115,11 @@ export function CustomTemplateHeader<T extends Named>({
                 onKeyDown={(e) => e.key === "Enter" && changed && rename()}
             />
             {changed && (
-                <Button size="sm" variant="secondary" onClick={rename} disabled={busy !== null}>
-                    {busy === "rename" ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+                <Button size="sm" variant="secondary" onClick={rename} disabled={busy}>
+                    {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
                     Rename
                 </Button>
             )}
-            <Button size="sm" variant="ghost" className="ml-auto text-red-600" onClick={remove} disabled={busy !== null}>
-                {busy === "delete" ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
-                Delete template
-            </Button>
         </div>
     );
 }

@@ -89,9 +89,3 @@ export async function renameCustomEmailTemplate(kind: EmailAnyKind, name: string
     cache.delete(kind);
     return toView(kind, row);
 }
-
-export async function deleteCustomEmailTemplate(kind: EmailAnyKind): Promise<void> {
-    if (!isCustomKind(kind)) throw new EmailTemplateError("A built-in template cannot be deleted.");
-    await prisma.emailTemplate.deleteMany({ where: { kind } });
-    cache.delete(kind);
-}

@@ -4,7 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest } from "@/shared/lib/api";
 import { EMAIL_BODY_MAX, EMAIL_SUBJECT_MAX, isEmailAnyKind } from "@/shared/lib/email/emailTemplates";
 import { CUSTOM_NAME_MAX } from "@/shared/lib/whatsapp/billTemplates";
-import { EmailTemplateError, deleteCustomEmailTemplate, renameCustomEmailTemplate, saveEmailTemplate } from "@/shared/lib/email/emailTemplateStore";
+import { EmailTemplateError, renameCustomEmailTemplate, saveEmailTemplate } from "@/shared/lib/email/emailTemplateStore";
 
 type RouteCtx = { params: Promise<{ kind: string }> };
 
@@ -51,22 +51,6 @@ export async function PATCH(req: Request, { params }: RouteCtx) {
     if (error) return error;
     try {
         return NextResponse.json({ template: await renameCustomEmailTemplate(kind, data.name) });
-    } catch (e) {
-        if (e instanceof EmailTemplateError) return NextResponse.json({ error: e.message }, { status: 409 });
-        throw e;
-    }
-}
-
-// DELETE /api/settings/email-templates/[kind] — remove a custom template.
-export async function DELETE(_req: Request, { params }: RouteCtx) {
-    const { response } = await requirePermission("settings:manage");
-    if (response) return response;
-
-    const { kind } = await params;
-    if (!isEmailAnyKind(kind)) return NextResponse.json({ error: "Unknown template kind" }, { status: 404 });
-    try {
-        await deleteCustomEmailTemplate(kind);
-        return NextResponse.json({ ok: true });
     } catch (e) {
         if (e instanceof EmailTemplateError) return NextResponse.json({ error: e.message }, { status: 409 });
         throw e;

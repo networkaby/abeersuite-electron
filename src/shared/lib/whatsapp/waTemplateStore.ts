@@ -172,14 +172,6 @@ export async function renameCustomWaTemplate(kind: WaAnyKind, name: string): Pro
     return getOne(kind);
 }
 
-/** Remove a custom template. Its copy stays on Meta's side (Meta keeps the
- *  name reserved anyway); nothing here sends it any more. */
-export async function deleteCustomWaTemplate(kind: WaAnyKind): Promise<void> {
-    if (!isCustomKind(kind)) throw new WaTemplateError("A built-in template cannot be deleted.");
-    await prisma.whatsAppTemplate.deleteMany({ where: { kind } });
-    cache.delete(kind);
-}
-
 /** Send the saved draft to Meta under a fresh versioned name. */
 export async function submitWaTemplate(kind: WaAnyKind): Promise<WaTemplateView> {
     if (!isTemplateApiConfigured()) {
