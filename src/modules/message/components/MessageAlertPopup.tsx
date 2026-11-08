@@ -63,6 +63,7 @@ import StaffPickerDialog, { type PickMode, type Staff } from "./StaffPickerDialo
 import MentionTextarea, { mentionTargets } from "./MentionTextarea";
 import { requestOpenChat, useChatDrawerOpen } from "../lib/chatDrawer";
 import { MessageMedia, captionOf, type MediaInfo } from "@/modules/crm/components/MessageMedia";
+import { overDialogsProps } from "@/shared/lib/ui/overDialogs";
 
 const MESSAGES_HREF = "/office/crm/messages";
 const DISMISS_KEY = "message-alert-dismissed:v1";
@@ -438,7 +439,7 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
                     style={fab.style}
                     onClick={() => { if (!fab.wasDrag()) router.push(href); }}
                     // Default spot is just above the + button; drag to move.
-                    className="fixed right-4 bottom-[calc(9.5rem+env(safe-area-inset-bottom))] z-[60] flex size-14 touch-none items-center justify-center rounded-full bg-green-600 text-white shadow-lg active:bg-green-700"
+                    {...overDialogsProps} className="fixed right-4 bottom-[calc(9.5rem+env(safe-area-inset-bottom))] z-[60] flex size-14 touch-none items-center justify-center rounded-full bg-green-600 text-white shadow-lg active:bg-green-700"
                     aria-label={`${waiting} chats waiting — open Inbox`}
                 >
                     <MessageCircle className="size-7" />
@@ -446,7 +447,7 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
                 </button>
             )}
             {flash && (
-            <div className="fixed inset-x-2 top-[max(0.5rem,env(safe-area-inset-top))] z-[60] animate-in slide-in-from-top fade-in duration-200">
+            <div {...overDialogsProps} className="fixed inset-x-2 top-[max(0.5rem,env(safe-area-inset-top))] z-[60] animate-in slide-in-from-top fade-in duration-200">
                 <div className="flex items-center gap-3 rounded-2xl border border-green-300 bg-background p-3 shadow-lg dark:border-green-800">
                     <button
                         className="flex min-w-0 flex-1 items-center gap-3 text-left"
@@ -599,7 +600,7 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
                     data-drag
                     style={{ right: place.right, bottom: place.bottom }}
                     onPointerDown={(e) => dragStack(e, bubbleRef.current, () => changePlace({ ...place, minimised: false }))}
-                    className="fixed z-[60] flex size-12 touch-none items-center justify-center rounded-full bg-green-600 text-white shadow-lg hover:bg-green-700"
+                    {...overDialogsProps} className="fixed z-[60] flex size-12 touch-none items-center justify-center rounded-full bg-green-600 text-white shadow-lg hover:bg-green-700"
                     title="WhatsApp chats waiting — click to open, drag to move"
                 >
                     <MessageCircle className="size-6" />
@@ -610,13 +611,13 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
                 // A card moved on its own; kept on screen if the window shrank.
                 const sp = clampSpot(cards[a.phone], 384, (cardH[a.phone] ?? 140) + 8);
                 return (
-                    <div key={a.phone} ref={measureCard(a.phone)} style={{ right: sp.right, bottom: sp.bottom }} className="fixed z-[60] max-h-[calc(100vh-1rem)] w-96 max-w-[calc(100vw-1rem)] overflow-y-auto">
+                    <div key={a.phone} ref={measureCard(a.phone)} style={{ right: sp.right, bottom: sp.bottom }} {...overDialogsProps} className="fixed z-[60] max-h-[calc(100vh-1rem)] w-96 max-w-[calc(100vw-1rem)] overflow-y-auto">
                         {renderCard(a)}
                     </div>
                 );
             })}
             {stacked.length > 0 && !place.minimised && (
-                <div ref={boxRef} style={{ right: place.right, bottom: Math.max(0, Math.min(place.bottom, (typeof window === "undefined" ? 0 : window.innerHeight) - boxH - 8)) }} className="fixed z-[60] flex max-h-[calc(100vh-1rem)] w-96 max-w-[calc(100vw-1rem)] flex-col gap-1 overflow-y-auto">
+                <div ref={boxRef} style={{ right: place.right, bottom: Math.max(0, Math.min(place.bottom, (typeof window === "undefined" ? 0 : window.innerHeight) - boxH - 8)) }} {...overDialogsProps} className="fixed z-[60] flex max-h-[calc(100vh-1rem)] w-96 max-w-[calc(100vw-1rem)] flex-col gap-1 overflow-y-auto">
                     {(() => {
                         // The open chat is the first layer; every other chat is a strip below it.
                         const openPhone = stacked.some((x) => x.phone === front) ? front : stacked[0].phone;

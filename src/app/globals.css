@@ -337,3 +337,7 @@
     background-color: var(--surface-raised);
   }
 }
+
+/* Floating UI kept usable over an open modal (see src/shared/lib/ui/overDialogs.ts):
+   a Radix modal sets body pointer-events:none. */
+[data-over-dialogs] { pointer-events: auto; }

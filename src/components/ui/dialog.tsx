@@ -5,6 +5,7 @@ import { Dialog as DialogPrimitive } from "radix-ui"
 
 import { cn } from "@/shared/lib/format/utils"
 import { createEscapeSlot, dialogEscape, EscapeSlotContext } from "@/shared/lib/ui/escapeLayer"
+import { installOverDialogsFocusGuard, isOverDialogs } from "@/shared/lib/ui/overDialogs"
 import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
 
@@ -53,12 +54,15 @@ function DialogContent({
   children,
   showCloseButton = true,
   onEscapeKeyDown,
+  onInteractOutside,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
 }) {
   // A form hosted in this dialog may own its Esc (see escapeLayer.ts).
   const [escapeSlot] = React.useState(createEscapeSlot)
+  // Floating UI marked over-dialogs (WhatsApp popups) stays usable while open.
+  React.useEffect(installOverDialogsFocusGuard, [])
   return (
     <DialogPortal>
       <DialogOverlay />
@@ -69,6 +73,10 @@ function DialogContent({
           className
         )}
         onEscapeKeyDown={(e) => dialogEscape(e, escapeSlot, onEscapeKeyDown)}
+        onInteractOutside={(e) => {
+          if (isOverDialogs(e.target)) e.preventDefault()
+          else onInteractOutside?.(e)
+        }}
         {...props}
       >
         <EscapeSlotContext.Provider value={escapeSlot}>{children}</EscapeSlotContext.Provider>
