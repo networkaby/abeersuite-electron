@@ -548,7 +548,7 @@ export default function StatusesPage() {
             </Dialog>
 
             <Dialog open={!!editModalId && !!editStatus} onOpenChange={(isOpen) => { if (!isOpen) setEditModalId(null); }}>
-                <DialogContent className="sm:max-w-xl max-h-[88vh] overflow-y-auto">
+                <DialogContent className="sm:max-w-3xl max-h-[88vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Edit status</DialogTitle>
                         <DialogDescription>
@@ -756,6 +756,7 @@ export default function StatusesPage() {
                                 </p>
                             </div>
 
+                            <div className="grid gap-3 sm:grid-cols-2">
                             {(["waTemplate", "emailTemplate"] as const).map((key) => {
                                 const options = key === "waTemplate" ? templates.wa : templates.email;
                                 return (
@@ -776,6 +777,7 @@ export default function StatusesPage() {
                                     </div>
                                 );
                             })}
+                            </div>
                             <p className="text-xs text-muted-foreground">
                                 Sent to the customer when a ticket <em>enters</em> this status — once per ticket. Templates live in Settings → WhatsApp / Email Templates.
                             </p>
