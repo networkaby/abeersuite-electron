@@ -93,5 +93,7 @@ export interface DealDto {
 
 export interface DealDetailDto extends DealDto {
     notes: string | null;
+    // The current stage's "Transitions To" list — the Move To buttons.
+    nextStages?: { id: string; label: string; isTerminal: boolean }[];
     activities: DealActivityDto[];
 }

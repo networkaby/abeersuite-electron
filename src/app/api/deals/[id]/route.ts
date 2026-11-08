@@ -9,6 +9,7 @@ import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { DEAL_TICKET_SELECT, flattenDeal } from "../route";
 import { parseNumericId } from "@/shared/lib/api/parseNumericId";
 import { ticketLogAvatars, ticketLogMedia, type LogMedia } from "@/modules/message/lib/customerMessages";
+import { notifySeatAssigned } from "@/modules/repairing/lib/notifySeatAssigned";
 
 // Deal + its activity timeline. Activities are TicketLog rows now; we map `note` back
 // to the old `body` field the deals UI expects.
@@ -40,11 +41,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     try {
         const lead = await prisma.ticket.findUnique({ where: { id }, select: DEAL_DETAIL_SELECT });
         if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
-        const [logs, media] = await Promise.all([
+        const [logs, media, moves] = await Promise.all([
             ticketLogAvatars(lead.logs, lead.deal?.personId ?? null),
             ticketLogMedia(id, lead.logs),
+            // The stage's "Transitions To" list (Workflow → Statuses) = the Move To buttons.
+            prisma.statusTransition.findMany({
+                where: { fromStatusId: lead.status },
+                select: { to: { select: { id: true, label: true, isTerminal: true, order: true } } },
+            }),
         ]);
-        return NextResponse.json(flattenDealDetail({ ...lead, logs }, media));
+        const nextStages = moves.map((m) => m.to).sort((a, b) => a.order - b.order);
+        return NextResponse.json({ ...flattenDealDetail({ ...lead, logs }, media), nextStages });
     } catch (e) {
         return handleApiError(e, "Failed to fetch lead");
     }
@@ -142,6 +149,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             });
         }
 
+        if (positionChanging && data.assignedPositionId && newPositionTitle) {
+            await notifySeatAssigned({ positionId: data.assignedPositionId, seatTitle: newPositionTitle, actorUserId: user.id, kind: "Deal", ticketId: id, title: lead.title, url: "/office/crm/deals" });
+        }
         return NextResponse.json(flattenDeal(lead));
     } catch (e) {
         return handleApiError(e, "Failed to update lead");

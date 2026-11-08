@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
     Pencil, Trash2, Send, StickyNote, Phone, CalendarCheck, CheckSquare,
     Activity as ActivityIcon, ExternalLink, Copy, Check, CalendarClock,
-    User, Briefcase, Mail, ArrowLeft, X, Loader2, IndianRupee,
+    User, Briefcase, Mail, ArrowLeft, X, Loader2, IndianRupee, ArrowRight, CheckCircle2,
     MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import UserAvatar from "@/shared/components/UserAvatar";
 import { TallyDateTimeInput } from "@/shared/components/TallyDateTimeInput";
-import { useNow } from "@/shared/hooks";
+import { useNow, usePositionPicker } from "@/shared/hooks";
 import { PRIORITY_META } from "@/shared/lib/constants/badges";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { formatDate, formatDateTime, formatCallerNumber, timeAgo } from "@/shared/lib/format";
@@ -44,6 +44,13 @@ const ACTIVITY_KINDS: { kind: Exclude<DealActivityKind, "SYSTEM">; label: string
 const KIND_ICON: Record<DealActivityKind, typeof StickyNote> = {
     NOTE: StickyNote, CALL: Phone, MEETING: CalendarCheck, TASK: CheckSquare, SYSTEM: ActivityIcon,
 };
+
+// ISO (UTC) -> "YYYY-MM-DDTHH:mm" in the browser's own time, for the follow-up box.
+function toLocalInput(iso: string | Date): string {
+    const d = new Date(iso);
+    const p = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
 
 export default function DealDetailDialog({
     dealId,
@@ -108,6 +115,21 @@ export default function DealDetailDialog({
             onChanged();
         } catch {
             toast.error("Failed to move deal");
+        }
+    };
+
+    // Seat / follow-up edits right on the card, saved on pick like Stage.
+    const { positions } = usePositionPicker();
+    const [followUpDraft, setFollowUpDraft] = useState<string | null>(null);
+    const patchDeal = async (body: Record<string, unknown>, ok: string) => {
+        if (!deal) return;
+        try {
+            await axios.patch(`/api/deals/${deal.id}`, body);
+            toast.success(ok);
+            await load();
+            onChanged();
+        } catch {
+            toast.error("Failed to update deal");
         }
     };
 
@@ -629,6 +651,30 @@ export default function DealDetailDialog({
                                             </div>
                                         </div>
                                     )}
+
+                                    {/* Move To: one button per stage in this stage's Transitions To
+                                        list (Workflow > Statuses), same as the Help Desk. */}
+                                    {canEdit && (deal.nextStages?.length ?? 0) > 0 && (
+                                        <div className="space-y-2 pt-2 border-t">
+                                            <Label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Move To</Label>
+                                            <div className="flex flex-col gap-1.5">
+                                                {deal.nextStages!.map((s) => (
+                                                    <Button
+                                                        key={s.id}
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="justify-start text-xs h-8 border hover:bg-muted/60"
+                                                        onClick={() => moveStage(s.id)}
+                                                    >
+                                                        {s.isTerminal
+                                                            ? <CheckCircle2 className="size-3.5 mr-2 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                                            : <ArrowRight className="size-3.5 mr-2 text-muted-foreground shrink-0" />}
+                                                        <span>{s.label}</span>
+                                                    </Button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Ownership & Schedule Card */}
@@ -638,6 +684,26 @@ export default function DealDetailDialog({
                                     {/* Assigned Seat / Owner */}
                                     <div className="space-y-1">
                                         <Label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Owner / Seat</Label>
+                                        {canEdit && (
+                                            <Select
+                                                value={deal.assignedPositionId ?? "__none__"}
+                                                onValueChange={(v) => {
+                                                    const next = v === "__none__" ? null : v;
+                                                    if (next !== (deal.assignedPositionId ?? null)) void patchDeal({ assignedPositionId: next }, next ? "Assigned" : "Unassigned");
+                                                }}
+                                            >
+                                                <SelectTrigger className="h-9 w-full"><SelectValue placeholder="Unassigned" /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="__none__">Unassigned</SelectItem>
+                                                    {deal.assignedPositionId && !positions.some((p) => p.id === deal.assignedPositionId) && (
+                                                        <SelectItem value={deal.assignedPositionId}>{deal.assignedPosition?.title ?? deal.assignedPositionId}</SelectItem>
+                                                    )}
+                                                    {positions.map((p) => (
+                                                        <SelectItem key={p.id} value={p.id}>{p.title}{p.branchName ? ` · ${p.branchName}` : ""}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        )}
                                         {deal.assignedPosition ? (
                                             <div className="space-y-1.5 pt-0.5">
                                                 <div className="flex items-center gap-2">
@@ -685,6 +751,26 @@ export default function DealDetailDialog({
                                                 <span className="text-xs text-muted-foreground italic">No follow-up set</span>
                                             )}
                                         </div>
+                                        {canEdit && (
+                                            <div className="flex items-center gap-1.5 pt-1">
+                                                <TallyDateTimeInput
+                                                    value={followUpDraft ?? (deal.nextFollowUpAt ? toLocalInput(deal.nextFollowUpAt) : "")}
+                                                    onValueChange={setFollowUpDraft}
+                                                    className="h-8 text-xs flex-1"
+                                                />
+                                                <Button
+                                                    size="sm"
+                                                    className="h-8"
+                                                    disabled={followUpDraft === null}
+                                                    onClick={async () => { await patchDeal({ nextFollowUpAt: followUpDraft || null }, followUpDraft ? "Follow-up set" : "Follow-up cleared"); setFollowUpDraft(null); }}
+                                                >Set</Button>
+                                                {deal.nextFollowUpAt && (
+                                                    <Button size="sm" variant="ghost" className="h-8 px-2" title="Clear follow-up"
+                                                        onClick={async () => { await patchDeal({ nextFollowUpAt: null }, "Follow-up cleared"); setFollowUpDraft(null); }}
+                                                    ><X className="size-3.5" /></Button>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Created By details */}
