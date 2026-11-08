@@ -105,6 +105,9 @@ interface StatusForm {
     resolveTimeDays: string;
     resolveTimeHoursPart: string;
     resolveGroupId: string;
+    // Roles that see this status' overdue notices. Empty = everyone.
+    overdueRoleIds: string[];
+    overdueRolesDirty: boolean;
     autoMoveAfterDays: string;
     autoMoveToId: string;
 }
@@ -121,8 +124,10 @@ function formatResolveTime(totalHours: number): string {
 const EMPTY_FORM: StatusForm = {
     label: "", color: "bg-gray-100 text-gray-600", order: 0, isTerminal: false, isEntryPoint: false,
     workId: "", warrantyScope: "any", actionLabel: "", leavePrompt: "", announceOnEntry: false, etaText: "", waTemplate: "", emailTemplate: "",
-    resolveTimeDays: "", resolveTimeHoursPart: "", resolveGroupId: "", autoMoveAfterDays: "", autoMoveToId: "",
+    resolveTimeDays: "", resolveTimeHoursPart: "", resolveGroupId: "", overdueRoleIds: [], overdueRolesDirty: false, autoMoveAfterDays: "", autoMoveToId: "",
 };
+
+interface RoleOption { id: string; label: string; isAdmin: boolean; permissionIds: string[] }
 
 export default function StatusesPage() {
     const [pipelines, setPipelines] = useState<Pipeline[]>([]);
@@ -130,6 +135,7 @@ export default function StatusesPage() {
     const [statuses, setStatuses] = useState<TicketStatus[]>([]);
     const [works, setWorks] = useState<Work[]>([]);
     const [groups, setGroups] = useState<WorkGroup[]>([]);
+    const [roles, setRoles] = useState<RoleOption[]>([]);
     const [loading, setLoading] = useState(true);
 
     // One full "Edit status" dialog covers basics, flags, work (optional), and prompts.
@@ -154,8 +160,10 @@ export default function StatusesPage() {
         axios.get("/api/works"),
         axios.get("/api/pipelines"),
         axios.get("/api/work-groups"),
+        axios.get<{ id: string; label: string; department?: { isAllAccess: boolean } | null; permissions: { permissionId: string }[] }[]>("/api/roles"),
     ])
-        .then(([statusesResponse, worksResponse, pipelinesResponse, groupsResponse]) => {
+        .then(([statusesResponse, worksResponse, pipelinesResponse, groupsResponse, rolesResponse]) => {
+            setRoles(rolesResponse.data.map((r) => ({ id: r.id, label: r.label, isAdmin: r.id === "R1" || !!r.department?.isAllAccess, permissionIds: r.permissions.map((p) => p.permissionId) })));
             setStatuses(statusesResponse.data);
             setWorks(worksResponse.data);
             setPipelines(pipelinesResponse.data);
@@ -202,6 +210,8 @@ export default function StatusesPage() {
             resolveTimeDays: status.resolveTimeHours != null ? String(Math.floor(status.resolveTimeHours / 24)) : "",
             resolveTimeHoursPart: status.resolveTimeHours != null ? String(status.resolveTimeHours % 24) : "",
             resolveGroupId: status.resolveGroupId ?? "",
+            overdueRoleIds: roles.filter((r) => !r.isAdmin && r.permissionIds.includes(`status-overdue:${status.id}`)).map((r) => r.id),
+            overdueRolesDirty: false,
             autoMoveAfterDays: status.autoMoveAfterDays != null ? String(status.autoMoveAfterDays) : "",
             autoMoveToId: status.autoMoveToId ?? "",
         });
@@ -243,6 +253,12 @@ export default function StatusesPage() {
                 emailTemplate: editForm.emailTemplate || null,
                 resolveTimeHours,
                 resolveGroupId: editForm.resolveGroupId || null,
+                // None ticked → [] → everyone sees them. Otherwise admin roles ride along.
+                ...(editForm.overdueRolesDirty && {
+                    overdueRoleIds: editForm.overdueRoleIds.length
+                        ? [...new Set([...editForm.overdueRoleIds, ...roles.filter((r) => r.isAdmin).map((r) => r.id)])]
+                        : [],
+                }),
                 autoMoveAfterDays: autoDays,
                 autoMoveToId: autoTo,
             });
@@ -670,6 +686,28 @@ export default function StatusesPage() {
                                     Where an overdue ticket with no work shows. Blank = none.
                                 </p>
                             </div>
+                            {roles.length > 0 && (
+                                <div className="space-y-1.5 pt-1">
+                                    <Label>Who sees overdue tickets</Label>
+                                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                                        {roles.map((r) => (
+                                            <label key={r.id} className="flex items-center gap-1.5 text-xs">
+                                                <Checkbox
+                                                    checked={r.isAdmin || editForm.overdueRoleIds.includes(r.id)}
+                                                    disabled={r.isAdmin}
+                                                    onCheckedChange={(c) => setEditForm((prev) => ({
+                                                        ...prev,
+                                                        overdueRolesDirty: true,
+                                                        overdueRoleIds: c === true ? [...prev.overdueRoleIds, r.id] : prev.overdueRoleIds.filter((id) => id !== r.id),
+                                                    }))}
+                                                />
+                                                {r.label}
+                                            </label>
+                                        ))}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">None ticked = everyone. Admin always sees them. Applies on the person&apos;s next login.</p>
+                                </div>
+                            )}
                         </div>
 
                         {/* ── Auto-move ──────────────────────────────────── */}

@@ -7,6 +7,7 @@ import { parseArgs, isUserArg, isEntryArg, argKey, resolveTicketSource, META_PRE
 import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
 import { canOpenPage } from "@/shared/lib/auth/pageAccess";
 import { passesWorkGate } from "@/modules/repairing/lib/workGate";
+import { passesOverdueGate, restrictedOverdueStatusIds } from "@/modules/repairing/lib/workRoleGrants";
 import { slaEnteredAt, slaOverdueMs, workLessSlaCandidates } from "@/modules/repairing/lib/resolveTimeSla";
 import LiveRefresh from "@/shared/components/LiveRefresh";
 
@@ -299,7 +300,10 @@ export default async function AssignmentsPage() {
     // carry no work fields and no actions — the board shows them as "Needs attention"
     // with an Open link, and they sort with the rest by longest-waiting. Not-yet-overdue
     // work-less tickets stay out: the inbox lists things to do, not everything alive.
+    // A status can limit its overdue notices to ticked roles (Edit status → Resolve time).
+    const restrictedOverdue = await restrictedOverdueStatusIds();
     const slaItems: WorkInboxItem[] = slaCandidates
+        .filter((t) => passesOverdueGate(resolvedUser, t.status, restrictedOverdue))
         .map((t) => ({ t, overdueByMs: slaOverdueMs(t, t.ticketStatus?.resolveTimeHours, now) }))
         .filter(({ overdueByMs }) => overdueByMs > 0)
         .map(({ t, overdueByMs }) => {

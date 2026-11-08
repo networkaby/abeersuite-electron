@@ -4,6 +4,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { canGrantWorkRoles, setOverdueRoles } from "@/modules/repairing/lib/workRoleGrants";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -26,16 +27,21 @@ const ticketStatusPatchSchema = z.object({
     resolveGroupId: z.string().trim().optional().nullable(),
     autoMoveAfterDays: z.coerce.number().int().min(1).max(365).nullable().optional(),
     autoMoveToId: z.string().trim().optional().nullable(),
+    // Roles that see this status' overdue notices in the Work Inbox. [] = everyone.
+    overdueRoleIds: z.array(z.string().trim().min(1)).optional(),
 });
 
 export async function PATCH(req: Request, { params }: Params) {
-    const { response } = await requireAuth();
+    const { user, response } = await requireAuth();
     if (response) return response;
     try {
         const { id } = await params;
         const { data, error } = await validateRequest(req, ticketStatusPatchSchema);
         if (error) return error;
         const body = data;
+        if (body.overdueRoleIds && !canGrantWorkRoles(user)) {
+            return NextResponse.json({ error: "Only someone who can edit roles can choose who sees overdue tickets" }, { status: 403 });
+        }
 
         // A chosen start worker must actually be applicable to this status.
         if ("startWorkerId" in body && body.startWorkerId) {
@@ -85,6 +91,7 @@ export async function PATCH(req: Request, { params }: Params) {
                 autoMoveToId: "autoMoveToId" in body ? (body.autoMoveToId || null) : undefined,
             },
         });
+        if (body.overdueRoleIds) await setOverdueRoles(id, status.label, body.overdueRoleIds);
         return NextResponse.json(status);
     } catch (e) {
         return handleApiError(e, "Failed to update status");

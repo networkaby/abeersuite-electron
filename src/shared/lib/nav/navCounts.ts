@@ -3,6 +3,7 @@ import { unstable_cache } from "next/cache";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { ResolvedUser } from "@/shared/lib/auth/permissions";
 import { passesWorkGate } from "@/modules/repairing/lib/workGate";
+import { passesOverdueGate, restrictedOverdueStatusIds } from "@/modules/repairing/lib/workRoleGrants";
 import { slaOverdueMs, workLessSlaCandidates } from "@/modules/repairing/lib/resolveTimeSla";
 import { getUnreadTotal, getNotificationUnread } from "@/modules/message/lib/inbox";
 import {
@@ -98,7 +99,7 @@ export async function hasNavCountsChangedSince(userId: number, since: Date): Pro
 export async function getNavCounts(user: ResolvedUser): Promise<NavCounts> {
     const now = new Date();
 
-    const [{ works, pipelines }, seenRows, slaCandidates] = await Promise.all([
+    const [{ works, pipelines }, seenRows, slaCandidates, restrictedOverdue] = await Promise.all([
         getNavMasters(),
         prisma.userSurfaceSeen.findMany({
             where: { userId: user.id },
@@ -110,14 +111,16 @@ export async function getNavCounts(user: ResolvedUser): Promise<NavCounts> {
         prisma.ticket.findMany({
             where: workLessSlaCandidates(now),
             select: {
-                id: true, statusEnteredAt: true, updatedAt: true,
+                id: true, status: true, statusEnteredAt: true, updatedAt: true,
                 ticketStatus: { select: { resolveTimeHours: true } },
             },
         }),
+        restrictedOverdueStatusIds(),
     ]);
 
     const slaOverdue = slaCandidates.filter(
         (t) => slaOverdueMs(t, t.ticketStatus?.resolveTimeHours, now.getTime()) > 0
+            && passesOverdueGate(user, t.status, restrictedOverdue)
     );
 
     const seenBySurface = new Map(seenRows.map((r) => [r.surface, r.seenAt]));
