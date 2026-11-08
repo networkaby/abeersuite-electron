@@ -167,22 +167,28 @@ type WorkFormValues = {
     failPopup: boolean;
     args: WorkArg[];
     groupIds: string[];
+    // "Who can do this" — roles holding this gated work's permission.
+    roleIds: string[];
+    rolesDirty: boolean;   // send roleIds only when changed (needs roles:edit)
 };
+
+interface RoleOption { id: string; label: string; isAdmin: boolean; permissionIds: string[] }
 
 const BLANK: WorkFormValues = {
     label: "", color: "bg-gray-100 text-gray-600", gated: false, order: "",
     successLabel: "", failLabel: "", prompt: "", startLabel: "", successPopup: false, failPopup: false,
-    args: [], groupIds: [],
+    args: [], groupIds: [], roleIds: [], rolesDirty: false,
 };
 
 // The full Add/Edit Work form body — shared by both dialogs so they can't drift.
 // Two tabs: "Setup" (Basics / Worker context / Completion sections) and "Arguments".
 // The Worker-context checklist and the per-outcome popup questions both edit the same
 // `form.args` array (single source of truth with the Arguments tab).
-function WorkFormBody({ form, set, groups, contextVars }: {
+function WorkFormBody({ form, set, groups, roles, contextVars }: {
     form: WorkFormValues;
     set: (patch: Partial<WorkFormValues>) => void;
     groups: { id: string; name: string; label: string }[];
+    roles: RoleOption[];
     contextVars: { key: string; label: string }[];
 }) {
     const args = form.args;
@@ -275,6 +281,27 @@ function WorkFormBody({ form, set, groups, contextVars }: {
                             Gated <span className="text-xs text-muted-foreground">(needs a permission)</span>
                         </label>
                     </div>
+                    {form.gated && roles.length > 0 && (
+                        <div className="space-y-1.5">
+                            <Label>Who can do this</Label>
+                            <div className="flex flex-wrap gap-x-4 gap-y-1">
+                                {roles.map((r) => (
+                                    <label key={r.id} className="flex items-center gap-1.5 text-xs">
+                                        <Checkbox
+                                            checked={r.isAdmin || form.roleIds.includes(r.id)}
+                                            disabled={r.isAdmin}
+                                            onCheckedChange={(c) => set({
+                                                rolesDirty: true,
+                                                roleIds: c === true ? [...form.roleIds, r.id] : form.roleIds.filter((id) => id !== r.id),
+                                            })}
+                                        />
+                                        {r.label}
+                                    </label>
+                                ))}
+                            </div>
+                            <p className="text-xs text-muted-foreground">Same ticks as the Role page. Admin always can. Applies on the person&apos;s next login.</p>
+                        </div>
+                    )}
                 </div>
 
                 {/* ── Worker context ─────────────────────────────────────── */}
@@ -384,6 +411,7 @@ export default function WorksPage() {
     const [works, setWorks] = useState<Work[]>([]);
     const [pipelines, setPipelines] = useState<Pipeline[]>([]);
     const [groups, setGroups] = useState<{ id: string; name: string; label: string; color: string }[]>([]);
+    const [roles, setRoles] = useState<RoleOption[]>([]);
     const [loading, setLoading] = useState(true);
 
     const [showCreate, setShowCreate] = useState(false);
@@ -402,8 +430,10 @@ export default function WorksPage() {
         axios.get("/api/works"),
         axios.get("/api/pipelines"),
         axios.get("/api/work-groups"),
+        axios.get<{ id: string; label: string; department?: { isAllAccess: boolean } | null; permissions: { permissionId: string }[] }[]>("/api/roles"),
     ])
-        .then(([worksRes, pipelinesRes, groupsRes]) => {
+        .then(([worksRes, pipelinesRes, groupsRes, rolesRes]) => {
+            setRoles(rolesRes.data.map((r) => ({ id: r.id, label: r.label, isAdmin: r.id === "R1" || !!r.department?.isAllAccess, permissionIds: r.permissions.map((p) => p.permissionId) })));
             setWorks(worksRes.data);
             setPipelines(pipelinesRes.data);
             setGroups(groupsRes.data);
@@ -430,6 +460,8 @@ export default function WorksPage() {
         failPopup: form.failPopup,
         args: form.args,
         groupIds: form.groupIds,
+        // Admin roles keep the grant even though their box is locked.
+        ...(form.gated && form.rolesDirty && { roleIds: [...new Set([...form.roleIds, ...roles.filter((r) => r.isAdmin).map((r) => r.id)])] }),
     });
 
     const handleCreate = async () => {
@@ -456,6 +488,8 @@ export default function WorksPage() {
             prompt: work.prompt ?? "", startLabel: work.startLabel ?? "",
             successPopup: work.successPopup ?? false, failPopup: work.failPopup ?? false,
             args: work.args ?? [], groupIds: work.groups ? work.groups.map((g) => g.id) : [],
+            roleIds: work.permissionId ? roles.filter((r) => r.permissionIds.includes(work.permissionId!)).map((r) => r.id) : [],
+            rolesDirty: false,
         });
     };
 
@@ -593,7 +627,7 @@ export default function WorksPage() {
                         <DialogTitle>Add Work</DialogTitle>
                         <DialogDescription>The work id is auto-generated from the label.</DialogDescription>
                     </DialogHeader>
-                    <WorkFormBody form={createForm} set={(p) => setCreateForm({ ...createForm, ...p })} groups={groups} contextVars={outcomeVariables(works)} />
+                    <WorkFormBody form={createForm} set={(p) => setCreateForm({ ...createForm, ...p })} groups={groups} roles={roles} contextVars={outcomeVariables(works)} />
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
                         <Button type="button" onClick={handleCreate} disabled={saving || !createForm.label.trim()}>
@@ -610,7 +644,7 @@ export default function WorksPage() {
                         <DialogTitle>Edit Work</DialogTitle>
                         <DialogDescription>Rename, recolour, change gating, or set the work&apos;s shape.</DialogDescription>
                     </DialogHeader>
-                    <WorkFormBody form={editForm} set={(p) => setEditForm({ ...editForm, ...p })} groups={groups} contextVars={outcomeVariables(works)} />
+                    <WorkFormBody form={editForm} set={(p) => setEditForm({ ...editForm, ...p })} groups={groups} roles={roles} contextVars={outcomeVariables(works)} />
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={() => setEditId(null)}>Cancel</Button>
                         <Button type="button" onClick={handleEdit} disabled={saving || !editForm.label.trim()}>

@@ -8,12 +8,15 @@ import { Prisma } from "@/generated/prisma/client";
 import { isKnownTool } from "@/modules/repairing/lib/actionTools";
 import { revalidateTag } from "next/cache";
 import { NAV_MASTERS_TAG } from "@/shared/lib/nav/navCounts";
+import { canGrantWorkRoles, setWorkRoles } from "@/modules/repairing/lib/workRoleGrants";
 
 const patchSchema = z.object({
     label: z.string().trim().min(1).optional(),
     color: z.string().trim().optional(),
     order: z.coerce.number().int().nonnegative().optional(),
     gated: z.boolean().optional(),
+    // "Who can do this" — roles that hold this gated work's permission (needs roles:edit).
+    roleIds: z.array(z.string().trim().min(1)).optional(),
     successLabel: z.string().trim().optional().nullable(),
     failLabel: z.string().trim().optional().nullable(),
     prompt: z.string().trim().optional().nullable(),
@@ -46,13 +49,14 @@ async function mintWorkPermission(id: string, label: string): Promise<string> {
 
 // PATCH /api/works/[id]
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireAuth();
+    const { user, response } = await requireAuth();
     if (response) return response;
     try {
         const { id } = await params;
         const { data, error } = await validateRequest(req, patchSchema);
         if (error) return error;
         const body = data;
+        if (body.roleIds && !canGrantWorkRoles(user)) return NextResponse.json({ error: "Only someone who can edit roles can choose who does this work" }, { status: 403 });
 
         const work = await prisma.work.findUnique({ where: { id } });
         if (!work) return NextResponse.json({ error: "Work not found" }, { status: 404 });
@@ -94,6 +98,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 permissionId,
             },
         });
+        if (permissionId && body.roleIds) await setWorkRoles(permissionId, body.roleIds);
         revalidateTag(NAV_MASTERS_TAG, { expire: 0 });
         return NextResponse.json(updated);
     } catch (e) {

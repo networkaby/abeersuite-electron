@@ -8,6 +8,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { isKnownTool } from "@/modules/repairing/lib/actionTools";
 import { revalidateTag } from "next/cache";
 import { NAV_MASTERS_TAG } from "@/shared/lib/nav/navCounts";
+import { canGrantWorkRoles, setWorkRoles } from "@/modules/repairing/lib/workRoleGrants";
 
 const argSchema = z.array(z.object({
     key: z.string().trim().optional(),
@@ -23,6 +24,8 @@ const createSchema = z.object({
     color: z.string().trim().optional(),
     order: z.coerce.number().int().nonnegative().optional(),
     gated: z.boolean().optional(),
+    // "Who can do this" — roles that hold this gated work's permission (needs roles:edit).
+    roleIds: z.array(z.string().trim().min(1)).optional(),
     successLabel: z.string().trim().optional().nullable(),
     failLabel: z.string().trim().optional().nullable(),
     prompt: z.string().trim().optional().nullable(),
@@ -75,11 +78,12 @@ export async function GET() {
 
 // POST /api/works
 export async function POST(req: Request) {
-    const { response } = await requireAuth();
+    const { user, response } = await requireAuth();
     if (response) return response;
     try {
         const { data, error } = await validateRequest(req, createSchema);
         if (error) return error;
+        if (data.roleIds && !canGrantWorkRoles(user)) return NextResponse.json({ error: "Only someone who can edit roles can choose who does this work" }, { status: 403 });
         const { label, color, order, gated, successLabel, failLabel, prompt, startLabel, successPopup, failPopup, args, groupIds, kind, toolType, toolConfig } = data;
         const isAuto = kind === "auto";
         if (isAuto && toolType && !isKnownTool(toolType)) {
@@ -94,6 +98,7 @@ export async function POST(req: Request) {
         const work = await prisma.work.create({
             data: { id, label, color: color ?? "bg-gray-100 text-gray-600", order: maxOrder, permissionId, successLabel: successLabel || null, failLabel: failLabel || null, prompt: prompt || null, startLabel: startLabel || null, successPopup: successPopup ?? false, failPopup: failPopup ?? false, args: (args ?? []) as unknown as Prisma.InputJsonValue, groups: { create: (groupIds ?? []).map((workGroupId) => ({ workGroupId })) }, kind: kind ?? "human", toolType: isAuto ? (toolType || null) : null, toolConfig: (toolConfig ?? {}) as Prisma.InputJsonValue },
         });
+        if (permissionId && data.roleIds) await setWorkRoles(permissionId, data.roleIds);
         revalidateTag(NAV_MASTERS_TAG, { expire: 0 });
         return NextResponse.json(work, { status: 201 });
     } catch (e) {
