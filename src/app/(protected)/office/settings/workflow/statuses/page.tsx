@@ -649,7 +649,7 @@ export default function StatusesPage() {
                                     className="w-20"
                                     value={editForm.resolveTimeDays}
                                     onChange={(e) => setEditForm((prev) => ({ ...prev, resolveTimeDays: e.target.value.replace(/[^0-9]/g, "") }))}
-                                    placeholder="0"
+                                    placeholder="—"
                                 />
                                 <span className="text-sm text-muted-foreground">days</span>
                                 <Input
@@ -662,12 +662,22 @@ export default function StatusesPage() {
                                         const clamped = digits === "" ? "" : String(Math.min(23, Number(digits)));
                                         setEditForm((prev) => ({ ...prev, resolveTimeHoursPart: clamped }));
                                     }}
-                                    placeholder="0"
+                                    placeholder="—"
                                 />
                                 <span className="text-sm text-muted-foreground">hours</span>
+                                {/* Never = both boxes empty. Ticking clears them; typing a number unticks it. */}
+                                <label className="ml-2 flex items-center gap-1.5 text-sm">
+                                    <Checkbox
+                                        checked={editForm.resolveTimeDays.trim() === "" && editForm.resolveTimeHoursPart.trim() === ""}
+                                        onCheckedChange={(c) => setEditForm((prev) => c === true
+                                            ? { ...prev, resolveTimeDays: "", resolveTimeHoursPart: "" }
+                                            : { ...prev, resolveTimeDays: "0", resolveTimeHoursPart: "0" })}
+                                    />
+                                    Never
+                                </label>
                             </div>
                             <p className="text-xs text-muted-foreground">
-                                Longer than this = <span className="font-medium text-foreground">Needs attention</span>. Blank = no SLA.
+                                Longer than this = <span className="font-medium text-foreground">Needs attention</span>. 0 days 0 hours = at once. Never = no SLA.
                             </p>
                             <div className="space-y-2 pt-1">
                                 <Label>Group <span className="font-normal text-muted-foreground">(optional)</span></Label>
