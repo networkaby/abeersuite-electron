@@ -25,7 +25,8 @@ export function readShopDraft(raw: unknown): ShopDraft | null {
         ...(notes.length ? { notes } : {}),
     };
 }
-import { invProductToPublic, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
+import { invProductToPublic, productGalleryUrls, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
+import { mergeGallery } from "@/modules/ecommerce/lib/mergeGallery";
 import { barcodeTagPaise, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
 import { readPhotoChecklist, type PhotoChecklist } from "@/modules/ecommerce/lib/photoChecklist";
 
@@ -43,6 +44,8 @@ export type ShopProductAdmin = ShopProductPublic & {
     shopDraftAt: string | null;
     /** The draft copy itself — only the product's own page gets it (withShopDraft). */
     shopDraft?: ShopDraft | null;
+    /** Photos in the open draft, when it changes the photo list — the list shows "14 → 3". */
+    draftPhotoCount?: number;
     /** Per-product override: accept orders even at zero stock (backorder). */
     allowBackorder: boolean;
     unitId: number;
@@ -125,6 +128,19 @@ export function invProductToAdmin(
         codes: p.codes ?? [],
         photoChecklist: readPhotoChecklist(p.photoChecklistJson),
     };
+}
+
+/**
+ * The photo list as it is being edited: the open draft's list — with photos
+ * added elsewhere since, exactly as Save as ready will merge them
+ * (updateShopProduct) — else the saved gallery. The agent API and the list's
+ * draft count read this, so a photo number means the same photo everywhere.
+ */
+export function editingGallery(galleryJson: unknown, imageUrl: string | null, shopDraftJson: unknown): string[] {
+    const saved = productGalleryUrls(galleryJson, imageUrl);
+    const d = readShopDraft(shopDraftJson)?.patch;
+    if (!d?.galleryUrls) return saved;
+    return d.galleryBase ? mergeGallery(d.galleryBase, d.galleryUrls, saved) : d.galleryUrls;
 }
 
 /** The admin row plus its draft copy — for the product's own page only (lists skip the JSON). */

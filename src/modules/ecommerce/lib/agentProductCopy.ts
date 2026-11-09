@@ -3,11 +3,10 @@ import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import type { ShopStatus } from "@/generated/prisma/enums";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
 import { photosForAi } from "@/shared/lib/shop/photoMark";
 import { AI_PHOTO_LIMITS } from "@/shared/lib/constants/ai";
 import { OUTPUT_KEYS, type ProductCopy } from "@/modules/ecommerce/lib/aiProductCopy";
-import { readShopDraft, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
+import { editingGallery, readShopDraft, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
 import { PHOTO_LOOK_OPTIONS, arrangeFrom, checkWrittenCopy, writtenCopySchema } from "@/modules/ecommerce/lib/aiVerifiedCopy";
 import { readGivenPages } from "@/modules/ecommerce/lib/aiPageReader";
 import { checkFact, normForCheck } from "@/modules/ecommerce/lib/aiFactCheck";
@@ -24,7 +23,9 @@ import { PHOTO_KINDS, PHOTO_REMOVE_REASONS, checklistFrom, isPhotoKind, type Pho
  * The stage is never changed and nothing here publishes. The skill is .claude/skills/product-copy/SKILL.md.
  */
 
-const galleryOf = (p: { galleryJson: Prisma.JsonValue; imageUrl: string | null }) => productGalleryUrls(p.galleryJson, p.imageUrl);
+/** Photos as being edited — the open draft's list when it has one (editingGallery), so photo n is the same photo here, in the proxy and in staff's editor. */
+const galleryOf = (p: { galleryJson: Prisma.JsonValue; imageUrl: string | null; shopDraftJson: Prisma.JsonValue }) =>
+    editingGallery(p.galleryJson, p.imageUrl, p.shopDraftJson);
 
 // ── Backlog ───────────────────────────────────────────────────────────────────
 
@@ -83,7 +84,7 @@ export async function productBacklog(q: z.infer<typeof backlogQuery>) {
     };
     const select = {
         id: true, sku: true, name: true, shopStatus: true, shopDescription: true, shopDraftAt: true, stock: true,
-        imageUrl: true, galleryJson: true,
+        imageUrl: true, galleryJson: true, shopDraftJson: true,
         brand: { select: { name: true } }, group: { select: { name: true } },
     } as const;
     type Row = Prisma.InvProductGetPayload<{ select: typeof select }>;
@@ -117,12 +118,15 @@ export async function productBacklog(q: z.infer<typeof backlogQuery>) {
     const missing = q.sku?.filter((s) => !rows.some((p) => p.sku.toUpperCase() === s)) ?? [];
 
     return {
-        products: rows.map((p) => ({
-            id: p.id, sku: p.sku, name: p.name, brand: p.brand?.name ?? null, group: p.group?.name ?? null,
-            shopStatus: p.shopStatus, hasDescription: !!p.shopDescription?.trim(),
+        products: rows.map((p) => {
+            const d = readShopDraft(p.shopDraftJson)?.patch ?? {};
+            return {
+            id: p.id, sku: p.sku, name: d.name ?? p.name, brand: p.brand?.name ?? null, group: p.group?.name ?? null,
+            shopStatus: p.shopStatus, hasDescription: !!(d.shopDescription !== undefined ? d.shopDescription : p.shopDescription)?.trim(),
             photos: photoCount(p), stock: p.stock,
             draftWaitingSince: p.shopDraftAt?.toISOString() ?? null,
-        })),
+            };
+        }),
         /** Asked-for SKUs not found (wrong SKU, inactive, or filtered out). */
         ...(missing.length && { notFound: missing }),
         nextBefore: rows.length === limit && more ? before ?? null : null,
@@ -162,7 +166,7 @@ export async function productForAgent(id: number) {
         where: { id },
         select: {
             id: true, sku: true, name: true, modelNo: true, shopStatus: true, shopDescription: true, specsJson: true,
-            imageUrl: true, galleryJson: true, shopCategory: true, shopDraftAt: true,
+            imageUrl: true, galleryJson: true, shopCategory: true, shopDraftAt: true, shopDraftJson: true,
             codes: { where: { kind: { in: ["EAN", "UPC"] } }, select: { value: true } },
             brand: { select: { name: true } }, category: { select: { name: true } }, group: { select: { name: true } },
             warrantyTerm: { select: { durationDays: true } },
@@ -171,23 +175,32 @@ export async function productForAgent(id: number) {
     });
     if (!p) return null;
     const masters = await pickableMasters();
+    // Staff's open draft sits on top (withDraftOverlay's rule): Claude reviews
+    // what staff see in the editor, not the saved row the draft will replace.
+    const d = readShopDraft(p.shopDraftJson)?.patch ?? {};
+    const draftGroup = d.groupId ? await prisma.invProductGroup.findUnique({ where: { id: d.groupId }, select: { name: true } }) : null;
+    const draftBrand = d.brandId ? masters.brands.find((b) => b.id === d.brandId)?.name : undefined;
+    const specs = d.specs ?? p.specsJson;
+    const collectionIds = d.collectionIds ?? p.collections.map((c) => c.categoryId);
     return {
         id: p.id,
         sku: p.sku,
-        name: p.name,
-        brand: p.brand?.name ?? null,
-        category: p.shopCategory ?? p.group?.name ?? p.category?.name ?? null,
+        name: d.name ?? p.name,
+        /** Fields here that come from staff's open draft, not yet saved to the shop. Empty = no draft edits. */
+        fromDraft: Object.keys(d).filter((k) => k !== "galleryBase"),
+        brand: draftBrand ?? p.brand?.name ?? null,
+        category: p.shopCategory ?? draftGroup?.name ?? p.group?.name ?? p.category?.name ?? null,
         modelNo: p.modelNo,
         /** The maker's EAN / UPC only — our own shop barcodes are not the maker's. */
         barcodes: p.codes.map((c) => c.value),
         /** Typed by staff earlier — may be wrong; a hint, never a fact. */
-        typedSpecs: p.specsJson && typeof p.specsJson === "object" && !Array.isArray(p.specsJson) ? p.specsJson : null,
+        typedSpecs: specs && typeof specs === "object" && !Array.isArray(specs) ? specs : null,
         /** OUR support period in days — never the maker's warranty, never written online. */
         shopSupportDays: p.warrantyTerm?.durationDays ?? null,
         shopStatus: p.shopStatus,
-        currentDescription: p.shopDescription,
+        currentDescription: d.shopDescription !== undefined ? d.shopDescription : p.shopDescription,
         draftWaitingSince: p.shopDraftAt?.toISOString() ?? null,
-        /** Our gallery in order, "Skip for AI" photos left out. Look at every one. */
+        /** Our gallery in order (the open draft's when it has one), "Skip for AI" photos left out. Look at every one. */
         photos: photosForAi(galleryOf(p)),
         /** The shop's house style and the exact keys of the written copy — same as our own AI's. */
         writing: OUTPUT_KEYS,
@@ -199,7 +212,7 @@ export async function productForAgent(id: number) {
         /** Each photo through our own server — use it when the photo host is blocked for you. n = 1-based place in photos. */
         photoProxy: `/api/agent/products/${p.id}/photos/{n}`,
         /** Collections set now, main first — Claude only adds to these. */
-        currentCollections: p.collections.map((c) => ({ id: c.categoryId, path: masters.collections.find((x) => x.id === c.categoryId)?.path ?? String(c.categoryId) })),
+        currentCollections: collectionIds.map((id) => ({ id, path: masters.collections.find((x) => x.id === id)?.path ?? String(id) })),
         /** The masters to pick brandId / collectionIds from. Missing one? Say so in notes — never invent an id. */
         masters: { brands: masters.brands, collections: masters.collections },
     };
@@ -321,11 +334,12 @@ export async function saveAgentCopy(id: number, body: z.infer<typeof agentCopySc
     const notes = [...body.notes];
     const open = readShopDraft(p.shopDraftJson);
     const masterPatch: ShopDraft["patch"] = {};
+    const nowBrand = open?.patch.brandId !== undefined ? open.patch.brandId : p.brandId;
     if (body.brandId) {
         const b = masters.brands.find((x) => x.id === body.brandId);
         if (!b) notes.push(`Brand id ${body.brandId} is not an active brand — not set.`);
-        else if (p.brandId && p.brandId !== b.id) notes.push(`Brand left as "${p.brand?.name}" — Claude suggests "${b.name}". Check which is right.`);
-        else if (!p.brandId) {
+        else if (nowBrand && nowBrand !== b.id) notes.push(`Brand left as "${masters.brands.find((x) => x.id === nowBrand)?.name ?? p.brand?.name}" — Claude suggests "${b.name}". Check which is right.`);
+        else if (!nowBrand) {
             masterPatch.brandId = b.id;
             notes.push(`Brand "${b.name}" set in the draft — after Save as ready, rebuild the name with ⟳ / Deep edit if needed.`);
         }

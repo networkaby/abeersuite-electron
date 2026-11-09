@@ -541,6 +541,11 @@ export default function EcommerceProductsPage() {
                                         </TableCell>
                                         <TableCell className={`text-right text-sm tabular-nums ${productPhotoCount(p) === 0 ? "text-destructive/70" : ""}`}>
                                             {productPhotoCount(p)}
+                                            {p.draftPhotoCount !== undefined && p.draftPhotoCount !== productPhotoCount(p) ? (
+                                                <span className="text-muted-foreground" title={`The open draft has ${p.draftPhotoCount}; the shop gets them after Save as ready`}>
+                                                    {" → "}{p.draftPhotoCount}
+                                                </span>
+                                            ) : null}
                                         </TableCell>
                                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                             <div className="flex items-center justify-end gap-1.5">

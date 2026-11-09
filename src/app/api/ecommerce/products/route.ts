@@ -3,7 +3,7 @@ import { shopSlugClash } from "@/shared/lib/shop/shopSlug";
 import { syncMainCollections } from "@/modules/inventory/lib/productCollections";
 import { NextResponse } from "next/server";
 import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
-import { invProductToAdmin } from "@/modules/ecommerce/lib/productAdmin";
+import { editingGallery, invProductToAdmin, readShopDraft } from "@/modules/ecommerce/lib/productAdmin";
 import { nextShopStatus, resolveShopListing, SHOP_STATUSES } from "@/modules/ecommerce/lib/shopListing";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
@@ -78,7 +78,20 @@ export async function GET(req: Request) {
             omit: { shopDraftJson: true },
             orderBy: [{ shopCategory: "asc" }, { id: "desc" }],
         });
-        return NextResponse.json(products.map((p) => invProductToAdmin(p, bands)));
+        // Only the few products with a draft open: their draft's photo count, so
+        // the list does not show the saved 14 while the draft has 3.
+        const drafts = await prisma.invProduct.findMany({
+            where: { id: { in: products.filter((p) => p.shopDraftAt).map((p) => p.id) } },
+            select: { id: true, galleryJson: true, imageUrl: true, shopDraftJson: true },
+        });
+        const draftCount = new Map(drafts
+            .filter((d) => readShopDraft(d.shopDraftJson)?.patch.galleryUrls)
+            .map((d) => [d.id, editingGallery(d.galleryJson, d.imageUrl, d.shopDraftJson).length]));
+        return NextResponse.json(products.map((p) => {
+            const row = invProductToAdmin(p, bands);
+            const n = draftCount.get(p.id);
+            return n === undefined ? row : { ...row, draftPhotoCount: n };
+        }));
     } catch (e) {
         return handleApiError(e, "Failed to list products");
     }

@@ -67,6 +67,7 @@ Answer: `{ products: [{ id, sku, name, brand, group, shopStatus, hasDescription,
 - With `sku` or `q`, stage and description are not filtered — a Published product can be redone; it goes into its draft.
 - `notFound` → tell the owner. Several `q` matches → show the list and ask.
 - Skip `photos: 0` unless told otherwise. `draftWaitingSince` set → a draft is open; say so and ask before adding to it.
+- **With a draft open you see the draft, not the saved product.** Name, description, specs, brand, group, collections, `photos` and photo numbers (also `/photos/{n}`) are staff's draft — what they see on the product page. `fromDraft` on the product lists which fields come from the draft. A photo staff removed in the draft is gone for you too; the office list shows "14 → 3" for it. Never report "photos not removed" or "collection missing" from the saved shop data.
 - **Tell the owner the list before starting.** Then do them **one at a time**, steps 1–9 each.
 
 ## 1. Read the product
