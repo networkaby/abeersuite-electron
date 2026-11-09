@@ -312,8 +312,8 @@ export default function ProductForm({
         setDescription(initial.description ?? "");
         setBadge(initial.badge ?? "");
         setGalleryUrls(initial.galleryUrls ?? []);
-        // Our photo AI saves its checklist on the product; Claude's waits in the draft
-        // copy — either way staff get the same Remove buttons.
+        // The product's own checklist (our photo AI saves it, staff ticks update it), else
+        // Claude's from the draft copy — the same Remove buttons either way.
         setPhotoChecklist(initial.photoChecklist ?? initial.shopDraft?.aiCopy?.photoChecklist ?? null);
         setSelectedImage(0);
         // Loading a product's own saved gallery is not a user edit — it becomes
@@ -1023,7 +1023,7 @@ export default function ProductForm({
                                     )}
                                     <span className={c.ok ? "" : "text-muted-foreground"}>{c.label}</span>
                                 </div>
-                                {c.key === "image" && photoChecklist && photoChecklist.items.length > 0 && (
+                                {c.key === "image" && photoChecklist && (photoChecklist.items.length > 0 || photoChecklist.remove.length > 0) && (
                                     <PhotoChecklistRows
                                         checklist={photoChecklist}
                                         gallery={galleryUrls}
