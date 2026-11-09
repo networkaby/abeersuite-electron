@@ -574,7 +574,13 @@ export default function StatusesPage() {
                                                         <SettingLine label="Action label" value={status.actionLabel} />
                                                     </SettingBox>
                                                     <SettingBox title="Prompts & messages">
-                                                        <SettingLine label="Leave prompt" value={status.leavePrompt ? <span title={status.leavePrompt}>{status.leavePrompt}</span> : null} />
+                                                        {/* Leave prompt: full text, wraps onto as many lines as it needs. */}
+                                                        <div className="text-xs leading-5">
+                                                            <span className="text-muted-foreground">Leave prompt</span>
+                                                            {status.leavePrompt
+                                                                ? <p className="whitespace-pre-wrap break-words font-medium text-foreground">{status.leavePrompt}</p>
+                                                                : <span className="float-right text-muted-foreground/50">—</span>}
+                                                        </div>
                                                         <SettingLine label="Announce" value={status.announceOnEntry ? `Yes${status.etaText ? ` · ${status.etaText}` : ""}` : "No"} />
                                                         <SettingLine label="WhatsApp" value={status.waTemplate} />
                                                         <SettingLine label="Email" value={status.emailTemplate} />
