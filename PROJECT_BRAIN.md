@@ -1510,6 +1510,11 @@ First-week pain for a shop moving off Vyapar: the first three rows plus batch/ex
   - Known risk: if the cashier gives change in cash but forgets to type it in “change back”, the drawer is short at shift close, and the customer wrongly gets advance.
   - Possible later improvements, only if needed: (1) a bigger warning in checkout, (2) print “Old dues cleared / Advance” on the receipt, (3) make the POS edit screen follow the same rule (today it refuses extra money).
   - Code: `usePosBilling.ts` (overpaid), `PosScreen.tsx` (collectSurplus), `api/pos/sale/route.ts` (surplus handling).
+- **Collections to add later, when products justify them (parked 2026-11-10).** Lean tree chosen because the catalogue is small; add a collection only when it would hold ~8+ products clearly different from its siblings, max 2 levels, never a product type (that is a Product Group). Waiting list:
+  - Under Shop by Need: **Students**, **Gaming**, **Work From Home** (folded into Home & Family for now), **Industrial & Warehouse** (folded into Office & Business for now), Professional & Creative.
+  - Under Offers: **Special Offers** / seasonal deals (use Clearance until then).
+  - Under Setup Kits: Work From Home Setup, Conference Room Setup.
+  - Later still: Best Sellers / New Arrivals computed from sales and date added instead of hand-ticked; Setup Kits as sellable bundles (see the bundle idea above).
 
 ---
 
