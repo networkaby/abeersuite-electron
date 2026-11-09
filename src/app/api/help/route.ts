@@ -1,3 +1,4 @@
+import { openOrRecentlyClosedWhere } from "@/shared/lib/tickets/closedWindow";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
@@ -99,8 +100,9 @@ export async function GET(req: Request) {
                 return deltaResponse(changed.map(flattenHelp), overflow, computedAt);
             }
 
+            // Open tickets + those closed in the last CLOSED_TICKET_WINDOW_DAYS only.
             const all = await prisma.ticket.findMany({
-                where: { pipelineId: pipeline.id },
+                where: { pipelineId: pipeline.id, ...openOrRecentlyClosedWhere(computedAt) },
                 orderBy,
                 select: HELP_TICKET_SELECT,
             });

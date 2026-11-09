@@ -19,6 +19,7 @@ export { useBrowserCached } from "./useBrowserCached";
 export { usePositionPicker, invalidatePositionPicker, type PositionPickerData } from "./usePositionPicker";
 export { useBranchOptions, defaultOpeningBranchId, type BranchOption } from "./useBranchOptions";
 export { useTicketsDelta, type TicketRow, type TicketsQuery, type UseTicketsDeltaOptions } from "./useTicketsDelta";
+export { useColumnCap } from "./useColumnCap";
 export { useRealtimeTopics } from "./useRealtimeTopics";
 export { useReplicaUpdate, subscribeReplicaUpdate } from "./useReplicaUpdate";
 export { useProductCatalog, loadProductCatalog, invalidateProductCatalog } from "./useProductCatalog";

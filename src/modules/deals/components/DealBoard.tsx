@@ -1,5 +1,8 @@
 "use client";
 
+import { useColumnCap } from "@/shared/hooks/useColumnCap";
+import ColumnShowMore from "@/shared/components/ColumnShowMore";
+
 import { useState } from "react";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import DealCard from "./DealCard";
@@ -20,6 +23,7 @@ export default function DealBoard({
     onMove: (dealId: number, stageId: string) => void;
     onOpen: (dealId: number) => void;
 }) {
+    const cap = useColumnCap();
     const [draggedId, setDraggedId] = useState<number | null>(null);
     const [dragOverStage, setDragOverStage] = useState<string | null>(null);
 
@@ -41,6 +45,7 @@ export default function DealBoard({
         <div className="flex flex-1 gap-4 overflow-x-auto pb-2">
             {stages.map((stage) => {
                 const items = byStage(stage.id);
+                const page = cap(stage.id, items);
                 const isOver = dragOverStage === stage.id;
                 const total = stageValue(stage.id);
                 return (
@@ -72,7 +77,7 @@ export default function DealBoard({
                                     No deals
                                 </div>
                             ) : (
-                                items.map((deal) => (
+                                <>{page.shown.map((deal) => (
                                     <DealCard
                                         key={deal.id}
                                         deal={deal}
@@ -80,7 +85,8 @@ export default function DealBoard({
                                         onDragStart={() => setDraggedId(deal.id)}
                                         onClick={() => onOpen(deal.id)}
                                     />
-                                ))
+                                ))}
+                                <ColumnShowMore hidden={page.hidden} onClick={page.showMore} /></>
                             )}
                         </div>
                     </div>

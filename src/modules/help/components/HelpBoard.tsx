@@ -1,5 +1,8 @@
 "use client";
 
+import { useColumnCap } from "@/shared/hooks/useColumnCap";
+import ColumnShowMore from "@/shared/components/ColumnShowMore";
+
 import { useState } from "react";
 import HelpCard from "./HelpCard";
 import type { HelpDto, HelpStage } from "../lib/types";
@@ -19,6 +22,7 @@ export default function HelpBoard({
     onMove: (ticketId: number, stageId: string) => void;
     onOpen: (ticketId: number) => void;
 }) {
+    const cap = useColumnCap();
     const [draggedId, setDraggedId] = useState<number | null>(null);
     const [dragOverStage, setDragOverStage] = useState<string | null>(null);
 
@@ -38,6 +42,7 @@ export default function HelpBoard({
         <div className="flex flex-1 gap-4 overflow-x-auto pb-2">
             {stages.map((stage) => {
                 const items = byStage(stage.id);
+                const page = cap(stage.id, items);
                 const isOver = dragOverStage === stage.id;
                 return (
                     <div
@@ -63,7 +68,7 @@ export default function HelpBoard({
                                     No tickets
                                 </div>
                             ) : (
-                                items.map((ticket) => (
+                                <>{page.shown.map((ticket) => (
                                     <HelpCard
                                         key={ticket.id}
                                         ticket={ticket}
@@ -71,7 +76,8 @@ export default function HelpBoard({
                                         onDragStart={() => setDraggedId(ticket.id)}
                                         onClick={() => onOpen(ticket.id)}
                                     />
-                                ))
+                                ))}
+                                <ColumnShowMore hidden={page.hidden} onClick={page.showMore} /></>
                             )}
                         </div>
                     </div>

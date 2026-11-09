@@ -1,5 +1,7 @@
 "use client";
 
+import { isOpenOrRecentlyClosed } from "@/shared/lib/tickets/closedWindow";
+
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
@@ -19,6 +21,8 @@ import HelpQuickForm from "./HelpQuickForm";
 import HelpDetailDialog from "./HelpDetailDialog";
 import { INQUIRY_LABEL, OUTCOME_LABEL, helpCustomerName, helpTitle, type HelpDto, type HelpDetailDto, type HelpStage } from "../lib/types";
 import { usePositionPicker, useTicketsDelta } from "@/shared/hooks";
+
+const keepHelpRow = (t: HelpDto) => isOpenOrRecentlyClosed(t.closedAt);
 
 export default function HelpWorkspace({
     stages,
@@ -53,6 +57,7 @@ export default function HelpWorkspace({
     // ticket-flavoured boards use, and realtime-refreshed live — see useTicketsDelta.
     const { rows: tickets, setRows: setTickets, loading, error, reload: load, afterOwnWrite } = useTicketsDelta<HelpDto>({}, {
         apiPath: "/api/help",
+        keep: keepHelpRow,
         sort: (a, b) => a.order - b.order || b.createdAt.localeCompare(a.createdAt) || b.id - a.id,
     });
 
@@ -84,7 +89,23 @@ export default function HelpWorkspace({
 
     const mySet = new Set(myPositionIds);
     const q = query.trim().toLowerCase();
-    const visible = tickets
+
+    // The board holds only tickets closed in the last 30 days. A search of 3+
+    // letters also asks the server, so an older closed ticket is still found.
+    const [older, setOlder] = useState<{ q: string; rows: HelpDto[] }>({ q: "", rows: [] });
+    useEffect(() => {
+        if (q.length < 3) return;
+        const timer = setTimeout(() => {
+            axios.get<HelpDto[]>("/api/help", { params: { q } })
+                .then(({ data }) => setOlder({ q, rows: data }))
+                .catch(() => { /* local results still show */ });
+        }, 400);
+        return () => clearTimeout(timer);
+    }, [q]);
+    const heldIds = new Set(tickets.map((t) => t.id));
+    const olderRows = q.length >= 3 && older.q === q ? older.rows.filter((t) => !heldIds.has(t.id)) : [];
+
+    const visible = [...tickets, ...olderRows]
         .filter((t) => (mineOnly ? t.assignedPositionId !== null && mySet.has(t.assignedPositionId) : true))
         .filter((t) => {
             if (!q) return true;

@@ -1,5 +1,10 @@
 "use client";
 
+import { useColumnCap } from "@/shared/hooks/useColumnCap";
+import ColumnShowMore from "@/shared/components/ColumnShowMore";
+
+import { isOpenOrRecentlyClosed } from "@/shared/lib/tickets/closedWindow";
+
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
@@ -15,6 +20,8 @@ import TaskFormDialog from "./TaskFormDialog";
 import TaskDetailDialog from "./TaskDetailDialog";
 import type { TaskDto, TaskStage } from "../lib/types";
 import { usePositionPicker, useTicketsDelta } from "@/shared/hooks";
+
+const keepTaskRow = (t: TaskDto) => isOpenOrRecentlyClosed(t.completedAt);
 
 export default function TaskBoard({
     stages,
@@ -38,6 +45,7 @@ export default function TaskBoard({
     const router = useRouter();
     const searchParams = useSearchParams();
     const [myTasksOnly, setMyTasksOnly] = useState(false);
+    const cap = useColumnCap();
     const [draggedId, setDraggedId] = useState<number | null>(null);
     const [dragOverStage, setDragOverStage] = useState<string | null>(null);
 
@@ -51,6 +59,7 @@ export default function TaskBoard({
     // ticket-flavoured boards use, and realtime-refreshed live — see useTicketsDelta.
     const { rows: tasks, setRows: setTasks, loading, error, reload: load, afterOwnWrite } = useTicketsDelta<TaskDto>({}, {
         apiPath: "/api/admin-tasks",
+        keep: keepTaskRow,
         sort: (a, b) => a.order - b.order || b.createdAt.localeCompare(a.createdAt) || b.id - a.id,
     });
 
@@ -158,6 +167,7 @@ export default function TaskBoard({
             <div className="flex flex-1 gap-4 overflow-x-auto pb-2">
                 {stages.map((stage) => {
                     const items = byStage(stage.id);
+                    const page = cap(stage.id, items);
                     const isOver = dragOverStage === stage.id;
                     return (
                         <div
@@ -189,7 +199,7 @@ export default function TaskBoard({
                                         No tasks
                                     </div>
                                 ) : (
-                                    items.map((task) => (
+                                    <>{page.shown.map((task) => (
                                         <TaskCard
                                             key={task.id}
                                             task={task}
@@ -197,7 +207,8 @@ export default function TaskBoard({
                                             onDragStart={() => setDraggedId(task.id)}
                                             onClick={() => openDetail(task.id)}
                                         />
-                                    ))
+                                    ))}
+                                    <ColumnShowMore hidden={page.hidden} onClick={page.showMore} /></>
                                 )}
                             </div>
                         </div>

@@ -182,11 +182,15 @@ export type UseTicketsDeltaOptions<T extends TicketRow> = {
      *  carry a server-computed `order`) should pass a comparator over that field
      *  instead, so a delta merge doesn't scramble a hand-ordered column. */
     sort?: (a: T, b: T) => number;
+    /** Rows to keep on the board and in the device copy; others are dropped on
+     *  every load and merge (e.g. tickets closed long ago — see closedWindow.ts). */
+    keep?: (row: T) => boolean;
 };
 
 export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, options: UseTicketsDeltaOptions<T> = {}) {
     const apiPath = options.apiPath ?? DEFAULT_API;
     const sort = options.sort ?? (byAge as unknown as (a: T, b: T) => number);
+    const keep = options.keep;
 
     const [rows,        setRows]       = useState<T[]>([]);
     const [loading,     setLoading]     = useState(true);
@@ -216,10 +220,12 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
     // The caller rebuilds `sort` every render; afterOwnWrite reads the latest through
     // this rather than carrying it in a dependency list.
     const sortRef = useRef(sort);
+    const keepRef = useRef(keep);
     // Layout effect: both refs are current before any effect or handler below reads them.
     useLayoutEffect(() => {
         rowsRef.current = rows;
         sortRef.current = sort;
+        keepRef.current = keep;
         nextCursorRef.current = nextCursor;
     });
     const forceNext  = useRef(false);
@@ -280,7 +286,7 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
                     : null;
                 if (fresh) {
                     if (fresh.mode !== "page") return;
-                    const sorted = applyPins([...fresh.rows]).sort(sortRef.current);
+                    const sorted = applyPins(keepRef.current ? fresh.rows.filter(keepRef.current) : [...fresh.rows]).sort(sortRef.current);
                     setRows(sorted);
                     setNextCursor(fresh.nextCursor);
                     checkedAtRef.current = fresh.computedAt;
@@ -289,7 +295,7 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
                 } else if (res.mode === "delta") {
                     const byId = new Map(rowsRef.current.map((r) => [r.id, r]));
                     for (const r of res.rows) byId.set(r.id, r);
-                    const merged = applyPins([...byId.values()]).sort(sortRef.current);
+                    const merged = applyPins(keepRef.current ? [...byId.values()].filter(keepRef.current) : [...byId.values()]).sort(sortRef.current);
                     setRows(merged);
                     checkedAtRef.current = res.computedAt;
                     setStale(false);
@@ -356,7 +362,7 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
                 cached = await readCachedView<T>(key);
                 if (cancelled) return;
                 if (cached) {
-                    setRows(applyPins([...cached.rows]).sort(sort));
+                    setRows(applyPins(keep ? cached.rows.filter(keep) : [...cached.rows]).sort(sort));
                     setNextCursor(cached.nextCursor);
                     checkedAtRef.current = cached.checkedAt;
                     setLoading(false);
@@ -377,7 +383,7 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
                     if (cancelled) return;
                     if (fresh) {
                         if (fresh.mode !== "page") return;
-                        const sorted = applyPins([...fresh.rows]).sort(sort);
+                        const sorted = applyPins(keep ? fresh.rows.filter(keep) : [...fresh.rows]).sort(sort);
                         setRows(sorted);
                         setNextCursor(fresh.nextCursor);
                         checkedAtRef.current = fresh.computedAt;
@@ -385,7 +391,7 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
                     } else if (res.mode === "delta") {
                         const byId = new Map(rowsRef.current.map((r) => [r.id, r]));
                         for (const r of res.rows) byId.set(r.id, r);
-                        const merged = applyPins([...byId.values()]).sort(sort);
+                        const merged = applyPins(keep ? [...byId.values()].filter(keep) : [...byId.values()]).sort(sort);
                         setRows(merged);
                         checkedAtRef.current = res.computedAt;
                         if (cacheable) await writeCachedView(key, merged, cached.nextCursor, res.computedAt);
@@ -393,7 +399,7 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
                 } else {
                     const res = await fetchTickets<T>(apiPath, query, search);
                     if (cancelled || res.mode !== "page") return;
-                    const sorted = applyPins([...res.rows]).sort(sort);
+                    const sorted = applyPins(keep ? res.rows.filter(keep) : [...res.rows]).sort(sort);
                     setRows(sorted);
                     setNextCursor(res.nextCursor);
                     checkedAtRef.current = res.computedAt;

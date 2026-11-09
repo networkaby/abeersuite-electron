@@ -1,5 +1,7 @@
 "use client";
 
+import { isOpenOrRecentlyClosed } from "@/shared/lib/tickets/closedWindow";
+
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
@@ -18,6 +20,8 @@ import DealTable from "./DealTable";
 import DealFormDialog from "./DealFormDialog";
 import DealDetailDialog from "./DealDetailDialog";
 import type { DealDto, DealDetailDto, DealStage } from "../lib/types";
+
+const keepDealRow = (d: DealDto) => isOpenOrRecentlyClosed(d.closedAt);
 
 export default function DealsWorkspace({
     stages,
@@ -50,6 +54,7 @@ export default function DealsWorkspace({
     // ticket-flavoured boards use, and realtime-refreshed live — see useTicketsDelta.
     const { rows: deals, setRows: setDeals, loading, error, reload: load, afterOwnWrite } = useTicketsDelta<DealDto>({}, {
         apiPath: "/api/deals",
+        keep: keepDealRow,
         sort: (a, b) => a.order - b.order || b.createdAt.localeCompare(a.createdAt) || b.id - a.id,
     });
 
