@@ -271,59 +271,58 @@ cost on the server:
 | 4 Fact check | **The server.** It downloads Claude's pages again and checks every fact. The checker is the same code used for our own AI. |
 
 - **What makes this safe:** Claude sends page **URLs**, not page text. The server reads each page itself, keeps only the maker's site and known sellers, drops a page that shows a different barcode, and then runs the fact check. Claude can't get a fact through that isn't really on the page.
-- **Where the result goes:** into the product's **draft copy**, beside any edits staff have open there. The stage doesn't change and the shop keeps showing the last finished version. Staff review it, press **Save as ready**, and Publish when the time is right. The agent never publishes.
+- **Where the result goes:** straight onto the product, and the product moves to **Draft** (off the shop). Claude's text replaces ours (owner, 2026-11-10). Its notes and photo advice stay beside it on the product page. Staff review, press **Save as ready**, and Publish when the time is right; **Discard draft** puts the old stage back (Claude's text stays). The agent never publishes.
 - **Three endpoints:**
   - a backlog list (paged in the DB)
   - one product's Step-1 input, plus the house-style rules, so Claude writes in the same style as our AI
   - submit the draft
-- **Brand and collections:** the product endpoint also sends the brand and collection masters (cached). Claude may set a brand only on a product with **no brand**, and may **add** collections (existing ones stay, the main one is unchanged), using existing ids only. Both go into the draft. Applying them with Save as ready needs the product-masters permission, the same as picking them by hand.
+- **Brand and collections:** the product endpoint also sends the brand and collection masters (cached). Claude's brand replaces ours, and it may **add** collections (existing ones stay, the main one is unchanged), using existing ids only. Both go straight onto the product (the agent key is trusted for this).
 - **Notes:** anything staff should fix (a brand or collection to create, a spelling mistake, a wrong group, an empty Model No) comes back as notes, shown under "Notes for you" on the product page. Claude never creates masters and never changes the group (GST).
 - **A site blocks Claude?** `POST /api/agent/read-page` reads it through the server's own path: plain download, then the "Read page" keys on AI Setup (Scrape.do…), free keys first, within their limits. Maker or known sellers only, never a private address, so it is not an open scraper. Search keys (Tavily, Exa) are not lent to Claude; its own search is enough.
 - **Photos:** Claude sends `photoPicks` (photo link + kind) from the accepted pages. The server keeps a pick only if an accepted page really shows that photo, puts the maker's first, flags seller photos "check before use", and offers them on the product page. Nothing is added to the gallery by itself.
-- **Shipping:** Claude quotes the package weight and size exactly as the source prints them; the server finds the text on the label or an accepted page, converts it itself (grams, whole cm rounded up) and fills the draft only where the product has none.
+- **Shipping:** Claude quotes the package weight and size exactly as the source prints them; the server finds the text on the label or an accepted page, converts it itself (grams, whole cm rounded up) and sets it on the product.
 - **Photo order and looks (same as our photo AI):** Claude may send `photos.order` (our photo urls, best first) and `photos.look` (crop / focus / fixes / rotate / background from `photoLookOptions`). The server runs them through the same `arrangeFrom` as Step 5, so staff get the same **Use / Undo** card; a photo staff framed by hand keeps its framing.
 - **Photos through our server:** `GET /api/agent/products/{id}/photos/{n}` serves photo n of that product's own gallery (Skip-for-AI left out) — for when Claude's workspace blocks the photo host. Only the product's own photos, never any other URL.
-- **The agent reads the draft:** with a draft open, the backlog, `GET /api/agent/products/{id}` (name, description, specs, brand, group, collections, photos; `fromDraft` lists them) and `/photos/{n}` show the product as being edited — `editingGallery` in `productAdmin.ts` (the draft's photos, merged with phone adds the way Save as ready merges them). Photo numbers in Claude's POST match the same list. The office Products list shows the draft's count beside the saved one ("14 → 3").
 - **A clash stops Claude** (our data vs the photo): no copy is saved, but the clash and the other mistakes it saw go to the product as review notes (`/notes`), so staff see them in AbeerSuite.
 - **No page read:** a draft saved with no page at all gets a note saying the copy is from the label and photos only. Notes on the copy POST: up to 40 lines.
 - **Review mode:** `POST /api/agent/products/{id}/notes` adds notes only (nothing on the product changes). They show as "Review notes for you" on the product page until staff Save as ready or Discard.
-- **Compatibility:** the checked list is kept as the product's **"Compatible Models"** spec (no new column). Claude's compatibility-only mode (`POST /api/agent/products/{id}/compatibility`) refreshes just that list: the server keeps only models on an accepted page and replaces the old list in the draft. The shop (`src/shared/lib/shop/compatibility.ts`) turns it into three product-page rows: **Made for this one** (printer → its inks and heads), **For the same machine** (black ink → the colours and the head), **Works with these** (ink → the printers we sell). A model matches only as a whole phrase in a product name ("Smart Tank 580" never matches "5800"), across brands. Search (results and the suggestion box) reads the list too.
-- **Claude only saves drafts** (owner, 2026-11-08): it never presses Save as ready and never publishes.
+- **Compatibility:** the checked list is kept as the product's **"Compatible Models"** spec (no new column). Claude's compatibility-only mode (`POST /api/agent/products/{id}/compatibility`) refreshes just that list: the server keeps only models on an accepted page and replaces the old list on the product (which moves to Draft). The shop (`src/shared/lib/shop/compatibility.ts`) turns it into three product-page rows: **Made for this one** (printer → its inks and heads), **For the same machine** (black ink → the colours and the head), **Works with these** (ink → the printers we sell). A model matches only as a whole phrase in a product name ("Smart Tank 580" never matches "5800"), across brands. Search (results and the suggestion box) reads the list too.
+- **Claude only leaves products in Draft** (owner, 2026-11-08): it never presses Save as ready and never publishes. Review notes also move the product to Draft.
 - **One skill file** tells Claude the steps and rules, including a mistake checklist (name, codes, brand, collections, group, photos, description, shipping).
 
-### A9. Shop stages and the draft copy
+### A9. Shop stages (Draft is a stage)
 
-**Stages:** Unpublished → Ready → Published, plus Pending.
+**Stages:** Unpublished → Draft → Ready → Published, plus Pending. One product = one copy = one stage (owner, 2026-11-10: *"only one copy no parallel"*).
 
 | Stage | Work done? | Decided to sell? | In the shop? | Waits for |
 |---|---|---|---|---|
 | Unpublished | No | No | No | Someone to work on it |
+| Draft | Being done (staff, AI, Claude) | No | No | Save as ready |
 | Ready | Yes, checked | Not yet, on purpose | No | Your decision (stock arriving, a festival) |
 | Pending | Yes | Yes | No, held back | A publish rule to be met; then live by itself |
 | Published | Yes | Yes | Yes | Nothing |
 
 - Pending isn't stored; it's worked out each time from "Published" and the publish rules.
 - The shop reads one "live now" flag: Published and the rules met.
+- Every edit goes straight onto the product. There is no second copy, so the list, Cowork and the shop all read the same data.
 
-**Draft is a copy, not a stage.** Any product, even a Published one, can have one open draft:
+**Buttons on the product page:**
 
-- Any change on the product page unlocks **Save as draft**. The changes, photos included, wait in the draft copy (`InvProduct.shopDraftJson`), over as many steps and people (staff, AI, Claude) as it takes.
-- While a draft is open, **the shop keeps showing the last finished version**. Customers and Google never see half-done work, and the product never drops off the shop.
-- **Save as ready** puts the draft's changes on the product and closes the draft:
-  - It was Published (or Pending) → it stays Published, now with the new content. It was never taken off, so it doesn't drop back.
-  - Any other stage → **Ready**.
-- **Discard draft** throws the changes away. The product and its stage stay as they were.
-- While a draft is open, Mark ready / Publish / Unpublish are hidden, so a half-done product is never launched. Bulk actions skip products with an open draft and name them.
-
-**Buttons** when no draft is open:
-
-| Stage | Button |
+| | Buttons |
 |---|---|
+| Unsaved changes | **Save** (stage stays — a Published product changes live) · **Save as draft** (→ Draft, off the shop) · **Save as ready** |
+| Draft | **Save as ready** · **Discard draft** (back to the stage it came from; the edits stay — `shopDraftJson.stageBefore`) |
 | Unpublished | Mark ready |
 | Ready | Publish |
-| Published / Pending | Unpublish (→ **Ready**, since the work is finished) |
+| Published / Pending | Unpublish (→ **Ready**) |
 
-**Products list tabs:** All · Unpublished · Draft (open drafts, any stage) · Ready · Published · Pending.
+- Photos save onto the product at once, whatever the stage (a Published product's photos change live).
+- Bulk Mark ready / Publish / Unpublish skip products in Draft and name them.
+- `InvProduct.shopDraftJson` now holds only what a Draft carries beside the fields: `stageBefore`, Claude's `aiCopy` (notes, photo advice) and review `notes`. Save as ready / Discard draft clear it.
+
+**Products list tabs:** All · Unpublished · Draft · Ready · Published · Pending.
+
+**Moving old draft copies:** `POST /api/ecommerce/products/old-drafts` (product-masters permission) puts every draft copy still open on its product and moves it to Draft. Run once per database after the deploy, then delete the route.
 
 ---
 

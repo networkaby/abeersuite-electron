@@ -5,8 +5,8 @@ import { AgentCopyError, agentCopySchema, saveAgentCopy } from "@/modules/ecomme
 
 // POST /api/agent/products/[id]/copy — Claude's Verified copy for one product.
 // The server reads Claude's pages itself and checks every fact (Step 4); what
-// fails goes to "unsure". Saved into the product's draft copy for staff; the
-// stage and the live product are untouched. Never publishes.
+// fails goes to "unsure". Written straight onto the product, which moves to
+// Draft (off the shop) for staff to Save as ready. Never publishes.
 // Answer: { result: "draft", shopStatus, kept: { specs, highlights }, unsure, flags, note, sources }.
 
 export const maxDuration = 120; // reads up to 8 pages

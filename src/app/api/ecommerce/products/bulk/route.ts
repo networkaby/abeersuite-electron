@@ -14,7 +14,7 @@ import { resolveShopListing } from "@/modules/ecommerce/lib/shopListing";
 //   the rest are Pending and go live by themselves once fixed. A live product
 //   with no slug gets one (same as the single-product save).
 // - unpublish: Published / Pending → READY, off the shop (the work is finished).
-// A product with a draft copy open is skipped and named — finish or discard it first.
+// A product in Draft is skipped and named — finish it (Save as ready) or Discard draft first.
 
 const schema = z.object({
     ids: z.array(z.coerce.number().int().positive()).min(1).max(5000),
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
 
     try {
         const inDraft = await prisma.invProduct.findMany({
-            where: { id: { in: ids }, shopDraftAt: { not: null } },
+            where: { id: { in: ids }, shopStatus: "DRAFT" },
             select: { id: true, name: true },
         });
         const skipped = { inDraft: inDraft.length, names: inDraft.slice(0, 5).map((p) => p.name) };

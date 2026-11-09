@@ -243,7 +243,7 @@ model InvNamingConfig {
 /// Online-shop stage of a product — see InvProduct.shopStatus.
 enum ShopStatus {
   UNPUBLISHED
-  /// Retired 2026-11-07 — a draft is now a copy (InvProduct.shopDraftJson), not a stage.
+  /// Being worked on, off the shop (owner, 2026-11-10: a stage again, one copy).
   DRAFT
   READY
   PUBLISHED
@@ -328,18 +328,18 @@ model InvProduct {
   /// Live in the shop right now = shopStatus PUBLISHED and the publish rules met
   /// (shopListing.ts). Computed on every shop save — never set on its own.
   isListedInShop          Boolean @default(false)
-  /// Online-shop stage (owner, 2026-11-07): UNPUBLISHED (new, made at a
-  /// counter, untouched) → READY (work complete, waiting for a good time) →
-  /// PUBLISHED. "Pending" = PUBLISHED with a publish rule unmet — not stored.
-  /// Unpublish goes back to READY. DRAFT is retired (never written): work in
-  /// progress is the separate draft copy below, on a product of any stage.
+  /// Online-shop stage: UNPUBLISHED (new, made at a counter, untouched) →
+  /// DRAFT (being worked on, off the shop) → READY (work complete, waiting for
+  /// a good time) → PUBLISHED. "Pending" = PUBLISHED with a publish rule unmet —
+  /// not stored. Unpublish goes back to READY. One copy only (owner, 2026-11-10).
   shopStatus              ShopStatus @default(UNPUBLISHED)
-  /// Work in progress, kept apart from the live product (owner, 2026-11-07):
-  /// { patch: shop fields being edited, aiCopy?: Claude's Verified copy }.
-  /// "Save as ready" puts the patch on the product; Discard drops it. The shop
-  /// keeps showing the last finished version meanwhile (shopDraft.ts).
+  /// What a DRAFT product carries beside its fields (productAdmin.ts ShopDraft):
+  /// { stageBefore (Discard draft returns to it), aiCopy (Claude's notes and
+  /// photo advice), notes }. Never a second copy of the fields. Save as ready /
+  /// Discard draft clear it. Old rows may still hold a `patch` until
+  /// POST /api/ecommerce/products/old-drafts moves it onto the product.
   shopDraftJson           Json?
-  /// When the draft was last saved — lists read this, never the JSON (null = no draft open).
+  /// When it was last saved as draft or Claude wrote on it (null = not in Draft).
   shopDraftAt             DateTime?
   /// Per-product override of the org out-of-stock policy: when true the shop
   /// accepts orders for this product even at zero stock (backorder / procure later).

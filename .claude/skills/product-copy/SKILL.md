@@ -1,19 +1,21 @@
 ---
 name: product-copy
-description: Prepare AbeerSuite shop products as Claude through the agent API — check photos against our data, find the maker / seller pages, write Verified copy (name, description, highlights, specs, compatibility, warranty), set brand and collections, fill shipping weight and parcel size, pick photos from the maker's page, advise on the gallery, and note every mistake in our data — all saved as a draft for staff (never published, never "ready"). Also reviews finished products and leaves notes only. Use when the owner says "do product copy", "write product descriptions", "prepare products for the shop", "review the drafts", "check product 722", or runs /product-copy.
+description: Prepare AbeerSuite shop products as Claude through the agent API — check photos against our data, find the maker / seller pages, write Verified copy (name, description, highlights, specs, compatibility, warranty), set brand and collections, fill shipping weight and parcel size, pick photos from the maker's page, advise on the gallery, and note every mistake in our data — all written onto the product, which moves to Draft for staff (never published, never "ready"). Also reviews finished products and leaves notes only. Use when the owner says "do product copy", "write product descriptions", "prepare products for the shop", "review the drafts", "check product 722", or runs /product-copy.
 ---
 
 # Product copy (Verified, by Claude)
 
 You prepare products for the online shop and send everything to AbeerSuite.
 The server reads your pages **itself** and drops any fact it cannot find on them.
-Everything goes into the product's **draft copy**; the shop keeps showing the last
-finished version.
+Everything is written **straight onto the product** (there is one copy, no
+separate draft) and the product moves to the **Draft** stage — off the shop until
+staff finish it. Your text replaces what was there.
 
-**You only ever save to the draft.** You never press Save as ready, never publish,
+**You only ever leave products in Draft.** You never press Save as ready, never publish,
 never create brands / collections, never change the group (GST). Staff review the
-draft, fix what your notes say, press **Save as ready**, and publish when the time
-is right.
+product, fix what your notes say, press **Save as ready**, and publish when the time
+is right. Because a Published product leaves the shop while in Draft, say so in your
+report when you touched one.
 
 The rule above all: **no information is better than false information.**
 
@@ -50,13 +52,13 @@ curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$ABEERSUITE_URL/api/agent/produc
 
 | Owner says | Filters |
 |---|---|
-| nothing particular | *(none)* = newest Unpublished, no description, no draft open |
+| nothing particular | *(none)* = newest Unpublished, no description |
 | "SKU 107102" / "these: 107102, 107233" | `sku=107102,107233` — exactly these, in that order |
 | "the Portronics hub" / a barcode | `q=portronics hub` |
 | "with at least 5 photos" | `minPhotos=5` |
 | "only what is in stock" | `inStock=1` |
 | "Portronics brand" / "USB HUB group" | `brand=portronics` / `group=usb hub` |
-| "ready ones" / "published ones" / "open drafts" | `stage=ready` / `published` / `draft` (`all` = any) |
+| "ready ones" / "published ones" / "drafts" | `stage=ready` / `published` / `draft` (`all` = any) |
 | "even if it has a description" | `need=all` |
 | "10 of them" | `limit=10` (max 50) |
 
@@ -64,10 +66,9 @@ Filters combine: `brand=portronics&inStock=1&minPhotos=5&limit=5`.
 
 Answer: `{ products: [{ id, sku, name, brand, group, shopStatus, hasDescription, photos, stock, draftWaitingSince }], notFound?, nextBefore }`.
 
-- With `sku` or `q`, stage and description are not filtered — a Published product can be redone; it goes into its draft.
+- With `sku` or `q`, stage and description are not filtered — a Published product can be redone; it moves to Draft (off the shop) when you save.
 - `notFound` → tell the owner. Several `q` matches → show the list and ask.
-- Skip `photos: 0` unless told otherwise. `draftWaitingSince` set → a draft is open; say so and ask before adding to it.
-- **With a draft open you see the draft, not the saved product.** Name, description, specs, brand, group, collections, `photos` and photo numbers (also `/photos/{n}`) are staff's draft — what they see on the product page. `fromDraft` on the product lists which fields come from the draft. A photo staff removed in the draft is gone for you too; the office list shows "14 → 3" for it. Never report "photos not removed" or "collection missing" from the saved shop data.
+- Skip `photos: 0` unless told otherwise. `shopStatus: "DRAFT"` → someone is working on it; say so and ask before writing over it. What you read is exactly what staff and the shop data hold.
 - **Tell the owner the list before starting.** Then do them **one at a time**, steps 1–9 each.
 
 ## 1. Read the product
@@ -91,7 +92,7 @@ Never stop a product because a photo URL is blocked — use this.
 Never use your own memory of the product.
 
 1. **Clash** = our typed data (name, modelNo, barcodes, typedSpecs) disagrees with what is **printed**: another brand or model, another printed number (capacity, wattage, size, count). Not a clash: missing data, the same thing spelled differently, a count only *seen*, our support period shorter than the printed warranty.
-   **Any clash → stop this product: no copy, no draft.** Report `field: typed "X", photo shows "Y"` (e.g. `capacity: typed "128GB", label shows "256G"`).
+   **Any clash → stop this product: no copy, nothing saved.** Report `field: typed "X", photo shows "Y"` (e.g. `capacity: typed "128GB", label shows "256G"`).
    Then **save what you found as notes** so staff see it in AbeerSuite, not only in this chat — the notes route (step R) changes nothing on the product:
    ```bash
    curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json"      "$ABEERSUITE_URL/api/agent/products/<id>/notes" -d '{ "notes": ["STOPPED — capacity: typed \"128GB\", photo 3 sticker shows \"256G\". Check the real unit, then ask Claude to run product copy again.", "Model No is empty — sticker prints HS-SSD-E1000."] }'
@@ -146,7 +147,7 @@ For the courier rate. Prefer the **package** weight and size (what is shipped); 
 "shipping": { "weight": "~0.05 kg", "dimensions": "116.26 x 36.46 x 100.94 mm", "source": "<accepted page url or \"label\">" }
 ```
 
-The server finds the text on that source, converts it itself (grams; whole cm, rounded up), and fills the draft only where the product has no weight / size. Not on any source → leave `shipping` out and add a note ("Shipping weight / size unknown — weigh the box").
+The server finds the text on that source, converts it itself (grams; whole cm, rounded up), and sets the product's weight / size. Not on any source → leave `shipping` out and add a note ("Shipping weight / size unknown — weigh the box").
 
 ## 7. Photos from the maker / seller pages
 
@@ -209,7 +210,7 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
 - `notes` holds up to 40 lines — one problem per line; never squash several into one.
 - Full example of `photos`: `{ "have": ["box_front"], "must": ["front", "ports"], "nice": ["in_use"], "remove": [{ "url": "…/9.jpg", "why": "irrelevant", "note": "personal family photo" }], "order": ["…/2.jpg", "…/1.jpg", "…/3.jpg"], "look": [{ "url": "…/1.jpg", "crop": "pad", "fixes": ["trim", "auto_color"], "rotate": 0, "background": "white", "why": "yellow tint, wide border" }] }`
 - Answer: `{ result: "draft", shopStatus, kept, unsure, flags, note, sources }`. `422` → fix as the message says and resend.
-- The draft fills the product page: description (if empty), online name (if empty or the stock name), missing specs, brand, collections, shipping. Anything staff typed stays; the AI version waits beside it with **Use**.
+- It goes straight onto the product: description, online name, specs (your rows replace ours with the same label; other rows stay), brand, collections (added), shipping. The product moves to Draft.
 
 ---
 
@@ -226,14 +227,14 @@ The shop uses each product's **Compatible Models** list for its "Made for this o
 curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json"   "$ABEERSUITE_URL/api/agent/products/<id>/compatibility"   -d '{ "pages": [ { "url": "<maker page>", "accepted": true, "why": "maker, part code on page" } ], "models": ["HP Smart Tank 580", "HP Smart Tank 515"] }'
 ```
 
-Answer: `{ kept, dropped, sources }`. The server keeps only models really on an accepted page and **replaces** the old list in the draft (the maker's current list is the truth). Report kept / dropped per product.
+Answer: `{ kept, dropped, sources }`. The server keeps only models really on an accepted page and **replaces** the old list on the product, which moves to Draft (the maker's current list is the truth). Report kept / dropped per product.
 
 - No maker list anywhere → skip, and note it ("no compatible list found").
 - A full Prepare run (steps 1–9) also saves the checked `compatibility` as this list.
 
 ## R. Review mode (notes only)
 
-For finished products — staff's copy or an earlier draft. **Change nothing**; only notes.
+For finished products — staff's copy or an earlier one of yours. **Change nothing**; only notes. The notes move the product to Draft (off the shop) until staff Save as ready or Discard draft.
 
 1. Read the product (step 1) and its photos (step 2) — look for clashes and photo problems.
 2. Read the maker's page (step 3, `read-page` if blocked) and compare the current description, specs and compatibility with it.

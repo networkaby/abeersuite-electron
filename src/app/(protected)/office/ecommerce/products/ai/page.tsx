@@ -106,12 +106,12 @@ export default function AiBulkCopyPage() {
         }
         const f = { ...filters, query };
         return products
-            .filter((p) => (pick ? pick.has(p.id) && !work[p.id]?.saved : !hasDescription(p) && !p.shopDraftAt))
+            .filter((p) => (pick ? pick.has(p.id) && !work[p.id]?.saved : !hasDescription(p) && p.shopStatus !== "DRAFT"))
             .filter((p) => matchesProductFilters(p, f, DEFAULT_SHOP_PUBLISH_RULES))
             .sort(priority);
     }, [products, pick, filters, query, work, batch]);
-    const backlog = useMemo(() => products.filter((p) => p.isActive && !hasDescription(p) && !p.shopDraftAt).length, [products]);
-    const withPhoto = useMemo(() => products.filter((p) => p.isActive && !hasDescription(p) && !p.shopDraftAt && p.galleryUrls.length > 0).length, [products]);
+    const backlog = useMemo(() => products.filter((p) => p.isActive && !hasDescription(p) && p.shopStatus !== "DRAFT").length, [products]);
+    const withPhoto = useMemo(() => products.filter((p) => p.isActive && !hasDescription(p) && p.shopStatus !== "DRAFT" && p.galleryUrls.length > 0).length, [products]);
 
     // A new filter / search / pick starts from the first batch again (while rendering).
     if ([useValueChange(filters), useValueChange(query), useValueChange(pick)].some(Boolean)) setShown(SHOW_STEP);
@@ -190,8 +190,8 @@ export default function AiBulkCopyPage() {
                 .map((x) => [x.k, x.v]),
         );
         try {
-            // Into the product's draft copy (shopDraft.ts) — staff finish it with
-            // Save as ready on the product page; the shop is untouched until then.
+            // Onto the product, which moves to Draft (off the shop) — staff finish it
+            // with Save as ready on the product page.
             const { data } = await axios.patch<ShopProductAdmin>(`/api/ecommerce/products/${r.id}`, {
                 draft: "save",
                 shopDescription: draft.shopDescription,

@@ -6,7 +6,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError, prismaUniqueError } from "@/shared/lib/api";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
-import { invProductToAdmin, type ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
+import { invProductToAdmin, readShopDraft, type ShopDraft, type ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { nextShopStatus, resolveShopListing, SHOP_STATUSES } from "@/modules/ecommerce/lib/shopListing";
 import { PHOTO_KIND_KEYS } from "@/modules/ecommerce/lib/photoChecklist";
 import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
@@ -57,9 +57,10 @@ export const shopProductPatchSchema = z.object({
     /** Mark ready / Publish / Unpublish (Unpublish sends READY). Left out, the stage stays. */
     shopStatus: z.enum(SHOP_STATUSES).optional(),
     /**
-     * The draft copy (shopDraft.ts): "save" keeps these fields in the draft, the
-     * product untouched; "ready" puts draft + these fields on the product and
-     * closes it; "discard" drops it. Left out, the fields go on the product now.
+     * Draft is a stage on the one product row (owner, 2026-11-10). The fields go
+     * on the product either way; "save" moves it to DRAFT (off the shop) and
+     * remembers the stage it came from, "ready" moves it to READY, "discard"
+     * moves it back to that stage — the edits stay. Left out, the stage stays.
      */
     draft: z.enum(["save", "ready", "discard"]).optional(),
     allowBackorder: z.boolean().optional(),
@@ -80,8 +81,8 @@ export const shopProductInclude = {
  * (`/api/mobile/photos/product/[id]`) both save through here, so the listing and
  * slug rules can never differ between them.
  *
- * Merges the request over the saved row, moves the shop stage (`nextShopStatus`:
- * any save of an UNPUBLISHED product makes it DRAFT), re-decides `isListedInShop`
+ * Merges the request over the saved row, moves the shop stage (`nextShopStatus`,
+ * plus the `draft` actions above), re-decides `isListedInShop`
  * + `slug` (`resolveShopListing`: live = PUBLISHED and the rules met, else
  * Pending), and writes. Returns the admin row, or the response to send instead
  * (404, 409 duplicate).
@@ -97,7 +98,7 @@ export async function updateShopProduct(
                 name: true, sku: true, imageUrl: true, galleryJson: true,
                 shopDescription: true, shopCategory: true, stock: true, savedSalePricePaise: true, barcodeManualPaise: true,
                 mrpPaise: true, effectiveSalePricePaise: true, slug: true,
-                groupId: true, brandId: true, allowBackorder: true, weightGrams: true, shopStatus: true,
+                groupId: true, brandId: true, allowBackorder: true, weightGrams: true, shopStatus: true, shopDraftJson: true,
             },
         });
         if (!existing) return { response: NextResponse.json({ error: "Not found" }, { status: 404 }) };
@@ -149,9 +150,26 @@ export async function updateShopProduct(
         if (b.heightCm !== undefined) data.heightCm = b.heightCm;
         if (b.allowBackorder !== undefined) data.allowBackorder = b.allowBackorder;
         if (b.isActive !== undefined) data.isActive = b.isActive;
-        // Applying a draft closes it (shopDraft.ts passes this through).
-        if (b.draft === "ready") { data.shopDraftJson = Prisma.DbNull; data.shopDraftAt = null; }
-        const shopStatus = nextShopStatus(existing.shopStatus, { status: b.shopStatus, listed: b.isListedInShop });
+        // Draft stage: Save as draft remembers where it came from; Save as ready
+        // and Discard leave Draft and drop Claude's notes with it.
+        const info = readShopDraft(existing.shopDraftJson);
+        let status = b.shopStatus;
+        if (b.draft === "save") {
+            status = "DRAFT";
+            const stageBefore = existing.shopStatus === "DRAFT" ? info?.stageBefore : existing.shopStatus;
+            const next: ShopDraft = { ...info, ...(stageBefore && { stageBefore }) };
+            data.shopDraftJson = next as unknown as Prisma.InputJsonValue;
+            data.shopDraftAt = new Date();
+        } else if (b.draft === "ready" || b.draft === "discard") {
+            status = b.draft === "ready" ? "READY" : existing.shopStatus === "DRAFT" ? info?.stageBefore ?? "UNPUBLISHED" : existing.shopStatus;
+            data.shopDraftJson = Prisma.DbNull;
+            data.shopDraftAt = null;
+        } else if (b.shopStatus && b.shopStatus !== "DRAFT" && existing.shopStatus === "DRAFT") {
+            // Leaving Draft by a stage button (Mark ready / Publish / Unpublish).
+            data.shopDraftJson = Prisma.DbNull;
+            data.shopDraftAt = null;
+        }
+        const shopStatus = nextShopStatus(existing.shopStatus, { status, listed: b.isListedInShop });
         data.shopStatus = shopStatus;
 
         // Resolve listing + slug from the merged (request ∪ existing) state.

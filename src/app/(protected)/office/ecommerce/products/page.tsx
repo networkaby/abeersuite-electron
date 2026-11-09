@@ -61,8 +61,8 @@ const STICKY_HEAD =
 const COL_COUNT = 11;
 const PAGE_SIZE = 25;
 
-/** Stages (owner, 2026-11-07): Unpublished → Ready → Published (live) / Pending; Draft = a draft copy is open, any stage. */
-type TabKey = "all" | "draft" | ProductStatus["kind"];
+/** Stages: Unpublished → Draft → Ready → Published (live) / Pending — one stage per product (owner, 2026-11-10). */
+type TabKey = "all" | ProductStatus["kind"];
 const TAB_KEYS: TabKey[] = ["all", "unpublished", "draft", "ready", "live", "pending"];
 const TAB_LABEL: Record<TabKey, string> = { all: "All", unpublished: "Unpublished", draft: "Draft", ready: "Ready", live: "Published", pending: "Pending" };
 // Persist the list view (page / filters / scroll) per browser tab so leaving for
@@ -85,8 +85,8 @@ function loadSavedView(): Partial<SavedView> {
     }
 }
 
-function StatusBadge({ status, draftOpen, aiDraft }: { status: ProductStatus; draftOpen?: boolean; aiDraft?: boolean }) {
-    const badge = status.kind === "live" ? (
+function StatusBadge({ status }: { status: ProductStatus }) {
+    return status.kind === "live" ? (
         <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50 text-emerald-700">
             <CheckCircle2 className="size-3" /> Published
         </Badge>
@@ -98,20 +98,14 @@ function StatusBadge({ status, draftOpen, aiDraft }: { status: ProductStatus; dr
         <Badge variant="outline" className="gap-1 border-violet-200 bg-violet-50 text-violet-700" title="Complete — waiting to be published">
             <CheckCircle2 className="size-3" /> Ready
         </Badge>
+    ) : status.kind === "draft" ? (
+        <Badge variant="outline" className="gap-1 border-sky-200 bg-sky-50 text-sky-700" title="Being worked on — not in the shop">
+            <CircleDashed className="size-3" /> Draft
+        </Badge>
     ) : (
         <Badge variant="outline" className="gap-1 border-border bg-muted/40 text-muted-foreground">
             Unpublished
         </Badge>
-    );
-    if (!draftOpen) return badge;
-    return (
-        <span className="inline-flex items-center gap-1">
-            {badge}
-            <Badge variant="outline" className="gap-1 border-sky-200 bg-sky-50 text-sky-700" title="A draft is open — the shop shows the last finished version">
-                <CircleDashed className="size-3" /> Draft
-            </Badge>
-            {aiDraft ? <Sparkles className="size-3.5 text-violet-600" aria-label="AI copy in the draft" /> : null}
-        </span>
     );
 }
 
@@ -187,13 +181,12 @@ export default function EcommerceProductsPage() {
     const counts = useMemo(() => {
         const c: Record<TabKey, number> = { all: products.length, unpublished: 0, draft: 0, ready: 0, live: 0, pending: 0 };
         for (const st of statusOf.values()) c[st.kind]++;
-        c.draft = products.filter((p) => p.shopDraftAt).length;
         return c;
     }, [products, statusOf]);
 
     const filtered = useMemo(
         () => products.filter((p) =>
-            (tab === "all" || (tab === "draft" ? !!p.shopDraftAt : statusOf.get(p.id)?.kind === tab))
+            (tab === "all" || statusOf.get(p.id)?.kind === tab)
             && matchesProductFilters(p, filters, rules)),
         [products, tab, filters, rules, statusOf]
     );
@@ -301,7 +294,7 @@ export default function EcommerceProductsPage() {
                 toast.success(`${data.unpublished} unpublished — off the shop, kept as Ready`);
             }
             if (data.skipped?.inDraft) {
-                toast.info(`${data.skipped.inDraft} skipped — a draft is open (${data.skipped.names.join(", ")}${data.skipped.inDraft > data.skipped.names.length ? ", …" : ""}). Finish or discard it first.`);
+                toast.info(`${data.skipped.inDraft} skipped — in Draft (${data.skipped.names.join(", ")}${data.skipped.inDraft > data.skipped.names.length ? ", …" : ""}). Finish it with Save as ready, or Discard draft.`);
             }
             clearSelection();
             load();
@@ -359,7 +352,7 @@ export default function EcommerceProductsPage() {
                 <div>
                     <h1 className="text-2xl font-semibold tracking-tight">Products</h1>
                     <p className="text-muted-foreground text-sm">
-                        One catalogue across shop, POS and Sale vouchers. Unpublished → Ready (complete, waiting) → Published; a published product missing a publish rule waits as Pending. Draft = edits in progress, kept apart until Save as ready.
+                        One catalogue across shop, POS and Sale vouchers. Unpublished → Ready (complete, waiting) → Published; a published product missing a publish rule waits as Pending. Draft = being worked on, off the shop until Save as ready.
                     </p>
                 </div>
                 <Button asChild variant="outline" size="sm">
@@ -531,7 +524,7 @@ export default function EcommerceProductsPage() {
                                             {p.groupName ?? "—"}
                                         </TableCell>
                                         <TableCell>
-                                            <StatusBadge status={status} draftOpen={!!p.shopDraftAt} />
+                                            <StatusBadge status={status} />
                                         </TableCell>
                                         <TableCell className="text-right tabular-nums">
                                             {shopPricePaise ? formatRupeesFromPaise(shopPricePaise) : "—"}
@@ -541,15 +534,10 @@ export default function EcommerceProductsPage() {
                                         </TableCell>
                                         <TableCell className={`text-right text-sm tabular-nums ${productPhotoCount(p) === 0 ? "text-destructive/70" : ""}`}>
                                             {productPhotoCount(p)}
-                                            {p.draftPhotoCount !== undefined && p.draftPhotoCount !== productPhotoCount(p) ? (
-                                                <span className="text-muted-foreground" title={`The open draft has ${p.draftPhotoCount}; the shop gets them after Save as ready`}>
-                                                    {" → "}{p.draftPhotoCount}
-                                                </span>
-                                            ) : null}
                                         </TableCell>
                                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                             <div className="flex items-center justify-end gap-1.5">
-                                                {p.shopDraftAt ? (
+                                                {status.kind === "draft" ? (
                                                     <Button size="sm" variant="outline" asChild>
                                                         <Link href={`/office/ecommerce/products/${p.id}`}>Open draft</Link>
                                                     </Button>

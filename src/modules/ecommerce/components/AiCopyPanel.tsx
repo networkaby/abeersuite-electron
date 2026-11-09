@@ -88,7 +88,7 @@ export default function AiCopyPanel({
     onAddPhotos,
     onGallery,
 }: {
-    /** Claude's (Cowork) draft saved on the product, waiting for review — shown as if just generated. */
+    /** Claude's (Cowork) copy, already written onto the product — shown for its notes and photo advice. */
     savedDraft?: ProductCopy | null;
     onDiscardSaved?: () => void;
     productId?: number;
@@ -215,7 +215,7 @@ export default function AiCopyPanel({
                 <div className="space-y-2 text-sm">
                     {fromSaved && (
                         <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-violet-50 px-2 py-1.5 text-xs text-violet-800 dark:bg-violet-950/40 dark:text-violet-200">
-                            <span>AI draft waiting for review (sent by Claude, checked by the server). Use what you like, then Save.</span>
+                            <span>Written onto this product by Claude (checked by the server) — the product is in Draft. Review, then Save as ready.</span>
                             {onDiscardSaved && (
                                 <Button type="button" size="sm" variant="ghost" onClick={onDiscardSaved}>Discard draft</Button>
                             )}

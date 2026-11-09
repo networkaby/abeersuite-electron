@@ -1,14 +1,16 @@
 import type { InvProduct } from "@/generated/prisma/client";
 import type { ShopStatus } from "@/generated/prisma/enums";
-import type { ShopProductPatch } from "@/modules/ecommerce/lib/updateShopProduct";
 import type { ProductCopy } from "@/modules/ecommerce/lib/aiProductCopy";
 
 /**
- * A product's draft copy (InvProduct.shopDraftJson, shopDraft.ts): the shop
- * fields being edited, and Claude's Verified copy when it sent one.
+ * What a product in the DRAFT stage carries beside its fields
+ * (InvProduct.shopDraftJson). Draft is a stage on the one product row (owner,
+ * 2026-11-10: "only one copy no parallel") — this is never a second copy.
  */
 export type ShopDraft = {
-    patch: Partial<Omit<ShopProductPatch, "draft" | "shopStatus" | "isListedInShop">>;
+    /** The stage it was in before Save as draft — Discard draft goes back to it. */
+    stageBefore?: ShopStatus;
+    /** Claude's Verified copy: already written onto the product; kept for its notes and photo advice. */
     aiCopy?: ProductCopy;
     /** Review notes (Claude's review mode, /api/agent/products/[id]/notes) — things for staff to fix. */
     notes?: string[];
@@ -16,17 +18,16 @@ export type ShopDraft = {
 
 export function readShopDraft(raw: unknown): ShopDraft | null {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-    const r = raw as { patch?: unknown; aiCopy?: unknown; notes?: unknown };
-    const patch = r.patch && typeof r.patch === "object" && !Array.isArray(r.patch) ? (r.patch as ShopDraft["patch"]) : {};
+    const r = raw as { stageBefore?: unknown; aiCopy?: unknown; notes?: unknown };
     const notes = Array.isArray(r.notes) ? r.notes.filter((x): x is string => typeof x === "string") : [];
+    const stages: unknown[] = ["UNPUBLISHED", "READY", "PUBLISHED"];
     return {
-        patch,
+        ...(stages.includes(r.stageBefore) ? { stageBefore: r.stageBefore as ShopStatus } : {}),
         ...(r.aiCopy && typeof r.aiCopy === "object" ? { aiCopy: r.aiCopy as ProductCopy } : {}),
         ...(notes.length ? { notes } : {}),
     };
 }
-import { invProductToPublic, productGalleryUrls, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
-import { mergeGallery } from "@/modules/ecommerce/lib/mergeGallery";
+import { invProductToPublic, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { barcodeTagPaise, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
 import { readPhotoChecklist, type PhotoChecklist } from "@/modules/ecommerce/lib/photoChecklist";
 
@@ -40,12 +41,10 @@ export type ShopProductAdmin = ShopProductPublic & {
     isListedInShop: boolean;
     /** Stage: UNPUBLISHED → READY → PUBLISHED ("Pending" = PUBLISHED, not live). */
     shopStatus: ShopStatus;
-    /** When the open draft copy was last saved (null = no draft open). */
+    /** When it was last saved as draft or Claude wrote on it (null = not in Draft). */
     shopDraftAt: string | null;
-    /** The draft copy itself — only the product's own page gets it (withShopDraft). */
+    /** Stage-before + Claude's notes — only the product's own page gets it (withShopDraft). */
     shopDraft?: ShopDraft | null;
-    /** Photos in the open draft, when it changes the photo list — the list shows "14 → 3". */
-    draftPhotoCount?: number;
     /** Per-product override: accept orders even at zero stock (backorder). */
     allowBackorder: boolean;
     unitId: number;
@@ -130,19 +129,6 @@ export function invProductToAdmin(
     };
 }
 
-/**
- * The photo list as it is being edited: the open draft's list — with photos
- * added elsewhere since, exactly as Save as ready will merge them
- * (updateShopProduct) — else the saved gallery. The agent API and the list's
- * draft count read this, so a photo number means the same photo everywhere.
- */
-export function editingGallery(galleryJson: unknown, imageUrl: string | null, shopDraftJson: unknown): string[] {
-    const saved = productGalleryUrls(galleryJson, imageUrl);
-    const d = readShopDraft(shopDraftJson)?.patch;
-    if (!d?.galleryUrls) return saved;
-    return d.galleryBase ? mergeGallery(d.galleryBase, d.galleryUrls, saved) : d.galleryUrls;
-}
-
 /** The admin row plus its draft copy — for the product's own page only (lists skip the JSON). */
 export function withShopDraft(
     p: InvProduct & Parameters<typeof invProductToAdmin>[0],
@@ -151,31 +137,3 @@ export function withShopDraft(
     return { ...invProductToAdmin(p, bands), shopDraft: readShopDraft(p.shopDraftJson) };
 }
 
-/**
- * The product as it is being edited: the saved row with its open draft copy's
- * fields on top. The product page seeds its form from this; the shop never sees it.
- */
-export function withDraftOverlay<T extends Partial<ShopProductAdmin>>(p: T | null | undefined): T | null | undefined {
-    const d = p?.shopDraft?.patch;
-    if (!p || !d) return p;
-    const has = (k: keyof ShopDraft["patch"]) => d[k] !== undefined;
-    return {
-        ...p,
-        ...(has("name") && { name: d.name }),
-        ...(has("slug") && { slug: d.slug ?? null }),
-        ...(has("shopSubheading") && { subheading: d.shopSubheading ?? null }),
-        ...(has("shopDescription") && { description: d.shopDescription ?? null }),
-        ...(has("shopBadge") && { badge: d.shopBadge ?? null }),
-        ...(has("galleryUrls") && { galleryUrls: d.galleryUrls }),
-        ...(has("specs") && { specs: d.specs }),
-        ...(has("groupId") && { groupId: d.groupId ?? null }),
-        ...(has("brandId") && { brandId: d.brandId ?? null }),
-        ...(has("collectionIds") && { collectionIds: d.collectionIds }),
-        ...(has("weightGrams") && { weightGrams: d.weightGrams ?? null }),
-        ...(has("lengthCm") && { lengthCm: d.lengthCm ?? null }),
-        ...(has("breadthCm") && { breadthCm: d.breadthCm ?? null }),
-        ...(has("heightCm") && { heightCm: d.heightCm ?? null }),
-        ...(has("allowBackorder") && { allowBackorder: d.allowBackorder }),
-        ...(has("isActive") && { isActive: d.isActive }),
-    };
-}

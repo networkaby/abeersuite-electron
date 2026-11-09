@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useEffectEvent } from "react";
+import { useCallback, useEffect, useRef, useState, useEffectEvent } from "react";
 import { GatedLink } from "@/shared/components/GatedLink";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { withDraftOverlay, type ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
+import type { ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { productShopUrl, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import ProductGalleryUploader from "@/modules/ecommerce/components/ProductGalleryUploader";
 import AiCopyPanel from "@/modules/ecommerce/components/AiCopyPanel";
@@ -41,7 +41,7 @@ const sameList = (a: string[], b: string[]) => a.length === b.length && a.every(
 /** "Never seen" for useValueChange, so the form also seeds on its first render. */
 const NOT_SEEN = Symbol("not seen");
 export default function ProductForm({
-    initial: savedInitial,
+    initial,
     onSaved,
     submitLabel = "Save product",
     onNameChange,
@@ -53,10 +53,6 @@ export default function ProductForm({
      *  told the unsaved rebuilt name when Group / Brand change it. */
     onNameChange?: (name: string) => void;
 }) {
-    // The product as staff are editing it: the saved row with its open draft copy
-    // on top (shopDraft.ts). Every field below seeds from this; the shop keeps the
-    // saved row until "Save as ready".
-    const initial = useMemo(() => withDraftOverlay(savedInitial), [savedInitial]);
     // inventory fields
     const [sku, setSku] = useState(initial?.sku ?? "");
     const [name, setName] = useState(initial?.name ?? "");
@@ -197,10 +193,8 @@ export default function ProductForm({
     const [allowBackorder, setAllowBackorder] = useState(initial?.allowBackorder ?? false);
     const [isActive, setIsActive] = useState(initial?.isActive ?? true);
     const [busy, setBusy] = useState(false);
-    // The fields as last loaded — any change from this unlocks Save as draft (null = take it next render).
+    // The fields as last loaded — any change from this unlocks the Save buttons (null = take it next render).
     const [baseSig, setBaseSig] = useState<string | null>(null);
-    // A photo change went into the draft copy since the product was loaded.
-    const [photoDrafted, setPhotoDrafted] = useState(false);
     // Owner-configured publish rules (which fields gate listing). Falls back to
     // the default gate until loaded.
     const [rules, setRules] = useState<ShopPublishRules>(DEFAULT_SHOP_PUBLISH_RULES);
@@ -224,7 +218,7 @@ export default function ProductForm({
         const seq = gallerySeq.current;
         axios
             .get<ShopProductAdmin>(`/api/ecommerce/products/${productId}`)
-            .then((r) => { if (gallerySeq.current === seq) showServerGallery(withDraftOverlay(r.data)?.galleryUrls ?? []); })
+            .then((r) => { if (gallerySeq.current === seq) showServerGallery(r.data.galleryUrls ?? []); })
             .catch(() => { /* the next signal or a reopen catches up */ });
     }, [initial?.id, showServerGallery]);
     useRealtimeTopics(["catalogue"], reloadGallery, !!initial?.id && galleryStatus !== "saving", ["InvProduct"]);
@@ -327,7 +321,6 @@ export default function ProductForm({
         setAllowBackorder(initial.allowBackorder ?? false);
         setIsActive(initial.isActive ?? true);
         setBaseSig(null);
-        setPhotoDrafted(false);
     }
     useEffect(() => {
         if (!initial) return;
@@ -351,18 +344,16 @@ export default function ProductForm({
         const seq = ++gallerySeq.current;
         galleryDebounce.current = setTimeout(() => {
             axios
-                // Photos go into the draft copy like every other edit — the shop
-                // keeps the finished gallery until Save as ready.
+                // Photos save onto the product at once, whatever the stage — a
+                // Published product's photos change live (owner, 2026-11-10).
                 .patch<ShopProductAdmin>(`/api/ecommerce/products/${productId}`, {
-                    draft: "save",
                     galleryUrls,
                     galleryBase: galleryBase.current,
                 })
                 .then((r) => {
                     if (gallerySeq.current !== seq) return;
                     setGalleryStatus("saved");
-                    setPhotoDrafted(true);
-                    showServerGallery(withDraftOverlay(r.data)?.galleryUrls ?? []);
+                    showServerGallery(r.data.galleryUrls ?? []);
                 })
                 .catch((e: unknown) => {
                     if (gallerySeq.current === seq) {
@@ -417,8 +408,7 @@ export default function ProductForm({
     const qualified = qualification.qualified;
     // Mark ready with a rule unmet is allowed — the toast says what publishing would wait for.
     const readyNote = qualified ? "" : `Marked ready — still needs ${qualification.missing.join(", ").toLowerCase()}, so publishing would wait as Pending`;
-    // Stage (owner, 2026-11-07): Unpublished → Ready → Published / Pending. A draft
-    // copy is separate: open on any stage, finished with Save as ready.
+    // Stage: Unpublished → Draft → Ready → Published / Pending, one copy (owner, 2026-11-10).
     const shopStatus = initial?.shopStatus ?? "UNPUBLISHED";
     const aiDraft: ProductCopy | null = initial?.shopDraft?.aiCopy ?? null;
     const editSig = JSON.stringify([
@@ -427,9 +417,8 @@ export default function ProductForm({
     ]);
     if (baseSig === null) setBaseSig(editSig);
     const dirty = baseSig !== null && editSig !== baseSig;
-    const draftOpen = !!initial?.shopDraftAt || photoDrafted;
-    // Any change, or a draft already open: the draft buttons replace the stage buttons.
-    const drafting = !!initial?.id && (dirty || draftOpen);
+    // Any unsaved change: the Save buttons replace the stage buttons.
+    const drafting = !!initial?.id && dirty;
 
     // The live card always renders galleryUrls[0], so put the photo the user has
     // selected in the gallery first — preview only, the saved order is untouched.
@@ -491,9 +480,10 @@ export default function ProductForm({
     };
 
     /**
-     * A new product: create. An existing one: "save" / "ready" / "discard" the
-     * draft copy, or move the stage — markReady (Unpublished → Ready), publish,
-     * unpublish (→ Ready; the work is finished).
+     * A new product: create. An existing one: no act = Save (stage kept — a
+     * Published product changes live); "save" = Save as draft (off the shop);
+     * "ready" = Save as ready; "discard" = Discard draft (back to the stage it
+     * came from, edits kept); or move the stage — markReady, publish, unpublish.
      */
     const submit = async (act?: "save" | "ready" | "discard" | "markReady" | "publish" | "unpublish") => {
 
@@ -545,13 +535,13 @@ export default function ProductForm({
                 ? saved.isListedInShop ? "live in the shop" : "pending until Shop readiness is met"
                 : "";
             toast.success(
-                act === "save" ? "Saved as draft — the shop still shows the last finished version"
-                    : act === "ready" ? live ? `Saved — published, ${live}` : readyNote || "Saved as ready — publish when the time is right"
-                        : act === "discard" ? "Draft discarded"
+                act === "save" ? "Saved as draft — off the shop until Save as ready"
+                    : act === "ready" ? readyNote || "Saved as ready — publish when the time is right"
+                        : act === "discard" ? `Draft closed — back to ${saved.shopStatus === "PUBLISHED" ? live || "Published" : saved.shopStatus.toLowerCase()}`
                             : act === "markReady" ? readyNote || "Marked ready — publish when the time is right"
                                 : act === "publish" ? `Published — ${live}`
                                     : act === "unpublish" ? "Unpublished — off the shop, kept as Ready"
-                                        : "Saved",
+                                        : live ? `Saved — ${live}` : "Saved",
             );
             onSaved?.(res.data);
         } catch (e: unknown) {
@@ -911,20 +901,33 @@ export default function ProductForm({
                         </Button>
                     ) : drafting ? (
                         <>
-                            <Button type="button" variant="outline" onClick={() => void submit("save")} disabled={busy}
-                                title="Keep the work — the shop still shows the last finished version">
-                                Save as draft
+                            <Button type="button" onClick={() => void submit()} disabled={busy}
+                                title={shopStatus === "PUBLISHED" ? "Save onto the product — the shop shows it at once" : "Save onto the product — the stage stays"}>
+                                Save
                             </Button>
+                            {shopStatus !== "DRAFT" && (
+                                <Button type="button" variant="outline" onClick={() => void submit("save")} disabled={busy}
+                                    title="Save and move to Draft — off the shop until Save as ready">
+                                    Save as draft
+                                </Button>
+                            )}
+                            <Button type="button" variant="outline" onClick={() => void submit("ready")} disabled={busy}
+                                title="Save — Ready to publish">
+                                Save as ready
+                            </Button>
+                        </>
+                    ) : shopStatus === "DRAFT" ? (
+                        <>
                             <Button type="button" onClick={() => void submit("ready")} disabled={busy}
-                                title={shopStatus === "PUBLISHED" ? "Put the changes on the product — it stays published" : "Put the changes on the product — Ready to publish"}>
+                                title="The work is done — Ready to publish">
                                 Save as ready
                             </Button>
                             <Button type="button" variant="ghost" onClick={() => void submit("discard")} disabled={busy}
-                                title="Throw the changes away">
+                                title="Leave Draft — back to the stage it came from; the edits stay">
                                 Discard draft
                             </Button>
                         </>
-                    ) : shopStatus === "UNPUBLISHED" || shopStatus === "DRAFT" ? (
+                    ) : shopStatus === "UNPUBLISHED" ? (
                         <Button type="button" variant="outline" onClick={() => void submit("markReady")} disabled={busy}
                             title="The product is complete — Ready to publish">
                             Mark ready
@@ -942,7 +945,9 @@ export default function ProductForm({
                     )}
                     <span className="text-muted-foreground text-xs">
                         {drafting
-                            ? `Draft open${shopStatus === "PUBLISHED" ? " — the shop still shows the published version" : ""}.`
+                            ? `Unsaved changes${shopStatus === "PUBLISHED" ? " — Save puts them live; Save as draft takes it off the shop" : ""}.`
+                            : shopStatus === "DRAFT"
+                                ? "Draft — being worked on, not in the shop."
                             : shopStatus === "READY"
                                 ? `Ready — complete, waiting to be published${qualified ? "" : `; needs ${qualification.missing.join(", ").toLowerCase()}`}.`
                                 : shopStatus === "PUBLISHED"
