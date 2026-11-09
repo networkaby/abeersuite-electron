@@ -665,7 +665,7 @@ export default function StatusesPage() {
                                     placeholder="—"
                                 />
                                 <span className="text-sm text-muted-foreground">hours</span>
-                                {/* Never = both boxes empty. Ticking clears them; typing a number unticks it. */}
+                                {/* No time limit = both boxes empty. Ticking clears them; typing a number unticks it. */}
                                 <label className="ml-2 flex items-center gap-1.5 text-sm">
                                     <Checkbox
                                         checked={editForm.resolveTimeDays.trim() === "" && editForm.resolveTimeHoursPart.trim() === ""}
@@ -673,11 +673,11 @@ export default function StatusesPage() {
                                             ? { ...prev, resolveTimeDays: "", resolveTimeHoursPart: "" }
                                             : { ...prev, resolveTimeDays: "0", resolveTimeHoursPart: "0" })}
                                     />
-                                    Never
+                                    No time limit
                                 </label>
                             </div>
                             <p className="text-xs text-muted-foreground">
-                                Longer than this = <span className="font-medium text-foreground">Needs attention</span>. 0 days 0 hours = at once. Never = no SLA.
+                                Longer than this = <span className="font-medium text-foreground">Needs attention</span>. 0 days 0 hours = at once. No time limit = never overdue.
                             </p>
                             <div className="space-y-2 pt-1">
                                 <Label>Group <span className="font-normal text-muted-foreground">(optional)</span></Label>
