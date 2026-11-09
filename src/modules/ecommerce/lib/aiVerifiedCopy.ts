@@ -135,6 +135,9 @@ function writePrompt(p: VerifiedCopyInput, c: Check, pages: PageRead[]): string 
 }
 
 const kindList = z.preprocess((v) => (Array.isArray(v) ? v.filter(isPhotoKind) : []), z.array(z.string())).default([]);
+/** The look options our photo AI may ask for — handed to Claude so both choose from the same list. */
+export const PHOTO_LOOK_OPTIONS = { crop: CROP_MODES, focus: GRAVITY_MODES, fixes: IMAGE_FIX_KEYS, rotate: IMAGE_ROTATIONS, background: ["auto", "white"] } as const;
+
 const photoSchema = z.object({
     have: kindList,
     must: kindList,
@@ -236,8 +239,8 @@ async function photoAdvice(p: VerifiedCopyInput, ours: ReturnType<typeof photoPa
     };
 }
 
-/** The AI's order and looks as URLs. A photo staff framed by hand (a focus point) keeps its framing. */
-function arrangeFrom(answer: z.infer<typeof photoSchema>, ourUrls: string[], removed: Set<string>): PhotoArrange | null {
+/** The AI's order and looks as URLs. A photo staff framed by hand (a focus point) keeps its framing. Claude's save (agentProductCopy) uses it too. */
+export function arrangeFrom(answer: Pick<z.infer<typeof photoSchema>, "order" | "look">, ourUrls: string[], removed: Set<string>): PhotoArrange | null {
     if (answer.look.length) console.info(`[aiVerifiedCopy] photo look asked: ${JSON.stringify(answer.look)}`);
     const picked = answer.order.map((n) => ourUrls[n - 1]).filter((u): u is string => !!u && !removed.has(u));
     const order = [...new Set(picked)];

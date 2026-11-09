@@ -8,7 +8,7 @@ import { photosForAi } from "@/shared/lib/shop/photoMark";
 import { AI_PHOTO_LIMITS } from "@/shared/lib/constants/ai";
 import { OUTPUT_KEYS, type ProductCopy } from "@/modules/ecommerce/lib/aiProductCopy";
 import { readShopDraft, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
-import { checkWrittenCopy, writtenCopySchema } from "@/modules/ecommerce/lib/aiVerifiedCopy";
+import { PHOTO_LOOK_OPTIONS, arrangeFrom, checkWrittenCopy, writtenCopySchema } from "@/modules/ecommerce/lib/aiVerifiedCopy";
 import { readGivenPages } from "@/modules/ecommerce/lib/aiPageReader";
 import { checkFact, normForCheck } from "@/modules/ecommerce/lib/aiFactCheck";
 import { COMPATIBLE_SPEC } from "@/shared/lib/shop/compatibility";
@@ -194,6 +194,10 @@ export async function productForAgent(id: number) {
         /** Photo kinds for Step 5 (key → label). */
         photoKinds: Object.fromEntries(Object.entries(PHOTO_KINDS).map(([k, v]) => [k, v.label])),
         photoRemoveReasons: Object.keys(PHOTO_REMOVE_REASONS),
+        /** Step 5 "look" choices — the same list our own photo AI picks from. */
+        photoLookOptions: PHOTO_LOOK_OPTIONS,
+        /** Each photo through our own server — use it when the photo host is blocked for you. n = 1-based place in photos. */
+        photoProxy: `/api/agent/products/${p.id}/photos/{n}`,
         /** Collections set now, main first — Claude only adds to these. */
         currentCollections: p.collections.map((c) => ({ id: c.categoryId, path: masters.collections.find((x) => x.id === c.categoryId)?.path ?? String(c.categoryId) })),
         /** The masters to pick brandId / collectionIds from. Missing one? Say so in notes — never invent an id. */
@@ -228,7 +232,7 @@ export const agentCopySchema = z.object({
     /** Collections from masters.collections to ADD; the ones set now are kept, the main one stays. */
     collectionIds: z.array(z.number().int().positive()).max(10).optional(),
     /** Anything staff should fix: a brand / collection to create, a spelling mistake in our data, a wrong group… */
-    notes: z.array(z.string().trim().min(1).max(300)).max(20).default([]),
+    notes: z.array(z.string().trim().min(1).max(300)).max(40).default([]),
     /**
      * Photos Claude picked from the accepted pages, best first, with the kind each
      * fills. Kept only when the photo really is on an accepted page (the server's
@@ -253,6 +257,18 @@ export const agentCopySchema = z.object({
         must: z.array(z.string()).default([]),
         nice: z.array(z.string()).default([]),
         remove: z.array(z.object({ url: z.string().url(), why: z.string(), note: z.string().max(200).default("") })).max(30).default([]),
+        /** Our photos (urls) in the best order, removed ones left out — product front first. Same rule as our photo AI. */
+        order: z.array(z.string().url()).max(30).default([]),
+        /** Photos that would show better in the shop's frames — choices from photoLookOptions. Staff press Use / Undo. */
+        look: z.array(z.object({
+            url: z.string().url(),
+            crop: z.string().optional(),
+            focus: z.string().optional(),
+            fixes: z.array(z.string()).default([]),
+            rotate: z.coerce.number().catch(0).default(0),
+            background: z.string().optional(),
+            why: z.string().trim().max(120).default(""),
+        })).max(30).default([]),
     }).optional(),
 });
 
@@ -336,6 +352,17 @@ export async function saveAgentCopy(id: number, body: z.infer<typeof agentCopySc
     picked.sort((a, b) => Number(onPage.get(b.url)?.maker) - Number(onPage.get(a.url)?.maker));
     if (picked.some((x) => !onPage.get(x.url)?.maker)) notes.push("Some suggested photos are from a seller's page, not the maker's — check they are the maker's own before adding.");
 
+    // Step 5's order and looks, through the same check as our photo AI (arrangeFrom).
+    const ours = photosForAi(gallery);
+    const removed = new Set((body.photos?.remove ?? []).map((r) => r.url));
+    const nOf = (u: string) => ours.indexOf(u) + 1;
+    const arrange = body.photos && arrangeFrom({
+        order: body.photos.order.map(nOf).filter((n) => n > 0),
+        look: body.photos.look.filter((x) => nOf(x.url) > 0).map((x) => ({ ...x, photo: nOf(x.url), crop: x.crop, focus: x.focus, background: x.background })),
+    }, ours, removed);
+    // Claude runs the steps itself — a draft with no page read is said plainly, so staff know.
+    if (!body.pages.length) notes.push("No maker or seller page was read for this draft — the copy is from the label and photos only.");
+
     const draft: ProductCopy = {
         ...checked.copy,
         note: `Written by Claude; ${checked.copy.note}`,
@@ -348,6 +375,7 @@ export async function saveAgentCopy(id: number, body: z.infer<typeof agentCopySc
                     .map((r) => ({ url: r.url, why: r.why as PhotoRemoveReason, note: r.note })),
             ),
         }),
+        ...(arrange && { photoArrange: arrange }),
         // Photos on the pages the copy kept — free; staff pick on the product page.
         // Claude's picks first (with their kind), then the rest the kept pages name.
         photoSuggestions: [...picked, ...checked.trusted.flatMap((pg) => pg.photos.map((url) => ({ url, site: pg.site, kind: null })))]

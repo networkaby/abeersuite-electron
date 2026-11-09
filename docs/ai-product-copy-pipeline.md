@@ -281,6 +281,9 @@ cost on the server:
 - **A site blocks Claude?** `POST /api/agent/read-page` reads it through the server's own path: plain download, then the "Read page" keys on AI Setup (Scrape.do…), free keys first, within their limits. Maker or known sellers only, never a private address, so it is not an open scraper. Search keys (Tavily, Exa) are not lent to Claude; its own search is enough.
 - **Photos:** Claude sends `photoPicks` (photo link + kind) from the accepted pages. The server keeps a pick only if an accepted page really shows that photo, puts the maker's first, flags seller photos "check before use", and offers them on the product page. Nothing is added to the gallery by itself.
 - **Shipping:** Claude quotes the package weight and size exactly as the source prints them; the server finds the text on the label or an accepted page, converts it itself (grams, whole cm rounded up) and fills the draft only where the product has none.
+- **Photo order and looks (same as our photo AI):** Claude may send `photos.order` (our photo urls, best first) and `photos.look` (crop / focus / fixes / rotate / background from `photoLookOptions`). The server runs them through the same `arrangeFrom` as Step 5, so staff get the same **Use / Undo** card; a photo staff framed by hand keeps its framing.
+- **Photos through our server:** `GET /api/agent/products/{id}/photos/{n}` serves photo n of that product's own gallery (Skip-for-AI left out) — for when Claude's workspace blocks the photo host. Only the product's own photos, never any other URL.
+- **No page read:** a draft saved with no page at all gets a note saying the copy is from the label and photos only. Notes on the copy POST: up to 40 lines.
 - **Review mode:** `POST /api/agent/products/{id}/notes` adds notes only (nothing on the product changes). They show as "Review notes for you" on the product page until staff Save as ready or Discard.
 - **Compatibility:** the checked list is kept as the product's **"Compatible Models"** spec (no new column). Claude's compatibility-only mode (`POST /api/agent/products/{id}/compatibility`) refreshes just that list: the server keeps only models on an accepted page and replaces the old list in the draft. The shop (`src/shared/lib/shop/compatibility.ts`) turns it into three product-page rows: **Made for this one** (printer → its inks and heads), **For the same machine** (black ink → the colours and the head), **Works with these** (ink → the printers we sell). A model matches only as a whole phrase in a product name ("Smart Tank 580" never matches "5800"), across brands. Search (results and the suggestion box) reads the list too.
 - **Claude only saves drafts** (owner, 2026-11-08): it never presses Save as ready and never publishes.
@@ -338,7 +341,7 @@ cost on the server:
 | Saved research (R2) | `src/modules/ecommerce/lib/aiResearchStore.ts` |
 | Photo kinds and checklist | `src/modules/ecommerce/lib/photoChecklist.ts` |
 | Settings screen | Settings → AI Setup |
-| Claude route (its own "Claude — Product copy" key on Settings → Incoming API) | `src/app/api/agent/products/route.ts` (+ `[id]/route.ts`, `[id]/copy/route.ts`), `src/modules/ecommerce/lib/agentProductCopy.ts` |
+| Claude route (its own "Claude — Product copy" key on Settings → Incoming API) | `src/app/api/agent/products/route.ts` (+ `[id]/route.ts`, `[id]/copy/route.ts`, `[id]/photos/[n]/route.ts`), `src/modules/ecommerce/lib/agentProductCopy.ts` |
 | Claude's steps (skill) | `.claude/skills/product-copy/SKILL.md` |
 | Shop stage rule | `src/modules/ecommerce/lib/shopListing.ts` (`nextShopStatus`, `resolveShopListing`) |
 

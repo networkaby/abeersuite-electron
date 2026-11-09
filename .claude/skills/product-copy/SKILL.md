@@ -17,6 +17,11 @@ is right.
 
 The rule above all: **no information is better than false information.**
 
+**Run every step, every time.** Our own AI runs these steps as code and cannot
+skip one; you must not either. Never skip a step because you *guess* it will find
+nothing — do it, and report what it found. A step that truly cannot run (no photo,
+every page refused) is reported with the reason, never silently left out.
+
 Full design: `docs/ai-product-copy-pipeline.md`.
 
 ## Setup (ask once if missing)
@@ -70,7 +75,15 @@ Answer: `{ products: [{ id, sku, name, brand, group, shopStatus, hasDescription,
 curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$ABEERSUITE_URL/api/agent/products/<id>"
 ```
 
-Answer: `{ name, brand, category, modelNo, barcodes, typedSpecs, shopSupportDays, currentDescription, photos, writing, photoKinds, photoRemoveReasons, currentCollections, masters: { brands, collections } }`.
+Answer: `{ name, brand, category, modelNo, barcodes, typedSpecs, shopSupportDays, currentDescription, photos, writing, photoKinds, photoRemoveReasons, photoLookOptions, photoProxy, currentCollections, masters: { brands, collections } }`.
+
+**Photos will not open** (the photo host is blocked in your workspace)? Get each one through our server — same key, `n` = its place in `photos` (1, 2, 3…):
+
+```bash
+curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$ABEERSUITE_URL/api/agent/products/<id>/photos/<n>" -o photo<n>.jpg
+```
+
+Never stop a product because a photo URL is blocked — use this.
 
 ## 2. Check the photos (open every one)
 
@@ -85,6 +98,8 @@ Never use your own memory of the product.
 6. While looking, note **photo problems** for step 8.
 
 ## 3. Find the pages
+
+**Always search, even with no brand or model on the box.** Then search with what *is* printed: the spec lines, the port count, a code, the box wording ("HDMI splitter 1x2 4K x 2K 1.4B"). Unbranded goods are often sold online in the very same box.
 
 Search brand + exact model / part code (India first). **Maker's site first**, then big Indian sellers (Amazon.in, Flipkart, Reliance Digital, Croma). At most 8 pages. Blogs and other shops are refused by the server.
 
@@ -182,7 +197,11 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
 }
 ```
 
-- `photos` = gallery advice with `photoKinds` keys: what we **have**, what we **must** add (most important first), **nice** to add, and our photos to **remove** (`{ url, why: one of photoRemoveReasons, note }`; duplicates: list only the weaker).
+- `photos.order` = our photo **urls** in the best order, removed ones left out: a clear product front first (it is the shop card and search photo), then the other sides and close-ups, then the box, then feel photos. Leave empty if the order is already right.
+- `photos.look` = only our photos that would show better in the shop's frames (4:3 card, square page): `{ url, crop, focus, fixes, rotate, background, why }`, every choice from `photoLookOptions` — `crop: pad` (safe, keeps the whole picture) or `fill` (only when the product sits small in empty space); `fixes` e.g. `trim` a wide border, `auto_color` a yellow tint, `auto_brightness` a dark photo, `improve` a dull one; `rotate` a sideways photo; `background: white` for a plain light background. Staff see the result with **Use / Undo** — the same card our own AI fills.
+- `photos` = gallery advice with `photoKinds` keys: what we **have**, what we **must** add (most important first), **nice** to add, and our photos to **remove** (`{ url, why: one of photoRemoveReasons, note }`; duplicates: list only the weaker). Each one shows staff a **Remove** button under *Shop readiness → AI suggests removing* — so never tell staff to delete photos by hand; say "press Remove". Give each wrong photo its own entry with a short `note` ("personal family photo", "Citizen calculator").
+- `notes` holds up to 40 lines — one problem per line; never squash several into one.
+- Full example of `photos`: `{ "have": ["box_front"], "must": ["front", "ports"], "nice": ["in_use"], "remove": [{ "url": "…/9.jpg", "why": "irrelevant", "note": "personal family photo" }], "order": ["…/2.jpg", "…/1.jpg", "…/3.jpg"], "look": [{ "url": "…/1.jpg", "crop": "pad", "fixes": ["trim", "auto_color"], "rotate": 0, "background": "white", "why": "yellow tint, wide border" }] }`
 - Answer: `{ result: "draft", shopStatus, kept, unsure, flags, note, sources }`. `422` → fix as the message says and resend.
 - The draft fills the product page: description (if empty), online name (if empty or the stock name), missing specs, brand, collections, shipping. Anything staff typed stays; the AI version waits beside it with **Use**.
 
@@ -220,7 +239,7 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
   "$ABEERSUITE_URL/api/agent/products/<id>/notes" -d '{ "notes": ["…", "…"], "replace": false }'
 ```
 
-`replace: true` for a fresh review (drops the old review notes). Nothing wrong → send nothing and say "no problems found".
+Notes are **added** to the ones already there (`replace: false`, the default). Use `replace: true` only when the owner asks for a fresh review — it drops the old review notes. Nothing wrong → send nothing and say "no problems found".
 
 ---
 
