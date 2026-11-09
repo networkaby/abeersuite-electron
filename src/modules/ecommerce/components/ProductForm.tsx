@@ -151,7 +151,7 @@ export default function ProductForm({
     // preview card can show that photo, not just index 0.
     const [selectedImage, setSelectedImage] = useState(0);
     const [galleryStatus, setGalleryStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-    const [photoChecklist, setPhotoChecklist] = useState<PhotoChecklist | null>(initial?.photoChecklist ?? null);
+    const [photoChecklist, setPhotoChecklist] = useState<PhotoChecklist | null>(initial?.photoChecklist ?? initial?.shopDraft?.aiCopy?.photoChecklist ?? null);
     // The gallery exactly as last shown from the server (seeded, or the answer to
     // a save). Only a gallery that is a different list from this is a user edit
     // and autosaves — showing the server's copy never PATCHes it straight back.
@@ -312,7 +312,9 @@ export default function ProductForm({
         setDescription(initial.description ?? "");
         setBadge(initial.badge ?? "");
         setGalleryUrls(initial.galleryUrls ?? []);
-        setPhotoChecklist(initial.photoChecklist ?? null);
+        // Our photo AI saves its checklist on the product; Claude's waits in the draft
+        // copy — either way staff get the same Remove buttons.
+        setPhotoChecklist(initial.photoChecklist ?? initial.shopDraft?.aiCopy?.photoChecklist ?? null);
         setSelectedImage(0);
         // Loading a product's own saved gallery is not a user edit — it becomes
         // the server copy, so the autosave does not re-PATCH it right back.
