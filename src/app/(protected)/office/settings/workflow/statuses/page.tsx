@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
-import { Plus, Trash2, Save, ArrowUpDown, GitMerge, Briefcase, Lock } from "lucide-react";
+import { Plus, Trash2, Save, ArrowUpDown, GitMerge, Briefcase, Lock, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
@@ -113,6 +113,29 @@ interface StatusForm {
 }
 
 // "76" → "3d 4h" (drops the zero side: "3d" or "4h" alone) — for the read-only SLA badge.
+// One read-only line in a stage's expanded settings panel. Empty = a faint dash.
+function SettingLine({ label, value }: { label: string; value: React.ReactNode }) {
+    const empty = value === null || value === undefined || value === "" || value === "No" || value === "Off";
+    return (
+        <div className="flex items-baseline justify-between gap-3 text-xs leading-5">
+            <span className="shrink-0 text-muted-foreground">{label}</span>
+            <span className={empty ? "text-muted-foreground/50" : "min-w-0 truncate text-right font-medium text-foreground"}>{value === null || value === undefined || value === "" ? "—" : value}</span>
+        </div>
+    );
+}
+
+// A small titled box in the expanded panel.
+function SettingBox({ title, children }: { title: string; children: React.ReactNode }) {
+    return (
+        <div className="rounded-lg border bg-background px-3 py-2">
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
+            {children}
+        </div>
+    );
+}
+
+const EXPANDED_KEY = "workflow-statuses-expanded";
+
 function formatResolveTime(totalHours: number): string {
     const days = Math.floor(totalHours / 24);
     const hours = totalHours % 24;
@@ -134,6 +157,17 @@ export default function StatusesPage() {
     const [activePipelineId, setActivePipelineId] = useState<string>("P1");
     const [statuses, setStatuses] = useState<TicketStatus[]>([]);
     const [works, setWorks] = useState<Work[]>([]);
+    // Rows opened to show their settings; remembered in this browser only.
+    const [expanded, setExpanded] = useState<Set<string>>(new Set());
+    const saveExpanded = (next: Set<string>) => {
+        setExpanded(next);
+        try { localStorage.setItem(EXPANDED_KEY, JSON.stringify([...next])); } catch { /* private window */ }
+    };
+    const toggleExpanded = (id: string) => {
+        const next = new Set(expanded);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        saveExpanded(next);
+    };
     const [groups, setGroups] = useState<WorkGroup[]>([]);
     const [roles, setRoles] = useState<RoleOption[]>([]);
     const [loading, setLoading] = useState(true);
@@ -165,6 +199,11 @@ export default function StatusesPage() {
         .then(([statusesResponse, worksResponse, pipelinesResponse, groupsResponse, rolesResponse]) => {
             setRoles(rolesResponse.data.map((r) => ({ id: r.id, label: r.label, isAdmin: r.id === "R1" || !!r.department?.isAllAccess, permissionIds: r.permissions.map((p) => p.permissionId) })));
             setStatuses(statusesResponse.data);
+            // Restore opened rows once data is in (the server render has no localStorage).
+            setExpanded((prev) => {
+                if (prev.size) return prev;
+                try { return new Set(JSON.parse(localStorage.getItem(EXPANDED_KEY) ?? "[]") as string[]); } catch { return prev; }
+            });
             setWorks(worksResponse.data);
             setPipelines(pipelinesResponse.data);
             setGroups(groupsResponse.data);
@@ -383,9 +422,23 @@ export default function StatusesPage() {
                     {loading ? (
                         <p className="text-sm text-muted-foreground">Loading…</p>
                     ) : (
+                        <>
+                        {statuses.length > 0 && (
+                            <div className="mb-2 flex justify-end">
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => saveExpanded(statuses.every((st) => expanded.has(st.id)) ? new Set() : new Set(statuses.map((st) => st.id)))}
+                                >
+                                    {statuses.every((st) => expanded.has(st.id)) ? "Collapse all" : "Expand all"}
+                                </Button>
+                            </div>
+                        )}
                         <Table>
                             <TableHeader>
                                 <TableRow>
+                                    <TableHead className="w-8" />
                                     <TableHead className="w-20">ID</TableHead>
                                     <TableHead>Label</TableHead>
                                     <TableHead>Color</TableHead>
@@ -403,14 +456,20 @@ export default function StatusesPage() {
                             <TableBody>
                                 {statuses.length === 0 && !addingNew && (
                                     <TableRow>
-                                        <TableCell colSpan={10} className="py-10 text-center text-sm text-muted-foreground">
+                                        <TableCell colSpan={11} className="py-10 text-center text-sm text-muted-foreground">
                                             No statuses in this pipeline yet. Add the first one.
                                         </TableCell>
                                     </TableRow>
                                 )}
 
                                 {statuses.map((status) => (
-                                    <TableRow key={status.id}>
+                                    <Fragment key={status.id}>
+                                    <TableRow className="cursor-pointer" onClick={(e) => { if (!(e.target as HTMLElement).closest("button")) toggleExpanded(status.id); }}>
+                                        <TableCell className="w-8 px-1">
+                                            <button type="button" aria-label={expanded.has(status.id) ? "Hide settings" : "Show settings"} onClick={() => toggleExpanded(status.id)} className="rounded p-1 hover:bg-muted">
+                                                <ChevronRight size={14} className={`transition-transform ${expanded.has(status.id) ? "rotate-90" : ""}`} />
+                                            </button>
+                                        </TableCell>
                                         <TableCell className="font-mono text-xs text-muted-foreground">{status.id}</TableCell>
                                         <TableCell>
                                             <Badge {...badgeColor(status.color)}>{status.label}</Badge>
@@ -483,10 +542,53 @@ export default function StatusesPage() {
                                             </div>
                                         </TableCell>
                                     </TableRow>
+                                    {expanded.has(status.id) && (
+                                        <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                            <TableCell />
+                                            <TableCell colSpan={10} className="py-2 pr-4">
+                                                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                                                    <SettingBox title="Flags & resolve time">
+                                                        <SettingLine label="Entry point" value={status.isEntryPoint ? "Yes" : "No"} />
+                                                        <SettingLine label="Terminal" value={status.isTerminal ? "Yes" : "No"} />
+                                                        <SettingLine label="Resolve time" value={status.resolveTimeHours == null ? "No time limit" : status.resolveTimeHours === 0 ? "At once" : formatResolveTime(status.resolveTimeHours)} />
+                                                        <SettingLine label="Group" value={groups.find((g) => g.id === status.resolveGroupId)?.label} />
+                                                    </SettingBox>
+                                                    <SettingBox title="Overdue & auto-move">
+                                                        <SettingLine
+                                                            label="Who sees overdue"
+                                                            value={(() => {
+                                                                const names = roles.filter((ro) => !ro.isAdmin && ro.permissionIds.includes(`status-overdue:${status.id}`)).map((ro) => ro.label);
+                                                                return names.length ? `Admin, ${names.join(", ")}` : "Everyone";
+                                                            })()}
+                                                        />
+                                                        <SettingLine
+                                                            label="Auto-move"
+                                                            value={status.autoMoveAfterDays && status.autoMoveToId
+                                                                ? `${status.autoMoveAfterDays}d → ${statuses.find((st) => st.id === status.autoMoveToId)?.label ?? status.autoMoveToId}`
+                                                                : "Off"}
+                                                        />
+                                                    </SettingBox>
+                                                    <SettingBox title="Work & access">
+                                                        <SettingLine label="Work" value={works.find((w) => w.id === status.workId)?.label} />
+                                                        <SettingLine label="Warranty" value={status.warrantyScope === "any" ? "Any" : WARRANTY_SCOPE_OPTIONS.find((o) => o.value === status.warrantyScope)?.label ?? status.warrantyScope} />
+                                                        <SettingLine label="Action label" value={status.actionLabel} />
+                                                    </SettingBox>
+                                                    <SettingBox title="Prompts & messages">
+                                                        <SettingLine label="Leave prompt" value={status.leavePrompt ? <span title={status.leavePrompt}>{status.leavePrompt}</span> : null} />
+                                                        <SettingLine label="Announce" value={status.announceOnEntry ? `Yes${status.etaText ? ` · ${status.etaText}` : ""}` : "No"} />
+                                                        <SettingLine label="WhatsApp" value={status.waTemplate} />
+                                                        <SettingLine label="Email" value={status.emailTemplate} />
+                                                    </SettingBox>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                    </Fragment>
                                 ))}
 
                                 {addingNew && (
                                     <TableRow>
+                                        <TableCell />
                                         <TableCell className="font-mono text-xs text-muted-foreground">auto</TableCell>
                                         <TableCell>
                                             <Input
@@ -536,6 +638,7 @@ export default function StatusesPage() {
                                 )}
                             </TableBody>
                         </Table>
+                        </>
                     )}
                 </CardContent>
             </Card>
