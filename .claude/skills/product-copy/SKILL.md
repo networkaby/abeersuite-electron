@@ -90,7 +90,12 @@ Never stop a product because a photo URL is blocked — use this.
 Never use your own memory of the product.
 
 1. **Clash** = our typed data (name, modelNo, barcodes, typedSpecs) disagrees with what is **printed**: another brand or model, another printed number (capacity, wattage, size, count). Not a clash: missing data, the same thing spelled differently, a count only *seen*, our support period shorter than the printed warranty.
-   **Any clash → stop this product, send nothing.** Report `field: typed "X", photo shows "Y"` (e.g. `capacity: typed "128GB", label shows "256G"`).
+   **Any clash → stop this product: no copy, no draft.** Report `field: typed "X", photo shows "Y"` (e.g. `capacity: typed "128GB", label shows "256G"`).
+   Then **save what you found as notes** so staff see it in AbeerSuite, not only in this chat — the notes route (step R) changes nothing on the product:
+   ```bash
+   curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json"      "$ABEERSUITE_URL/api/agent/products/<id>/notes" -d '{ "notes": ["STOPPED — capacity: typed \"128GB\", photo 3 sticker shows \"256G\". Check the real unit, then ask Claude to run product copy again.", "Model No is empty — sticker prints HS-SSD-E1000."] }'
+   ```
+   The clash first, then every other problem from the mistake check (step 8) you already saw, one per line.
 2. **labelFacts** — printed on product / box / label, copied as printed.
 3. **seen** — only visible, counts as "at least N".
 4. **identity** — what tells it from sister models (capacity, size, wattage, yield…).
