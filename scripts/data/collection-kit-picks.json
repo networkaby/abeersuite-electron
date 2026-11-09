@@ -1,0 +1,56 @@
+{
+  "_note": "Phase 2 of scripts/reorganise-collections.ts. Each kit keeps EXACTLY these product ids; every other product leaves it. Edit ids freely (the name beside each is only for reading). keepAll kits are not touched. switchOff collections are emptied and switched off. add = extra products put into a collection (kept if already there). Picked 2026-11-10 from 365-day sales, stock breaking ties.",
+  "kits": {
+    "CCTV Starter Kit": [
+      [598, "CP PLUS HD Dome IR 2.4MP"],
+      [583, "CP PLUS HD Dome Color 2.4MP"],
+      [295, "CP PLUS HD Bullet Color 2.4MP"],
+      [313, "CP PLUS HD Bullet IR 2.4MP"],
+      [606, "CP PLUS DVR 4CH"],
+      [609, "CP PLUS DVR 8CH"],
+      [425, "CP PLUS 3in1 Cable"],
+      [280, "Trayojack BNC pigtail connector"],
+      [458, "Trayojack SMPS CCTV 12V 5A"],
+      [1000, "CP PLUS NVR 8CH"],
+      [588, "CP PLUS IP Dome 2MP"]
+    ],
+    "New PC Build": [
+      [327, "Coconut Cabinet + SMPS Tango"],
+      [341, "Consistent Cabinet CIE107 + SMPS"],
+      [852, "POWERX Motherboard H81"],
+      [847, "POWERX Motherboard H61"],
+      [550, "DDR3 8GB D-Gold"],
+      [558, "DDR3 8GB Starlight"],
+      [1194, "SMPS Foxin 500W"],
+      [492, "CPU fan Coconut 775"],
+      [256, "CMOS battery CR2032"]
+    ],
+    "Office Network Setup": [
+      [192, "4G Router Daichi DI4GR"],
+      [194, "Secureya 4G Router S-4GW2"],
+      [1299, "CP PLUS PoE Switch 8 port"],
+      [412, "DIGISOL CAT 6 cable"],
+      [413, "CAT 6 cable"],
+      [1377, "Wifi Adapter Coconut WA-06"],
+      [1376, "Wifi Adapter Coconut WA-04"],
+      [1477, "Uricom USB to LAN"],
+      [993, "DIGISOL mount box"]
+    ]
+  },
+  "keepAll": ["Billing Counter Setup"],
+  "switchOff": ["Work From Home"],
+  "add": {
+    "Home & Family": [
+      [732, "Keyboard Coconut Lemon K23"],
+      [779, "Logitech Keyboard K120"],
+      [929, "Logitech Mouse M90"],
+      [940, "Portronics Mouse Toad 103"],
+      [877, "19in FM 1950 Crystal monitor"],
+      [1417, "Consistent Monitor CTM2001 19in"],
+      [1372, "Logitech Webcam C270"],
+      [704, "Boat Rockerz 110 headphone"],
+      [1340, "UPS Foxin FPS-755"],
+      [192, "4G Router Daichi DI4GR"]
+    ]
+  }
+}

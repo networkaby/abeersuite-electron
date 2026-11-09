@@ -16,7 +16,9 @@
  *   • every product's list renumbered 0..n with InvProduct.categoryId = the first,
  *     updatedAt bumped only on products whose row changed, so counters pull them.
  *
- * NOT touched yet (phase 2, needs the owner's pick): the Setup Kits and Work From
+ * Phase 2 (`--phase2`): each kit keeps exactly the products listed in
+ * scripts/data/collection-kit-picks.json, Work From Home is switched off and its
+ * short pick goes to Home & Family. Phase 1 alone leaves the kits untouched: the Setup Kits and Work From
  * Home, which today hold whole product types. The run prints, per kit, how its
  * products spread across Product Groups so the owner can choose what stays.
  *
@@ -26,8 +28,10 @@
  *   npx tsx scripts/reorganise-collections.ts -- --db <local url>                     # plan
  *   npx tsx scripts/reorganise-collections.ts -- --db <local url> --apply --rollback  # rehearse
  *   npx tsx scripts/reorganise-collections.ts -- --apply                               # live (backup < 1 h)
+ *   … add --phase2 to any of the above for the kit trim
  */
 
+import { readFileSync } from "node:fs";
 import type { PoolClient } from "pg";
 import { finish, openTarget } from "./vyapar/liveTarget";
 
@@ -126,7 +130,11 @@ async function apply(db: PoolClient): Promise<number> {
         if (c) await db.query(`update "InvCategory" set "isActive" = false, "updatedAt" = now() where id = $1 and "isActive"`, [c.id]);
     }
 
-    // One pass for every product: list renumbered 0..n in its existing order, main = the first.
+    return settleMains(db);
+}
+
+/** Every product: list renumbered 0..n in its existing order, main = the first. Returns product rows changed. */
+async function settleMains(db: PoolClient): Promise<number> {
     await db.query(`
         with ranked as (
             select "productId", "categoryId",
@@ -143,6 +151,54 @@ async function apply(db: PoolClient): Promise<number> {
               from "InvProduct" p) m
         where m.id = x.id and x."categoryId" is distinct from m.first`);
     return res.rowCount ?? 0;
+}
+
+// ── Phase 2: Setup Kits trimmed to the owner's picks (scripts/data/collection-kit-picks.json) ──
+
+type Pick = [id: number, label: string];
+type Picks = { kits: Record<string, Pick[]>; keepAll: string[]; switchOff: string[]; add: Record<string, Pick[]> };
+
+async function applyKits(db: PoolClient, picks: Picks, byName: Map<string, Cat>): Promise<number> {
+    const id = (name: string) => byName.get(name)!.id;
+    for (const [kit, list] of Object.entries(picks.kits)) {
+        const keep = list.map(([pid]) => pid);
+        await db.query(`delete from inv_product_collections where "categoryId" = $1 and not ("productId" = any($2::int[]))`, [id(kit), keep]);
+        await addLinks(db, id(kit), keep);
+    }
+    for (const [name, list] of Object.entries(picks.add)) await addLinks(db, id(name), list.map(([pid]) => pid));
+    for (const name of picks.switchOff) {
+        await db.query(`delete from inv_product_collections where "categoryId" = $1`, [id(name)]);
+        await db.query(`update "InvCategory" set "isActive" = false, "updatedAt" = now() where id = $1`, [id(name)]);
+    }
+    return settleMains(db);
+}
+
+/** Put products into a collection, at the END of each one's list (never changes an existing main). */
+async function addLinks(db: PoolClient, categoryId: number, productIds: number[]): Promise<void> {
+    await db.query(`
+        insert into inv_product_collections ("productId", "categoryId", "sortOrder")
+        select p, $1, coalesce((select max("sortOrder") + 1 from inv_product_collections where "productId" = p), 0)
+        from unnest($2::int[]) p
+        on conflict ("productId", "categoryId") do nothing`, [categoryId, productIds]);
+}
+
+async function checkPicks(db: PoolClient, picks: Picks, byName: Map<string, Cat>): Promise<void> {
+    const names = [...Object.keys(picks.kits), ...picks.keepAll, ...picks.switchOff, ...Object.keys(picks.add)];
+    const missing = names.filter((n) => !byName.get(n)?.isActive);
+    if (missing.length) throw new Error(`Collection(s) missing or switched off: ${missing.join(", ")}. Run phase 1 first.`);
+    const all = [...Object.values(picks.kits), ...Object.values(picks.add)].flat();
+    const rows = (await db.query<{ id: number; name: string; isActive: boolean }>(
+        `select id, name, "isActive" from "InvProduct" where id = any($1::int[])`, [all.map(([pid]) => pid)])).rows;
+    const found = new Map(rows.map((r) => [r.id, r]));
+    const bad = all.filter(([pid]) => !found.get(pid)?.isActive).map(([pid, l]) => `${pid} (${l})`);
+    if (bad.length) throw new Error(`Picked product(s) missing or inactive: ${bad.join(", ")}`);
+    for (const [title, groups] of [["Kits keep", picks.kits], ["Added", picks.add]] as const) {
+        for (const [name, list] of Object.entries(groups)) {
+            console.log(`
+  ${title}: ${name} (${list.length})`);
+            for (const [pid] of list) console.log(`    ${String(pid).padStart(5)}  ${found.get(pid)!.name}`);
+        }
+    }
 }
 
 async function verify(db: PoolClient): Promise<void> {
@@ -170,6 +226,21 @@ async function main(): Promise<void> {
     let summary = "";
     try {
         const byName = await cats(db);
+        if (process.argv.includes("--phase2")) {
+            const picks = JSON.parse(readFileSync("scripts/data/collection-kit-picks.json", "utf8")) as Picks;
+            await checkPicks(db, picks, byName);
+            await printTree(db, "Before");
+            if (t.go) {
+                const touched = await applyKits(db, picks, byName);
+                await verify(db);
+                await printTree(db, "After");
+                console.log(`
+Products whose row changed (pulled again by counters): ${touched}`);
+                summary = `kits trimmed, ${touched} product row(s) changed`;
+            } else summary = "plan printed";
+            ok = true;
+            return;
+        }
         const need = [
             ...RENAMES.map(([f, to]) => (byName.has(f) || byName.has(to) ? null : `${f} (or ${to})`)),
             ...MERGES.map(([f, into]) => (byName.has(f) || byName.has(into) ? null : f)),
