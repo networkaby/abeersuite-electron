@@ -117,9 +117,9 @@ interface StatusForm {
 function SettingLine({ label, value }: { label: string; value: React.ReactNode }) {
     const empty = value === null || value === undefined || value === "" || value === "No" || value === "Off";
     return (
-        <div className="flex items-baseline justify-between gap-3 text-xs leading-5">
+        <div className="flex items-start justify-between gap-3 text-xs leading-5">
             <span className="shrink-0 text-muted-foreground">{label}</span>
-            <span className={empty ? "text-muted-foreground/50" : "min-w-0 truncate text-right font-medium text-foreground"}>{value === null || value === undefined || value === "" ? "—" : value}</span>
+            <span className={empty ? "text-muted-foreground/50" : "min-w-0 whitespace-pre-wrap break-words text-right font-medium text-foreground"}>{value === null || value === undefined || value === "" ? "—" : value}</span>
         </div>
     );
 }
