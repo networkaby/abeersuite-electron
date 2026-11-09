@@ -569,6 +569,30 @@ export function usePosBilling(opts: {
     // coupon). The free-slot hit is either the grant (rule 1, ₹-less) or this.
     const effectiveFreeHit = eb ? null : appliedFree ?? autoFree;
     const onTopRupees = effectiveFreeHit?.onTop ? (effectiveFreeHit.rupees ?? 0) : 0;
+
+    // ── Headroom (staff hint on the POS line) ───────────────────────────────────
+    // Incl ₹ a cashier may still cut by hand before a line hits its sale price:
+    // (price − floor) − the line's own level discount − its share of the bill-wide
+    // cuts (loyalty, coupon, on-top free item), shared by line value. Display only.
+    const lineRoomIncl = cart.map((l, i) => {
+        const floor = lineFloorExcl(l);
+        if (floor == null) return null;
+        const k = 1 + l.taxRate / 100;
+        return (l.qty * (l.unitPrice - floor) - lineTierAfterCoupon[i]) * k;
+    });
+    const roomBase = cart.reduce((s, l, i) => s + (lineRoomIncl[i] != null ? l.qty * l.unitPrice : 0), 0);
+    const billWideCuts = effRedemptionRupees + couponRupees + onTopRupees;
+    // Keyed by the line itself — the screen lists renderCart, not cart order.
+    const lineGapRupees = new Map<CartLine, number>();
+    cart.forEach((l, i) => {
+        const room = lineRoomIncl[i];
+        if (room == null || l.qty <= 0) return;
+        const share = roomBase > 0 ? billWideCuts * (l.qty * l.unitPrice) / roomBase : 0;
+        lineGapRupees.set(l, round2((room - share) / l.qty)); // per piece, what the price box moves by
+    });
+    const totalGapRupees = lineRoomIncl.some((r) => r != null)
+        ? round2(lineRoomIncl.reduce<number>((s, r) => s + (r ?? 0), 0) - billWideCuts)
+        : null;
     // Loyalty redemption + coupon + on-top all ride chargesNet as negative
     // charges, exactly as the server folds them into calcVoucherTotals.
     const chargesNet = manualChargesNet - effRedemptionRupees - couponRupees - onTopRupees;
@@ -1896,6 +1920,8 @@ export function usePosBilling(opts: {
         couponDroppedTier, couponBlockedLoyalty, onTopRupees,
         // Each line's level discount (₹, before GST) — what an edit saves on its lines.
         lineTierDiscounts: lineTierAfterCoupon,
+        // Real hand-discount headroom (incl ₹): per piece by cart index, and the bill's.
+        lineGapRupees, totalGapRupees,
         total, giftCardApplied, payableTotal, posExtraCharges, posTierLabel,
         // tender math
         cashNet, splitsSum, upiEntered, collected, onCredit, overpaid, balanceDue, ledgerBalance,

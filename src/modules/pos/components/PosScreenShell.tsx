@@ -433,16 +433,15 @@ export function PosScreenShell({
                                                                     <span className="uppercase tracking-wider text-emerald-600/80 dark:text-emerald-400/80">Barcode</span>
                                                                     <span className="font-medium text-emerald-700 dark:text-emerald-300">{barcode != null ? formatInr(barcode) : "—"}</span>
                                                                 </div>
-                                                                {/* Half the room between the barcode price and the floor
-                                                                    (the sale price, usePosBilling.enforcePriceFloor).
-                                                                    Staff know the real room is double; a customer
-                                                                    watching the screen never sees the floor itself. */}
-                                                                {barcode != null && l.salePaise != null && l.salePaise > 0 && barcode - l.salePaise / 100 >= 0.01 && (
+                                                                {/* Real headroom per piece: price − sale-price floor, less this
+                                                                    line's level discount and its share of loyalty / coupon
+                                                                    (usePosBilling.lineGapRupees). What staff may still cut by hand. */}
+                                                                {(() => { const gap = b.lineGapRupees.get(l); return gap != null && l.salePaise != null && l.salePaise > 0 && (
                                                                     <div className="flex items-center gap-1.5">
                                                                         <span className="uppercase tracking-wider text-amber-600/90 dark:text-amber-400/90">Gap</span>
-                                                                        <span className="font-medium text-amber-700 dark:text-amber-300">{formatInr((barcode - l.salePaise / 100) / 2)}</span>
+                                                                        <span className={`font-medium ${gap < 0.005 ? "text-red-600 dark:text-red-400" : "text-amber-700 dark:text-amber-300"}`}>{formatInr(Math.max(0, gap))}</span>
                                                                     </div>
-                                                                )}
+                                                                ); })()}
                                                             </div>
                                                         )}
                                                         <div className="flex items-center gap-0.5">
@@ -607,6 +606,7 @@ export function PosScreenShell({
                                 tax={b.tax}
                                 total={b.total}
                                 totalDiscount={b.totalDiscount}
+                                totalGapRupees={b.totalGapRupees}
                                 discountPct={b.discountPct}
                                 synthDiscountPct={b.synthDiscountPct}
                                 discountAmount={b.discountAmount}

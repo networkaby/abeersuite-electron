@@ -38,6 +38,8 @@ export type PosBillSummaryProps = {
     tax: number;
     total: number;
     totalDiscount: number;
+    /** Real hand-discount headroom left on the bill (incl ₹), null = no floored lines. */
+    totalGapRupees?: number | null;
     discountPct: number;
     /** Synthetic tier % — the discount as a share of the tag (incl. GST) the customer
      *  sees. Shown in place of the configured "% of cost". */
@@ -117,7 +119,7 @@ export type PosBillSummaryProps = {
 };
 
 export function PosBillSummary({
-    subtotal, tax, totalDiscount, discountPct, synthDiscountPct, discountAmount, tier,
+    subtotal, tax, totalDiscount, totalGapRupees, discountPct, synthDiscountPct, discountAmount, tier,
     snapshot, rates, canRedeem, loyaltyBalance, redeemBlocked, maxRedeemablePts,
     redeemOn, setRedeemOn, redeemPointsStr, setRedeemPointsStr, effRedemptionRupees,
     appliedCoupon, setAppliedCoupon, autoCoupon, couponRupees, couponDroppedTier,
@@ -222,7 +224,8 @@ export function PosBillSummary({
                         </span>,
                     );
                 }
-                if (chips.length === 0) return null;
+                const showGap = totalGapRupees != null;
+                if (chips.length === 0 && !showGap) return null;
                 return (
                     <div className="flex items-start justify-between gap-2 text-[11px]">
                         {/* breakdown chips on the left, "+" between chips only */}
@@ -234,11 +237,19 @@ export function PosBillSummary({
                             )}
                         </div>
                         {/* combined total on the right of the SAME line */}
-                        {totalDiscount > 0.005 && (
-                            <span className="shrink-0 whitespace-nowrap font-medium tabular-nums text-emerald-600 dark:text-emerald-400">
-                                Total discount − {formatInr(totalDiscount)}
-                            </span>
-                        )}
+                        <span className="flex shrink-0 items-center gap-3 whitespace-nowrap font-medium tabular-nums">
+                            {/* What staff may still cut by hand across the bill, after every discount above. */}
+                            {totalGapRupees != null && (
+                                <span className={totalGapRupees < 0.005 ? "text-red-600 dark:text-red-400" : "text-amber-700 dark:text-amber-300"}>
+                                    Gap {formatInr(Math.max(0, totalGapRupees))}
+                                </span>
+                            )}
+                            {totalDiscount > 0.005 && (
+                                <span className="text-emerald-600 dark:text-emerald-400">
+                                    Total discount − {formatInr(totalDiscount)}
+                                </span>
+                            )}
+                        </span>
                     </div>
                 );
             })()}
