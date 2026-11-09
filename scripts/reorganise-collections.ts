@@ -28,12 +28,15 @@
  *   npx tsx scripts/reorganise-collections.ts -- --db <local url>                     # plan
  *   npx tsx scripts/reorganise-collections.ts -- --db <local url> --apply --rollback  # rehearse
  *   npx tsx scripts/reorganise-collections.ts -- --apply                               # live (backup < 1 h)
- *   … add --phase2 to any of the above for the kit trim
+ *   … add --phase2 to any of the above for the kit trim, or --slugs to give
+ *     every active collection without one a shop link (/name)
  */
 
 import { readFileSync } from "node:fs";
 import type { PoolClient } from "pg";
 import { finish, openTarget } from "./vyapar/liveTarget";
+import { slugify } from "../src/shared/lib/format/slugify";
+import { isReservedShopSlug } from "../src/shared/lib/shop/storefrontSlugPath";
 
 const RENAMES: Array<[from: string, to: string]> = [
     ["Shop by Customer", "Shop by Need"],
@@ -201,6 +204,35 @@ async function checkPicks(db: PoolClient, picks: Picks, byName: Map<string, Cat>
     }
 }
 
+// ── Slugs (`--slugs`): every active collection without a shop link gets one ──
+// Same rule as autoShopSlug in src/shared/lib/shop/shopSlug.ts: slugify(name),
+// then -2, -3 … while a page of the app, a product, group, collection or brand holds it.
+
+async function applySlugs(db: PoolClient): Promise<number> {
+    const taken = new Set((await db.query<{ slug: string }>(`
+        select slug from "InvProduct" where slug is not null
+        union select slug from "InvProductGroup" where slug is not null
+        union select slug from "InvCategory" where slug is not null
+        union select slug from "InvBrand" where slug is not null`)).rows.map((r) => r.slug));
+    const rows = (await db.query<{ id: number; name: string }>(
+        `select id, name from "InvCategory" where "isActive" and slug is null order by id`)).rows;
+    let n = 0;
+    for (const r of rows) {
+        const base = slugify(r.name, { maxLength: 80 });
+        let slug: string | null = null;
+        for (let i = 1; base && i <= 50 && !slug; i++) {
+            const c = i === 1 ? base : `${base}-${i}`;
+            if (!taken.has(c) && !isReservedShopSlug(c)) slug = c;
+        }
+        if (!slug) { console.log(`  ! ${r.name}: no free link, left blank`); continue; }
+        taken.add(slug);
+        await db.query(`update "InvCategory" set slug = $2, "updatedAt" = now() where id = $1`, [r.id, slug]);
+        console.log(`  ${r.name.padEnd(28)} → /${slug}`);
+        n++;
+    }
+    return n;
+}
+
 async function verify(db: PoolClient): Promise<void> {
     const problems: string[] = [];
     const onOff = await count(db, `
@@ -226,6 +258,13 @@ async function main(): Promise<void> {
     let summary = "";
     try {
         const byName = await cats(db);
+        if (process.argv.includes("--slugs")) {
+            console.log("Shop links for active collections:");
+            const n = await applySlugs(db);
+            summary = `${n} collection link(s)`;
+            ok = true;
+            return;
+        }
         if (process.argv.includes("--phase2")) {
             const picks = JSON.parse(readFileSync("scripts/data/collection-kit-picks.json", "utf8")) as Picks;
             await checkPicks(db, picks, byName);
