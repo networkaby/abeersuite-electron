@@ -569,6 +569,19 @@ export function usePosBilling(opts: {
     // coupon). The free-slot hit is either the grant (rule 1, ₹-less) or this.
     const effectiveFreeHit = eb ? null : appliedFree ?? autoFree;
     const onTopRupees = effectiveFreeHit?.onTop ? (effectiveFreeHit.rupees ?? 0) : 0;
+    // Loyalty redemption + coupon + on-top all ride chargesNet as negative
+    // charges, exactly as the server folds them into calcVoucherTotals.
+    const chargesNet = manualChargesNet - effRedemptionRupees - couponRupees - onTopRupees;
+
+    // ── Customer-group rebate (mirrors /api/pos/sale) ──────────────────────────
+    // PROFIT_SHARE / REVENUE_DISCOUNT rules give back part of the profit still
+    // left after every other discount, taken silently out of each line's rate
+    // before GST. Same groupRebatesExcl, same inputs as the server — goods
+    // lines only, bill-level discounts = coupon + on-top + loyalty + manual
+    // minus charges — so the total collected here is the total it posts. No
+    // rule → every rebate is 0 and the bill math below is exactly as before.
+    const groupPricing = opts.groupRebate ? snapshot?.groupPricing ?? null : null;
+    const lineTierAfterCoupon = lineTierDiscExcl.map((v) => (couponDroppedTier ? 0 : v));
 
     // ── Headroom (staff hint on the POS line) ───────────────────────────────────
     // Incl ₹ a cashier may still cut by hand before a line hits its sale price:
@@ -593,19 +606,7 @@ export function usePosBilling(opts: {
     const totalGapRupees = lineRoomIncl.some((r) => r != null)
         ? round2(lineRoomIncl.reduce<number>((s, r) => s + (r ?? 0), 0) - billWideCuts)
         : null;
-    // Loyalty redemption + coupon + on-top all ride chargesNet as negative
-    // charges, exactly as the server folds them into calcVoucherTotals.
-    const chargesNet = manualChargesNet - effRedemptionRupees - couponRupees - onTopRupees;
 
-    // ── Customer-group rebate (mirrors /api/pos/sale) ──────────────────────────
-    // PROFIT_SHARE / REVENUE_DISCOUNT rules give back part of the profit still
-    // left after every other discount, taken silently out of each line's rate
-    // before GST. Same groupRebatesExcl, same inputs as the server — goods
-    // lines only, bill-level discounts = coupon + on-top + loyalty + manual
-    // minus charges — so the total collected here is the total it posts. No
-    // rule → every rebate is 0 and the bill math below is exactly as before.
-    const groupPricing = opts.groupRebate ? snapshot?.groupPricing ?? null : null;
-    const lineTierAfterCoupon = lineTierDiscExcl.map((v) => (couponDroppedTier ? 0 : v));
     const lineRebateExcl = cart.map(() => 0);
     if (groupPricing) {
         const goodsIdx = cart.flatMap((l, i) => (l.kind !== "service" ? [i] : []));
