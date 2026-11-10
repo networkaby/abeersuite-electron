@@ -30,8 +30,10 @@ export interface NamingToken {
     defaultValue?: string | null;
     /** Only used when kind === "literal". */
     literal?: string;
-    /** Only used when kind === "attr" — the key to read from InvProduct.attrsJson. */
+    /** Legacy (kind === "attr"): once picked one attrsJson key. Ignored now — the attr row prints all attributes. */
     attrKey?: string | null;
+    /** Only used when kind === "attr" — placed between attribute values. Default " ". */
+    attrSeparator?: string | null;
     /** Prepended to the resolved value (e.g. "(" or " ["). Empty/null = none. */
     prefix?: string | null;
     /** Appended to the resolved value (e.g. ")" or "]"). Empty/null = none. */
@@ -90,8 +92,13 @@ function resolveToken(
     if (token.kind === "literal") {
         value = (token.literal ?? "").trim();
     } else if (token.kind === "attr") {
-        // Reads directly from attrsJson by key — no fallback chain for custom attrs.
-        value = (masters.attrs?.[token.attrKey ?? ""] ?? "").trim();
+        // One row prints every attribute the product has, in the order the
+        // product stores them, joined by the token's own separator. Prefix /
+        // suffix wrap the whole block. No fallback chain for attributes.
+        value = Object.values(masters.attrs ?? {})
+            .map((v) => String(v ?? "").trim())
+            .filter(Boolean)
+            .join(token.attrSeparator ?? " ");
         if (!value) value = (token.defaultValue ?? "").trim();
     } else {
         const primary = primarySource(token.kind, masters);

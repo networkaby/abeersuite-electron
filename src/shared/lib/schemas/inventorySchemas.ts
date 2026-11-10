@@ -212,6 +212,7 @@ const namingTokenSchema = z.object({
     defaultValue: z.string().max(120).nullish(),
     literal: z.string().max(120).nullish(),
     attrKey: z.string().max(64).nullish(),
+    attrSeparator: z.string().max(16).nullish(),
     prefix: z.string().max(32).nullish(),
     suffix: z.string().max(32).nullish(),
 });

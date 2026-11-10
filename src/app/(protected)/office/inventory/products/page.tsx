@@ -71,6 +71,8 @@ type EditRow = {
     sku: string;
     name: string;
     namePart: string | null;
+    /** Attribute bag — feeds the Attributes token when the name is rebuilt. */
+    attrsJson?: Record<string, string> | null;
     isActive: boolean;
     /** Cashier must fill the POS line note before selling this item. */
     requireSaleNote: boolean;
@@ -619,7 +621,7 @@ export default function InventoryProductsPage() {
             warranty: war ? { name: war.name ?? "" } : null,
             unit: unit ? { code: unit.code ?? "" } : null,
             modelNo: (pick("modelNo") as string | null) || null,
-            attrs: null,
+            attrs: (r.attrsJson as Record<string, string> | null | undefined) ?? null,
             // userPart survives every regenerate — the template inserts it
             // wherever the `userPart` token sits. Operator edits the Custom
             // column, never the auto-built Name.

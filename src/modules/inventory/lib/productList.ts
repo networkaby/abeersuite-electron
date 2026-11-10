@@ -150,7 +150,7 @@ function dbOrderBy(sort: ProductListQuery["sort"]): Prisma.InvProductOrderByWith
 /** Columns the light path needs to match, sort and compute stock — and what the
  *  page's edit grid needs for a row it has not loaded (select all filtered). */
 const LIGHT_SELECT = {
-    id: true, sku: true, name: true, namePart: true, modelNo: true,
+    id: true, sku: true, name: true, namePart: true, modelNo: true, attrsJson: true,
     isActive: true, requireSaleNote: true,
     unitId: true, categoryId: true, groupId: true, brandId: true, warrantyTermId: true,
     openingStock: true, openingBranchId: true,
@@ -316,7 +316,7 @@ export async function loadProductPage(query: ProductListQuery) {
 export async function loadProductSelection(query: ProductListQuery) {
     const rows = await matchLight(query);
     return rows.map((r) => ({
-        id: r.id, sku: r.sku, name: r.name, namePart: r.namePart, modelNo: r.modelNo,
+        id: r.id, sku: r.sku, name: r.name, namePart: r.namePart, modelNo: r.modelNo, attrsJson: r.attrsJson,
         isActive: r.isActive, requireSaleNote: r.requireSaleNote,
         unitId: r.unitId, categoryId: r.categoryId, groupId: r.groupId,
         brandId: r.brandId, warrantyTermId: r.warrantyTermId,

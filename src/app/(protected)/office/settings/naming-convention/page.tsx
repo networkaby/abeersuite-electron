@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { ArrowDown, ArrowUp, Plus, Trash2, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -30,7 +29,7 @@ const TOKEN_LABEL: Record<TokenKind, string> = {
     warranty: "Warranty",
     unit:     "Unit",
     literal:  "Literal text",
-    attr:     "Custom attribute",
+    attr:     "Attributes",
     userPart: "Custom (user part)",
 };
 
@@ -47,6 +46,7 @@ const PREVIEW_MASTERS: NamingMasters = {
     unit:     { code: "PCS" },
     modelNo:  "250-G9",
     userPart: "1.5M Special",
+    attrs:    { colour: "Red", length: "1 Meter" },
 };
 
 function move<T>(list: T[], from: number, dir: -1 | 1): T[] {
@@ -62,10 +62,9 @@ interface TokenListEditorProps {
     onChange: (tokens: NamingToken[]) => void;
     /** Kinds that are not already in the list but can be added. "literal" is always addable. */
     available: TokenKind[];
-    attrKeys?: Array<{ key: string; name: string }>;
 }
 
-function TokenListEditor({ tokens, onChange, available, attrKeys = [] }: TokenListEditorProps) {
+function TokenListEditor({ tokens, onChange, available }: TokenListEditorProps) {
     const [pendingKind, setPendingKind] = useState<TokenKind | "">("");
 
     const updateAt = (i: number, patch: Partial<NamingToken>) => {
@@ -79,7 +78,7 @@ function TokenListEditor({ tokens, onChange, available, attrKeys = [] }: TokenLi
             pendingKind === "literal"
                 ? { kind: "literal", enabled: true, literal: "", defaultValue: null }
                 : pendingKind === "attr"
-                ? { kind: "attr", enabled: true, attrKey: "", defaultValue: null }
+                ? { kind: "attr", enabled: true, attrSeparator: " ", defaultValue: null }
                 : { kind: pendingKind, enabled: true, defaultValue: null };
         onChange([...tokens, next]);
         setPendingKind("");
@@ -125,31 +124,13 @@ function TokenListEditor({ tokens, onChange, available, attrKeys = [] }: TokenLi
                                 />
                             ) : t.kind === "attr" ? (
                                 <>
-                                    {attrKeys.length > 0 ? (
-                                        <Select
-                                            value={t.attrKey ?? ""}
-                                            onValueChange={(v) => updateAt(i, { attrKey: v || null })}
-                                        >
-                                            <SelectTrigger className="w-36">
-                                                <SelectValue placeholder="attr key…" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {attrKeys.map((a) => (
-                                                    <SelectItem key={a.key} value={a.key}>
-                                                        {a.name} <span className="font-mono text-xs text-muted-foreground">({a.key})</span>
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    ) : (
-                                        <Input
-                                            className="w-28 font-mono text-xs"
-                                            value={t.attrKey ?? ""}
-                                            onChange={(e) => updateAt(i, { attrKey: e.target.value || null })}
-                                            placeholder="attr key"
-                                            title="Key in attrsJson (e.g. color, storage, os)"
-                                        />
-                                    )}
+                                    <Input
+                                        className="w-24 font-mono text-xs"
+                                        value={t.attrSeparator ?? " "}
+                                        onChange={(e) => updateAt(i, { attrSeparator: e.target.value })}
+                                        placeholder="separator"
+                                        title="Placed between attribute values (e.g. space, comma). All the product's attributes print here, in the product's order."
+                                    />
                                     <Input
                                         className="max-w-[120px]"
                                         value={t.defaultValue ?? ""}
@@ -249,33 +230,13 @@ export default function NamingConventionPage() {
     const [cfg, setCfg] = useState<NamingConfigShape>(DEFAULT_NAMING_CONFIG);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [attrKeys, setAttrKeys] = useState<Array<{ key: string; name: string }>>([]);
-
-    // The attribute keys are a reference list, so they follow changes; the config
-    // itself is the form being edited and is read once.
-    const loadAttrKeys = useCallback(() =>
-            axios
-                .get<Array<{ key: string; name: string; isActive: boolean }>>("/api/inventory/attribute-masters")
-                .then((r) => {
-                    const seen = new Set<string>();
-                    setAttrKeys(
-                        r.data
-                            .filter((m) => m.isActive)
-                            .filter((m) => { if (seen.has(m.key)) return false; seen.add(m.key); return true; }),
-                    );
-                }), []);
-    useRealtimeTopics(["catalogue"], () => { void loadAttrKeys().catch(() => {}); });
-
     useEffect(() => {
-        Promise.all([
-            axios
-                .get<NamingConfigShape>("/api/inventory/naming-config")
-                .then((r) => setCfg({ ...DEFAULT_NAMING_CONFIG, ...r.data })),
-            loadAttrKeys(),
-        ])
+        axios
+            .get<NamingConfigShape>("/api/inventory/naming-config")
+            .then((r) => setCfg({ ...DEFAULT_NAMING_CONFIG, ...r.data }))
             .catch(() => toast.error("Failed to load naming config"))
             .finally(() => setLoading(false));
-    }, [loadAttrKeys]);
+    }, []);
 
     const offlinePreview = useMemo(() => buildOfflineName(PREVIEW_MASTERS, cfg), [cfg]);
     const onlinePreview = useMemo(() => buildOnlineName(PREVIEW_MASTERS, cfg), [cfg]);
@@ -343,7 +304,7 @@ export default function NamingConventionPage() {
                     tokens={cfg.nameFields}
                     onChange={(t) => setCfg({ ...cfg, nameFields: t })}
                     available={ALL_KINDS}
-                    attrKeys={attrKeys}
+                   
                 />
                 <div className="border border-dashed border-border bg-background p-2 font-mono text-sm">
                     Preview: <span className="font-semibold">{offlinePreview || <em className="text-muted-foreground">(empty)</em>}</span>
@@ -365,7 +326,7 @@ export default function NamingConventionPage() {
                     tokens={cfg.onlineNameFields}
                     onChange={(t) => setCfg({ ...cfg, onlineNameFields: t })}
                     available={ALL_KINDS}
-                    attrKeys={attrKeys}
+                   
                 />
                 <div className="border border-dashed border-border bg-background p-2 font-mono text-sm">
                     Preview: <span className="font-semibold">{onlinePreview || <em className="text-muted-foreground">(empty)</em>}</span>
@@ -400,7 +361,7 @@ export default function NamingConventionPage() {
                     tokens={cfg.slugFields}
                     onChange={(t) => setCfg({ ...cfg, slugFields: t })}
                     available={ALL_KINDS}
-                    attrKeys={attrKeys}
+                   
                 />
                 <div className="border border-dashed border-border bg-background p-2 font-mono text-sm">
                     Preview: <span className="font-semibold">{slugPreview || <em className="text-muted-foreground">(disabled or empty)</em>}</span>
