@@ -73,6 +73,8 @@ export const shopProductInclude = {
     brand: { select: { name: true } },
     group: { select: { name: true } },
     collections: { select: { categoryId: true, category: { select: { name: true } } }, orderBy: { sortOrder: "asc" } },
+    // The product page shows the barcode under the name (staff scan it from the phone app).
+    codes: { select: { kind: true, value: true } },
 } as const;
 
 /**

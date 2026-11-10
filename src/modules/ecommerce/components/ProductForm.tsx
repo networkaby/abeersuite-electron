@@ -45,7 +45,13 @@ export default function ProductForm({
     onSaved,
     submitLabel = "Save product",
     onNameChange,
+    onClose,
+    onDirtyChange,
 }: {
+    /** Shows a Close button in the save bar (asks first when there are unsaved changes). */
+    onClose?: () => void;
+    /** Told whenever the form gains / loses unsaved changes. */
+    onDirtyChange?: (dirty: boolean) => void;
     initial?: Partial<ShopProductAdmin> | null;
     onSaved?: (p: ShopProductAdmin) => void;
     submitLabel?: string;
@@ -419,6 +425,9 @@ export default function ProductForm({
     const dirty = baseSig !== null && editSig !== baseSig;
     // Any unsaved change: the Save buttons replace the stage buttons.
     const drafting = !!initial?.id && dirty;
+    useEffect(() => {
+        onDirtyChange?.(dirty);
+    }, [dirty, onDirtyChange]);
 
     // The live card always renders galleryUrls[0], so put the photo the user has
     // selected in the gallery first — preview only, the saved order is untouched.
@@ -901,20 +910,24 @@ export default function ProductForm({
                         </Button>
                     ) : drafting ? (
                         <>
-                            <Button type="button" onClick={() => void submit()} disabled={busy}
-                                title={shopStatus === "PUBLISHED" ? "Save onto the product — the shop shows it at once" : "Save onto the product — the stage stays"}>
-                                Save
+                            {/* Published / Pending: changes go straight to the shop, or park in Draft.
+                                Every other stage: Draft or Ready — no stage-less plain Save. */}
+                            {shopStatus === "PUBLISHED" ? (
+                                <Button type="button" onClick={() => void submit()} disabled={busy}
+                                    title={initial?.isListedInShop ? "Save — the shop shows the changes at once" : "Save — still Pending until Shop readiness is met"}>
+                                    Publish changes
+                                </Button>
+                            ) : null}
+                            <Button type="button" variant={shopStatus === "PUBLISHED" ? "outline" : "default"} onClick={() => void submit("save")} disabled={busy}
+                                title="Save and move to Draft — off the shop until Save as ready">
+                                Save as draft
                             </Button>
-                            {shopStatus !== "DRAFT" && (
-                                <Button type="button" variant="outline" onClick={() => void submit("save")} disabled={busy}
-                                    title="Save and move to Draft — off the shop until Save as ready">
-                                    Save as draft
+                            {shopStatus !== "PUBLISHED" && (
+                                <Button type="button" variant="outline" onClick={() => void submit("ready")} disabled={busy}
+                                    title="Save — Ready to publish">
+                                    Save as ready
                                 </Button>
                             )}
-                            <Button type="button" variant="outline" onClick={() => void submit("ready")} disabled={busy}
-                                title="Save — Ready to publish">
-                                Save as ready
-                            </Button>
                         </>
                     ) : shopStatus === "DRAFT" ? (
                         <>
@@ -943,9 +956,15 @@ export default function ProductForm({
                             Unpublish
                         </Button>
                     )}
+                    {onClose && (
+                        <Button type="button" variant="outline" onClick={onClose} disabled={busy}
+                            title="Back to the Products list">
+                            Close
+                        </Button>
+                    )}
                     <span className="text-muted-foreground text-xs">
                         {drafting
-                            ? `Unsaved changes${shopStatus === "PUBLISHED" ? " — Save puts them live; Save as draft takes it off the shop" : ""}.`
+                            ? `Unsaved changes${shopStatus === "PUBLISHED" ? " — Publish changes puts them live; Save as draft takes it off the shop" : ""}.`
                             : shopStatus === "DRAFT"
                                 ? "Draft — being worked on, not in the shop."
                             : shopStatus === "READY"

@@ -8,8 +8,9 @@ import ProductForm from "@/modules/ecommerce/components/ProductForm";
 import type { ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
 import { Button } from "@/components/ui/button";
+import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";
 import { toast } from "sonner";
-import { SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal, X } from "lucide-react";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 export default function EcommerceProductEditPage() {
@@ -22,6 +23,14 @@ export default function EcommerceProductEditPage() {
     const [deepEditOpen, setDeepEditOpen] = useState(false);
     // Name rebuilt by a Group / Brand pick, not saved yet (ProductForm onNameChange).
     const [liveName, setLiveName] = useState<string | null>(null);
+
+    const [dirty, setDirty] = useState(false);
+    // Close → back to the list (router.back keeps its filter / page when we came from it).
+    const close = useCallback(async () => {
+        if ((dirty || liveName) && !(await confirmAction({ title: "Leave without saving?", confirmLabel: "Leave" }))) return;
+        if (window.history.length > 1) router.back();
+        else router.push("/office/ecommerce/products");
+    }, [dirty, liveName, router]);
 
     const load = useCallback(() => {
         if (!Number.isFinite(id)) return;
@@ -43,29 +52,40 @@ export default function EcommerceProductEditPage() {
         return <p className="text-muted-foreground">Loading…</p>;
     }
 
+    // Main barcode first, else the first scannable code.
+    const barcode = (product.codes.find((c) => c.kind.toUpperCase() === "BARCODE") ?? product.codes[0])?.value ?? null;
+
     return (
         <div className="space-y-6">
-            <div className="flex flex-wrap items-center gap-3">
-                <Button variant="ghost" size="sm" asChild>
+            <div className="flex items-start gap-3">
+                <Button variant="ghost" size="sm" asChild className="shrink-0">
                     <Link href="/office/ecommerce/products">← Products</Link>
                 </Button>
-                <h1 className="min-w-0 truncate text-2xl font-semibold tracking-tight" title={liveName ?? product.name}>
-                    Edit product
-                    <span className="ml-2 font-normal text-muted-foreground">· {liveName ?? product.name}</span>
-                    {liveName && liveName !== product.name ? (
-                        <span className="ml-2 align-middle text-xs font-normal text-amber-600">unsaved</span>
+                <div className="min-w-0 flex-1">
+                    <h1 className="text-2xl font-semibold tracking-tight break-words">
+                        Edit product
+                        <span className="ml-2 font-normal text-muted-foreground">· {liveName ?? product.name}</span>
+                        {liveName && liveName !== product.name ? (
+                            <span className="ml-2 align-middle text-xs font-normal text-amber-600">unsaved</span>
+                        ) : null}
+                    </h1>
+                </div>
+                <div className="flex shrink-0 items-start gap-2">
+                    {barcode ? (
+                        // White card so the phone camera reads it in dark mode too.
+                        <div className="rounded border bg-white px-1" title="Scan from the staff app to find this product">
+                            <BarcodeSvg value={barcode} height={34} fontSize={11} margin={2} />
+                        </div>
                     ) : null}
-                </h1>
-                <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="ml-auto"
-                    onClick={() => setDeepEditOpen(true)}
-                >
-                    <SlidersHorizontal className="size-4" />
-                    Deep edit
-                </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setDeepEditOpen(true)}>
+                        <SlidersHorizontal className="size-4" />
+                        Deep edit
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => void close()}>
+                        <X className="size-4" />
+                        Close
+                    </Button>
+                </div>
             </div>
             <InvProductDialog
                 open={deepEditOpen}
@@ -82,6 +102,8 @@ export default function EcommerceProductEditPage() {
                 initial={product}
                 submitLabel="Save changes"
                 onNameChange={setLiveName}
+                onDirtyChange={setDirty}
+                onClose={() => void close()}
                 onSaved={(p) => {
                     setProduct(p);
                     setLiveName(null);
