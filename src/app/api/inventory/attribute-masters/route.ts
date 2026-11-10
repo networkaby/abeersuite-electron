@@ -9,7 +9,7 @@ import { validateRequest } from "@/shared/lib/api";
 const createSchema = z.object({
     key:        z.string().min(1).max(64).regex(/^[a-z][a-z0-9_]*$/, "Key must be lowercase letters, digits, underscores, starting with a letter"),
     name:       z.string().min(1).max(100),
-    categoryId: z.number().int().positive().nullish(),
+    groupId: z.number().int().positive().nullish(),
     sortOrder:  z.number().int().min(0).default(0),
     isActive:   z.boolean().default(true),
 });
@@ -19,15 +19,15 @@ export async function GET(req: Request) {
     if (response) return response;
     try {
         const url = new URL(req.url);
-        const categoryIdParam = url.searchParams.get("categoryId");
-        const categoryId = categoryIdParam ? Number(categoryIdParam) : undefined;
+        const groupIdParam = url.searchParams.get("groupId");
+        const groupId = groupIdParam ? Number(groupIdParam) : undefined;
 
         const rows = await prisma.invAttributeMaster.findMany({
-            where: categoryId != null
-                ? { OR: [{ categoryId }, { categoryId: null }] }
+            where: groupId != null
+                ? { OR: [{ groupId }, { groupId: null }] }
                 : undefined,
-            orderBy: [{ categoryId: "asc" }, { sortOrder: "asc" }, { name: "asc" }],
-            include: { category: { select: { id: true, name: true } } },
+            orderBy: [{ groupId: "asc" }, { sortOrder: "asc" }, { name: "asc" }],
+            include: { group: { select: { id: true, name: true } } },
         });
         return NextResponse.json(rows);
     } catch (e) {
@@ -45,16 +45,16 @@ export async function POST(req: Request) {
             data: {
                 key:        data.key,
                 name:       data.name,
-                categoryId: data.categoryId ?? null,
+                groupId: data.groupId ?? null,
                 sortOrder:  data.sortOrder,
                 isActive:   data.isActive,
             },
-            include: { category: { select: { id: true, name: true } } },
+            include: { group: { select: { id: true, name: true } } },
         });
         return NextResponse.json(row, { status: 201 });
     } catch (e: unknown) {
         if (e instanceof Error && e.message.includes("Unique constraint")) {
-            return NextResponse.json({ error: "Key already exists for this category" }, { status: 409 });
+            return NextResponse.json({ error: "Key already exists for this group" }, { status: 409 });
         }
         return handleApiError(e, "Failed to create attribute master");
     }

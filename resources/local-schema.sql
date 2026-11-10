@@ -2740,7 +2740,7 @@ CREATE TABLE IF NOT EXISTS "InvAttributeMaster" (
     "id" SERIAL NOT NULL,
     "key" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "categoryId" INTEGER,
+    "groupId" INTEGER,
     "sortOrder" INTEGER NOT NULL DEFAULT 0,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -2751,8 +2751,8 @@ CREATE TABLE IF NOT EXISTS "InvAttributeMaster" (
 ALTER TABLE "InvAttributeMaster" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
 ALTER TABLE "InvAttributeMaster" ADD COLUMN IF NOT EXISTS "key" TEXT NOT NULL;
 ALTER TABLE "InvAttributeMaster" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL;
-ALTER TABLE "InvAttributeMaster" ADD COLUMN IF NOT EXISTS "categoryId" INTEGER;
-ALTER TABLE "InvAttributeMaster" ALTER COLUMN "categoryId" DROP NOT NULL;
+ALTER TABLE "InvAttributeMaster" ADD COLUMN IF NOT EXISTS "groupId" INTEGER;
+ALTER TABLE "InvAttributeMaster" ALTER COLUMN "groupId" DROP NOT NULL;
 ALTER TABLE "InvAttributeMaster" ADD COLUMN IF NOT EXISTS "sortOrder" INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE "InvAttributeMaster" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "InvAttributeMaster" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
@@ -2805,6 +2805,8 @@ CREATE TABLE IF NOT EXISTS "InvProduct" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "slug" TEXT,
     "shopSubheading" TEXT,
+    "variantFamilyId" INTEGER,
+    "variantLabel" TEXT,
     "shopDescription" TEXT,
     "shopCategory" TEXT,
     "effectiveSalePricePaise" INTEGER,
@@ -2876,6 +2878,10 @@ ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "slug" TEXT;
 ALTER TABLE "InvProduct" ALTER COLUMN "slug" DROP NOT NULL;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "shopSubheading" TEXT;
 ALTER TABLE "InvProduct" ALTER COLUMN "shopSubheading" DROP NOT NULL;
+ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "variantFamilyId" INTEGER;
+ALTER TABLE "InvProduct" ALTER COLUMN "variantFamilyId" DROP NOT NULL;
+ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "variantLabel" TEXT;
+ALTER TABLE "InvProduct" ALTER COLUMN "variantLabel" DROP NOT NULL;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "shopDescription" TEXT;
 ALTER TABLE "InvProduct" ALTER COLUMN "shopDescription" DROP NOT NULL;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "shopCategory" TEXT;
@@ -6060,10 +6066,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS "InvBrand_slug_key" ON "InvBrand"("slug");
 CREATE UNIQUE INDEX IF NOT EXISTS "InvBrand_name_key" ON "InvBrand"("name");
 
 -- CreateIndex
-CREATE INDEX IF NOT EXISTS "InvAttributeMaster_categoryId_idx" ON "InvAttributeMaster"("categoryId");
+CREATE INDEX IF NOT EXISTS "InvAttributeMaster_groupId_idx" ON "InvAttributeMaster"("groupId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX IF NOT EXISTS "InvAttributeMaster_key_categoryId_key" ON "InvAttributeMaster"("key", "categoryId");
+CREATE UNIQUE INDEX IF NOT EXISTS "InvAttributeMaster_key_groupId_key" ON "InvAttributeMaster"("key", "groupId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "InvProduct_sku_key" ON "InvProduct"("sku");
@@ -6094,6 +6100,9 @@ CREATE INDEX IF NOT EXISTS "InvProduct_isListedInShop_idx" ON "InvProduct"("isLi
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "InvProduct_shopStatus_idx" ON "InvProduct"("shopStatus");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "InvProduct_variantFamilyId_idx" ON "InvProduct"("variantFamilyId");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "InvProduct_openingBranchId_idx" ON "InvProduct"("openingBranchId");
@@ -7104,7 +7113,7 @@ END $$;
 
 -- AddForeignKey
 DO $$ BEGIN
-    ALTER TABLE "InvAttributeMaster" ADD CONSTRAINT "InvAttributeMaster_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "InvCategory"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+    ALTER TABLE "InvAttributeMaster" ADD CONSTRAINT "InvAttributeMaster_groupId_fkey" FOREIGN KEY ("groupId") REFERENCES "InvProductGroup"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;

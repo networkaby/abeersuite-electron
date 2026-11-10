@@ -138,7 +138,7 @@ export type EffectiveTax = {
     taxabilitySource: string | { kind: "group"; groupId: number; groupName: string } | null;
 };
 
-export type AttrMasterRow = { id: number; key: string; name: string; categoryId: number | null; isActive: boolean };
+export type AttrMasterRow = { id: number; key: string; name: string; groupId: number | null; isActive: boolean };
 
 const TAXABILITY_OPTIONS = [
     { value: "TAXABLE",  label: "Taxable" },
@@ -485,10 +485,10 @@ export function InvProductFormFields({
                             <p className="text-[11px] text-muted-foreground">Used in naming convention &amp; SEO</p>
                         </div>
                         {(() => {
-                            // Filter masters to those applicable to the current category (global + category-specific).
-                            const catId = form.categoryId ? Number(form.categoryId) : null;
+                            // Filter masters to those applicable to the current group (global + group-specific).
+                            const grpId = form.groupId ? Number(form.groupId) : null;
                             const available = attrMasters.filter(
-                                (m) => m.isActive !== false && (m.categoryId == null || m.categoryId === catId),
+                                (m) => m.isActive !== false && (m.groupId == null || m.groupId === grpId),
                             );
                             const usedKeys = new Set(form.attrs.map((a) => a.key));
                             const addable = available.filter((m) => !usedKeys.has(m.key));

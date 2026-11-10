@@ -10,7 +10,7 @@ import { parseIdParam } from "@/shared/lib/api";
 const updateSchema = z.object({
     key:        z.string().min(1).max(64).regex(/^[a-z][a-z0-9_]*$/).optional(),
     name:       z.string().min(1).max(100).optional(),
-    categoryId: z.number().int().positive().nullish(),
+    groupId: z.number().int().positive().nullish(),
     sortOrder:  z.number().int().min(0).optional(),
     isActive:   z.boolean().optional(),
 });
@@ -28,16 +28,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             data: {
                 ...(data.key        !== undefined ? { key:        data.key }        : {}),
                 ...(data.name       !== undefined ? { name:       data.name }       : {}),
-                ...(data.categoryId !== undefined ? { categoryId: data.categoryId ?? null } : {}),
+                ...(data.groupId !== undefined ? { groupId: data.groupId ?? null } : {}),
                 ...(data.sortOrder  !== undefined ? { sortOrder:  data.sortOrder }  : {}),
                 ...(data.isActive   !== undefined ? { isActive:   data.isActive }   : {}),
             },
-            include: { category: { select: { id: true, name: true } } },
+            include: { group: { select: { id: true, name: true } } },
         });
         return NextResponse.json(row);
     } catch (e: unknown) {
         if (e instanceof Error && e.message.includes("Unique constraint")) {
-            return NextResponse.json({ error: "Key already exists for this category" }, { status: 409 });
+            return NextResponse.json({ error: "Key already exists for this group" }, { status: 409 });
         }
         return handleApiError(e, "Failed to update attribute master");
     }

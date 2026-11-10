@@ -28,22 +28,22 @@ import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableSta
 import { useDeleteWithConfirm } from "@/shared/hooks";
 import { flattenTree, treeLabel } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
 
-type Category = { id: number; name: string };
+type Group = { id: number; name: string };
 type Row = {
     id: number;
     key: string;
     name: string;
-    categoryId: number | null;
-    category: { id: number; name: string } | null;
+    groupId: number | null;
+    group: { id: number; name: string } | null;
     sortOrder: number;
     isActive: boolean;
 };
 
-const emptyForm = { key: "", name: "", categoryId: "", sortOrder: "0", isActive: true };
+const emptyForm = { key: "", name: "", groupId: "", sortOrder: "0", isActive: true };
 
 export default function AttributeMastersPage() {
     const [rows, setRows] = useState<Row[]>([]);
-    const [categories, setCategories] = useState<Category[]>([]);
+    const [groups, setGroups] = useState<Group[]>([]);
     const [loading, setLoading] = useState(true);
     const [adding, setAdding] = useState(false);
     const [editId, setEditId] = useState<number | null>(null);
@@ -58,18 +58,18 @@ export default function AttributeMastersPage() {
             .finally(() => setLoading(false));
     };
 
-    const loadCategories = useCallback(() => {
-        axios.get<Category[]>("/api/inventory/categories")
-            .then((r) => setCategories(r.data))
+    const loadGroups = useCallback(() => {
+        axios.get<Group[]>("/api/inventory/product-groups")
+            .then((r) => setGroups(r.data))
             .catch(() => {});
     }, []);
 
-    useEffect(() => { loadCategories(); load(); }, [loadCategories]);
+    useEffect(() => { loadGroups(); load(); }, [loadGroups]);
 
-    // Attribute masters and the categories they hang off are catalogue config —
+    // Attribute masters and the groups they hang off are catalogue config —
     // a master added on another machine should appear here without a reload.
     // The row editor keeps its own `form` state, so it is untouched.
-    useRealtimeTopics(["catalogue"], () => { loadCategories(); load(); });
+    useRealtimeTopics(["catalogue"], () => { loadGroups(); load(); });
 
     const cancel = () => {
         setAdding(false);
@@ -87,7 +87,7 @@ export default function AttributeMastersPage() {
         const payload = {
             key:        form.key.trim(),
             name:       form.name.trim(),
-            categoryId: form.categoryId && form.categoryId !== "__none__" ? Number(form.categoryId) : null,
+            groupId: form.groupId && form.groupId !== "__none__" ? Number(form.groupId) : null,
             sortOrder:  Number(form.sortOrder) || 0,
             isActive:   form.isActive,
         };
@@ -128,7 +128,7 @@ export default function AttributeMastersPage() {
         setForm({
             key:       r.key,
             name:      r.name,
-            categoryId: r.categoryId != null ? String(r.categoryId) : "",
+            groupId: r.groupId != null ? String(r.groupId) : "",
             sortOrder: String(r.sortOrder),
             isActive:  r.isActive,
         });
@@ -149,8 +149,8 @@ export default function AttributeMastersPage() {
 
             <p className="flex-none text-sm text-muted-foreground">
                 Define the attribute keys used in product custom attributes (e.g. <code className="font-mono text-xs">ram</code>, <code className="font-mono text-xs">storage</code>, <code className="font-mono text-xs">os</code>).
-                Optionally restrict an attribute to a specific collection — product form dropdowns filter by the selected collection plus global attributes.
-                These keys are also used in the naming convention&apos;s <strong>Custom attribute</strong> token.
+                Optionally restrict an attribute to one group — the product form offers the product&apos;s group attributes plus global ones.
+                The naming convention&apos;s <strong>Attributes</strong> token prints every attribute a product has.
             </p>
 
             {adding || editId != null ? (
@@ -180,17 +180,17 @@ export default function AttributeMastersPage() {
                             />
                         </div>
                         <div className="space-y-2 min-w-[180px]">
-                            <Label>Collection <span className="text-[10px] text-muted-foreground font-normal">(optional)</span></Label>
+                            <Label>Group <span className="text-[10px] text-muted-foreground font-normal">(optional)</span></Label>
                             <Select
-                                value={form.categoryId || "__none__"}
-                                onValueChange={(v) => setForm((f) => ({ ...f, categoryId: v === "__none__" ? "" : v }))}
+                                value={form.groupId || "__none__"}
+                                onValueChange={(v) => setForm((f) => ({ ...f, groupId: v === "__none__" ? "" : v }))}
                             >
                                 <SelectTrigger>
-                                    <SelectValue placeholder="All collections" />
+                                    <SelectValue placeholder="All groups" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="__none__">All collections (global)</SelectItem>
-                                    {flattenTree(categories).map((r) => (
+                                    <SelectItem value="__none__">All groups (global)</SelectItem>
+                                    {flattenTree(groups).map((r) => (
                                         <SelectItem key={r.id} value={String(r.id)}>{treeLabel(r)}</SelectItem>
                                     ))}
                                 </SelectContent>
@@ -222,7 +222,7 @@ export default function AttributeMastersPage() {
                         <TableRow>
                             <TableHead>Key</TableHead>
                             <TableHead>Label</TableHead>
-                            <TableHead>Collection</TableHead>
+                            <TableHead>Group</TableHead>
                             <TableHead className="text-right"> </TableHead>
                         </TableRow>
                     </TableHeader>
@@ -237,7 +237,7 @@ export default function AttributeMastersPage() {
                                     <TableCell className="font-mono text-xs">{r.key}</TableCell>
                                     <TableCell className="font-medium">{r.name}</TableCell>
                                     <TableCell className="text-sm text-muted-foreground">
-                                        {r.category ? r.category.name : <em>Global</em>}
+                                        {r.group ? r.group.name : <em>Global</em>}
                                     </TableCell>
                                     <TableCell className="text-right space-x-2">
                                         {!r.isActive ? <Badge variant="outline">inactive</Badge> : null}
