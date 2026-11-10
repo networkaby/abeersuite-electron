@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -21,12 +21,28 @@ type Family = { label: string | null; members: VariantMember[] };
  * round — and the label is the text on this product's shop option button.
  * Saves straight away, separate from the form's Save. See lib/variants.ts.
  */
-export default function ProductVariantsSection({ productId }: { productId: number }) {
+export default function ProductVariantsSection({
+    productId,
+    onMembersChange,
+}: {
+    productId: number;
+    /** Told the family after every load / change — the form uses it to offer the siblings' attributes. */
+    onMembersChange?: (members: VariantMember[]) => void;
+}) {
     const [family, setFamily] = useState<Family | null>(null);
     const [label, setLabel] = useState("");
     const [busy, setBusy] = useState(false);
     const [pickNonce, setPickNonce] = useState(0);
     const url = `/api/inventory/products/${productId}/variants`;
+
+    // A ref, so a parent passing a fresh arrow each render does not re-run this.
+    const membersCb = useRef(onMembersChange);
+    useEffect(() => {
+        membersCb.current = onMembersChange;
+    });
+    useEffect(() => {
+        if (family) membersCb.current?.(family.members);
+    }, [family]);
 
     useEffect(() => {
         let live = true;
@@ -150,6 +166,7 @@ export default function ProductVariantsSection({ productId }: { productId: numbe
                     allowCreate={false}
                     clearNonce={pickNonce}
                     placeholder="Search product by name or SKU…"
+                    excludeIds={[productId, ...members.map((m) => m.id)]}
                     onChange={(p) => {
                         if (!p) return;
                         setPickNonce((n) => n + 1);

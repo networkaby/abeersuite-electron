@@ -158,7 +158,7 @@ function taxSourceLabel(src: EffectiveTax["gstSource"]): string {
 /** Three tabs: Basics · Pricing & stock · Opening & tax. Shop-listing fields
  *  (name, slug, images, description) are edited at /office/ecommerce/products/[id],
  *  not here — this dialog owns the inventory master only. */
-export type InvProductFormTab = "basics" | "pricing" | "tax";
+export type InvProductFormTab = "basics" | "pricing" | "tax" | "variants";
 
 export function InvProductFormFields({
     form,
@@ -178,6 +178,8 @@ export function InvProductFormFields({
     isEditMode = false,
     defaultTab = "basics",
     onCreateMaster,
+    variantsSlot,
+    siblingAttrKeys = [],
 }: {
     form: InvProductFormState;
     setForm: React.Dispatch<React.SetStateAction<InvProductFormState>>;
@@ -198,6 +200,10 @@ export function InvProductFormFields({
     /** Initial tab. Callers that deep-link into a specific concern (e.g. Tax
      * Classification report → pencil) pass "tax" so the dialog opens on it. */
     defaultTab?: InvProductFormTab;
+    /** Content of the Variants tab — edit mode only (needs a saved product). */
+    variantsSlot?: React.ReactNode;
+    /** Attribute keys the other variants have filled — an empty one here is flagged. */
+    siblingAttrKeys?: string[];
     /** When provided, renders a "+ New" button next to each master picker that
      *  opens the InventoryMasterDropdownQuickDialog. Caller resolves with the new row id (or null
      *  if cancelled) — the form auto-selects it. */
@@ -313,6 +319,7 @@ export function InvProductFormFields({
                 <TabsTrigger value="basics">Basics</TabsTrigger>
                 <TabsTrigger value="pricing">Pricing &amp; stock</TabsTrigger>
                 <TabsTrigger value="tax">Tax &amp; opening</TabsTrigger>
+                {variantsSlot ? <TabsTrigger value="variants">Variants</TabsTrigger> : null}
             </TabsList>
 
             <TabsContent value="basics" className={tabPanel}>
@@ -498,14 +505,16 @@ export function InvProductFormFields({
                                         <div className="space-y-1.5">
                                             {form.attrs.map((a, i) => {
                                                 const master = attrMasters.find((m) => m.key === a.key);
+                                                const missing = !a.value.trim() && siblingAttrKeys.includes(a.key);
                                                 return (
-                                                    <div key={i} className="flex items-center gap-2">
+                                                    <div key={i} className="space-y-0.5">
+                                                    <div className="flex items-center gap-2">
                                                         <span className="min-w-[120px] font-mono text-xs font-medium text-muted-foreground" title={a.key}>
                                                             {master ? master.name : a.key}
                                                         </span>
                                                         <span className="text-muted-foreground text-xs">:</span>
                                                         <Input
-                                                            className="flex-1 text-sm"
+                                                            className={`flex-1 text-sm ${missing ? "border-destructive" : ""}`}
                                                             value={a.value}
                                                             onChange={(e) => {
                                                                 const next = form.attrs.slice();
@@ -522,6 +531,12 @@ export function InvProductFormFields({
                                                         >
                                                             <Trash2 className="size-4" />
                                                         </Button>
+                                                    </div>
+                                                    {missing ? (
+                                                        <p className="pl-[136px] text-[11px] text-destructive">
+                                                            Used by other variants — please fill.
+                                                        </p>
+                                                    ) : null}
                                                     </div>
                                                 );
                                             })}
@@ -805,6 +820,11 @@ export function InvProductFormFields({
                 </p>
             </TabsContent>
 
+            {variantsSlot ? (
+                <TabsContent value="variants" className={tabPanel}>
+                    {variantsSlot}
+                </TabsContent>
+            ) : null}
         </Tabs>
     );
 }

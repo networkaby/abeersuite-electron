@@ -33,6 +33,7 @@ import {
 import { InventoryMasterDropdownQuickDialog, type MasterKind } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
 import { generateSku } from "@/modules/inventory/lib/sku";
 import ProductVariantsSection from "@/modules/inventory/components/ProductVariantsSection";
+import type { VariantMember } from "@/modules/inventory/lib/variants";
 import {
     DEFAULT_NAMING_CONFIG,
     type NamingConfigShape,
@@ -178,6 +179,28 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
     const [effectiveTax, setEffectiveTax] = useState<EffectiveTax | null | undefined>(undefined);
     const [saving, setSaving] = useState(false);
     const [refsLoaded, setRefsLoaded] = useState(false);
+    // Attribute keys the OTHER variants have filled, and which product the form
+    // was last loaded for — rows are offered only once the form holds that product.
+    const [siblingAttrKeys, setSiblingAttrKeys] = useState<string[]>([]);
+    const [loadedFor, setLoadedFor] = useState<number | null>(null);
+    const offerSiblingAttrs = useCallback(
+        (members: VariantMember[]) => {
+            const keys = [...new Set(members.filter((m) => m.id !== editId).flatMap((m) => m.attrKeys))];
+            setSiblingAttrKeys((prev) => (prev.join() === keys.join() ? prev : keys));
+        },
+        [editId],
+    );
+    // A variant uses an attribute this product lacks → add it as an empty row so
+    // it is not forgotten. Runs when the sibling keys change, so a row the user
+    // removes stays removed. Empty rows are not saved.
+    useEffect(() => {
+        if (loadedFor == null || loadedFor !== editId || siblingAttrKeys.length === 0) return;
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- derived rows appended once per family change
+        setForm((f) => {
+            const miss = siblingAttrKeys.filter((k) => !f.attrs.some((a) => a.key === k));
+            return miss.length ? { ...f, attrs: [...f.attrs, ...miss.map((key) => ({ key, value: "" }))] } : f;
+        });
+    }, [siblingAttrKeys, loadedFor, editId]);
 
     /// Fan the replicated master lists out into their four Selects. Null means
     /// the replica could not be read AND the server could not be reached, so we
@@ -265,10 +288,14 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
                 });
             return;
         }
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- reset per opened product, before its load
+        setLoadedFor(null);
+        setSiblingAttrKeys([]);
         axios
             .get<InvProductRow>(`/api/inventory/products/${editId}`)
             .then((r) => {
                 setForm(rowToForm(r.data));
+                setLoadedFor(editId);
                 // Load cascade preview for edit mode.
                 return axios.get<EffectiveTax>(`/api/inventory/products/${editId}/resolved-tax`);
             })
@@ -300,6 +327,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
             return;
         }
 
+        const filledAttrs = form.attrs.filter((a) => a.key.trim() && a.value.trim());
         const payload = {
             sku: form.sku.trim(),
             name: form.name.trim(),
@@ -329,8 +357,9 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
             openingStock:     form.openingQty.trim()  === "" ? null : Number(form.openingQty),
             openingRate:      form.openingRate.trim() === "" ? null : Number(form.openingRate),
             openingBranchId:  form.openingBranchId || null,
-            attrsJson: form.attrs.filter((a) => a.key.trim()).length > 0
-                ? Object.fromEntries(form.attrs.filter((a) => a.key.trim()).map((a) => [a.key.trim(), a.value.trim()]))
+            // A row left empty (e.g. offered from a sibling variant) is not saved as "".
+            attrsJson: filledAttrs.length > 0
+                ? Object.fromEntries(filledAttrs.map((a) => [a.key.trim(), a.value.trim()]))
                 : null,
             // GST fields — null clears back to "inherit"; empty string treated as null.
             gstRateId:  form.gstRateId.trim() !== "" ? parseInt(form.gstRateId, 10) : null,
@@ -381,9 +410,14 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
                         isEditMode={editId != null}
                         defaultTab={defaultTab}
                         onCreateMaster={createMaster}
+                        siblingAttrKeys={siblingAttrKeys}
+                        // Saves on its own (not with Save) — needs a saved product.
+                        variantsSlot={
+                            editId != null ? (
+                                <ProductVariantsSection productId={editId} onMembersChange={offerSiblingAttrs} />
+                            ) : undefined
+                        }
                     />
-                    {/* Saves on its own (not with Save) — needs a saved product. */}
-                    {editId != null ? <ProductVariantsSection productId={editId} /> : null}
                 </div>
                 <div className="flex justify-end gap-2 border-t bg-muted/30 px-6 py-3">
                     <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

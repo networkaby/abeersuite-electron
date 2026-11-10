@@ -22,19 +22,30 @@ export type VariantMember = {
     variantLabel: string | null;
     isActive: boolean;
     shopStatus: string;
+    /** Attribute keys this member has filled — the form offers them to siblings. */
+    attrKeys: string[];
 };
 
-const MEMBER_SELECT = { id: true, sku: true, name: true, variantLabel: true, isActive: true, shopStatus: true } as const;
+const MEMBER_SELECT = { id: true, sku: true, name: true, variantLabel: true, isActive: true, shopStatus: true, attrsJson: true } as const;
 
 /** Every product in this product's family, itself included, by id. [] = no family. */
 export async function listVariantFamily(productId: number): Promise<VariantMember[]> {
     const p = await prisma.invProduct.findUnique({ where: { id: productId }, select: { variantFamilyId: true } });
     if (p?.variantFamilyId == null) return [];
-    return prisma.invProduct.findMany({
+    const rows = await prisma.invProduct.findMany({
         where: { variantFamilyId: p.variantFamilyId },
         select: MEMBER_SELECT,
         orderBy: { id: "asc" },
     });
+    return rows.map(({ attrsJson, ...m }) => ({
+        ...m,
+        attrKeys:
+            attrsJson && typeof attrsJson === "object" && !Array.isArray(attrsJson)
+                ? Object.entries(attrsJson as Record<string, unknown>)
+                      .filter(([, v]) => typeof v === "string" && v.trim())
+                      .map(([k]) => k)
+                : [],
+    }));
 }
 
 /**

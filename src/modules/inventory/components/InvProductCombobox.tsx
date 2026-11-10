@@ -64,6 +64,8 @@ type Props = {
     className?: string;
     /** Auto-focus the input on mount */
     autoFocus?: boolean;
+    /** Products not to offer (e.g. the ones already in a variant family). */
+    excludeIds?: number[];
     /**
      * When true (default), shows a "+ New product" CTA at the top of the
      * dropdown that opens an inline quick-create dialog. Pass `false` from
@@ -124,7 +126,7 @@ const PLACEMENT: DropdownPlacement = {
     },
 };
 
-export function InvProductCombobox({ value, onChange, placeholder = "Search item…", className = "", autoFocus = false, allowCreate = true, clearNonce = 0 }: Props) {
+export function InvProductCombobox({ value, onChange, placeholder = "Search item…", className = "", autoFocus = false, allowCreate = true, clearNonce = 0, excludeIds }: Props) {
     // Shared IndexedDB-backed catalogue — same array every picker on the page
     // reads, kept fresh by delta sync + realtime (see useProductCatalog).
     const { products: catalogProducts, loading } = useProductCatalog<ProductOption>();
@@ -168,11 +170,17 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
     // and an uncapped list mounted one <li> per catalogue row — the same shape
     // as the ledger dropdown that used to block the main thread for 1.8s. The
     // footer tells the operator why the list stops.
+    const excludeKey = excludeIds?.join(",") ?? "";
+    const offered = useMemo(() => {
+        if (!excludeKey) return products;
+        const skip = new Set(excludeKey.split(",").map(Number));
+        return products.filter((p) => !skip.has(p.id));
+    }, [products, excludeKey]);
     const filtered = useMemo(
         () => (query.trim()
-            ? searchProducts(products, query, { rows: MAX_ROWS }).rows
-            : products.slice(0, MAX_ROWS)),
-        [products, query],
+            ? searchProducts(offered, query, { rows: MAX_ROWS }).rows
+            : offered.slice(0, MAX_ROWS)),
+        [offered, query],
     );
     const truncated = filtered.length >= MAX_ROWS;
 
