@@ -54,6 +54,8 @@ export function ImageViewer({
     // Fingers down, for pinch: pointerId → last point.
     const touches = useRef(new Map<number, { x: number; y: number }>());
     const pinch = useRef<{ dist: number; scale: number } | null>(null);
+    // Set once a second finger lands; the gesture then ends without flipping or closing.
+    const pinched = useRef(false);
 
     // Mirrors scale + pos for handlers; every write goes through zoomTo / pan.
     const view = useRef({ scale: 1, x: 0, y: 0 });
@@ -174,13 +176,14 @@ export function ImageViewer({
                 className={`relative min-h-0 flex-1 touch-none select-none overflow-hidden ${scale > 1 ? "cursor-grab active:cursor-grabbing" : ""}`}
                 onPointerDown={(e) => {
                     touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-                    e.currentTarget.setPointerCapture(e.pointerId);
+                    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
                     if (touches.current.size === 2) {
                         const [a, b] = [...touches.current.values()];
                         pinch.current = { dist: Math.hypot(a.x - b.x, a.y - b.y), scale: view.current.scale };
-                        if (drag.current) drag.current.moved = true; // a pinch is never a click / swipe
+                        pinched.current = true; // this gesture is a pinch — never a click / swipe
                         return;
                     }
+                    if (touches.current.size === 1) pinched.current = false;
                     drag.current = { x: e.clientX, y: e.clientY, px: pos.x, py: pos.y, moved: false };
                     setDragging(true);
                 }}
@@ -210,7 +213,7 @@ export function ImageViewer({
                     if (touches.current.size > 0) return; // still a finger down
                     drag.current = null;
                     setDragging(false);
-                    if (!d) return;
+                    if (!d || pinched.current) return;
                     const dx = e.clientX - d.x;
                     // Not zoomed: a sideways swipe flips the photo.
                     if (view.current.scale === 1 && count > 1 && Math.abs(dx) > SWIPE && Math.abs(dx) > Math.abs(e.clientY - d.y)) {
