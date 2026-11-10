@@ -185,7 +185,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
     const [loadedFor, setLoadedFor] = useState<number | null>(null);
     const offerSiblingAttrs = useCallback(
         (members: VariantMember[]) => {
-            const keys = [...new Set(members.filter((m) => m.id !== editId).flatMap((m) => m.attrKeys))];
+            const keys = [...new Set(members.filter((m) => m.id !== editId).flatMap((m) => Object.keys(m.attrs)))];
             setSiblingAttrKeys((prev) => (prev.join() === keys.join() ? prev : keys));
         },
         [editId],
@@ -414,7 +414,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
                         // Saves on its own (not with Save) — needs a saved product.
                         variantsSlot={
                             editId != null ? (
-                                <ProductVariantsSection productId={editId} onMembersChange={offerSiblingAttrs} />
+                                <ProductVariantsSection productId={editId} onMembersChange={offerSiblingAttrs} selfReadOnly />
                             ) : undefined
                         }
                     />

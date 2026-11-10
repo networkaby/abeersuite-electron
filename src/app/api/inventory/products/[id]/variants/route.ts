@@ -5,35 +5,36 @@ import { recheckVariantFamilies } from "@/modules/ecommerce/lib/applyPublished";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError, parseIdParam } from "@/shared/lib/api";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
 import {
     addVariant,
-    cleanVariantLabel,
     listVariantFamily,
     removeVariant,
+    setMemberAttrs,
     VariantError,
 } from "@/modules/inventory/lib/variants";
 
 // /api/inventory/products/[id]/variants — the product's variant family
 // (modules/inventory/lib/variants.ts). Read by any signed-in staff; changes
-// need Products edit, like any other product field.
-//   GET                      → { label, members }
-//   POST   { otherId }       → add a product to this one's family
-//   PATCH  { label }         → this product's shop button text
-//   DELETE ?memberId=<id>    → take that product out of the family
+// need Products edit, like any other product field. The shop button text is
+// automatic (lib/shop/variants.ts) — there is no label to set.
+//   GET                                  → { members }
+//   POST   { otherId }                   → add a product to this one's family
+//   PATCH  { memberId, attrs: {k: v} }   → set a member's attributes ("" removes)
+//   DELETE ?memberId=<id>                → take that product out of the family
 
 async function familyResponse(id: number) {
-    const [self, members] = await Promise.all([
-        prisma.invProduct.findUnique({ where: { id }, select: { variantLabel: true } }),
-        listVariantFamily(id),
-    ]);
-    if (!self) return NextResponse.json({ error: "Product not found" }, { status: 404 });
-    return NextResponse.json({ label: self.variantLabel, members });
+    return NextResponse.json({ members: await listVariantFamily(id) });
 }
 
 function variantError(e: unknown, fallback: string) {
     if (e instanceof VariantError) return NextResponse.json({ error: e.message }, { status: 400 });
     return handleApiError(e, fallback);
+}
+
+/** A family change can move siblings into / out of Pending, and the shop buttons read the cached catalogue. */
+async function afterChange(ids: number[]) {
+    await recheckVariantFamilies(ids);
+    revalidateTag(STOREFRONT_PRODUCTS_TAG, { expire: 0 });
 }
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -60,10 +61,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             return NextResponse.json({ error: "Pick a product to add." }, { status: 400 });
         }
         await addVariant(id, otherId);
-        // A new member brings its attributes — siblings may now be missing one.
-        await recheckVariantFamilies([id, otherId]);
-        // The shop's option buttons come from the cached catalogue — refresh it now.
-        revalidateTag(STOREFRONT_PRODUCTS_TAG, { expire: 0 });
+        await afterChange([id, otherId]);
         return await familyResponse(id);
     } catch (e) {
         return variantError(e, "Failed to add variant");
@@ -76,12 +74,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     try {
         const { id, error } = await parseIdParam(params);
         if (error) return error;
-        const body = (await req.json().catch(() => ({}))) as { label?: unknown };
-        await prisma.invProduct.update({ where: { id }, data: { variantLabel: cleanVariantLabel(body.label) } });
-        revalidateTag(STOREFRONT_PRODUCTS_TAG, { expire: 0 });
+        const body = (await req.json().catch(() => ({}))) as { memberId?: unknown; attrs?: unknown };
+        const memberId = Number(body.memberId ?? id);
+        const attrs = body.attrs;
+        if (!attrs || typeof attrs !== "object" || Array.isArray(attrs)) {
+            return NextResponse.json({ error: "Nothing to save." }, { status: 400 });
+        }
+        const members = await listVariantFamily(id);
+        if (memberId !== id && !members.some((m) => m.id === memberId)) {
+            return NextResponse.json({ error: "That product is not in this family." }, { status: 400 });
+        }
+        await setMemberAttrs(memberId, attrs as Record<string, string>);
+        await afterChange([memberId]);
         return await familyResponse(id);
     } catch (e) {
-        return handleApiError(e, "Failed to save variant label");
+        return variantError(e, "Failed to save attribute");
     }
 }
 
@@ -97,10 +104,8 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
             return NextResponse.json({ error: "That product is not in this family." }, { status: 400 });
         }
         await removeVariant(memberId);
-        // The family (and the product that left it) no longer share attributes.
         // Every former member, as `id` itself may be the one that left.
-        await recheckVariantFamilies(members.map((m) => m.id));
-        revalidateTag(STOREFRONT_PRODUCTS_TAG, { expire: 0 });
+        await afterChange(members.map((m) => m.id));
         return await familyResponse(id);
     } catch (e) {
         return variantError(e, "Failed to remove variant");

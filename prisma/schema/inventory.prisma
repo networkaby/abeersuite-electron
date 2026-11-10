@@ -296,6 +296,7 @@ model InvProduct {
   /// "Add variant" on the product (modules/inventory/lib/variants.ts). null = no family.
   variantFamilyId         Int?
   /// The short text on the shop's option button ("Black", "6GB/128GB").
+  /// UNUSED since 2026-11-10 — the shop button text is automatic (lib/shop/variants.ts). Drop in a later migration.
   variantLabel            String?
   shopDescription         String?
   /// Display category label for storefront (falls back to InvCategory.name)

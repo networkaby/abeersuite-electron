@@ -1,4 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { Prisma } from "@/generated/prisma/client";
+import { variantAttrGaps } from "@/modules/ecommerce/lib/shopQualification";
 
 /**
  * Product variants (owner, 2026-11-10): "XYZ Black" and "XYZ Blue" stay two
@@ -19,14 +21,32 @@ export type VariantMember = {
     id: number;
     sku: string;
     name: string;
-    variantLabel: string | null;
     isActive: boolean;
     shopStatus: string;
-    /** Attribute keys this member has filled — the form offers them to siblings. */
-    attrKeys: string[];
+    /** Live in the shop now (PUBLISHED and the publish rules met). */
+    isListedInShop: boolean;
+    groupId: number | null;
+    /** Filled attributes, key → value (empty values are never stored). */
+    attrs: Record<string, string>;
+    /** Attributes a sibling has filled and this one has not ("Colour"). */
+    gaps: string[];
 };
 
-const MEMBER_SELECT = { id: true, sku: true, name: true, variantLabel: true, isActive: true, shopStatus: true, attrsJson: true } as const;
+const MEMBER_SELECT = {
+    id: true, sku: true, name: true, isActive: true, shopStatus: true, isListedInShop: true,
+    groupId: true, variantFamilyId: true, attrsJson: true,
+} as const;
+
+/** attrsJson → clean key → value, empty values dropped. */
+export function readAttrs(raw: unknown): Record<string, string> {
+    const out: Record<string, string> = {};
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+        for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+            if (typeof v === "string" && v.trim()) out[k] = v.trim();
+        }
+    }
+    return out;
+}
 
 /** Every product in this product's family, itself included, by id. [] = no family. */
 export async function listVariantFamily(productId: number): Promise<VariantMember[]> {
@@ -37,15 +57,31 @@ export async function listVariantFamily(productId: number): Promise<VariantMembe
         select: MEMBER_SELECT,
         orderBy: { id: "asc" },
     });
-    return rows.map(({ attrsJson, ...m }) => ({
-        ...m,
-        attrKeys:
-            attrsJson && typeof attrsJson === "object" && !Array.isArray(attrsJson)
-                ? Object.entries(attrsJson as Record<string, unknown>)
-                      .filter(([, v]) => typeof v === "string" && v.trim())
-                      .map(([k]) => k)
-                : [],
-    }));
+    const withAttrs = rows.map((r) => ({ ...r, attrs: readAttrs(r.attrsJson) }));
+    const gaps = variantAttrGaps(withAttrs);
+    return withAttrs.map(({ attrsJson: _a, variantFamilyId: _f, ...m }) => ({ ...m, gaps: gaps.get(m.id) ?? [] }));
+}
+
+/**
+ * Set some attributes on one product, keeping the others. An empty value
+ * removes the key — an empty attribute is never stored; the variant rule
+ * shows it as missing instead.
+ */
+export async function setMemberAttrs(productId: number, patch: Record<string, string>): Promise<void> {
+    const p = await prisma.invProduct.findUnique({ where: { id: productId }, select: { attrsJson: true } });
+    if (!p) throw new VariantError("Product not found.");
+    const next = readAttrs(p.attrsJson);
+    for (const [k, v] of Object.entries(patch)) {
+        const key = k.trim();
+        if (!key) continue;
+        const val = String(v ?? "").trim().slice(0, 120);
+        if (val) next[key] = val;
+        else delete next[key];
+    }
+    await prisma.invProduct.update({
+        where: { id: productId },
+        data: { attrsJson: Object.keys(next).length ? next : Prisma.DbNull },
+    });
 }
 
 /**
@@ -90,13 +126,6 @@ export async function removeVariant(productId: number): Promise<void> {
             await tx.invProduct.updateMany({ where: { variantFamilyId: p.variantFamilyId }, data: { variantFamilyId: null } });
         }
     });
-}
-
-/** The shop button text — trimmed, capped, "" = none. */
-export function cleanVariantLabel(v: unknown): string | null {
-    if (typeof v !== "string") return null;
-    const t = v.trim().slice(0, 40);
-    return t || null;
 }
 
 export class VariantError extends Error {}

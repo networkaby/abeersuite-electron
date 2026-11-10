@@ -66,6 +66,8 @@ type Props = {
     autoFocus?: boolean;
     /** Products not to offer (e.g. the ones already in a variant family). */
     excludeIds?: number[];
+    /** Hide the Cost Price column — for screens whose staff should not see cost (shop / variants). */
+    hideCost?: boolean;
     /**
      * When true (default), shows a "+ New product" CTA at the top of the
      * dropdown that opens an inline quick-create dialog. Pass `false` from
@@ -126,7 +128,7 @@ const PLACEMENT: DropdownPlacement = {
     },
 };
 
-export function InvProductCombobox({ value, onChange, placeholder = "Search item…", className = "", autoFocus = false, allowCreate = true, clearNonce = 0, excludeIds }: Props) {
+export function InvProductCombobox({ value, onChange, placeholder = "Search item…", className = "", autoFocus = false, allowCreate = true, clearNonce = 0, excludeIds, hideCost = false }: Props) {
     // Shared IndexedDB-backed catalogue — same array every picker on the page
     // reads, kept fresh by delta sync + realtime (see useProductCatalog).
     const { products: catalogProducts, loading } = useProductCatalog<ProductOption>();
@@ -170,6 +172,9 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
     // and an uncapped list mounted one <li> per catalogue row — the same shape
     // as the ledger dropdown that used to block the main thread for 1.8s. The
     // footer tells the operator why the list stops.
+    const gridCols = hideCost
+        ? "grid-cols-[minmax(0,1fr)_110px_110px_70px]"
+        : "grid-cols-[minmax(0,1fr)_140px_140px_140px_100px]";
     const excludeKey = excludeIds?.join(",") ?? "";
     const offered = useMemo(() => {
         if (!excludeKey) return products;
@@ -306,10 +311,10 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                     )}
 
                     {/* Column headers */}
-                    <div className="grid grid-cols-[minmax(0,1fr)_140px_140px_140px_100px] gap-x-3 border-b border-border bg-muted px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <div className={`grid ${gridCols} gap-x-3 border-b border-border bg-muted px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground`}>
                         <span>Item</span>
                         <span className="text-right">Sale Price</span>
-                        <span className="text-right">Cost Price</span>
+                        {hideCost ? null : <span className="text-right">Cost Price</span>}
                         <span className="text-right">MRP</span>
                         <span className="text-right">Stock</span>
                     </div>
@@ -342,7 +347,7 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                                                 onChange(toSelected(p));
                                             }}
                                             onMouseEnter={() => cb.setHighlighted(i)}
-                                            className={`grid grid-cols-[minmax(0,1fr)_140px_140px_140px_100px] gap-x-3 cursor-pointer px-3 py-2 transition-colors ${i === cb.highlighted ? "bg-accent" : "hover:bg-accent/60"
+                                            className={`grid ${gridCols} gap-x-3 cursor-pointer px-3 py-2 transition-colors ${i === cb.highlighted ? "bg-accent" : "hover:bg-accent/60"
                                                 }`}
                                         >
                                             {/* Name + SKU + brand + barcode */}
@@ -359,9 +364,11 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                                                 {formatINR(p.pricePaise)}
                                             </span>
                                             {/* Cost price — derived from LAST_INWARD walk (PR 3) */}
-                                            <span className="text-right text-xs tabular-nums text-muted-foreground self-center">
-                                                {formatINR(p.lastPurchasePaise)}
-                                            </span>
+                                            {hideCost ? null : (
+                                                <span className="text-right text-xs tabular-nums text-muted-foreground self-center">
+                                                    {formatINR(p.lastPurchasePaise)}
+                                                </span>
+                                            )}
                                             {/* MRP */}
                                             <span className="text-right text-xs tabular-nums text-muted-foreground self-center">
                                                 {formatINR(p.mrpPaise)}

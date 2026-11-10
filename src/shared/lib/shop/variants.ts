@@ -34,8 +34,8 @@ export function buildVariantOptions(
   const auto = autoVariantLabels(members);
   return members.map((p, i) => ({
     id: p.id,
-    // Typed label wins; else what tells this one apart; else the title.
-    label: p.variantLabel?.trim() || auto[i] || p.displayName,
+    // Automatic: what tells this one apart (attributes, brand, group, name); else the title.
+    label: auto[i] || p.displayName,
     href: pathOf(p),
     current: p.id === product.id,
     available: p.stockStatus !== "out_of_stock",

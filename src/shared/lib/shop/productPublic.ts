@@ -55,8 +55,6 @@ export type ShopProductPublic = {
   groupId: number | null;
   /** Hidden variant family number (InvProduct.variantFamilyId) — products sharing it show as option buttons. */
   variantFamilyId: number | null;
-  /** Text on this product's option button ("Black"). Optional — empty → worked out from the differences (lib/shop/variants.ts). */
-  variantLabel: string | null;
   /** Brand name — used to tell variants apart when brands differ. */
   brand: string | null;
   /** The product's own group name (not the shopCategory override). */
@@ -199,7 +197,6 @@ export function invProductToPublic(
         : [],
     groupId: p.groupId,
     variantFamilyId: p.variantFamilyId,
-    variantLabel: p.variantLabel,
     brand: p.brand?.name ?? null,
     groupName: group?.name ?? null,
     attrs,

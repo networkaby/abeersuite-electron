@@ -396,6 +396,8 @@ export default function ProductForm({
     const shopPricePaise = initial?.barcodePricePaise ?? initial?.pricePaise ?? 0;
     const effectiveMrpPaise = initial?.mrpPaise ?? null;
 
+    // Sibling attributes this product still lacks (variant publish rule).
+    const [selfGaps, setSelfGaps] = useState<string[]>(initial?.variantAttrGaps ?? []);
     const qualification = shopQualification(
         {
             pricePaise: shopPricePaise,
@@ -409,8 +411,8 @@ export default function ProductForm({
             stock: stockValue,
             allowBackorder,
             weightGrams: weightGrams.trim() === "" ? null : parseInt(weightGrams, 10),
-            // Attributes are edited in the inventory form; the server worked these out.
-            variantAttrGaps: initial?.variantAttrGaps ?? [],
+            // From the server, then kept current by the Variants table's edits.
+            variantAttrGaps: selfGaps,
         },
         rules
     );
@@ -456,7 +458,6 @@ export default function ProductForm({
         categoryPath: [],
         // Edited in the Variants section, which saves on its own.
         variantFamilyId: initial?.variantFamilyId ?? null,
-        variantLabel: initial?.variantLabel ?? null,
         brand: initial?.brand ?? null,
         attrs: initial?.attrs ?? {},
         pricePaise: shopPricePaise,
@@ -1038,7 +1039,15 @@ export default function ProductForm({
                 </div>
 
                 {/* Option buttons on the shop page — saves on its own (lib/variants.ts). */}
-                {initial?.id ? <ProductVariantsSection productId={initial.id} /> : null}
+                {initial?.id ? (
+                    <ProductVariantsSection
+                        productId={initial.id}
+                        onMembersChange={(ms) => {
+                            const self = ms.find((m) => m.id === initial.id);
+                            setSelfGaps(self ? self.gaps : []);
+                        }}
+                    />
+                ) : null}
 
                 <div className="rounded-lg border border-border p-3 space-y-2">
                     <div className="flex items-center justify-between">
