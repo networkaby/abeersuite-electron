@@ -1,34 +1,33 @@
-# v1.17.1
+# v1.17.2
 
-Every counter should install this one. It brings your own WhatsApp and email templates, smarter ticket workflows and a cleaner WhatsApp view on tickets. It also adds a few new settings to the database, so counters update first — a counter on an older version pauses its sync until it updates.
+Every counter should install this one. It adds product variants and an Attention stage for shop products, which changes the database — **update every counter first**; a counter that has not updated pauses its sync until it does. It also fixes a crash when adding an item to the cart on POS.
 
-## Your own message templates
+## Point of sale
 
-- Staff can now add their own WhatsApp and email templates next to the built-in ones. Custom templates cannot be deleted by mistake.
-- The template picker shows only templates that are ready to send — never sign-in codes.
+- Fixed: adding an item to the cart could crash the billing screen after a level discount.
+- The Gap figure now shows the real room left for a hand discount, after level discount, loyalty and coupon — and the bill shows the total Gap.
 
-## Ticket workflow
+## Products and variants
 
-- A status can send a WhatsApp and/or email template to the customer when a ticket enters it.
-- A status can move a ticket on by itself after a set number of days — for example Resolved → Closed after 7 days.
-- Choose which roles see a status's overdue tickets, and who may do a gated work, right on the Work form.
-- Worker steps can send your own WhatsApp / email templates. A UPI payment request from a ticket is skipped with a clear reason when it cannot be sent.
+- A product can now have variants (for example the same item in Black and Blue). Use **Add variant** on a product; each variant keeps its own photos, price and stock.
+- New **Variants** tab with an editable table; each variant has an **Open** link.
+- Attributes (like Length or Colour) can be set for several product groups at once; a parent group covers its subgroups.
+- The online name now follows the same name template as the offline name, and one Attributes token prints all of a product's attributes.
 
-## Help, repair and deal tickets
+## Online shop
 
-- The current stage is shown clearly in the header and the stage dropdown, and is never blank.
-- Move To buttons follow the stage's allowed next stages, on Help and now on Deals too.
-- Assign a seat, change priority and inquiry type right on the ticket. The seat holder gets an Inbox notice and the ticket shows in their Work Inbox at once.
-- Deals: edit the seat and follow-up date on the deal itself.
-- Repair: WhatsApp "received" / "ready" buttons appear only on their own stage.
+- Shop product pages show variant buttons, so customers can switch between options.
+- Product photos open full-screen with zoom and pinch.
+- Product page shows a scannable barcode and a Close button.
+- Changes to a variant's label show on the shop at once.
 
-## WhatsApp on tickets and messages
+## Preparing products for the shop
 
-- Back-to-back WhatsApp messages read as one run; automatic messages look quiet on the timeline, with the writer's photo.
-- WhatsApp photos open in a zoom viewer; ticket timelines show chat photos.
-- Linking a chat to a ticket copies its history faster.
-- WhatsApp popups and the notification panel stay usable over open dialogs and are no longer clipped by the sidebar.
+- New **Attention** stage: a product with a problem can be flagged and parked in its own tab, then resolved by saving it as draft or ready. Claude and the in-app AI park a clash here too.
+- Draft is again one copy per product, and the Products list shows the open draft.
+- AI-suggested photos open large before you tick them; Remove suggestions show consistently.
 
-## Screen layout
+## Boards and workflow
 
-- New third side-panel mode: a slim rail that opens when you hover over it.
+- Help, Deals and Tasks boards keep only the last 30 days of closed tickets and show 20 per column, with **Show more** — faster to open.
+- A status row can be expanded to see all its settings, and its resolve time can be set to **No time limit**.
