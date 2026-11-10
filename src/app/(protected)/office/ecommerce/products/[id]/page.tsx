@@ -99,6 +99,8 @@ export default function EcommerceProductEditPage() {
                 }}
             />
             <ProductForm
+                // Fresh form per product — the Variants "Open" link moves between ids on this page.
+                key={product.id}
                 initial={product}
                 submitLabel="Save changes"
                 onNameChange={setLiveName}

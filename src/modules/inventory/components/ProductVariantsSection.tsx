@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { X } from "lucide-react";
+import Link from "next/link";
+import { ExternalLink, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -114,6 +115,15 @@ export default function ProductVariantsSection({ productId }: { productId: numbe
                                     {!m.isActive ? " · inactive" : ""}
                                 </span>
                             </span>
+                            {m.id !== productId ? (
+                                <Button asChild variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs">
+                                    {/* The full product page — save this one first, its unsaved edits stay behind. */}
+                                    <Link href={`/office/ecommerce/products/${m.id}`} title="Open this product">
+                                        <ExternalLink className="size-3.5" />
+                                        Open
+                                    </Link>
+                                </Button>
+                            ) : null}
                             <Button
                                 type="button"
                                 variant="ghost"
