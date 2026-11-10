@@ -317,9 +317,9 @@ model VoucherAllocation {
 // Singleton org-level configuration. The book-restart day is shared by every
 // voucher series so a single year-end change rolls the whole business forward.
 model BooksConfig {
-  id           Int      @id @default(1) // singleton — always row id=1
-  restartMonth Int      @default(4) // 1-12; default April (Indian FY)
-  restartDay   Int      @default(1) // 1-31; default 1
+  id           Int @id @default(1) // singleton — always row id=1
+  restartMonth Int @default(4) // 1-12; default April (Indian FY)
+  restartDay   Int @default(1) // 1-31; default 1
 
   // ── Org period anchor ────────────────────────────────────────────────────
   // The counterpart of Company.booksBeginningFrom, which is per-PARTY (a
@@ -340,7 +340,7 @@ model BooksConfig {
   /// anything earlier belongs to the previous software or manual register.
   booksBeginningFrom DateTime? @db.Date
 
-  updatedAt    DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 }
 
 model VoucherSeries {
@@ -400,12 +400,12 @@ model VoucherSeries {
 model VoucherSeriesCounter {
   kind          String
   counterNumber Int
-  nextSeq       Int  @default(0)
+  nextSeq       Int      @default(0)
   /// Per-row FY tracker, same rollover rule as the series (BooksConfig restart day).
   fyStartYear   Int?
   /// The series' resetGen this row has applied. Behind the series → the owning
   /// counter zeroes nextSeq and catches up, in the same write as the FY rollover.
-  resetGen      Int  @default(0)
+  resetGen      Int      @default(0)
   updatedAt     DateTime @updatedAt
 
   series VoucherSeries @relation(fields: [kind], references: [kind])
@@ -553,31 +553,31 @@ model VoucherPrintTemplate {
 
 /// One upload of one bank ledger's statement.
 model BankStatementImport {
-  id                Int       @id @default(autoincrement())
+  id                Int                 @id @default(autoincrement())
   /// The bank ledger (Account under Bank Accounts / Bank OD A/c). Loose id.
   accountId         Int
   fileName          String
   /// sha1 of the file bytes — the same file uploaded twice is refused whole.
-  fileHash          String    @db.VarChar(40)
+  fileHash          String              @db.VarChar(40)
   /// Which parser understood the file: "sbi-tsv" | "generic" | …
   profile           String
   /// Read from the statement's own header when the bank prints them; checked
   /// against the ledger's bankJson before anything is saved.
   bankAccountNumber String?
   ifsc              String?
-  fromDate          DateTime? @db.Date
-  toDate            DateTime? @db.Date
-  openingBalance    Decimal?  @db.Decimal(14, 2)
-  closingBalance    Decimal?  @db.Decimal(14, 2)
+  fromDate          DateTime?           @db.Date
+  toDate            DateTime?           @db.Date
+  openingBalance    Decimal?            @db.Decimal(14, 2)
+  closingBalance    Decimal?            @db.Decimal(14, 2)
   /// Rows saved from this file.
   lineCount         Int
   /// Rows the file carried that were already saved by an earlier upload.
-  skippedCount      Int       @default(0)
+  skippedCount      Int                 @default(0)
   /// Rows refused because they were dated before the ledger's reconciled lock.
-  beforeLock        Int       @default(0)
+  beforeLock        Int                 @default(0)
   importedById      Int
-  importedBy        User      @relation("BankStatementImportedBy", fields: [importedById], references: [id])
-  createdAt         DateTime  @default(now())
+  importedBy        User                @relation("BankStatementImportedBy", fields: [importedById], references: [id])
+  createdAt         DateTime            @default(now())
   lines             BankStatementLine[]
 
   @@index([accountId, createdAt])
@@ -587,27 +587,27 @@ model BankStatementImport {
 /// the same shape. `withdrawal` = money out of the bank (our CREDIT leg),
 /// `deposit` = money in (our DEBIT leg).
 model BankStatementLine {
-  id          Int                 @id @default(autoincrement())
+  id          Int                  @id @default(autoincrement())
   importId    Int
-  import      BankStatementImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+  import      BankStatementImport  @relation(fields: [importId], references: [id], onDelete: Cascade)
   /// Denormalised from the import so the reconcile read can filter by ledger and date alone.
   accountId   Int
   /// Row order inside the file.
   seq         Int
-  date        DateTime            @db.Date
+  date        DateTime             @db.Date
   narration   String
   /// Cheque no / UTR / UPI ref / IMPS no — the bank's own column when it has one,
   /// else the token pulled out of the narration.
   reference   String?
-  withdrawal  Decimal?            @db.Decimal(14, 2)
-  deposit     Decimal?            @db.Decimal(14, 2)
+  withdrawal  Decimal?             @db.Decimal(14, 2)
+  deposit     Decimal?             @db.Decimal(14, 2)
   /// Running balance after this line, when the bank prints it.
-  balance     Decimal?            @db.Decimal(14, 2)
+  balance     Decimal?             @db.Decimal(14, 2)
   /// sha1(accountId|date|withdrawal|deposit|balance|narration|nth) — nth is the
   /// line's index among identical rows in the same file, so two genuinely equal
   /// entries on one day survive while a re-upload of the same period is skipped.
-  fingerprint String              @db.VarChar(40)
-  createdAt   DateTime            @default(now())
+  fingerprint String               @db.VarChar(40)
+  createdAt   DateTime             @default(now())
   matches     BankStatementMatch[]
 
   @@unique([accountId, fingerprint])

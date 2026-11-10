@@ -245,15 +245,15 @@ model BiGstPlanningFy {
 // which no income tax falls due. Every figure is editable — none is hard-coded.
 
 model BiGstPlanningConfig {
-  id                    Int      @id @default(1)
-  taxRatePercent        Decimal  @default(18) @db.Decimal(5, 2)
-  depositGapPercent     Decimal  @default(10) @db.Decimal(5, 2)
-  presumptiveRatePercent Decimal @default(8) @db.Decimal(5, 2)
-  incomeTaxFreeLimit    Decimal  @default(1200000) @db.Decimal(14, 2)
+  id                     Int      @id @default(1)
+  taxRatePercent         Decimal  @default(18) @db.Decimal(5, 2)
+  depositGapPercent      Decimal  @default(10) @db.Decimal(5, 2)
+  presumptiveRatePercent Decimal  @default(8) @db.Decimal(5, 2)
+  incomeTaxFreeLimit     Decimal  @default(1200000) @db.Decimal(14, 2)
   /// Bank + Bank OD ledger ids whose deposits count, e.g. [12, 45, 67]. Picked
   /// once and used for every month of every year.
-  bankAccountIds        Json     @default("[]")
-  updatedAt             DateTime @updatedAt
+  bankAccountIds         Json     @default("[]")
+  updatedAt              DateTime @updatedAt
 }
 
 // ── CreditLimitConfig (singleton, id=1) ──────────────────────────────────────

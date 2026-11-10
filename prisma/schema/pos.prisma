@@ -339,7 +339,7 @@ model PosHandover {
   // A's note/coin tally behind that count, shown to B: { lines: [{ denom, count }], otherPaise }.
   denominationsJson Json?
   countedByBPaise   BigInt? // retired — B no longer counts; kept for rows written before 2026-09-24
-  carryOverPaise    BigInt   @default(0) // retired — the whole drawer passes; kept for old rows
+  carryOverPaise    BigInt  @default(0) // retired — the whole drawer passes; kept for old rows
   notes             String?
 
   initiatedAt DateTime  @default(now())
@@ -349,7 +349,7 @@ model PosHandover {
   // `initiatedAt` is stamped when A hands over; B's acceptance — the counted cash
   // and the whole reason the record exists — mutates the row later and would never
   // reach the replica. `@default(now())` backfills on push. See Person.updatedAt.
-  updatedAt   DateTime  @default(now()) @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 
   @@index([updatedAt])
   @@map("pos_handovers")

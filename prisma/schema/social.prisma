@@ -85,15 +85,15 @@ model SocialConnection {
 // portal Social tab — its existence IS the "has joined social" flag. Deleting the
 // Person cascades it away.
 model CustomerSocialProfile {
-  id        Int      @id @default(autoincrement())
-  personId  Int      @unique
-  person    Person   @relation("PersonSocialProfile", fields: [personId], references: [id], onDelete: Cascade)
+  id       Int      @id @default(autoincrement())
+  personId Int      @unique
+  person   Person   @relation("PersonSocialProfile", fields: [personId], references: [id], onDelete: Cascade)
   /// Public handle (@nickname), unique across customers.
-  handle    String   @unique
+  handle   String   @unique
   /// Photo lives on Person.avatarUrl (shared with the rest of the portal).
-  coverUrl  String?
-  bio       String?
-  joinedAt  DateTime @default(now())
+  coverUrl String?
+  bio      String?
+  joinedAt DateTime @default(now())
 
   @@index([handle])
 }

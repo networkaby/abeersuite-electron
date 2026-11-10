@@ -14,52 +14,52 @@
 /// One WhatsApp message kind ("SALE" | "RECEIPT"). `body` uses friendly fields
 /// ({customer}, {billNo}, …) which billTemplates.ts turns into Meta's {{1}} slots.
 model WhatsAppTemplate {
-  kind          String    @id
+  kind         String    @id
   /// Staff's own name for a custom template (kind CUSTOM_<id>); null = built-in.
-  name          String?
-  enabled       Boolean   @default(false)
+  name         String?
+  enabled      Boolean   @default(false)
   /// Send by itself when the document is saved. Off = only staff's "Send on
   /// WhatsApp" (3-dot menu). Estimates start off (billTemplates WA_AUTO_SEND_DEFAULT).
-  autoSend      Boolean   @default(true)
-  body          String
+  autoSend     Boolean   @default(true)
+  body         String
   /// Text of the "View bill" URL button; null = no button.
-  viewButton    String?
+  viewButton   String?
   /// Text of the "Get our app" URL button; null = no button.
-  appButton     String?
+  appButton    String?
   /// DRAFT (edited, not sent) | PENDING (with Meta) | APPROVED | REJECTED
-  status        String    @default("DRAFT")
+  status       String    @default("DRAFT")
   /// Name of the copy last sent to Meta — `<kind>_bill_v<version>`.
-  metaName      String?
-  metaId        String?
-  rejectReason  String?
-  version       Int       @default(0)
-  submittedAt   DateTime?
+  metaName     String?
+  metaId       String?
+  rejectReason String?
+  version      Int       @default(0)
+  submittedAt  DateTime?
   /// The last copy Meta approved — what bills are actually sent with.
-  approvedName  String?
-  approvedBody  String?
-  approvedView  String?
-  approvedApp   String?
-  approvedAt    DateTime?
-  updatedAt     DateTime  @default(now()) @updatedAt
+  approvedName String?
+  approvedBody String?
+  approvedView String?
+  approvedApp  String?
+  approvedAt   DateTime?
+  updatedAt    DateTime  @default(now()) @updatedAt
 }
 
 /// One document announced to its customer — once per (kind, refId). `refId` is
 /// the UniversalVoucher id, or the Ticket id for the REPAIR_* kinds.
 model BillNotification {
-  id             Int       @id @default(autoincrement())
-  kind           String
-  refId          Int
-  personId       Int?
-  mobile         String?
+  id            Int      @id @default(autoincrement())
+  kind          String
+  refId         Int
+  personId      Int?
+  mobile        String?
   /// sent | no-subscription | failed | not-configured | no-person
-  pushStatus     String
-  pushMessageId  String?
+  pushStatus    String
+  pushMessageId String?
   /// sent | failed | not-configured | disabled | no-mobile
-  waStatus       String
-  waMessageId    String?
-  waError        String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @default(now()) @updatedAt
+  waStatus      String
+  waMessageId   String?
+  waError       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
 
   @@unique([kind, refId])
   @@index([personId, createdAt])
@@ -136,66 +136,66 @@ model EmailOptOut {
 
 /// Singleton (id = 1). The automation switch and its limits.
 model DueReminderSettings {
-  id          Int      @id @default(1)
+  id                 Int      @id @default(1)
   /// The daily job sends nothing while this is off.
-  enabled     Boolean  @default(false)
+  enabled            Boolean  @default(false)
   /// "HH:MM" India time — the job sends on its first run at or after this.
-  sendTime    String   @default("10:00")
+  sendTime           String   @default("10:00")
   /// Weekdays not to send on, 0 = Sunday … 6 = Saturday.
-  skipDays    Int[]    @default([5])
+  skipDays           Int[]    @default([5])
   /// Most automatic reminders in one day.
-  dailyCap    Int      @default(50)
+  dailyCap           Int      @default(50)
   /// Skip a party whose balance is below this (rupees).
-  minBalance  Decimal  @default(100) @db.Decimal(14, 2)
+  minBalance         Decimal  @default(100) @db.Decimal(14, 2)
   /// Skip a party owing less than this % of its auto credit limit (0 = off).
-  minPctAutoLimit   Int @default(0)
+  minPctAutoLimit    Int      @default(0)
   /// Skip a party owing less than this % of its manual credit limit (0 = off).
-  minPctCreditLimit Int @default(0)
+  minPctCreditLimit  Int      @default(0)
   /// Account ids never reminded — automation and Send to all skip them.
-  excludedAccountIds Int[] @default([])
+  excludedAccountIds Int[]    @default([])
   /// India date ("YYYY-MM-DD") the job last ran — once a day.
-  lastRunDate String?
-  updatedAt   DateTime @default(now()) @updatedAt
+  lastRunDate        String?
+  updatedAt          DateTime @default(now()) @updatedAt
 }
 
 /// One automation rule: oldest unpaid bill ≥ minDays AND balance ≥ minAmount.
 /// The strongest matching rule (highest minDays) wins for a party.
 model DueReminderRule {
-  id          Int      @id @default(autoincrement())
-  name        String
-  minDays     Int
-  minAmount   Decimal  @db.Decimal(14, 2)
+  id         Int      @id @default(autoincrement())
+  name       String
+  minDays    Int
+  minAmount  Decimal  @db.Decimal(14, 2)
   /// 0 = once per rule until the balance clears; N = again every N days.
-  repeatDays  Int      @default(0)
+  repeatDays Int      @default(0)
   /// SOFT | FIRM | CALL_LIST (no message — on the owner's call list).
-  action      String
-  enabled     Boolean  @default(true)
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @default(now()) @updatedAt
+  action     String
+  enabled    Boolean  @default(true)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
 }
 
 /// One reminder sent (or put on the call list) to one party.
 model DueReminderLog {
-  id            Int      @id @default(autoincrement())
-  accountId     Int
-  partyName     String
-  personId      Int?
-  amount        Decimal  @db.Decimal(14, 2)
+  id          Int      @id @default(autoincrement())
+  accountId   Int
+  partyName   String
+  personId    Int?
+  amount      Decimal  @db.Decimal(14, 2)
   /// SOFT | FIRM | CALL_LIST
-  action        String
+  action      String
   /// MANUAL | ALL | AUTO
-  mode          String
-  ruleId        Int?
-  mobile        String?
+  mode        String
+  ruleId      Int?
+  mobile      String?
   /// Same words as BillNotification.
-  pushStatus    String
-  waStatus      String
-  waMessageId   String?
-  waError       String?
+  pushStatus  String
+  waStatus    String
+  waMessageId String?
+  waError     String?
   /// Staff who pressed Send; null for the daily job.
-  sentById      Int?
-  createdAt     DateTime @default(now())
+  sentById    Int?
+  createdAt   DateTime @default(now())
 
   @@index([accountId, createdAt])
   @@index([createdAt])

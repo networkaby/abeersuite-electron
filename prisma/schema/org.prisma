@@ -39,15 +39,15 @@ model Branch {
   // Multi-branch inventory back-relations
   // Phase 5 5D-12: the primary voucher branch is on the spine now (UvBranch);
   // InvVoucher keeps only destinationBranch (branch-transfer detail).
-  universalVouchers UniversalVoucher[] @relation("UvBranch")
-  invVouchersAsDest VoucherDetail[]    @relation("InvVoucherDestBranch")
-  invStockLedger    InvStockLedger[]   @relation("InvStockLedgerBranch")
-  invProductStock   InvProductBranch[]
+  universalVouchers  UniversalVoucher[] @relation("UvBranch")
+  invVouchersAsDest  VoucherDetail[]    @relation("InvVoucherDestBranch")
+  invStockLedger     InvStockLedger[]   @relation("InvStockLedgerBranch")
+  invProductStock    InvProductBranch[]
   // Products whose OPENING quantity is lying at this branch. Stock location
   // only — the product master is org-wide. SetNull on delete: losing a branch
   // must not take the opening quantity with it, it just becomes unassigned
   // (and an unassigned opening folds into every branch again).
-  invProductOpenings InvProduct[]      @relation("InvProductOpeningBranch")
+  invProductOpenings InvProduct[]       @relation("InvProductOpeningBranch")
 
   // POS — per-branch vault account where end-of-day surplus lands
   vaultAccountId Int?
@@ -223,7 +223,7 @@ model OrgDefaults {
   // Product description option every product page opens on (Settings → AI
   // Setup): "direct" | "verified" (AI_COPY_FLOWS). Staff may switch for one
   // write. Admin-chosen, so bootstrap-seed leaves it untouched.
-  aiCopyFlow String @default("verified")
+  aiCopyFlow   String  @default("verified")
   // Verified's Photo AI (Settings → AI Setup): off = the read pages' photos are
   // suggested free, unlabelled; on = one extra AI call for the photo checklist,
   // remove advice and labels. Owner, 2026-10-22: default off to save AI cost.

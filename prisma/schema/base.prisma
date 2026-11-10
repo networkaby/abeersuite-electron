@@ -44,11 +44,11 @@ model Person {
   /// suppressed server-side, silently, on POS and shop. Hard-coded all-block
   /// for now; a settings toggle may refine the scope later. Toggle UI gated
   /// by customers:edit (same as credit limit).
-  noDiscount      Boolean @default(false)
+  noDiscount      Boolean        @default(false)
   /// Append-only staff timeline of rating/comment entries — see
   /// QualityLogEntry in src/modules/customer/lib/customerQuality.ts.
   /// Latest "rating" entry = current rating.
-  qualityLog      Json    @default("[]")
+  qualityLog      Json           @default("[]")
   /// Marketing segment (Corporate / School / Lawyer …) for product targeting.
   /// New master — NOT the old CRM tags/lifecycleStage.
   customerGroupId Int?
@@ -121,8 +121,8 @@ model Company {
   tags            String[]         @default([])
 
   // ── Customer Quality — mirror of Person, see comments there ──────────────
-  noDiscount      Boolean @default(false)
-  qualityLog      Json    @default("[]")
+  noDiscount      Boolean        @default(false)
+  qualityLog      Json           @default("[]")
   customerGroupId Int?
   customerGroup   CustomerGroup? @relation(fields: [customerGroupId], references: [id])
 
@@ -147,9 +147,9 @@ model Company {
   dealTickets  TicketDeal[] // deals (Ticket flavour "deal") linked to this company
   helpTickets  TicketHelp[] // help/enquiry tickets (Ticket flavour "help") linked to this company
   timelineLogs TicketLog[] // CRM Reconnect notes/calls logged directly on this company
-  owner       Position?       @relation("CompanyOwnerPosition", fields: [ownerPositionId], references: [id])
-  phones      Phone[]
-  emails      Email[]
+  owner        Position?       @relation("CompanyOwnerPosition", fields: [ownerPositionId], references: [id])
+  phones       Phone[]
+  emails       Email[]
 
   /// See Person's @@index([updatedAt]) — same reason.
   @@index([updatedAt])
@@ -173,9 +173,9 @@ model CustomerGroup {
   // ── Group pricing (Pricing Strategy → Group pricing) — POS only ─────────
   /// Which automatic benefits a customer of this group may get on a POS bill.
   /// The customer's own noDiscount flag still blocks all three regardless.
-  allowTierDiscount Boolean @default(true)
-  allowCoupons      Boolean @default(true)
-  allowLoyalty      Boolean @default(true)
+  allowTierDiscount Boolean                  @default(true)
+  allowCoupons      Boolean                  @default(true)
+  allowLoyalty      Boolean                  @default(true)
   priceRules        CustomerGroupPriceRule[]
 }
 
@@ -231,7 +231,7 @@ model PersonCompany {
   // `linkedAt` never moves, so unlinking someone from a company would not reach
   // the replica and the counter would keep showing a contact as employed there.
   // `@default(now())` backfills existing rows on push. See Person.updatedAt above.
-  updatedAt  DateTime  @default(now()) @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 
   @@index([personId])
   @@index([companyId])
@@ -253,20 +253,20 @@ model PersonCompany {
 // joining through PersonCompany — it never owns a duplicate row.
 
 model Phone {
-  id        Int      @id @default(autoincrement())
-  phone     String   @unique
-  personId  Int?
-  companyId Int?
-  label     String?
-  isPrimary Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id         Int       @id @default(autoincrement())
+  phone      String    @unique
+  personId   Int?
+  companyId  Int?
+  label      String?
+  isPrimary  Boolean   @default(false)
+  createdAt  DateTime  @default(now())
   /// Load-bearing for the counters, not bookkeeping. Without it the sync
   /// registry files this table as `append` on `createdAt` (see
   /// scripts/gen-sync-registry.ts), so a replica receives NEW phones but never
   /// an edited or deleted one — and the hourly reconcile compares an append
   /// table on keys alone, so a corrected number stays wrong at the till forever.
   /// `@default(now())` backfills existing rows on push. See Person.updatedAt.
-  updatedAt DateTime @default(now()) @updatedAt
+  updatedAt  DateTime  @default(now()) @updatedAt
   /// When ownership was proved. Staff-entered contacts are verified on entry
   /// (they met the customer); a portal OTP sets it too. Null only for a contact
   /// the customer typed into the portal without an OTP — POS search still finds
@@ -284,15 +284,15 @@ model Phone {
 }
 
 model Email {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  personId  Int?
-  companyId Int?
-  label     String?
-  isPrimary Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id         Int       @id @default(autoincrement())
+  email      String    @unique
+  personId   Int?
+  companyId  Int?
+  label      String?
+  isPrimary  Boolean   @default(false)
+  createdAt  DateTime  @default(now())
   /// See Phone.updatedAt — same reason, same backfill.
-  updatedAt DateTime @default(now()) @updatedAt
+  updatedAt  DateTime  @default(now()) @updatedAt
   /// When ownership was proved. Staff-entered contacts are verified on entry
   /// (they met the customer); a portal OTP sets it too. Null only for a contact
   /// the customer typed into the portal without an OTP — POS search still finds

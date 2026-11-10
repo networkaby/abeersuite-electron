@@ -60,9 +60,9 @@ model GstRate {
 }
 
 model InvCategory {
-  id        Int           @id @default(autoincrement())
-  name      String
-  slug      String?       @unique
+  id                 Int           @id @default(autoincrement())
+  name               String
+  slug               String?       @unique
   /// Ecommerce-module-owned shop presentation fields (edited at
   /// /office/ecommerce/masters, not the inventory master page). InvCategory is
   /// the customer-facing **Collection** — the cross-cutting merchandising axis
@@ -70,11 +70,11 @@ model InvCategory {
   /// loyalty/coupon rules and the
   /// BRAND → GROUP → CATEGORY → ORG pricing chain, so its rows may be edited
   /// freely but must not be re-keyed or restructured casually.
-  imageUrl    String?
-  description String?
-  parentId  Int?
-  parent    InvCategory?  @relation("InvCategoryHierarchy", fields: [parentId], references: [id])
-  children  InvCategory[] @relation("InvCategoryHierarchy")
+  imageUrl           String?
+  description        String?
+  parentId           Int?
+  parent             InvCategory?  @relation("InvCategoryHierarchy", fields: [parentId], references: [id])
+  children           InvCategory[] @relation("InvCategoryHierarchy")
   /// Movement-band overrides (days since last sale). null = inherit parent
   /// category → OrgDefaults.reorder*AfterDays. Second rung of the resolution
   /// (product's group chain wins first) — consumables vs CCTV don't share
@@ -82,15 +82,15 @@ model InvCategory {
   slowAfterDays      Int?
   nonMovingAfterDays Int?
   deadAfterDays      Int?
-  isActive  Boolean       @default(true)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  isActive           Boolean       @default(true)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
   products         InvProduct[]
   /// Every product in this Collection (a product may sit in several).
   collectionLinks  InvProductCollection[]
-  loyaltyEarnRules LoyaltyEarnRule[]    @relation("InvCategoryLoyaltyRules")
-  couponRules      CouponProductRule[]  @relation("CouponRuleCategory")
+  loyaltyEarnRules LoyaltyEarnRule[]      @relation("InvCategoryLoyaltyRules")
+  couponRules      CouponProductRule[]    @relation("CouponRuleCategory")
 
   @@index([parentId])
 }
@@ -115,10 +115,10 @@ model InvProductGroup {
   // ── Hierarchy ──────────────────────────────────────────────────────────────
   // Self-referential parent chain drives the GST / HSN / Taxability cascade
   // on InvProduct: product → group → parent group → … → OrgDefaults.
-  parentId Int?
-  parent   InvProductGroup?  @relation("InvProductGroupHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
-  children InvProductGroup[] @relation("InvProductGroupHierarchy")
-  attributeMasters InvAttributeMaster[]
+  parentId         Int?
+  parent           InvProductGroup?          @relation("InvProductGroupHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children         InvProductGroup[]         @relation("InvProductGroupHierarchy")
+  attributeMasters InvAttributeMasterGroup[]
 
   // ── GST / HSN classification (optional — inherited from parent when null) ──
   gstRateId  Int?
@@ -133,9 +133,9 @@ model InvProductGroup {
   nonMovingAfterDays Int?
   deadAfterDays      Int?
 
-  products         InvProduct[]
-  loyaltyEarnRules LoyaltyEarnRule[]   @relation("InvProductGroupLoyaltyRules")
-  couponRules      CouponProductRule[] @relation("CouponRuleGroup")
+  products           InvProduct[]
+  loyaltyEarnRules   LoyaltyEarnRule[]        @relation("InvProductGroupLoyaltyRules")
+  couponRules        CouponProductRule[]      @relation("CouponRuleGroup")
   customerPriceRules CustomerGroupPriceRule[]
 
   @@unique([name])
@@ -182,22 +182,33 @@ model InvWarrantyTerm {
 /// convention and the key dropdown on the product form. Attributes can be global
 /// (categoryId = null) or restricted to a single category.
 model InvAttributeMaster {
-  id         Int          @id @default(autoincrement())
+  id        Int                       @id @default(autoincrement())
   /// Machine key stored in InvProduct.attrsJson (e.g. "ram", "storage", "os").
-  /// Unique on its own — one key is either global or belongs to one group.
+  /// Unique on its own — one key, global or on a set of groups.
   /// The label (name) may repeat.
-  key        String       @unique
+  key       String                    @unique
   /// Human-readable label shown on forms (e.g. "RAM", "Storage", "OS").
-  name       String
-  /// null = applies to all groups; non-null = shown only for products of this group.
-  groupId    Int?
-  group      InvProductGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  sortOrder  Int          @default(0)
-  isActive   Boolean      @default(true)
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
+  name      String
+  /// Groups this attribute applies to (a group covers its subgroups). None = global.
+  groups    InvAttributeMasterGroup[]
+  sortOrder Int                       @default(0)
+  isActive  Boolean                   @default(true)
+  createdAt DateTime                  @default(now())
+  updatedAt DateTime                  @updatedAt
+}
 
+/// Attribute ↔ group, many-to-many (owner, 2026-11-10): "Length" on Wire, USB
+/// Cable and Cat 6 Cable from different parents. A ticked group covers its
+/// whole subtree; an attribute with no rows is global.
+model InvAttributeMasterGroup {
+  attributeId Int
+  attribute   InvAttributeMaster @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  groupId     Int
+  group       InvProductGroup    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([attributeId, groupId])
   @@index([groupId])
+  @@map("inv_attribute_master_groups")
 }
 
 /// Singleton config — drives auto-fill of InvProduct.name (offline),
@@ -278,7 +289,7 @@ model InvProduct {
 
   // ── Ecommerce / storefront fields (null = not listed in shop) ──────────────
   /// URL-safe handle for /shop/product/[handle]
-  slug                    String? @unique
+  slug                    String?    @unique
   shopSubheading          String?
   /// Variant family (owner, 2026-11-10): products sharing this number are one
   /// item in different options (XYZ Black / XYZ Blue). Hidden from staff — set by
@@ -314,11 +325,11 @@ model InvProduct {
   /// O2C reservation: units HELD by confirmed-but-not-yet-fulfilled orders.
   /// available-to-sell = stock − reserved. Incremented when an order is Confirmed,
   /// decremented on Cancel/Return; converted to a real stock-out at Fulfil.
-  reserved                Int     @default(0)
+  reserved                Int        @default(0)
   /// Manual minimum-alert floor. The reorder check uses
   /// max(avgDailyUsage × leadTimeDays, lowStockThreshold) — so this is the
   /// backstop for new / no-history items, not the whole reorder point.
-  lowStockThreshold       Int     @default(5)
+  lowStockThreshold       Int        @default(5)
   /// Supplier lead time in days for THIS product (reorder-point coverage
   /// horizon). null = inherit OrgDefaults.defaultLeadTimeDays.
   leadTimeDays            Int?
@@ -334,7 +345,7 @@ model InvProduct {
   minOrderQty             Int?
   /// Live in the shop right now = shopStatus PUBLISHED and the publish rules met
   /// (shopListing.ts). Computed on every shop save — never set on its own.
-  isListedInShop          Boolean @default(false)
+  isListedInShop          Boolean    @default(false)
   /// Online-shop stage: UNPUBLISHED (new, made at a counter, untouched) →
   /// DRAFT (being worked on, off the shop) → READY (work complete, waiting for
   /// a good time) → PUBLISHED. "Pending" = PUBLISHED with a publish rule unmet —
@@ -350,7 +361,7 @@ model InvProduct {
   shopDraftAt             DateTime?
   /// Per-product override of the org out-of-stock policy: when true the shop
   /// accepts orders for this product even at zero stock (backorder / procure later).
-  allowBackorder          Boolean @default(false)
+  allowBackorder          Boolean    @default(false)
   /// Shipping weight of ONE unit, in grams. Drives the courier rate at checkout
   /// (Shiprocket serviceability is priced by parcel weight) — the order parcel
   /// weight is Σ(weightGrams × qty). null = unknown; the quote falls back to the
@@ -368,10 +379,10 @@ model InvProduct {
   /// BS valuation. See `enum CostMethod`. Null = inherit from the matched
   /// strategy (which itself may inherit to OrgDefaults.valuationMethod).
   /// Resolution: product.costMethod ?? strategy.costMethod ?? OrgDefaults.valuationMethod.
-  costMethod      CostMethod?
+  costMethod    CostMethod?
   /// Per-item margin override in percent (e.g. 18.50 = +18.5%). null = walk the
   /// PricingStrategy chain (BRAND → GROUP → CATEGORY → ORG).
-  marginPercent   Decimal?    @db.Decimal(6, 2)
+  marginPercent Decimal?    @db.Decimal(6, 2)
 
   // ── Saved "Sale Price" (the human sale price — barcode source) ──────────────
   /// Which source materializes effectiveSalePricePaise. SAVED = the frozen
@@ -393,7 +404,7 @@ model InvProduct {
   /// See src/modules/pricing-strategy/lib/barcodeStore.ts.
   barcodeManualPaise       Int?
   /// true = the stored barcode was typed by hand (violet on screen); false = made from the bands.
-  barcodeIsManual          Boolean  @default(false)
+  barcodeIsManual          Boolean                  @default(false)
   /// effectiveSalePricePaise when the barcode was last saved — or re-based by a
   /// hand change of the selling price (source switch; margin while COMPUTED;
   /// Sale Price while SAVED). barcode − this = the ORIGINAL gap; Needs
@@ -466,7 +477,7 @@ model InvProduct {
   couponFreeProducts        Coupon[]                   @relation("CouponFreeProduct")
   couponBuyProducts         Coupon[]                   @relation("CouponBuyProduct")
   couponRules               CouponProductRule[]        @relation("CouponRuleProduct")
-    protection                ProductProtection?
+  protection                ProductProtection?
   additionalCostAllocations AdditionalCostAllocation[]
 
   @@index([unitId])
@@ -487,11 +498,11 @@ model InvProduct {
 
 /// Blacklist a product from all discount engines (coupons, loyalty, tiers).
 model ProductProtection {
-  id        Int      @id @default(autoincrement())
-  productId Int      @unique
+  id        Int        @id @default(autoincrement())
+  productId Int        @unique
   product   InvProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
   @@map("product_protection")
 }
@@ -714,15 +725,15 @@ model VoucherDetail {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  // Phase 5 5D-18: physical table renamed InvVoucher → VoucherDetail to match the
+  // model (the @@map bandage removed). Dev-only ALTER TABLE RENAME, data preserved.
+
   // The Day Book resolves the "Converted" mark by asking which vouchers point
   // BACK at a given one — a reverse lookup on this column that ran unindexed.
   @@index([refVoucherId])
   // Delta sync: "which trade details changed since <ts>?". A voucher edit can
   // touch this row without touching the spine, so both carry the same index.
   @@index([updatedAt])
-
-  // Phase 5 5D-18: physical table renamed InvVoucher → VoucherDetail to match the
-  // model (the @@map bandage removed). Dev-only ALTER TABLE RENAME, data preserved.
 }
 
 // Phase 4 G4c: renamed InvVoucherLine → VoucherInventoryLine (vocabulary.md — the

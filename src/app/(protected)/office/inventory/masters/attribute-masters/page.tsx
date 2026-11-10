@@ -10,13 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import {
     Table,
     TableBody,
     TableCell,
@@ -26,20 +19,21 @@ import {
 } from "@/components/ui/table";
 import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableStates";
 import { useDeleteWithConfirm } from "@/shared/hooks";
+import { SearchableMultiSelect } from "@/shared/components/SearchableMultiSelect";
 import { flattenTree, treeLabel } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
 
-type Group = { id: number; name: string };
+type Group = { id: number; name: string; parentId?: number | null };
 type Row = {
     id: number;
     key: string;
     name: string;
-    groupId: number | null;
-    group: { id: number; name: string } | null;
+    groupIds: number[];
+    groups: { id: number; name: string }[];
     sortOrder: number;
     isActive: boolean;
 };
 
-const emptyForm = { key: "", name: "", groupId: "", sortOrder: "0", isActive: true };
+const emptyForm = { key: "", name: "", groupIds: [] as number[], sortOrder: "0", isActive: true };
 
 export default function AttributeMastersPage() {
     const [rows, setRows] = useState<Row[]>([]);
@@ -87,7 +81,7 @@ export default function AttributeMastersPage() {
         const payload = {
             key:        form.key.trim(),
             name:       form.name.trim(),
-            groupId: form.groupId && form.groupId !== "__none__" ? Number(form.groupId) : null,
+            groupIds:  form.groupIds,
             sortOrder:  Number(form.sortOrder) || 0,
             isActive:   form.isActive,
         };
@@ -128,7 +122,7 @@ export default function AttributeMastersPage() {
         setForm({
             key:       r.key,
             name:      r.name,
-            groupId: r.groupId != null ? String(r.groupId) : "",
+            groupIds:  r.groupIds,
             sortOrder: String(r.sortOrder),
             isActive:  r.isActive,
         });
@@ -149,7 +143,7 @@ export default function AttributeMastersPage() {
 
             <p className="flex-none text-sm text-muted-foreground">
                 Define the attribute keys used in product custom attributes (e.g. <code className="font-mono text-xs">ram</code>, <code className="font-mono text-xs">storage</code>, <code className="font-mono text-xs">os</code>).
-                Optionally restrict an attribute to one group — the product form offers the product&apos;s group attributes plus global ones.
+                Optionally limit an attribute to some groups — ticking a parent covers all its subgroups, and subgroups from different parents can be mixed. With none ticked it is global.
                 The naming convention&apos;s <strong>Attributes</strong> token prints every attribute a product has.
             </p>
 
@@ -179,22 +173,21 @@ export default function AttributeMastersPage() {
                                 placeholder="RAM"
                             />
                         </div>
-                        <div className="space-y-2 min-w-[180px]">
-                            <Label>Group <span className="text-[10px] text-muted-foreground font-normal">(optional)</span></Label>
-                            <Select
-                                value={form.groupId || "__none__"}
-                                onValueChange={(v) => setForm((f) => ({ ...f, groupId: v === "__none__" ? "" : v }))}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="All groups" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="__none__">All groups (global)</SelectItem>
-                                    {flattenTree(groups).map((r) => (
-                                        <SelectItem key={r.id} value={String(r.id)}>{treeLabel(r)}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                        <div className="space-y-2 min-w-[260px] flex-1">
+                            <Label>
+                                Groups <span className="text-[10px] text-muted-foreground font-normal">(none = all groups; a group covers its subgroups)</span>
+                            </Label>
+                            <SearchableMultiSelect
+                                value={form.groupIds}
+                                onChange={(ids) => setForm((f) => ({ ...f, groupIds: ids }))}
+                                placeholder="All groups (global)"
+                                options={flattenTree(groups).map((r) => ({
+                                    value: r.id,
+                                    label: treeLabel(r),
+                                    leaf: r.name,
+                                    searchText: r.name,
+                                }))}
+                            />
                         </div>
                         <div className="space-y-2 w-20">
                             <Label>Order</Label>
@@ -222,7 +215,7 @@ export default function AttributeMastersPage() {
                         <TableRow>
                             <TableHead>Key</TableHead>
                             <TableHead>Label</TableHead>
-                            <TableHead>Group</TableHead>
+                            <TableHead>Groups</TableHead>
                             <TableHead className="text-right"> </TableHead>
                         </TableRow>
                     </TableHeader>
@@ -237,7 +230,7 @@ export default function AttributeMastersPage() {
                                     <TableCell className="font-mono text-xs">{r.key}</TableCell>
                                     <TableCell className="font-medium">{r.name}</TableCell>
                                     <TableCell className="text-sm text-muted-foreground">
-                                        {r.group ? r.group.name : <em>Global</em>}
+                                        {r.groups.length ? r.groups.map((g) => g.name).join(", ") : <em>Global</em>}
                                     </TableCell>
                                     <TableCell className="text-right space-x-2">
                                         {!r.isActive ? <Badge variant="outline">inactive</Badge> : null}

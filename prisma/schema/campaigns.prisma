@@ -54,33 +54,33 @@ model Campaign {
 /// scheduledAt, photos } } — a null field follows the main post (post.ts
 /// `channelPost`). `scheduledAt` is always the earliest channel's time.
 model Post {
-  id            Int         @id @default(autoincrement())
-  caption       String
+  id             Int         @id @default(autoincrement())
+  caption        String
   /// A shop page the post links to ("/shop/hp-15s"), never another site.
-  link          String?
+  link           String?
   /// Hashtags typed once ("#Abhayapuri #CCTV"), added under the text on
   /// HASHTAG_CHANNELS only (Instagram, Facebook) — post.ts `channelPost`.
-  hashtags      String?
-  channels      String[]
-  status        String      @default("DRAFT")
-  scheduledAt   DateTime?
+  hashtags       String?
+  channels       String[]
+  status         String      @default("DRAFT")
+  scheduledAt    DateTime?
   /// Last "Post due — share now" staff push; the job waits POST_REMINDER_EVERY_MIN after it.
   lastRemindedAt DateTime?
-  googleType    String      @default("UPDATE")
-  googleButton  String?
-  mediaKey      String?
-  mediaType     String?
-  mediaName     String?
-  mediaSize     Int?
-  extraMedia    Json        @default("[]")
-  variants      Json        @default("{}")
-  campaignId    Int?
-  campaign      Campaign?   @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  createdById   Int?
-  createdByName String?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  shares        PostShare[]
+  googleType     String      @default("UPDATE")
+  googleButton   String?
+  mediaKey       String?
+  mediaType      String?
+  mediaName      String?
+  mediaSize      Int?
+  extraMedia     Json        @default("[]")
+  variants       Json        @default("{}")
+  campaignId     Int?
+  campaign       Campaign?   @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  createdById    Int?
+  createdByName  String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  shares         PostShare[]
 
   @@index([status, scheduledAt])
   @@index([campaignId])

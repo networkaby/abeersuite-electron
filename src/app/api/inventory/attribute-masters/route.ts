@@ -5,31 +5,26 @@ import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
+import { ATTR_MASTER_INCLUDE, toAttrMasterRow } from "@/modules/inventory/lib/attributeMasters";
 
 const createSchema = z.object({
-    key:        z.string().min(1).max(64).regex(/^[a-z][a-z0-9_]*$/, "Key must be lowercase letters, digits, underscores, starting with a letter"),
-    name:       z.string().min(1).max(100),
-    groupId: z.number().int().positive().nullish(),
-    sortOrder:  z.number().int().min(0).default(0),
-    isActive:   z.boolean().default(true),
+    key:       z.string().min(1).max(64).regex(/^[a-z][a-z0-9_]*$/, "Key must be lowercase letters, digits, underscores, starting with a letter"),
+    name:      z.string().min(1).max(100),
+    /** Groups it applies to — each covers its subgroups. Empty = global. */
+    groupIds:  z.array(z.number().int().positive()).max(200).default([]),
+    sortOrder: z.number().int().min(0).default(0),
+    isActive:  z.boolean().default(true),
 });
 
-export async function GET(req: Request) {
+export async function GET() {
     const { response } = await requireAuth();
     if (response) return response;
     try {
-        const url = new URL(req.url);
-        const groupIdParam = url.searchParams.get("groupId");
-        const groupId = groupIdParam ? Number(groupIdParam) : undefined;
-
         const rows = await prisma.invAttributeMaster.findMany({
-            where: groupId != null
-                ? { OR: [{ groupId }, { groupId: null }] }
-                : undefined,
-            orderBy: [{ groupId: "asc" }, { sortOrder: "asc" }, { name: "asc" }],
-            include: { group: { select: { id: true, name: true } } },
+            orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+            include: ATTR_MASTER_INCLUDE,
         });
-        return NextResponse.json(rows);
+        return NextResponse.json(rows.map(toAttrMasterRow));
     } catch (e) {
         return handleApiError(e, "Failed to fetch attribute masters");
     }
@@ -43,15 +38,15 @@ export async function POST(req: Request) {
         if (error) return error;
         const row = await prisma.invAttributeMaster.create({
             data: {
-                key:        data.key,
-                name:       data.name,
-                groupId: data.groupId ?? null,
-                sortOrder:  data.sortOrder,
-                isActive:   data.isActive,
+                key:       data.key,
+                name:      data.name,
+                sortOrder: data.sortOrder,
+                isActive:  data.isActive,
+                groups:    { create: [...new Set(data.groupIds)].map((groupId) => ({ groupId })) },
             },
-            include: { group: { select: { id: true, name: true } } },
+            include: ATTR_MASTER_INCLUDE,
         });
-        return NextResponse.json(row, { status: 201 });
+        return NextResponse.json(toAttrMasterRow(row), { status: 201 });
     } catch (e: unknown) {
         if (e instanceof Error && e.message.includes("Unique constraint")) {
             return NextResponse.json({ error: "This key already exists — keys must be unique (labels may repeat)" }, { status: 409 });

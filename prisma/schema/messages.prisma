@@ -67,7 +67,7 @@ model Message {
   /// Null on rows from before conversations existed.
   conversationId Int?
   /// Staff member who sent an OUT reply; null for IN rows and system sends.
-  sentByUserId Int?
+  sentByUserId   Int?
 
   /// OUT delivery state: sent | delivered | read | failed. Null on IN rows.
   status      String?
@@ -79,7 +79,7 @@ model Message {
   seenAt DateTime?
   /// Spam is a property of the NUMBER, as on Call: flagging one message flags
   /// every message from that phone, and new ones arrive flagged.
-  spam   Boolean @default(false)
+  spam   Boolean   @default(false)
 
   /// When the message actually happened (the channel's own timestamp).
   occurredAt DateTime

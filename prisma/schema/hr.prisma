@@ -22,29 +22,29 @@ model StaffProfile {
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   /// Auto-generated employee code ("EMP-786", "EMP-787"...) starting from 786; unique when set. Editable if custom ID is needed.
-  staffCode      String?   @unique
-  joinedOn       DateTime? @db.Date
+  staffCode        String?   @unique
+  joinedOn         DateTime? @db.Date
   /// No sign-in from this date (inclusive). Null = current staff. Set through the
   /// HR profile's "Mark as left", which also vacates the seats and signs out every
   /// open session; the User row itself is never deleted by HR.
-  leftOn         DateTime? @db.Date
-  leftReason     String?
+  leftOn           DateTime? @db.Date
+  leftReason       String?
   /// FULL_TIME | PART_TIME | HELPER | CONTRACT — a plain string, validated by zod.
   /// Not an enum: a new kind would need its own migration file (ADD VALUE cannot
   /// be used in the transaction that adds it).
-  employmentType String    @default("FULL_TIME")
+  employmentType   String    @default("FULL_TIME")
   /// 0 = Sunday … 6 = Saturday, the BackupConfig.weekdays convention. The
   /// attendance phase reads it; nothing in phase 1 does.
-  weeklyOff      Int[]     @default([0])
+  weeklyOff        Int[]     @default([0])
   /// A full day's duty for THIS person, in minutes. Null = the org default
   /// (shared/lib/constants/hr.ts). A part-timer on a four-hour duty who works all
   /// four has done a full day, which a fixed hour rule would call a half.
-  dutyMinutes    Int?
+  dutyMinutes      Int?
   /// Office hours for THIS person, "HH:MM" in shop time. They say who is late,
   /// and their length IS the duty day unless dutyMinutes above overrides it (for
   /// an unpaid break). Null = the shop's default, shared/lib/constants/hr.ts.
-  dutyStart      String? @db.VarChar(5)
-  dutyEnd        String? @db.VarChar(5)
+  dutyStart        String?   @db.VarChar(5)
+  dutyEnd          String?   @db.VarChar(5)
   /// Minutes away from the app before this person is signed out — and before the
   /// gap stops counting as duty. Null = the default (45). A counter manager needs
   /// a short one, a technician a long one; one number cannot serve both. Capped
@@ -78,12 +78,12 @@ model StaffProfile {
   // org-wide salary expense ledger, held on PayrollRun, because "what did labour
   // cost the business" is a P&L question and 300 staff must not become 300 lines
   // in it.
-  ledgerAccountId  Int?     @unique
-  ledgerAccount    Account? @relation("StaffLedger", fields: [ledgerAccountId], references: [id], onDelete: SetNull)
+  ledgerAccountId Int?     @unique
+  ledgerAccount   Account? @relation("StaffLedger", fields: [ledgerAccountId], references: [id], onDelete: SetNull)
 
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @default(now()) @updatedAt
-  salaries  StaffSalary[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @default(now()) @updatedAt
+  salaries            StaffSalary[]
   commissionOverrides CommissionOverride[]
   commissionEntries   CommissionEntry[]
 
@@ -148,9 +148,9 @@ model PayrollRun {
   id Int @id @default(autoincrement())
 
   /// First day this run pays for — the day after the previous run ended.
-  periodFrom DateTime @db.Date
+  periodFrom  DateTime @db.Date
   /// Last day this run pays for, inclusive. "Till day" — usually today.
-  periodTo   DateTime @db.Date
+  periodTo    DateTime @db.Date
   /// The date the journal carries. `periodTo` unless changed.
   postingDate DateTime @db.Date
 
@@ -161,7 +161,7 @@ model PayrollRun {
   expenseAccount   Account? @relation("PayrollExpense", fields: [expenseAccountId], references: [id], onDelete: SetNull)
   /// DRAFT | POSTED | CANCELLED. A plain string for the same reason as
   /// StaffProfile.employmentType — a new state must not need an enum migration.
-  status      String   @default("DRAFT")
+  status           String   @default("DRAFT")
 
   /// The journal voucher this run posted.
   ///
@@ -189,8 +189,8 @@ model PayrollRun {
   createdById Int
   postedById  Int?
   postedAt    DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @default(now()) @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
 
   lines PayrollRunLine[]
 
@@ -209,7 +209,7 @@ model PayrollRunLine {
   runId Int
   run   PayrollRun @relation(fields: [runId], references: [id], onDelete: Cascade)
 
-  userId Int
+  userId    Int
   /// The name at the time of the run — a person can be renamed afterwards.
   staffName String
 
@@ -300,36 +300,36 @@ model PayrollRunLine {
 // (and the total on commissionPaise + a "Commission" earning) — editing a head
 // later never rewrites a month already paid.
 model CommissionHead {
-  id          Int     @id @default(autoincrement())
-  name        String
-  description String?
+  id           Int      @id @default(autoincrement())
+  name         String
+  description  String?
   /// PERCENT | ABOVE_TARGET | SLABS | BONUS | MANUAL — a plain string, validated
   /// by zod (CommissionKind); not an enum, so a new kind needs no ADD VALUE
   /// migration. MANUAL counts things the app cannot see (new customers, social
   /// work, visits) from CommissionEntry rows typed in by HR.
-  kind        String
+  kind         String
   /// ABOVE_TARGET / BONUS: the monthly line, paise. 0 elsewhere.
-  targetPaise Int     @default(0)
+  targetPaise  Int      @default(0)
   /// PERCENT / ABOVE_TARGET: basis points, 100 = 1%.
-  rateBp      Int     @default(0)
+  rateBp       Int      @default(0)
   /// SLABS: [{ fromPaise, rateBp }] ascending. Read whole, never queried.
-  slabsJson   Json?
+  slabsJson    Json?
   /// BONUS / MANUAL: the flat amount at the target, paise.
-  bonusPaise  Int     @default(0)
+  bonusPaise   Int      @default(0)
   /// MANUAL: what is counted — "customers", "visits", "posts".
   unit         String?
   /// MANUAL: how many a month. 0 = no target, only the per-unit pay.
-  targetCount  Int     @default(0)
+  targetCount  Int      @default(0)
   /// MANUAL: paid for each unit, paise.
-  perUnitPaise Int     @default(0)
+  perUnitPaise Int      @default(0)
   /// Globally on. An off head reaches nobody, whatever the overrides say.
-  active      Boolean @default(true)
+  active       Boolean  @default(true)
   /// Role labels (UserRole.label) this head is for. Empty = everyone.
-  appliesTo   String[] @default([])
-  sortOrder   Int     @default(0)
-  createdById Int
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @default(now()) @updatedAt
+  appliesTo    String[] @default([])
+  sortOrder    Int      @default(0)
+  createdById  Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
 
   overrides CommissionOverride[]
   entries   CommissionEntry[]
@@ -351,7 +351,7 @@ model CommissionOverride {
   /// This person's own bonus (bonus heads), null = the head's.
   bonusPaise Int?
   /// The head is switched off for this person.
-  off        Boolean @default(false)
+  off        Boolean  @default(false)
   updatedAt  DateTime @default(now()) @updatedAt
 
   @@unique([userId, headId])

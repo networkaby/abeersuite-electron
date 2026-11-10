@@ -2749,7 +2749,6 @@ CREATE TABLE IF NOT EXISTS "InvAttributeMaster" (
     "id" SERIAL NOT NULL,
     "key" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "groupId" INTEGER,
     "sortOrder" INTEGER NOT NULL DEFAULT 0,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -2760,12 +2759,20 @@ CREATE TABLE IF NOT EXISTS "InvAttributeMaster" (
 ALTER TABLE "InvAttributeMaster" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
 ALTER TABLE "InvAttributeMaster" ADD COLUMN IF NOT EXISTS "key" TEXT NOT NULL;
 ALTER TABLE "InvAttributeMaster" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL;
-ALTER TABLE "InvAttributeMaster" ADD COLUMN IF NOT EXISTS "groupId" INTEGER;
-ALTER TABLE "InvAttributeMaster" ALTER COLUMN "groupId" DROP NOT NULL;
 ALTER TABLE "InvAttributeMaster" ADD COLUMN IF NOT EXISTS "sortOrder" INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE "InvAttributeMaster" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "InvAttributeMaster" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE "InvAttributeMaster" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "inv_attribute_master_groups" (
+    "attributeId" INTEGER NOT NULL,
+    "groupId" INTEGER NOT NULL,
+
+    CONSTRAINT "inv_attribute_master_groups_pkey" PRIMARY KEY ("attributeId","groupId")
+);
+ALTER TABLE "inv_attribute_master_groups" ADD COLUMN IF NOT EXISTS "attributeId" INTEGER NOT NULL;
+ALTER TABLE "inv_attribute_master_groups" ADD COLUMN IF NOT EXISTS "groupId" INTEGER NOT NULL;
 
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "InvNamingConfig" (
@@ -6078,7 +6085,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS "InvBrand_name_key" ON "InvBrand"("name");
 CREATE UNIQUE INDEX IF NOT EXISTS "InvAttributeMaster_key_key" ON "InvAttributeMaster"("key");
 
 -- CreateIndex
-CREATE INDEX IF NOT EXISTS "InvAttributeMaster_groupId_idx" ON "InvAttributeMaster"("groupId");
+CREATE INDEX IF NOT EXISTS "inv_attribute_master_groups_groupId_idx" ON "inv_attribute_master_groups"("groupId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "InvProduct_sku_key" ON "InvProduct"("sku");
@@ -7122,7 +7129,14 @@ END $$;
 
 -- AddForeignKey
 DO $$ BEGIN
-    ALTER TABLE "InvAttributeMaster" ADD CONSTRAINT "InvAttributeMaster_groupId_fkey" FOREIGN KEY ("groupId") REFERENCES "InvProductGroup"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+    ALTER TABLE "inv_attribute_master_groups" ADD CONSTRAINT "inv_attribute_master_groups_attributeId_fkey" FOREIGN KEY ("attributeId") REFERENCES "InvAttributeMaster"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "inv_attribute_master_groups" ADD CONSTRAINT "inv_attribute_master_groups_groupId_fkey" FOREIGN KEY ("groupId") REFERENCES "InvProductGroup"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -8784,6 +8798,13 @@ DO $$ BEGIN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "InvAttributeMaster";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "InvAttributeMaster"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."inv_attribute_master_groups"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "inv_attribute_master_groups";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "inv_attribute_master_groups"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('attributeId', 'groupId');
     END IF;
 END $$;
 DO $$ BEGIN

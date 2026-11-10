@@ -111,7 +111,7 @@ model Coupon {
   /// OFF = coupon is exclusive: it drops tier + loyalty on the lines `stackScope`
   /// covers. ON = stacks with tier + loyalty everywhere (still subject to the
   /// global CouponConfig.maxTotalDiscountPct guard).
-  stackable Boolean @default(false)
+  stackable  Boolean          @default(false)
   /// Only meaningful when stackable = false. BILL = today's behavior (the whole
   /// bill loses tier + loyalty). LINE = only the lines THIS coupon's own rules
   /// match lose tier + loyalty; other lines in the same bill are unaffected.
@@ -206,7 +206,7 @@ model CouponRedemption {
   // frees the coupon's usage slot — would be invisible to the replica, and the
   // counter would keep refusing a coupon the shop has already given back.
   // `@default(now())` backfills on push. See Person.updatedAt.
-  updatedAt          DateTime          @default(now()) @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 
   @@index([couponId])
   @@index([accountId])

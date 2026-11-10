@@ -18,6 +18,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { attrAppliesToGroup } from "@/modules/inventory/lib/attributeMasters";
 import { generateSku } from "@/modules/inventory/lib/sku";
 import {
     buildOfflineName,
@@ -123,7 +124,7 @@ export const emptyInvProductForm: InvProductFormState = {
     taxability: "",
 };
 
-type Opt = { id: number; name?: string; code?: string; label?: string };
+type Opt = { id: number; name?: string; code?: string; label?: string; parentId?: number | null };
 
 export type GstRateOpt = { id: number; rate: string | number; label: string; isActive: boolean };
 
@@ -138,7 +139,7 @@ export type EffectiveTax = {
     taxabilitySource: string | { kind: "group"; groupId: number; groupName: string } | null;
 };
 
-export type AttrMasterRow = { id: number; key: string; name: string; groupId: number | null; isActive: boolean };
+export type AttrMasterRow = { id: number; key: string; name: string; groupIds: number[]; isActive: boolean };
 
 const TAXABILITY_OPTIONS = [
     { value: "TAXABLE",  label: "Taxable" },
@@ -492,10 +493,12 @@ export function InvProductFormFields({
                             <p className="text-[11px] text-muted-foreground">Used in naming convention &amp; SEO</p>
                         </div>
                         {(() => {
-                            // Filter masters to those applicable to the current group (global + group-specific).
+                            // Global attributes plus those on this group or any parent of it
+                            // (a ticked parent covers its subgroups) — attributeMasters.ts.
                             const grpId = form.groupId ? Number(form.groupId) : null;
+                            const parentOf = (id: number) => groups.find((g) => g.id === id)?.parentId;
                             const available = attrMasters.filter(
-                                (m) => m.isActive !== false && (m.groupId == null || m.groupId === grpId),
+                                (m) => m.isActive !== false && attrAppliesToGroup(m.groupIds ?? [], grpId, parentOf),
                             );
                             const usedKeys = new Set(form.attrs.map((a) => a.key));
                             const addable = available.filter((m) => !usedKeys.has(m.key));
@@ -565,7 +568,7 @@ export function InvProductFormFields({
                                         <p className="text-xs text-muted-foreground">All available attributes added.</p>
                                     ) : (
                                         <p className="text-xs text-muted-foreground">
-                                            No attributes defined for this category.{" "}
+                                            No attributes defined for this group.{" "}
                                             <GatedLink href="/office/inventory/masters/attribute-masters" className="underline" target="_blank" rel="noreferrer">
                                                 Manage attribute masters
                                             </GatedLink>

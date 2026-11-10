@@ -73,7 +73,7 @@ model User {
   attendanceSpans                  AttendanceSpan[]           @relation("AttendanceSpanUser")
   leaveRequests                    LeaveRequest[]             @relation("LeaveUser")
   staffPushDevices                 StaffPushDevice[]
-  campaignsCreated                 Campaign[]          @relation("CampaignCreatedBy")
+  campaignsCreated                 Campaign[]                 @relation("CampaignCreatedBy")
 }
 
 // ── UserSurfaceSeen — per-user "I have looked at this list" markers ───────────

@@ -201,21 +201,21 @@ model TicketOrder {
   shippingName    String?
   shippingAddress Json?
 
-  totalPaise          Int      @default(0)
+  totalPaise             Int      @default(0)
   // Shipping charge the customer picked at checkout (paise). The chosen courier
   // is stored in `courier` (kind: SHIPROCKET | SHIPWAY | CUSTOM | OWN_BOY |
   // STORE_PICKUP | FREE_DELIVERY). Grand total on
   // the bill = totalPaise (goods) + shippingChargePaise. GL posting stays manual.
-  shippingChargePaise Int      @default(0)
+  shippingChargePaise    Int      @default(0)
   // Spend-tier discount FROZEN at checkout (same engine as POS: tier% × cost).
   // totalPaise above is already NET of this discount — the gateway charges the
   // discounted amount. tierDiscountPaise = the inclusive (customer-facing) ₹
   // effect; tierDiscountPct = the configured cost-% that produced it; tierLabel
   // = display name ("Gold of FY spend") for the bill row + printed ladder.
   // Per-line pre-tax splits live on TicketOrderLine.tierDiscountPaise.
-  tierDiscountPaise   Int      @default(0)
-  tierDiscountPct     Decimal? @db.Decimal(5, 2)
-  tierLabel           String?
+  tierDiscountPaise      Int      @default(0)
+  tierDiscountPct        Decimal? @db.Decimal(5, 2)
+  tierLabel              String?
   // Coupon FROZEN at checkout (same engine as POS — selectCouponForCart,
   // channel SHOP; explicit code or best AUTO offer). totalPaise is already NET
   // of couponDiscountPaise. The CouponRedemption row is written AT CHECKOUT
@@ -223,39 +223,39 @@ model TicketOrder {
   // orders); the invoice conversion stamps its universalVoucherId when it
   // posts, so full-return reversal keeps working. Non-stackable coupons drop
   // the tier (tierDiscountPaise then freezes as 0).
-  couponId            Int?
-  couponCode          String?
-  couponDiscountPaise Int      @default(0)
-  couponRedemptionId  Int?
+  couponId               Int?
+  couponCode             String?
+  couponDiscountPaise    Int      @default(0)
+  couponRedemptionId     Int?
   // Independent FREE-GRANT coupon (FREE_ITEM / BOGO) FROZEN at checkout — the
   // granted item rides the order as a zero-price TicketOrderLine (freeQty),
   // like the POS counter. No ₹ discount, so couponDiscountPaise stays 0; the
   // redemption row (amount 0) still locks the usage limits and reverses on a
   // full return. Codeless AUTO offers freeze their display name as the code.
-  freeCouponId            Int?
-  freeCouponCode          String?
-  freeCouponRedemptionId  Int?
+  freeCouponId           Int?
+  freeCouponCode         String?
+  freeCouponRedemptionId Int?
   // Rule 2 — independent PARTIAL (<100%) FREE_ITEM / BOGO coupon FROZEN at
   // checkout: a ₹ discount ON TOP of the money coupon (never guard-clamped,
   // never drops tier / blocks loyalty). totalPaise is already NET of it; the
   // invoice conversion posts it as a negative coupon charge and stamps the
   // redemption, exactly like the money coupon.
-  onTopCouponId           Int?
-  onTopCouponCode         String?
-  onTopDiscountPaise      Int     @default(0)
-  onTopRedemptionId       Int?
+  onTopCouponId          Int?
+  onTopCouponCode        String?
+  onTopDiscountPaise     Int      @default(0)
+  onTopRedemptionId      Int?
   // Loyalty redemption FROZEN at checkout (points + ₹ value; validated against
   // balance / floors / the cart-aware redeem ceiling — same clampRedemption as
   // POS). totalPaise is already NET of loyaltyRedeemPaise. Points are NOT
   // burned here — the invoice conversion burns lots + earns + milestones in
   // its posting tx (applyLoyaltyForSale, POS-parity), guarding that the
   // balance still covers the frozen points (422 otherwise).
-  loyaltyRedeemPoints Int      @default(0)
-  loyaltyRedeemPaise  Int      @default(0)
-  razorpayOrderId     String?  @unique
-  razorpayPaymentId   String?
-  courier             String?
-  trackingNumber      String?
+  loyaltyRedeemPoints    Int      @default(0)
+  loyaltyRedeemPaise     Int      @default(0)
+  razorpayOrderId        String?  @unique
+  razorpayPaymentId      String?
+  courier                String?
+  trackingNumber         String?
 
   paidAt      DateTime?
   packedAt    DateTime?
@@ -470,7 +470,7 @@ model Device {
   // be pulled along with, so an edit at repair intake was invisible to every sync
   // strategy and the only correct option was re-copying the table forever.
   // `@default(now())` backfills existing rows on push. See Person.updatedAt.
-  updatedAt DateTime       @default(now()) @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 
   @@index([accountId])
   // Without this, "any device touched since <ts>?" scans every row to answer

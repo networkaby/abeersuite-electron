@@ -6,11 +6,13 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { parseIdParam } from "@/shared/lib/api";
+import { ATTR_MASTER_INCLUDE, toAttrMasterRow } from "@/modules/inventory/lib/attributeMasters";
 
 const updateSchema = z.object({
     key:        z.string().min(1).max(64).regex(/^[a-z][a-z0-9_]*$/).optional(),
     name:       z.string().min(1).max(100).optional(),
-    groupId: z.number().int().positive().nullish(),
+    /** Replaces the whole set. Empty = global. */
+    groupIds:   z.array(z.number().int().positive()).max(200).optional(),
     sortOrder:  z.number().int().min(0).optional(),
     isActive:   z.boolean().optional(),
 });
@@ -26,15 +28,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const row = await prisma.invAttributeMaster.update({
             where: { id },
             data: {
-                ...(data.key        !== undefined ? { key:        data.key }        : {}),
-                ...(data.name       !== undefined ? { name:       data.name }       : {}),
-                ...(data.groupId !== undefined ? { groupId: data.groupId ?? null } : {}),
-                ...(data.sortOrder  !== undefined ? { sortOrder:  data.sortOrder }  : {}),
-                ...(data.isActive   !== undefined ? { isActive:   data.isActive }   : {}),
+                ...(data.key       !== undefined ? { key:       data.key }       : {}),
+                ...(data.name      !== undefined ? { name:      data.name }      : {}),
+                ...(data.sortOrder !== undefined ? { sortOrder: data.sortOrder } : {}),
+                ...(data.isActive  !== undefined ? { isActive:  data.isActive }  : {}),
+                ...(data.groupIds  !== undefined
+                    ? { groups: { deleteMany: {}, create: [...new Set(data.groupIds)].map((groupId) => ({ groupId })) } }
+                    : {}),
             },
-            include: { group: { select: { id: true, name: true } } },
+            include: ATTR_MASTER_INCLUDE,
         });
-        return NextResponse.json(row);
+        return NextResponse.json(toAttrMasterRow(row));
     } catch (e: unknown) {
         if (e instanceof Error && e.message.includes("Unique constraint")) {
             return NextResponse.json({ error: "This key already exists — keys must be unique (labels may repeat)" }, { status: 409 });

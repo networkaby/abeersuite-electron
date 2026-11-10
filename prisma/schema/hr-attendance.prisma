@@ -11,31 +11,31 @@
 // the till at sign-in, so it has to ride the outbox up — it does, by default.
 
 model AttendanceDay {
-  id     Int @id @default(autoincrement())
-  userId Int
-  user   User @relation("AttendanceUser", fields: [userId], references: [id], onDelete: Cascade)
+  id                    Int       @id @default(autoincrement())
+  userId                Int
+  user                  User      @relation("AttendanceUser", fields: [userId], references: [id], onDelete: Cascade)
   /// The business day (shop calendar), never the server's UTC day.
-  date DateTime @db.Date
+  date                  DateTime  @db.Date
   /// PRESENT | HALF_DAY | ABSENT | LEAVE | WEEKLY_OFF | HOLIDAY — a plain string,
   /// validated by zod. Stored only when someone or something marked it; the
   /// calendar answers for the rest.
-  status String
+  status                String
   /// COUNTER — the till wrote it at sign-in. OFFICE — the register or a leave approval.
-  source String @default("OFFICE")
+  source                String    @default("OFFICE")
   /// First sign-in on a counter that day; last shift close. Informational.
-  firstInAt DateTime?
-  lastOutAt DateTime?
+  firstInAt             DateTime?
+  lastOutAt             DateTime?
   /// The last sign of life on that day — a real click or keypress, not a poll.
   /// The accumulator below measures against it; see shared/lib/hr/dutyTime.ts.
-  lastSeenAt DateTime?
+  lastSeenAt            DateTime?
   /// Minutes ACTUALLY worked, added up span by span. Idle stretches longer than
   /// the logout limit contribute nothing, so a forgotten sign-out costs nothing
   /// and is not paid either. Drives the full / half grade and payroll's 0.5.
-  workedMinutes Int @default(0)
-  counterId Int?
-  note      String?
+  workedMinutes         Int       @default(0)
+  counterId             Int?
+  note                  String?
   /// Who marked it from the office; null when the till did.
-  markedById Int?
+  markedById            Int?
   /// Owner, 2026-10-13: a day carries BOTH answers and a toggle picks which
   /// one pays. `source` is the toggle — OFFICE = manual, COUNTER = auto — and
   /// `status` is what the chosen side says. `manualStatus` keeps the office's
@@ -48,8 +48,8 @@ model AttendanceDay {
   overrideLateMinutes   Int?
   correctedById         Int?
   correctedAt           DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @default(now()) @updatedAt
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @default(now()) @updatedAt
 
   @@unique([userId, date])
   @@index([date])
@@ -75,22 +75,22 @@ model Holiday {
 // A leave request. Approval writes LEAVE onto every day in the range (the
 // register then shows it); rejection or cancellation clears those days again.
 model LeaveRequest {
-  id     Int  @id @default(autoincrement())
-  userId Int
-  user   User @relation("LeaveUser", fields: [userId], references: [id], onDelete: Cascade)
-  fromDate DateTime @db.Date
-  toDate   DateTime @db.Date
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  user         User      @relation("LeaveUser", fields: [userId], references: [id], onDelete: Cascade)
+  fromDate     DateTime  @db.Date
+  toDate       DateTime  @db.Date
   /// CASUAL | SICK | EARNED | UNPAID — plain string, validated by zod.
-  kind   String @default("CASUAL")
-  reason String?
+  kind         String    @default("CASUAL")
+  reason       String?
   /// PENDING | APPROVED | REJECTED | CANCELLED
-  status      String    @default("PENDING")
-  decidedById Int?
-  decidedAt   DateTime?
+  status       String    @default("PENDING")
+  decidedById  Int?
+  decidedAt    DateTime?
   decisionNote String?
-  createdById Int
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @default(now()) @updatedAt
+  createdById  Int
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now()) @updatedAt
 
   @@index([userId, fromDate])
   @@index([status])
@@ -115,17 +115,17 @@ model LeaveRequest {
 // leave year, the same rule the chart of accounts follows — a stored balance is one
 // more thing that can drift from the rows it claims to summarise.
 model LeaveType {
-  id   Int    @id @default(autoincrement())
+  id           Int      @id @default(autoincrement())
   /// CASUAL | SICK | EARNED | UNPAID — matches LeaveRequest.kind.
-  code String @unique
-  name String
+  code         String   @unique
+  name         String
   /// Whether a day of this kind is paid. Only UNPAID is false today.
-  paid Boolean @default(true)
+  paid         Boolean  @default(true)
   /// Days allowed in a leave year. NULL = no limit.
-  yearlyQuota Int?
+  yearlyQuota  Int?
   /// Reserved: unused days rolling into the next year. Off for every type until
   /// the owner settles the policy; `carryCap` is the ceiling when it is switched on.
-  carryForward Boolean @default(false)
+  carryForward Boolean  @default(false)
   carryCap     Int?
   /// Days of notice a request of this kind must carry. NULL = follow the shop rule.
   /// Sick leave carries 0 — you cannot give three days' notice of a fever.
@@ -135,11 +135,11 @@ model LeaveType {
   /// kinds), and that is still the one source. This column is where it should
   /// move so the rule stops being a constant — until it does, nothing on screen
   /// offers to set it, because two boxes for one rule is how they drift apart.
-  noticeDays Int?
-  sortOrder  Int     @default(0)
-  active     Boolean @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @default(now()) @updatedAt
+  noticeDays   Int?
+  sortOrder    Int      @default(0)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
 
   @@index([updatedAt])
   @@map("leave_types")
@@ -166,12 +166,12 @@ model LeaveType {
 /// The day row stays the one the register, grading and payroll read, so nothing
 /// that works today depends on this table being right — it only ever explains.
 model AttendanceSpan {
-  id     Int  @id @default(autoincrement())
-  userId Int
-  user   User @relation("AttendanceSpanUser", fields: [userId], references: [id], onDelete: Cascade)
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  user      User      @relation("AttendanceSpanUser", fields: [userId], references: [id], onDelete: Cascade)
   /// The business day this stretch belongs to — the same day key as
   /// AttendanceDay, so the two join without any date arithmetic.
-  date DateTime @db.Date
+  date      DateTime  @db.Date
   /// The first sign of life in this stretch, and the last. `endedAt` is null
   /// while the stretch is still running — that is the open span the next pulse
   /// extends, and there is at most one per person per day.
@@ -181,7 +181,7 @@ model AttendanceSpan {
   /// derived at read time: the span's credit is capped by the idle limit in
   /// places, and re-deriving it from the ends would quietly pay for a gap the
   /// stamping already refused.
-  minutes Int @default(0)
+  minutes   Int       @default(0)
   /// Where it was worked. Plain Int like AttendanceDay.counterId — no FK, so a
   /// retired till never takes attendance history with it.
   counterId Int?
@@ -190,9 +190,9 @@ model AttendanceSpan {
   /// SIGNED_OUT — the person signed out themselves.
   /// SHIFT_CLOSED — the till's shift close ended the day.
   /// OPEN — still running; null `endedAt` always carries this.
-  endedBy String @default("OPEN")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  endedBy   String    @default("OPEN")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now()) @updatedAt
 
   @@index([userId, date])
   @@index([date])
