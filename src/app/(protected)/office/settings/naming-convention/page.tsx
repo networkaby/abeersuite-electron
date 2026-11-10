@@ -17,7 +17,6 @@ import {
     type NamingToken,
     type TokenKind,
     buildOfflineName,
-    buildOnlineName,
     buildOnlineSlug,
 } from "@/modules/inventory/lib/productName";
 
@@ -239,7 +238,6 @@ export default function NamingConventionPage() {
     }, []);
 
     const offlinePreview = useMemo(() => buildOfflineName(PREVIEW_MASTERS, cfg), [cfg]);
-    const onlinePreview = useMemo(() => buildOnlineName(PREVIEW_MASTERS, cfg), [cfg]);
     const slugPreview = useMemo(() => buildOnlineSlug(PREVIEW_MASTERS, cfg), [cfg]);
 
     const save = async () => {
@@ -283,8 +281,8 @@ export default function NamingConventionPage() {
             </div>
 
             <p className="text-sm text-muted-foreground">
-                Configure how product Name, Online display name, and URL slug are auto-generated from the masters
-                (brand / category / group / model / warranty) on the product form. Three independent token lists share
+                Configure how the product Name (also used as the online name) and URL slug are auto-generated from the masters
+                (brand / category / group / model / warranty) on the product form. The two token lists share
                 one fallback chain. Each token can carry a default value used when its source — and the fallback
                 chain — are all empty.
             </p>
@@ -293,7 +291,7 @@ export default function NamingConventionPage() {
                 <div className="flex flex-wrap items-end gap-4">
                     <div>
                         <p className="text-sm font-semibold">Offline name</p>
-                        <p className="text-xs text-muted-foreground">Staff-facing — vouchers, stock reports, POS.</p>
+                        <p className="text-xs text-muted-foreground">Vouchers, stock reports, POS and the shop (online name).</p>
                     </div>
                     <div className="space-y-1">
                         <Label className="text-xs">Separator</Label>
@@ -304,32 +302,9 @@ export default function NamingConventionPage() {
                     tokens={cfg.nameFields}
                     onChange={(t) => setCfg({ ...cfg, nameFields: t })}
                     available={ALL_KINDS}
-                   
                 />
                 <div className="border border-dashed border-border bg-background p-2 font-mono text-sm">
                     Preview: <span className="font-semibold">{offlinePreview || <em className="text-muted-foreground">(empty)</em>}</span>
-                </div>
-            </section>
-
-            <section className="space-y-3 border-2 border-border bg-muted/30 p-4">
-                <div className="flex flex-wrap items-end gap-4">
-                    <div>
-                        <p className="text-sm font-semibold">Online display name</p>
-                        <p className="text-xs text-muted-foreground">Storefront — SEO-rich; aim for 50–65 chars.</p>
-                    </div>
-                    <div className="space-y-1">
-                        <Label className="text-xs">Separator</Label>
-                        <Input className="w-24 font-mono" value={cfg.onlineSeparator} onChange={(e) => setCfg({ ...cfg, onlineSeparator: e.target.value })} />
-                    </div>
-                </div>
-                <TokenListEditor
-                    tokens={cfg.onlineNameFields}
-                    onChange={(t) => setCfg({ ...cfg, onlineNameFields: t })}
-                    available={ALL_KINDS}
-                   
-                />
-                <div className="border border-dashed border-border bg-background p-2 font-mono text-sm">
-                    Preview: <span className="font-semibold">{onlinePreview || <em className="text-muted-foreground">(empty)</em>}</span>
                 </div>
             </section>
 

@@ -135,8 +135,10 @@ export function buildOfflineName(masters: NamingMasters, cfg: NamingConfigShape)
     return resolveAll(cfg.nameFields, masters, cfg.fallbackFields).join(cfg.separator);
 }
 
+/** The online name follows the offline name template. onlineNameFields /
+ *  onlineSeparator are kept in the DB but no longer read. */
 export function buildOnlineName(masters: NamingMasters, cfg: NamingConfigShape): string {
-    return resolveAll(cfg.onlineNameFields, masters, cfg.fallbackFields).join(cfg.onlineSeparator);
+    return buildOfflineName(masters, cfg);
 }
 
 export function buildOnlineSlug(masters: NamingMasters, cfg: NamingConfigShape): string {
