@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, useEffectEvent } from "react";
 import { toast } from "sonner";
-import { Check, ImagePlus } from "lucide-react";
+import { Check, ImagePlus, ZoomIn } from "lucide-react";
+import { ImageViewer } from "@/shared/components/ImageViewer";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { uploadImageToCloudinary } from "@/shared/lib/uploadToCloudinary";
@@ -32,6 +33,8 @@ export function AiPhotoPicker({
     const [open, setOpen] = useState(!checklist?.enough);
     const [picked, setPicked] = useState<Set<string>>(new Set());
     const [busy, setBusy] = useState(false);
+    // Index into `ordered` shown full screen — to judge a photo before ticking it.
+    const [viewing, setViewing] = useState<number | null>(null);
 
     if (!ordered.length) return null;
 
@@ -73,15 +76,15 @@ export function AiPhotoPicker({
             {open && (
                 <>
                     <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                        {ordered.map((s) => {
+                        {ordered.map((s, idx) => {
                             const on = picked.has(s.url);
                             const fills = !!s.kind && missing.has(s.kind);
                             return (
+                                <div key={s.url} className="group relative">
                                 <button
-                                    key={s.url}
                                     type="button"
                                     onClick={() => toggle(s.url)}
-                                    className={`relative overflow-hidden rounded-md border text-left ${on ? "border-primary ring-2 ring-primary" : "border-border"}`}
+                                    className={`relative w-full overflow-hidden rounded-md border text-left ${on ? "border-primary ring-2 ring-primary" : "border-border"}`}
                                 >
                                     {/* eslint-disable-next-line @next/next/no-img-element -- a foreign site's photo, shown as is for picking */}
                                     <img src={s.url} alt={s.kind ? photoKindLabel(s.kind) : s.site} loading="lazy" referrerPolicy="no-referrer" className="aspect-square w-full bg-muted object-contain" />
@@ -91,9 +94,28 @@ export function AiPhotoPicker({
                                         {s.site}
                                     </span>
                                 </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setViewing(idx)}
+                                    title="View large"
+                                    aria-label="View photo large"
+                                    className="absolute top-1 left-1 flex size-7 items-center justify-center rounded-full bg-background/90 text-foreground shadow-sm opacity-80 hover:opacity-100 group-hover:opacity-100"
+                                >
+                                    <ZoomIn className="size-4" />
+                                </button>
+                                </div>
                             );
                         })}
                     </div>
+                    {viewing !== null && (
+                        <ImageViewer
+                            srcs={ordered.map((s) => s.url)}
+                            startIndex={viewing}
+                            alt="Suggested photo"
+                            tools={false}
+                            onClose={() => setViewing(null)}
+                        />
+                    )}
                     <Button type="button" size="sm" variant="outline" disabled={busy || picked.size === 0} onClick={() => void add()}>
                         <ImagePlus className="size-4" />
                         {busy ? "Adding…" : `Add ${picked.size || ""} to gallery`}

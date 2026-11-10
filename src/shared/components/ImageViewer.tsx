@@ -247,6 +247,8 @@ export function ImageViewer({
                     src={current}
                     alt={alt ?? "Photo"}
                     draggable={false}
+                    // Other sites' photos (AI suggestions) block hotlinks that carry our address.
+                    referrerPolicy="no-referrer"
                     className="absolute left-1/2 top-1/2 max-w-[100vw] max-h-[calc(100dvh-5rem)]"
                     style={{
                         transform: `translate(-50%, -50%) translate(${pos.x}px, ${pos.y}px) scale(${scale}) rotate(${rot}deg)`,
