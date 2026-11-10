@@ -8,6 +8,7 @@ import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { invProductToAdmin, readShopDraft, type ShopDraft, type ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { nextShopStatus, resolveShopListing, SHOP_STATUSES } from "@/modules/ecommerce/lib/shopListing";
+import { loadVariantAttrGaps } from "@/modules/ecommerce/lib/applyPublished";
 import { PHOTO_KIND_KEYS } from "@/modules/ecommerce/lib/photoChecklist";
 import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
 import { mergeGallery } from "@/modules/ecommerce/lib/mergeGallery";
@@ -178,7 +179,11 @@ export async function updateShopProduct(
         const existingGallery = Array.isArray(existing.galleryJson)
             ? (existing.galleryJson as unknown[]).filter((x): x is string => typeof x === "string")
             : [];
-        const [bands, rules] = await Promise.all([loadBarcodeBands(), loadShopPublishRules()]);
+        const [bands, rules, gaps] = await Promise.all([
+            loadBarcodeBands(),
+            loadShopPublishRules(),
+            loadVariantAttrGaps([pid]),
+        ]);
         const listing = resolveShopListing(
             {
                 name: (data.name as string | undefined) ?? existing.name,
@@ -203,6 +208,7 @@ export async function updateShopProduct(
                 effectiveSalePricePaise:
                     b.pricePaise !== undefined ? b.pricePaise ?? null : existing.effectiveSalePricePaise,
                 slug: b.slug !== undefined ? b.slug?.trim() || null : existing.slug,
+                variantAttrGaps: gaps.get(pid),
             },
             { status: shopStatus, bands, rules }
         );
@@ -222,7 +228,7 @@ export async function updateShopProduct(
             else await syncMainCollections(tx, [pid]);
             return tx.invProduct.findUniqueOrThrow({ where: { id: pid }, include: shopProductInclude });
         });
-        return { product: invProductToAdmin(p, bands) };
+        return { product: { ...invProductToAdmin(p, bands), variantAttrGaps: gaps.get(pid) ?? [] } };
     } catch (e: unknown) {
         const conflict = prismaUniqueError(e, "SKU or slug already exists");
         if (conflict) return { response: conflict };

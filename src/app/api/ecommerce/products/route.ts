@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { invProductToAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { nextShopStatus, resolveShopListing, SHOP_STATUSES } from "@/modules/ecommerce/lib/shopListing";
+import { loadVariantAttrGaps } from "@/modules/ecommerce/lib/applyPublished";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { prismaUniqueError } from "@/shared/lib/api";
@@ -78,7 +79,12 @@ export async function GET(req: Request) {
             omit: { shopDraftJson: true },
             orderBy: [{ shopCategory: "asc" }, { id: "desc" }],
         });
-        return NextResponse.json(products.map((p) => invProductToAdmin(p, bands)));
+        // Variant rule: what each product still lacks that a sibling has, so the
+        // list can say "Pending — needs Colour".
+        const gaps = await loadVariantAttrGaps(products.filter((p) => p.variantFamilyId != null).map((p) => p.id));
+        return NextResponse.json(
+            products.map((p) => ({ ...invProductToAdmin(p, bands), variantAttrGaps: gaps.get(p.id) ?? [] }))
+        );
     } catch (e) {
         return handleApiError(e, "Failed to list products");
     }

@@ -15,6 +15,8 @@ export type ShopPublishRules = {
     mrp: boolean;
     stock: boolean;
     weight: boolean;
+    /** Every attribute a sibling variant has filled is filled here too. */
+    variantAttrs: boolean;
 };
 
 /** Default rules = the original hardcoded gate (image + description + price). */
@@ -27,6 +29,9 @@ export const DEFAULT_SHOP_PUBLISH_RULES: ShopPublishRules = {
     mrp: false,
     stock: false,
     weight: false,
+    // On by default (owner, 2026-11-10): an attribute left empty on one variant
+    // keeps it Pending, so the option buttons never show a gap.
+    variantAttrs: true,
 };
 
 export type ShopRequirementKey = keyof ShopPublishRules;
@@ -44,6 +49,7 @@ export const SHOP_REQUIREMENT_LABELS: Record<ShopRequirementKey, string> = {
     mrp: "MRP",
     stock: "In stock",
     weight: "Shipping weight",
+    variantAttrs: "Variant attributes filled",
 };
 
 /** Coerce a stored OrgDefaults.shopPublishRulesJson value into clean rules. */
@@ -61,6 +67,7 @@ export function normalizeShopPublishRules(raw: unknown): ShopPublishRules {
         mrp: pick("mrp"),
         stock: pick("stock"),
         weight: pick("weight"),
+        variantAttrs: pick("variantAttrs"),
     };
 }
 
@@ -81,6 +88,10 @@ export type ShopQualifiable = {
     brandId?: number | null;
     /** Shipping weight of one unit in grams — drives the courier quote. */
     weightGrams?: number | null;
+    /** Attributes a sibling variant has filled and this product has not (labels).
+     *  Undefined = not checked here (e.g. the storefront, which trusts the stored
+     *  isListedInShop flag that the save / family re-check already decided). */
+    variantAttrGaps?: string[] | null;
 };
 
 export type ShopQualificationResult = {
@@ -105,6 +116,7 @@ const REQUIREMENT_CHECKS: Record<ShopRequirementKey, (p: ShopQualifiable) => boo
     // Must be set ON the product — the whole point is to stop the courier quote
     // silently falling back to the delivery method's default item weight.
     weight: (p) => (p.weightGrams ?? 0) > 0,
+    variantAttrs: (p) => (p.variantAttrGaps?.length ?? 0) === 0,
 };
 
 const REQUIREMENT_ORDER: ShopRequirementKey[] = [
@@ -116,6 +128,7 @@ const REQUIREMENT_ORDER: ShopRequirementKey[] = [
     "mrp",
     "stock",
     "weight",
+    "variantAttrs",
 ];
 
 /**
@@ -162,7 +175,10 @@ export function shopQualification(
         label: SHOP_REQUIREMENT_LABELS[k],
         ok: REQUIREMENT_CHECKS[k](p),
     }));
-    const missing = checks.filter((c) => !c.ok).map((c) => c.label);
+    // The variant rule names the exact attributes ("Colour"), so staff know what to fill.
+    const missing = checks
+        .filter((c) => !c.ok)
+        .flatMap((c) => (c.key === "variantAttrs" && p.variantAttrGaps?.length ? p.variantAttrGaps : [c.label]));
     return { qualified: missing.length === 0, missing, checks };
 }
 
@@ -194,4 +210,39 @@ export function recheckMessage(r: RecheckResult): string {
         r.wentPending ? `${r.wentPending} moved to Pending` : "",
     ].filter(Boolean);
     return parts.length ? parts.join(" · ") : `nothing changed (${r.live} live, ${r.pending} pending)`;
+}
+
+/** "colour" → "Colour", "screen_size" → "Screen size" — the label a gap is shown with. */
+export function attrKeyLabel(key: string): string {
+    const t = key.replace(/_/g, " ").trim();
+    return t ? t[0].toUpperCase() + t.slice(1) : key;
+}
+
+/**
+ * For each product: the attributes some OTHER member of its variant family has
+ * filled and it has not (owner, 2026-11-10 — a sibling's attribute is waiting
+ * here until filled). Pure; callers pass every member of the families involved.
+ * Products outside a family get no entry.
+ */
+export function variantAttrGaps(
+    rows: { id: number; variantFamilyId: number | null; attrs: Record<string, unknown> | null | undefined }[]
+): Map<number, string[]> {
+    const filled = (a: Record<string, unknown> | null | undefined) =>
+        Object.entries(a ?? {})
+            .filter(([, v]) => typeof v === "string" && v.trim())
+            .map(([k]) => k);
+    const familyKeys = new Map<number, Set<string>>();
+    for (const r of rows) {
+        if (r.variantFamilyId == null) continue;
+        const set = familyKeys.get(r.variantFamilyId) ?? new Set<string>();
+        for (const k of filled(r.attrs)) set.add(k);
+        familyKeys.set(r.variantFamilyId, set);
+    }
+    const out = new Map<number, string[]>();
+    for (const r of rows) {
+        if (r.variantFamilyId == null) continue;
+        const own = new Set(filled(r.attrs));
+        out.set(r.id, [...(familyKeys.get(r.variantFamilyId) ?? [])].filter((k) => !own.has(k)).map(attrKeyLabel));
+    }
+    return out;
 }

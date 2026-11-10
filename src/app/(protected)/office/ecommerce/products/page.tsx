@@ -92,9 +92,17 @@ function StatusBadge({ status }: { status: ProductStatus }) {
             <CheckCircle2 className="size-3" /> Published
         </Badge>
     ) : status.kind === "pending" ? (
-        <Badge variant="outline" className="gap-1 border-amber-200 bg-amber-50 text-amber-700" title={`Needs ${status.missing.join(", ").toLowerCase()}`}>
-            <AlertCircle className="size-3" /> Pending
-        </Badge>
+        // The reason is written out, not only in a tooltip, so staff can act on it.
+        <span className="inline-flex flex-col items-start gap-0.5">
+            <Badge variant="outline" className="gap-1 border-amber-200 bg-amber-50 text-amber-700" title={`Needs ${status.missing.join(", ").toLowerCase()}`}>
+                <AlertCircle className="size-3" /> Pending
+            </Badge>
+            {status.missing.length ? (
+                <span className="max-w-[180px] text-[11px] leading-tight text-amber-700">
+                    Needs {status.missing.join(", ")}
+                </span>
+            ) : null}
+        </span>
     ) : status.kind === "ready" ? (
         <Badge variant="outline" className="gap-1 border-violet-200 bg-violet-50 text-violet-700" title="Complete — waiting to be published">
             <CheckCircle2 className="size-3" /> Ready

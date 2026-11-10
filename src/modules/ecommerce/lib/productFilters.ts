@@ -59,6 +59,7 @@ export function productStatus(p: ShopProductAdmin, rules: ShopPublishRules): Pro
             stock: p.stock,
             allowBackorder: p.allowBackorder,
             weightGrams: p.weightGrams,
+            variantAttrGaps: p.variantAttrGaps ?? [],
         },
         rules
     );

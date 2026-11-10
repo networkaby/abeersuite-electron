@@ -5,6 +5,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { invProductToAdmin, withShopDraft } from "@/modules/ecommerce/lib/productAdmin";
 import { shopProductInclude as productInclude, shopProductPatchSchema, updateShopProduct } from "@/modules/ecommerce/lib/updateShopProduct";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
+import { loadVariantAttrGaps } from "@/modules/ecommerce/lib/applyPublished";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 
@@ -19,7 +20,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
         const p = await prisma.invProduct.findUnique({ where: { id: pid }, include: productInclude });
         if (!p) return NextResponse.json({ error: "Not found" }, { status: 404 });
         // Draft info (stage before, Claude's notes) rides only here — the product's own page shows it.
-        return NextResponse.json(withShopDraft(p, bands));
+        const gaps = await loadVariantAttrGaps([pid]);
+        return NextResponse.json({ ...withShopDraft(p, bands), variantAttrGaps: gaps.get(pid) ?? [] });
     } catch (e) {
         return handleApiError(e, "Failed to load product");
     }

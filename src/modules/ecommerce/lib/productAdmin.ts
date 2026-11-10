@@ -74,6 +74,9 @@ export type ShopProductAdmin = ShopProductPublic & {
     codes: { kind: string; value: string }[];
     /** Photo checklist under Product image (null = never checked). */
     photoChecklist: PhotoChecklist | null;
+    /** Attributes a sibling variant has filled and this one has not ("Colour").
+     *  Filled in by the admin routes (loadVariantAttrGaps); absent = none. */
+    variantAttrGaps?: string[];
 };
 
 export function invProductToAdmin(

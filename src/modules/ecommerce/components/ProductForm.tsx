@@ -409,6 +409,8 @@ export default function ProductForm({
             stock: stockValue,
             allowBackorder,
             weightGrams: weightGrams.trim() === "" ? null : parseInt(weightGrams, 10),
+            // Attributes are edited in the inventory form; the server worked these out.
+            variantAttrGaps: initial?.variantAttrGaps ?? [],
         },
         rules
     );

@@ -25,6 +25,8 @@ export type ShopListingInput = {
     mrpPaise: number | null;
     effectiveSalePricePaise: number | null;
     slug: string | null;
+    /** Sibling attributes still empty here (loadVariantAttrGaps). */
+    variantAttrGaps?: string[];
 };
 
 /** Stages staff can choose, for zod. */
@@ -83,6 +85,8 @@ export function resolveShopListing(
             stock: m.stock,
             allowBackorder: m.allowBackorder,
             weightGrams: m.weightGrams,
+            // Always judged on a save: no family → no gaps.
+            variantAttrGaps: m.variantAttrGaps ?? [],
         },
         opts.rules ?? DEFAULT_SHOP_PUBLISH_RULES
     );

@@ -19,6 +19,9 @@ import { requireWritableBranchId } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
 import * as Sentry from "@sentry/nextjs";
 import { applyCollections, collectionsExist } from "@/modules/inventory/lib/productCollections";
+import { recheckVariantFamilies } from "@/modules/ecommerce/lib/applyPublished";
+import { revalidateTag } from "next/cache";
+import { STOREFRONT_PRODUCTS_TAG } from "@/shared/lib/shop/storefrontProducts";
 
 const productInclude = {
     unit: { select: { id: true, code: true, label: true } },
@@ -206,6 +209,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (openingTouched) await recomputeProductStock(tx, [id]);
             return tx.invProduct.findUniqueOrThrow({ where: { id }, include: productInclude });
         });
+        // An attribute change can put a variant sibling into or out of Pending
+        // (variant attribute rule) — re-judge the family's Published members.
+        if (b.attrsJson !== undefined) {
+            await recheckVariantFamilies([id]).catch((err: unknown) => {
+                Sentry.captureException(err, { tags: { source: "variant-recheck", productId: String(id) } });
+            });
+            // The shop's option buttons read attributes from the cached catalogue.
+            revalidateTag(STOREFRONT_PRODUCTS_TAG, { expire: 0 });
+        }
         // Re-materialize effectiveSalePricePaise (saved price / cost / GST may have
         // changed) so POS reflects the edit. Skip when the caller set an explicit
         // effectiveSalePricePaise here — that's a deliberate exact price, don't clobber.

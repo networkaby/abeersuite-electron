@@ -30,6 +30,7 @@ const putSchema = z.object({
     mrp: z.boolean().optional(),
     stock: z.boolean().optional(),
     weight: z.boolean().optional(),
+    variantAttrs: z.boolean().optional(),
 });
 
 /** "Re-check pending" (Products list): re-judge every Published product now. */

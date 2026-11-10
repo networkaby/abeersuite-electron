@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { STOREFRONT_PRODUCTS_TAG } from "@/shared/lib/shop/storefrontProducts";
+import { recheckVariantFamilies } from "@/modules/ecommerce/lib/applyPublished";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError, parseIdParam } from "@/shared/lib/api";
@@ -59,6 +60,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             return NextResponse.json({ error: "Pick a product to add." }, { status: 400 });
         }
         await addVariant(id, otherId);
+        // A new member brings its attributes — siblings may now be missing one.
+        await recheckVariantFamilies([id, otherId]);
         // The shop's option buttons come from the cached catalogue — refresh it now.
         revalidateTag(STOREFRONT_PRODUCTS_TAG, { expire: 0 });
         return await familyResponse(id);
@@ -94,6 +97,9 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
             return NextResponse.json({ error: "That product is not in this family." }, { status: 400 });
         }
         await removeVariant(memberId);
+        // The family (and the product that left it) no longer share attributes.
+        // Every former member, as `id` itself may be the one that left.
+        await recheckVariantFamilies(members.map((m) => m.id));
         revalidateTag(STOREFRONT_PRODUCTS_TAG, { expire: 0 });
         return await familyResponse(id);
     } catch (e) {

@@ -4,6 +4,7 @@ import { shopSlugClash } from "@/shared/lib/shop/shopSlug";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { resolveShopListing } from "@/modules/ecommerce/lib/shopListing";
+import { variantAttrGaps } from "@/modules/ecommerce/lib/shopQualification";
 
 /**
  * Make these products PUBLISHED and decide, against today's publish rules, which
@@ -14,9 +15,52 @@ import { resolveShopListing } from "@/modules/ecommerce/lib/shopListing";
  * pending") — a Pending product is otherwise only re-judged on its own save, so
  * loosening a rule never put the waiting ones live.
  */
+/**
+ * Sibling attributes still empty on each of these products (variant rule). Two
+ * reads whatever the count: the products' families, then every member of them.
+ */
+export async function loadVariantAttrGaps(ids: number[]): Promise<Map<number, string[]>> {
+    if (ids.length === 0) return new Map();
+    const fams = await prisma.invProduct.findMany({
+        where: { id: { in: ids }, variantFamilyId: { not: null } },
+        select: { variantFamilyId: true },
+        distinct: ["variantFamilyId"],
+    });
+    const familyIds = fams.map((f) => f.variantFamilyId!).filter((v) => v != null);
+    if (familyIds.length === 0) return new Map();
+    const members = await prisma.invProduct.findMany({
+        where: { variantFamilyId: { in: familyIds } },
+        select: { id: true, variantFamilyId: true, attrsJson: true },
+    });
+    return variantAttrGaps(members.map((m) => ({ ...m, attrs: m.attrsJson as Record<string, unknown> | null })));
+}
+
+/**
+ * Re-judge the Published members of these products' variant families — one
+ * member's attributes (or the family itself) changing can put a sibling into or
+ * out of Pending. Call after an attribute save or a family add / remove.
+ */
+export async function recheckVariantFamilies(productIds: number[]): Promise<void> {
+    if (productIds.length === 0) return;
+    const fams = await prisma.invProduct.findMany({
+        where: { id: { in: productIds }, variantFamilyId: { not: null } },
+        select: { variantFamilyId: true },
+        distinct: ["variantFamilyId"],
+    });
+    const familyIds = fams.map((f) => f.variantFamilyId!).filter((v) => v != null);
+    const members = await prisma.invProduct.findMany({
+        where: {
+            shopStatus: "PUBLISHED",
+            OR: [{ id: { in: productIds } }, ...(familyIds.length ? [{ variantFamilyId: { in: familyIds } }] : [])],
+        },
+        select: { id: true },
+    });
+    await applyPublished(members.map((m) => m.id));
+}
+
 export async function applyPublished(ids: number[]): Promise<{ published: number; pending: number }> {
     if (ids.length === 0) return { published: 0, pending: 0 };
-    const [bands, rules] = await Promise.all([loadBarcodeBands(), loadShopPublishRules()]);
+    const [bands, rules, gaps] = await Promise.all([loadBarcodeBands(), loadShopPublishRules(), loadVariantAttrGaps(ids)]);
     const products = await prisma.invProduct.findMany({
         where: { id: { in: ids } },
         select: {
@@ -44,6 +88,7 @@ export async function applyPublished(ids: number[]): Promise<{ published: number
                 weightGrams: p.weightGrams,
                 savedSalePricePaise: p.savedSalePricePaise, barcodeManualPaise: p.barcodeManualPaise, mrpPaise: p.mrpPaise,
                 effectiveSalePricePaise: p.effectiveSalePricePaise, slug: p.slug,
+                variantAttrGaps: gaps.get(p.id),
             },
             { status: "PUBLISHED", bands, rules }
         );
