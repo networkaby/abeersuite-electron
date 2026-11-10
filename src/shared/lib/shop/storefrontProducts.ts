@@ -49,8 +49,13 @@ export async function loadStorefrontProducts(
  * read it on every open (search, lists). A price or stock change shows within
  * 5 minutes; the website pages keep reading it fresh.
  */
+/** Tag for the cached list — a change that must show at once (a variant
+ *  family or label) calls `revalidateTag(STOREFRONT_PRODUCTS_TAG, { expire: 0 })`. */
+export const STOREFRONT_PRODUCTS_TAG = "shop:storefront-products";
+
 export const loadStorefrontProductsCached = unstable_cache(() => loadStorefrontProducts(), ["shop:storefront-products"], {
     revalidate: 300,
+    tags: [STOREFRONT_PRODUCTS_TAG],
 });
 
 export type StorefrontCategory = { name: string; count: number; fallbackImageUrl: string | null };

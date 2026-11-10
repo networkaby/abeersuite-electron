@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
+import { STOREFRONT_PRODUCTS_TAG } from "@/shared/lib/shop/storefrontProducts";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError, parseIdParam } from "@/shared/lib/api";
@@ -57,6 +59,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             return NextResponse.json({ error: "Pick a product to add." }, { status: 400 });
         }
         await addVariant(id, otherId);
+        // The shop's option buttons come from the cached catalogue — refresh it now.
+        revalidateTag(STOREFRONT_PRODUCTS_TAG, { expire: 0 });
         return await familyResponse(id);
     } catch (e) {
         return variantError(e, "Failed to add variant");
@@ -71,6 +75,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (error) return error;
         const body = (await req.json().catch(() => ({}))) as { label?: unknown };
         await prisma.invProduct.update({ where: { id }, data: { variantLabel: cleanVariantLabel(body.label) } });
+        revalidateTag(STOREFRONT_PRODUCTS_TAG, { expire: 0 });
         return await familyResponse(id);
     } catch (e) {
         return handleApiError(e, "Failed to save variant label");
@@ -89,6 +94,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
             return NextResponse.json({ error: "That product is not in this family." }, { status: 400 });
         }
         await removeVariant(memberId);
+        revalidateTag(STOREFRONT_PRODUCTS_TAG, { expire: 0 });
         return await familyResponse(id);
     } catch (e) {
         return variantError(e, "Failed to remove variant");
