@@ -455,6 +455,8 @@ export default function ProductForm({
         // Edited in the Variants section, which saves on its own.
         variantFamilyId: initial?.variantFamilyId ?? null,
         variantLabel: initial?.variantLabel ?? null,
+        brand: initial?.brand ?? null,
+        attrs: initial?.attrs ?? {},
         pricePaise: shopPricePaise,
         mrpPaise: effectiveMrpPaise,
         badge: badge.trim() || null,
