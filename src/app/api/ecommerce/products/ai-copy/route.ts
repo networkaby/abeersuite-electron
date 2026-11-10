@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { AiDataCheckError, aiErrorMessage, generateProductCopy, isAiConfigured } from "@/modules/ecommerce/lib/aiProductCopy";
+import { parkInAttention } from "@/modules/ecommerce/lib/shopAttention";
 import { generatePhotoAdvice, generateVerifiedCopy } from "@/modules/ecommerce/lib/aiVerifiedCopy";
 import { type AiCopyFlow } from "@/shared/lib/constants/ai";
 import { loadAiSetup } from "@/shared/lib/ai/aiKeys";
@@ -100,7 +101,18 @@ export async function POST(req: Request) {
             : await generateProductCopy(base);
         return NextResponse.json(copy);
     } catch (e) {
-        if (e instanceof AiDataCheckError) return NextResponse.json({ error: e.message, flags: e.flags }, { status: 422 });
+        // A clash parks the product in Attention, the same as Claude's (owner,
+        // 2026-11-11: both AIs give the same result) — any stage, off the shop
+        // until someone checks the real unit. Never blocks the answer.
+        if (e instanceof AiDataCheckError) {
+            const parked = await parkInAttention([data.productId], e.flags.join("\n"), "In-app AI", "any")
+                .then((r) => r.parked > 0)
+                .catch(() => false);
+            return NextResponse.json(
+                { error: parked ? `Parked in Attention — ${e.message}` : e.message, flags: e.flags, parked },
+                { status: 422 },
+            );
+        }
         const reason = aiErrorMessage(e);
         if (reason) return NextResponse.json({ error: reason }, { status: 503 });
         return handleApiError(e, "AI could not write this product");

@@ -260,4 +260,5 @@ A short table, one row per product:
 
 Then: **stopped products** with the exact clash (staff must fix the data or the photos), and the next step for the owner:
 
-> Open **E-Commerce → Products → Draft**, read "Notes for you", add the suggested photos, fix what the notes say, then **Save as ready**. Publish when the time is right.
+> **Attention** tab: the stopped products, parked with the clash as the reason — check the real unit, fix the data or photos, then **Save as draft** (and run product copy again) or **Save as ready**.
+> **Draft** tab: the finished ones — read "Notes for you", add the suggested photos, fix what the notes say, then **Save as ready**. Publish when the time is right.

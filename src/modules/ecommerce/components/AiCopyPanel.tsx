@@ -86,6 +86,7 @@ export default function AiCopyPanel({
     photoChecklist,
     onPhotoChecklist,
     onAddPhotos,
+    onParked,
     onGallery,
 }: {
     /** Claude's (Cowork) copy, already written onto the product — shown for its notes and photo advice. */
@@ -106,6 +107,8 @@ export default function AiCopyPanel({
     onPhotoChecklist: (c: PhotoChecklist) => void;
     /** Picked web photos, already copied to our storage, with the kinds they fill. */
     onAddPhotos: (urls: string[], kinds: PhotoKind[]) => void;
+    /** The server parked the product in Attention on a clash — reload the row. */
+    onParked?: () => void;
     /** Photo AI's order / look, applied to the gallery. */
     onGallery: (next: (g: string[]) => string[]) => void;
 }) {
@@ -123,6 +126,17 @@ export default function AiCopyPanel({
     }
     // Verified stopped at the photo check: our own data disagrees with itself.
     const [checkFlags, setCheckFlags] = useState<string[] | null>(null);
+    // The server parked the product in Attention on that clash (same as Claude's).
+    const [parked, setParked] = useState(false);
+    const onClash = (e: unknown): boolean => {
+        if (!axios.isAxiosError(e) || e.response?.status !== 422) return false;
+        const body = e.response.data as { flags?: string[]; parked?: boolean };
+        if (!body.flags?.length) return false;
+        setCheckFlags(body.flags);
+        setParked(!!body.parked);
+        if (body.parked) { toast.info("Parked in Attention — check the real unit, then Save as draft or Save as ready"); onParked?.(); }
+        return true;
+    };
     // "Photos only" answer — newer than the draft's own photo advice.
     const [photoRun, setPhotoRun] = useState<PhotoAdvice | null>(null);
 
@@ -148,9 +162,7 @@ export default function AiCopyPanel({
             }
             toast.success(filled.length ? `AI filled ${filled.join(", ")} — review, then Save` : "AI draft ready — use what you like, then Save");
         } catch (e) {
-            const flags = axios.isAxiosError(e) && e.response?.status === 422 ? (e.response.data as { flags?: string[] }).flags : undefined;
-            if (flags?.length) setCheckFlags(flags);
-            else toast.error(extractApiError(e, "AI could not write this product"));
+            if (!onClash(e)) toast.error(extractApiError(e, "AI could not write this product"));
         } finally {
             setBusy(false);
         }
@@ -167,9 +179,7 @@ export default function AiCopyPanel({
             if (advice.photoChecklist) onPhotoChecklist(advice.photoChecklist);
             toast.success(advice.savedSearch ? "Photo advice ready — used the last search" : "Photo advice ready — searched first, saved for next time");
         } catch (e) {
-            const flags = axios.isAxiosError(e) && e.response?.status === 422 ? (e.response.data as { flags?: string[] }).flags : undefined;
-            if (flags?.length) setCheckFlags(flags);
-            else toast.error(extractApiError(e, "Photo AI could not answer"));
+            if (!onClash(e)) toast.error(extractApiError(e, "Photo AI could not answer"));
         } finally {
             setBusy(false);
         }
@@ -204,7 +214,7 @@ export default function AiCopyPanel({
                         : "Photo AI off: photos suggested without labels, no AI cost."}
                 </p>
             )}
-            {checkFlags && <DataFlags flags={checkFlags} title="Not written — fix this product's data first:" />}
+            {checkFlags && <DataFlags flags={checkFlags} title={parked ? "Not written — parked in Attention. Check the real unit:" : "Not written — fix this product's data first:"} />}
             {photoRun && !draft && (
                 <div className="space-y-2 text-sm">
                     {photoRun.photoArrange && <AiPhotoArrange arrange={photoRun.photoArrange} gallery={imageUrls} onGallery={onGallery} />}

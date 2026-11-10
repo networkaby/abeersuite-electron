@@ -96,6 +96,14 @@ export default function ProductForm({
     );
     const attention = initial?.shopAttention ?? null;
     const [flagOpen, setFlagOpen] = useState(false);
+    /** Reload the saved row after it was parked (Flag attention, or an AI clash) — stage and buttons read Attention. */
+    const reloadRow = async () => {
+        if (!initial?.id) return;
+        try {
+            const res = await axios.get<ShopProductAdmin>(`/api/ecommerce/products/${initial.id}`);
+            (onReload ?? onSaved)?.(res.data);
+        } catch { /* the list shows it on the next load */ }
+    };
     // Replicated master lists — one delta request, usually "nothing changed".
     const [masters, setMasters] = useState<Masters | null>(null);
     useEffect(() => { void syncMasters().then((m) => { if (m) setMasters(m); }); }, []);
@@ -753,6 +761,7 @@ export default function ProductForm({
                         setGalleryUrls((g) => [...g, ...urls]);
                         tickPhotoKinds(kinds);
                     }}
+                    onParked={initial?.id ? () => void reloadRow() : undefined}
                 />
                 <div className="grid gap-2">
                     <Label>Description</Label>
@@ -938,13 +947,7 @@ export default function ProductForm({
                     <AttentionDialog
                         ids={flagOpen ? [initial.id] : null}
                         onClose={() => setFlagOpen(false)}
-                        onDone={async () => {
-                            // Reload the row so the stage (and its buttons) read Attention.
-                            try {
-                                const res = await axios.get<ShopProductAdmin>(`/api/ecommerce/products/${initial.id}`);
-                                (onReload ?? onSaved)?.(res.data);
-                            } catch { /* the list shows it on the next load */ }
-                        }}
+                        onDone={() => void reloadRow()}
                     />
                 ) : null}
                 {(initial?.shopDraft?.notes?.length ?? 0) > 0 && (

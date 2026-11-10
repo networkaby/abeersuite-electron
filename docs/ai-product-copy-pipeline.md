@@ -112,7 +112,9 @@ A step with no keys of its own **borrows the Direct flow's keys**.
   - `labelCodes`, `labelWebsite`, `branded`, and a `searchQuery` (brand + exact
     model code, or brand + type + main spec).
 - **If there is any clash:** **stop.** Show staff the clashes ("field: typed X,
-  photo shows Y") and write nothing.
+  photo shows Y") and write nothing. The product is parked in **Attention** with
+  the clashes as the reason ("In-app AI"), from any stage, off the shop — the
+  same result as Claude's clash stop (owner, 2026-11-11).
 
 #### Step 2 — Pages (no AI)
 
