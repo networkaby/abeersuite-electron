@@ -68,7 +68,7 @@ export function ProductFilterPanel({
             {choice("category", "Category", list("All categories", options.categories), "w-40")}
             {choice("brand", "Brand", list("All brands", options.brands), "w-40")}
             {choice("group", "Group", list("All groups", options.groups), "w-40")}
-            {choice("status", "Shop status", [["all", "Any status"], ["unpublished", "Unpublished"], ["draft", "Draft"], ["ready", "Ready"], ["live", "Published"], ["pending", "Pending"]])}
+            {choice("status", "Shop status", [["all", "Any status"], ["unpublished", "Unpublished"], ["draft", "Draft"], ["ready", "Ready"], ["live", "Published"], ["pending", "Pending"], ["attention", "Attention"]])}
             {choice("stock", "Stock", [["all", "Any stock"], ["in", "In stock"], ["out", "Out of stock"], ["untracked", "Untracked"]])}
             {choice("photos", "Photos", [["all", "Any"], ["none", "No photo"], ["one", "Only 1 photo"], ["has", "1 or more"], ["2", "2 or more"], ["3", "3 or more"], ["5", "5 or more"]], "w-32")}
             {choice("description", "Description", [["all", "Any"], ["has", "Written"], ["missing", "Missing"]], "w-32")}

@@ -4,8 +4,8 @@ import { requireIncomingKey } from "@/modules/incoming/lib/incomingApi";
 import { AgentCopyError, addReviewNotes, notesSchema } from "@/modules/ecommerce/lib/agentProductCopy";
 
 // POST /api/agent/products/[id]/notes { notes: [...], replace? } — Claude's review
-// mode: notes only, the product is not changed. They wait in the product's draft
-// ("Notes for you") until staff fix them and Save as ready, or Discard.
+// mode: notes only, the product is not changed. They become its Attention reason
+// (the Attention tab) until staff fix them and Resolve.
 // Answer: { notes: <count> }.
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {

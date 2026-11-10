@@ -43,6 +43,10 @@ export type ShopProductAdmin = ShopProductPublic & {
     shopStatus: ShopStatus;
     /** When it was last saved as draft or Claude wrote on it (null = not in Draft). */
     shopDraftAt: string | null;
+    /** Needs attention: the problem staff or Claude found (null = none). Beside any stage. */
+    shopAttention: string | null;
+    shopAttentionAt: string | null;
+    shopAttentionBy: string | null;
     /** Stage-before + Claude's notes — only the product's own page gets it (withShopDraft). */
     shopDraft?: ShopDraft | null;
     /** Per-product override: accept orders even at zero stock (backorder). */
@@ -109,6 +113,9 @@ export function invProductToAdmin(
         isListedInShop: p.isListedInShop,
         shopStatus: p.shopStatus,
         shopDraftAt: p.shopDraftAt?.toISOString() ?? null,
+        shopAttention: p.shopAttention ?? null,
+        shopAttentionAt: p.shopAttentionAt?.toISOString() ?? null,
+        shopAttentionBy: p.shopAttentionBy ?? null,
         allowBackorder: p.allowBackorder,
         unitId: p.unitId,
         categoryId: p.categoryId,

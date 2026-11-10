@@ -35,6 +35,7 @@ import { syncMasters, invalidateMasters, type Masters } from "@/shared/lib/inven
 import { useSession } from "next-auth/react";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { AttentionDialog, setAttention } from "@/modules/ecommerce/components/AttentionDialog";
 
 
 const sameList = (a: string[], b: string[]) => a.length === b.length && a.every((u, i) => u === b[i]);
@@ -83,6 +84,14 @@ export default function ProductForm({
         (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [],
         PERMISSIONS.ECOMMERCE_PRODUCT_MASTERS,
     );
+    // Needs attention (owner, 2026-11-11): the problem shows on top of the save
+    // buttons; Resolve / flag right here, without going back to the list.
+    const canFlag = hasPermissionWithScope(
+        (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [],
+        PERMISSIONS.ECOMMERCE_PRODUCT_ATTENTION,
+    );
+    const [attention, setAttentionText] = useState<string | null>(initial?.shopAttention ?? null);
+    const [flagOpen, setFlagOpen] = useState(false);
     // Replicated master lists — one delta request, usually "nothing changed".
     const [masters, setMasters] = useState<Masters | null>(null);
     useEffect(() => { void syncMasters().then((m) => { if (m) setMasters(m); }); }, []);
@@ -443,6 +452,9 @@ export default function ProductForm({
 
     const previewProduct: ShopProductAdmin = {
         id: initial?.id ?? 0,
+        shopAttention: attention,
+        shopAttentionAt: initial?.shopAttentionAt ?? null,
+        shopAttentionBy: initial?.shopAttentionBy ?? null,
         sku: sku.trim() || "SKU",
         slug: slug.trim() || null,
         name: name.trim() || "Product name",
@@ -903,6 +915,35 @@ export default function ProductForm({
                     </Button>
                 </div>
 
+                {initial?.id && attention ? (
+                    <div className="rounded-md border border-orange-200 bg-orange-50 p-3 text-xs text-orange-900 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-200">
+                        <p className="font-medium">
+                            Needs attention{initial.shopAttentionBy ? ` (${initial.shopAttentionBy})` : ""}:
+                        </p>
+                        <p className="mt-1 whitespace-pre-line">{attention}</p>
+                        <div className="mt-2 flex items-center gap-2">
+                            <span className="text-orange-800/80 dark:text-orange-300/80">Fix it, then Resolve — Mark ready and Publish wait until then.</span>
+                            {canFlag ? (
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="ml-auto h-7"
+                                    onClick={async () => { if (await setAttention([initial.id!], null)) setAttentionText(null); }}
+                                >
+                                    Resolve
+                                </Button>
+                            ) : null}
+                        </div>
+                    </div>
+                ) : null}
+                {initial?.id && canFlag ? (
+                    <AttentionDialog
+                        ids={flagOpen ? [initial.id] : null}
+                        onClose={() => setFlagOpen(false)}
+                        onDone={(r) => setAttentionText(r)}
+                    />
+                ) : null}
                 {(initial?.shopDraft?.notes?.length ?? 0) > 0 && (
                     <div className="rounded-md border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200">
                         <p className="font-medium">Review notes for you (Claude):</p>
@@ -965,6 +1006,12 @@ export default function ProductForm({
                             Unpublish
                         </Button>
                     )}
+                    {initial?.id && canFlag && !attention ? (
+                        <Button type="button" variant="ghost" onClick={() => setFlagOpen(true)} disabled={busy}
+                            title="Something is wrong — send it to the Attention tab with a reason">
+                            Needs attention
+                        </Button>
+                    ) : null}
                     {onClose && (
                         <Button type="button" variant="outline" onClick={onClose} disabled={busy}
                             title="Back to the Products list">

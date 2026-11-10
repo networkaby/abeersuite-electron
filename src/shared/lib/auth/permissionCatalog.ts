@@ -146,6 +146,7 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     // they stay locked unless the role holds this.
     { id: "ecommerce:fallback:unlock", label: "Unlock fallback sections", module: "ecommerce", description: "Show the Unlock button on E-Commerce → Customize Home, which opens every permanent fallback section at once to edit, move, switch off or delete, and to make a section a new fallback." },
     { id: "ecommerce:photos:cleanup", label: "Clean unused photos", module: "ecommerce", description: "Settings → E-Commerce → Photo cleanup: find shop photos in Cloudinary that nothing uses any more (older than 30 days) and delete them for good to free space." },
+    { id: "ecommerce:product:attention", label: "Flag products for attention", module: "ecommerce", description: "E-Commerce → Products: send a product to the Attention tab with a reason (photo wrong, data clash, price doubt) and Resolve it again. A flagged product cannot be marked ready or published until resolved." },
     { id: "ecommerce:product:masters", label: "Change product group / brand / collections", module: "ecommerce", description: "E-Commerce → Products → Edit: pick or create the product's Group (shown in the shop as its Category), Brand and Collections. These are the same inventory masters — a new group can change the GST/HSN the product takes from its group." },
 
     // inventory — per-kind voucher gates (inventory:voucher:<action>:<kind>). Every

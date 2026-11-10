@@ -43,12 +43,17 @@ import {
     CircleDashed,
     Search,
     AlertCircle,
+    AlertTriangle,
     ChevronRight,
     ExternalLink,
     Sparkles,
     // SlidersHorizontal,
 } from "lucide-react";
 import { productPreviewPath, productShopUrl } from "@/shared/lib/shop/productPublic";
+import { AttentionDialog, setAttention } from "@/modules/ecommerce/components/AttentionDialog";
+import { useSession } from "next-auth/react";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 // Sticky-header scroll frame (costing-page pattern): a plain overflow-auto div,
@@ -62,10 +67,11 @@ const STICKY_HEAD =
 const COL_COUNT = 11;
 const PAGE_SIZE = 25;
 
-/** Stages: Unpublished → Draft → Ready → Published (live) / Pending — one stage per product (owner, 2026-11-10). */
+/** Stages: Unpublished → Draft → Ready → Published (live) / Pending — one stage per product (owner, 2026-11-10).
+ *  Attention = a problem flagged, shown instead of the stage until resolved (owner, 2026-11-11). */
 type TabKey = "all" | ProductStatus["kind"];
-const TAB_KEYS: TabKey[] = ["all", "unpublished", "draft", "ready", "live", "pending"];
-const TAB_LABEL: Record<TabKey, string> = { all: "All", unpublished: "Unpublished", draft: "Draft", ready: "Ready", live: "Published", pending: "Pending" };
+const TAB_KEYS: TabKey[] = ["all", "unpublished", "draft", "ready", "live", "pending", "attention"];
+const TAB_LABEL: Record<TabKey, string> = { all: "All", unpublished: "Unpublished", draft: "Draft", ready: "Ready", live: "Published", pending: "Pending", attention: "Attention" };
 // Persist the list view (page / filters / scroll) per browser tab so leaving for
 // a product's Edit page and coming back (Esc → router.back) returns to the same
 // place instead of resetting to page 1.
@@ -86,8 +92,17 @@ function loadSavedView(): Partial<SavedView> {
     }
 }
 
-function StatusBadge({ status }: { status: ProductStatus }) {
-    return status.kind === "live" ? (
+function StatusBadge({ status, attention }: { status: ProductStatus; attention?: string | null }) {
+    return status.kind === "attention" ? (
+        <span className="inline-flex flex-col items-start gap-0.5">
+            <Badge variant="outline" className="gap-1 border-orange-200 bg-orange-50 text-orange-700" title={attention ?? ""}>
+                <AlertTriangle className="size-3" /> Attention
+            </Badge>
+            {attention ? (
+                <span className="line-clamp-2 max-w-[180px] whitespace-pre-line text-[11px] leading-tight text-orange-700">{attention}</span>
+            ) : null}
+        </span>
+    ) : status.kind === "live" ? (
         <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50 text-emerald-700">
             <CheckCircle2 className="size-3" /> Published
         </Badge>
@@ -153,6 +168,13 @@ export default function EcommerceProductsPage() {
     const restoredScrollTop = useRef(0);
 
     const [rechecking, setRechecking] = useState(false);
+    // Needs attention: who may flag / resolve, and the open reason box (ids, or null).
+    const { data: session } = useSession();
+    const canFlag = hasPermissionWithScope(
+        (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [],
+        PERMISSIONS.ECOMMERCE_PRODUCT_ATTENTION,
+    );
+    const [flagIds, setFlagIds] = useState<number[] | null>(null);
     const load = () => {
         fetchAdminProducts()
             .then(setProducts)
@@ -189,7 +211,7 @@ export default function EcommerceProductsPage() {
     // One status per product, shared by the tab counts, the tab filter and the rows.
     const statusOf = useMemo(() => new Map(products.map((p) => [p.id, productStatus(p, rules)])), [products, rules]);
     const counts = useMemo(() => {
-        const c: Record<TabKey, number> = { all: products.length, unpublished: 0, draft: 0, ready: 0, live: 0, pending: 0 };
+        const c: Record<TabKey, number> = { all: products.length, unpublished: 0, draft: 0, ready: 0, live: 0, pending: 0, attention: 0 };
         for (const st of statusOf.values()) c[st.kind]++;
         return c;
     }, [products, statusOf]);
@@ -289,7 +311,7 @@ export default function EcommerceProductsPage() {
         if (ids.length === 0) return;
         setBulkBusy(true);
         try {
-            const { data } = await axios.post<{ published: number; pending: number; unpublished: number; ready?: number; skipped?: { inDraft: number; names: string[] } }>(
+            const { data } = await axios.post<{ published: number; pending: number; unpublished: number; ready?: number; skipped?: { inDraft: number; names: string[] }; attention?: number }>(
                 "/api/ecommerce/products/bulk",
                 { ids, action }
             );
@@ -306,6 +328,7 @@ export default function EcommerceProductsPage() {
             if (data.skipped?.inDraft) {
                 toast.info(`${data.skipped.inDraft} skipped — in Draft (${data.skipped.names.join(", ")}${data.skipped.inDraft > data.skipped.names.length ? ", …" : ""}). Finish it with Save as ready, or Discard draft.`);
             }
+            if (data.attention) toast.info(`${data.attention} skipped — needs attention. Resolve it first.`);
             clearSelection();
             load();
         } catch {
@@ -362,7 +385,7 @@ export default function EcommerceProductsPage() {
                 <div>
                     <h1 className="text-2xl font-semibold tracking-tight">Products</h1>
                     <p className="text-muted-foreground text-sm">
-                        One catalogue across shop, POS and Sale vouchers. Unpublished → Ready (complete, waiting) → Published; a published product missing a publish rule waits as Pending. Draft = being worked on, off the shop until Save as ready.
+                        One catalogue across shop, POS and Sale vouchers. Unpublished → Ready (complete, waiting) → Published; a published product missing a publish rule waits as Pending. Draft = being worked on, off the shop until Save as ready. Attention = a problem flagged, waiting for someone to fix it and Resolve.
                     </p>
                 </div>
                 <div className="flex gap-2">
@@ -464,6 +487,22 @@ export default function EcommerceProductsPage() {
                     <Button size="sm" variant="outline" disabled={bulkBusy} onClick={() => void runBulk("unpublish")}>
                         Unpublish
                     </Button>
+                    {canFlag ? (
+                        <>
+                            <Button size="sm" variant="outline" disabled={bulkBusy} onClick={() => setFlagIds([...selected])}>
+                                <AlertTriangle className="size-4" /> Needs attention
+                            </Button>
+                            {tab === "attention" ? (
+                                <Button size="sm" variant="outline" disabled={bulkBusy} onClick={async () => {
+                                    setBulkBusy(true);
+                                    if (await setAttention([...selected], null)) { clearSelection(); load(); }
+                                    setBulkBusy(false);
+                                }}>
+                                    Resolve
+                                </Button>
+                            ) : null}
+                        </>
+                    ) : null}
                     <Button size="sm" variant="outline" asChild>
                         <Link href="/office/ecommerce/products/ai" onClick={() => handOffAiPick([...selected])}>
                             <Sparkles className="size-4" /> Write with AI
@@ -481,6 +520,8 @@ export default function EcommerceProductsPage() {
             ) : null}
 
             {/* Scrollable table — fills remaining height, header pinned */}
+            <AttentionDialog ids={flagIds} onClose={() => setFlagIds(null)} onDone={() => { clearSelection(); load(); }} />
+
             <div ref={scrollRef} onScroll={persistScroll} className={SCROLL_FRAME} onContextMenu={onContainerContextMenu}>
                 <LinkContextMenu menu={linkMenu} onClose={closeLinkMenu} />
                 <Table>
@@ -558,7 +599,7 @@ export default function EcommerceProductsPage() {
                                             {p.groupName ?? "—"}
                                         </TableCell>
                                         <TableCell>
-                                            <StatusBadge status={status} />
+                                            <StatusBadge status={status} attention={p.shopAttention} />
                                         </TableCell>
                                         <TableCell className="text-right tabular-nums">
                                             {shopPricePaise ? formatRupeesFromPaise(shopPricePaise) : "—"}
@@ -571,7 +612,23 @@ export default function EcommerceProductsPage() {
                                         </TableCell>
                                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                             <div className="flex items-center justify-end gap-1.5">
-                                                {status.kind === "draft" ? (
+                                                {status.kind === "attention" ? (
+                                                    canFlag ? (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            disabled={publishing.has(p.id)}
+                                                            title="The problem is fixed — show its stage again"
+                                                            onClick={async () => {
+                                                                setPublishing((s) => new Set(s).add(p.id));
+                                                                if (await setAttention([p.id], null)) load();
+                                                                setPublishing((s) => { const n = new Set(s); n.delete(p.id); return n; });
+                                                            }}
+                                                        >
+                                                            {publishing.has(p.id) ? "…" : "Resolve"}
+                                                        </Button>
+                                                    ) : null
+                                                ) : status.kind === "draft" ? (
                                                     <Button size="sm" variant="outline" asChild>
                                                         <Link href={`/office/ecommerce/products/${p.id}`}>Open draft</Link>
                                                     </Button>
@@ -641,7 +698,9 @@ export default function EcommerceProductsPage() {
                                                     <Detail
                                                         label="Shop status"
                                                         value={
-                                                            status.kind === "live"
+                                                            status.kind === "attention"
+                                                                ? `Needs attention${p.shopAttentionBy ? ` (${p.shopAttentionBy}${p.shopAttentionAt ? `, ${new Date(p.shopAttentionAt).toLocaleDateString("en-IN")}` : ""})` : ""}: ${p.shopAttention}. Stage underneath: ${p.shopStatus.toLowerCase()}${p.isListedInShop ? ", still live in the shop" : ""}.`
+                                                                : status.kind === "live"
                                                                 ? "Published — live on the storefront"
                                                                 : status.kind === "pending"
                                                                     ? `Pending — needs ${status.missing.join(", ").toLowerCase()}; goes live by itself once added`
@@ -670,6 +729,11 @@ export default function EcommerceProductsPage() {
                                                                 <ExternalLink className="size-3.5" />
                                                             </a>
                                                         </Button>
+                                                        {canFlag && status.kind !== "attention" ? (
+                                                            <Button variant="outline" size="sm" onClick={() => setFlagIds([p.id])}>
+                                                                <AlertTriangle className="size-3.5" /> Needs attention
+                                                            </Button>
+                                                        ) : null}
                                                         {status.kind === "live" && canOpen(`/office/campaigns/posts/new`) ? (
                                                             <Button variant="outline" size="sm" asChild>
                                                                 <Link href={`/office/campaigns/posts/new?product=${p.id}`}>Make a post</Link>

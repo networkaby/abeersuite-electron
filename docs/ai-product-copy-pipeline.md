@@ -283,11 +283,11 @@ cost on the server:
 - **Shipping:** Claude quotes the package weight and size exactly as the source prints them; the server finds the text on the label or an accepted page, converts it itself (grams, whole cm rounded up) and sets it on the product.
 - **Photo order and looks (same as our photo AI):** Claude may send `photos.order` (our photo urls, best first) and `photos.look` (crop / focus / fixes / rotate / background from `photoLookOptions`). The server runs them through the same `arrangeFrom` as Step 5, so staff get the same **Use / Undo** card; a photo staff framed by hand keeps its framing.
 - **Photos through our server:** `GET /api/agent/products/{id}/photos/{n}` serves photo n of that product's own gallery (Skip-for-AI left out) — for when Claude's workspace blocks the photo host. Only the product's own photos, never any other URL.
-- **A clash stops Claude** (our data vs the photo): no copy is saved, but the clash and the other mistakes it saw go to the product as review notes (`/notes`), so staff see them in AbeerSuite.
+- **A clash stops Claude** (our data vs the photo): no copy is saved, but the clash and the other mistakes it saw go to the product's **Attention** reason (`/notes`), so staff see them in the Attention tab.
 - **No page read:** a draft saved with no page at all gets a note saying the copy is from the label and photos only. Notes on the copy POST: up to 40 lines.
-- **Review mode:** `POST /api/agent/products/{id}/notes` adds notes only (nothing on the product changes). They show as "Review notes for you" on the product page until staff Save as ready or Discard.
+- **Review mode:** `POST /api/agent/products/{id}/notes` adds notes only (no field changes, stage untouched). They become the product's Attention reason (E-Commerce → Products → Attention tab, and a banner on the product page) until staff fix it and press Resolve; Mark ready / Publish are refused meanwhile (owner, 2026-11-11 — Draft keeps real edits only).
 - **Compatibility:** the checked list is kept as the product's **"Compatible Models"** spec (no new column). Claude's compatibility-only mode (`POST /api/agent/products/{id}/compatibility`) refreshes just that list: the server keeps only models on an accepted page and replaces the old list on the product (which moves to Draft). The shop (`src/shared/lib/shop/compatibility.ts`) turns it into three product-page rows: **Made for this one** (printer → its inks and heads), **For the same machine** (black ink → the colours and the head), **Works with these** (ink → the printers we sell). A model matches only as a whole phrase in a product name ("Smart Tank 580" never matches "5800"), across brands. Search (results and the suggestion box) reads the list too.
-- **Claude only leaves products in Draft** (owner, 2026-11-08): it never presses Save as ready and never publishes. Review notes also move the product to Draft.
+- **Claude only leaves products in Draft** (owner, 2026-11-08): it never presses Save as ready and never publishes. Review notes send it to Attention instead, leaving the stage as it is.
 - **One skill file** tells Claude the steps and rules, including a mistake checklist (name, codes, brand, collections, group, photos, description, shipping).
 
 ### A9. Shop stages (Draft is a stage)
@@ -303,6 +303,7 @@ cost on the server:
 | Published | Yes | Yes | Yes | Nothing |
 
 - Pending isn't stored; it's worked out each time from "Published" and the publish rules.
+- **Attention** (owner, 2026-11-11) sits beside the stage, not in place of it: `InvProduct.shopAttention` (reason) + `shopAttentionAt` / `shopAttentionBy`. Staff flag it (row, ticked rows or the product page, `ecommerce:product:attention`, `POST /api/ecommerce/products/attention`) or Claude's notes set it. The list shows it in its own Attention tab instead of the stage; Mark ready / Publish are refused until Resolve. Unpublish and Discard draft still work, and a Published product stays live while flagged.
 - The shop reads one "live now" flag: Published and the rules met.
 - Every edit goes straight onto the product. There is no second copy, so the list, Cowork and the shop all read the same data.
 

@@ -101,7 +101,7 @@ export async function updateShopProduct(
                 name: true, sku: true, imageUrl: true, galleryJson: true,
                 shopDescription: true, shopCategory: true, stock: true, savedSalePricePaise: true, barcodeManualPaise: true,
                 mrpPaise: true, effectiveSalePricePaise: true, slug: true,
-                groupId: true, brandId: true, allowBackorder: true, weightGrams: true, shopStatus: true, shopDraftJson: true,
+                groupId: true, brandId: true, allowBackorder: true, weightGrams: true, shopStatus: true, shopDraftJson: true, shopAttention: true,
             },
         });
         if (!existing) return { response: NextResponse.json({ error: "Not found" }, { status: 404 }) };
@@ -173,6 +173,10 @@ export async function updateShopProduct(
             data.shopDraftAt = null;
         }
         const shopStatus = nextShopStatus(existing.shopStatus, { status, listed: b.isListedInShop });
+        // Needs attention: no step towards the shop until it is resolved.
+        if (existing.shopAttention && b.draft !== "discard" && shopStatus !== existing.shopStatus && (shopStatus === "READY" || shopStatus === "PUBLISHED")) {
+            return { response: NextResponse.json({ error: `Needs attention: ${existing.shopAttention} — Resolve it first.` }, { status: 409 }) };
+        }
         data.shopStatus = shopStatus;
 
         // Resolve listing + slug from the merged (request ∪ existing) state.

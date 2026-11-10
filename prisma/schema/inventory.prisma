@@ -360,6 +360,14 @@ model InvProduct {
   shopDraftJson           Json?
   /// When it was last saved as draft or Claude wrote on it (null = not in Draft).
   shopDraftAt             DateTime?
+  /// Needs attention (owner, 2026-11-11): a problem found on the product — photo
+  /// wrong, data clash, price doubt. Set by staff or by Claude's product-copy;
+  /// shown in its own Attention tab, beside any stage, so Draft stays for real
+  /// edits only. While set, Mark ready / Publish are refused. null = no problem.
+  shopAttention           String?
+  /// When it was flagged, and who (staff name, or "Claude").
+  shopAttentionAt         DateTime?
+  shopAttentionBy         String?
   /// Per-product override of the org out-of-stock policy: when true the shop
   /// accepts orders for this product even at zero stock (backorder / procure later).
   allowBackorder          Boolean    @default(false)

@@ -521,18 +521,21 @@ export const notesSchema = z.object({
 });
 
 /**
- * Claude reviewed a product (finished copy, staff's or its own) and only leaves
- * notes — no field changes. The product moves to Draft with "Notes for you"
- * until staff fix them and Save as ready, or Discard draft (stage back).
+ * Claude reviewed a product (or stopped on a clash) and only leaves notes — no
+ * field changes, stage untouched. The notes become the product's Attention
+ * reason (owner, 2026-11-11: problems go to Attention, Draft keeps real edits)
+ * until staff fix them and Resolve. One note per line.
  */
 export async function addReviewNotes(id: number, b: z.infer<typeof notesSchema>) {
-    let count = 0;
-    await writeAsDraft(id, {}, (open) => {
-        const notes = [...new Set([...(b.replace ? [] : open?.notes ?? []), ...b.notes])].slice(-50);
-        count = notes.length;
-        return { notes };
+    const p = await prisma.invProduct.findUnique({ where: { id }, select: { shopAttention: true } });
+    if (!p) throw new AgentCopyError("Product not found");
+    const before = b.replace ? [] : (p.shopAttention ?? "").split("\n").map((x) => x.trim()).filter(Boolean);
+    const notes = [...new Set([...before, ...b.notes])].slice(-30);
+    await prisma.invProduct.update({
+        where: { id },
+        data: { shopAttention: notes.join("\n").slice(0, 10000), shopAttentionAt: new Date(), shopAttentionBy: "Claude" },
     });
-    return { notes: count };
+    return { notes: notes.length };
 }
 
 // ── Compatibility only ────────────────────────────────────────────────────────
