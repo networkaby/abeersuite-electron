@@ -93,7 +93,7 @@ Never use your own memory of the product.
 
 1. **Clash** = our typed data (name, modelNo, barcodes, typedSpecs) disagrees with what is **printed**: another brand or model, another printed number (capacity, wattage, size, count). Not a clash: missing data, the same thing spelled differently, a count only *seen*, our support period shorter than the printed warranty.
    **Any clash → stop this product: no copy, nothing saved.** Report `field: typed "X", photo shows "Y"` (e.g. `capacity: typed "128GB", label shows "256G"`).
-   Then **save what you found as notes** so staff see it in AbeerSuite, not only in this chat — the notes route (step R) changes nothing on the product and sends it to the **Attention** tab:
+   Then **save what you found as notes** so staff see it in AbeerSuite, not only in this chat — the notes route (step R) changes no field and parks the product in the **Attention** stage (off the shop):
    ```bash
    curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json"      "$ABEERSUITE_URL/api/agent/products/<id>/notes" -d '{ "notes": ["STOPPED — capacity: typed \"128GB\", photo 3 sticker shows \"256G\". Check the real unit, then ask Claude to run product copy again.", "Model No is empty — sticker prints HS-SSD-E1000."] }'
    ```
@@ -234,7 +234,7 @@ Answer: `{ kept, dropped, sources }`. The server keeps only models really on an 
 
 ## R. Review mode (notes only)
 
-For finished products — staff's copy or an earlier one of yours. **Change nothing**; only notes. The notes become the product's **Attention** reason — its stage stays as it is (a Published product stays live) — and it waits in the Attention tab until staff fix it and press Resolve. Mark ready / Publish are refused while it needs attention.
+For finished products — staff's copy or an earlier one of yours. **Change nothing**; only notes. The notes park the product in the **Attention** stage with the notes as its reason — off the shop, even if it was Published — until staff check it and Save as draft or Save as ready. So send review notes only for real problems.
 
 1. Read the product (step 1) and its photos (step 2) — look for clashes and photo problems.
 2. Read the maker's page (step 3, `read-page` if blocked) and compare the current description, specs and compatibility with it.

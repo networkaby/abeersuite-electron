@@ -35,7 +35,7 @@ import { syncMasters, invalidateMasters, type Masters } from "@/shared/lib/inven
 import { useSession } from "next-auth/react";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { AttentionDialog, setAttention } from "@/modules/ecommerce/components/AttentionDialog";
+import { AttentionDialog } from "@/modules/ecommerce/components/AttentionDialog";
 
 
 const sameList = (a: string[], b: string[]) => a.length === b.length && a.every((u, i) => u === b[i]);
@@ -84,13 +84,14 @@ export default function ProductForm({
         (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [],
         PERMISSIONS.ECOMMERCE_PRODUCT_MASTERS,
     );
-    // Needs attention (owner, 2026-11-11): the problem shows on top of the save
-    // buttons; Resolve / flag right here, without going back to the list.
+    // Attention stage (owner, 2026-11-11): a Draft parked until something is
+    // checked by hand. The reason shows above the save buttons (also after Save
+    // as draft, until Save as ready); Flag attention parks it from here.
     const canFlag = hasPermissionWithScope(
         (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [],
         PERMISSIONS.ECOMMERCE_PRODUCT_ATTENTION,
     );
-    const [attention, setAttentionText] = useState<string | null>(initial?.shopAttention ?? null);
+    const attention = initial?.shopAttention ?? null;
     const [flagOpen, setFlagOpen] = useState(false);
     // Replicated master lists — one delta request, usually "nothing changed".
     const [masters, setMasters] = useState<Masters | null>(null);
@@ -918,30 +919,29 @@ export default function ProductForm({
                 {initial?.id && attention ? (
                     <div className="rounded-md border border-orange-200 bg-orange-50 p-3 text-xs text-orange-900 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-200">
                         <p className="font-medium">
-                            Needs attention{initial.shopAttentionBy ? ` (${initial.shopAttentionBy})` : ""}:
+                            {shopStatus === "ATTENTION" ? "Parked in Attention" : "Was parked in Attention"}
+                            {initial.shopAttentionBy ? ` by ${initial.shopAttentionBy}` : ""}
+                            {initial.shopAttentionAt ? ` on ${new Date(initial.shopAttentionAt).toLocaleDateString("en-IN")}` : ""}:
                         </p>
                         <p className="mt-1 whitespace-pre-line">{attention}</p>
-                        <div className="mt-2 flex items-center gap-2">
-                            <span className="text-orange-800/80 dark:text-orange-300/80">Fix it, then Resolve — Mark ready and Publish wait until then.</span>
-                            {canFlag ? (
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    className="ml-auto h-7"
-                                    onClick={async () => { if (await setAttention([initial.id!], null)) setAttentionText(null); }}
-                                >
-                                    Resolve
-                                </Button>
-                            ) : null}
-                        </div>
+                        <p className="mt-1 text-orange-800/80 dark:text-orange-300/80">
+                            {shopStatus === "ATTENTION"
+                                ? "Check it, then Save as draft to carry on working, or Save as ready if it is done."
+                                : "Shown until Save as ready."}
+                        </p>
                     </div>
                 ) : null}
                 {initial?.id && canFlag ? (
                     <AttentionDialog
                         ids={flagOpen ? [initial.id] : null}
                         onClose={() => setFlagOpen(false)}
-                        onDone={(r) => setAttentionText(r)}
+                        onDone={async () => {
+                            // Reload the row so the stage (and its buttons) read Attention.
+                            try {
+                                const res = await axios.get<ShopProductAdmin>(`/api/ecommerce/products/${initial.id}`);
+                                onSaved?.(res.data);
+                            } catch { /* the list shows it on the next load */ }
+                        }}
                     />
                 ) : null}
                 {(initial?.shopDraft?.notes?.length ?? 0) > 0 && (
@@ -979,6 +979,17 @@ export default function ProductForm({
                                 </Button>
                             )}
                         </>
+                    ) : shopStatus === "ATTENTION" ? (
+                        <>
+                            <Button type="button" onClick={() => void submit("save")} disabled={busy}
+                                title="Checked — back to Draft to carry on working">
+                                Save as draft
+                            </Button>
+                            <Button type="button" variant="outline" onClick={() => void submit("ready")} disabled={busy}
+                                title="Checked and complete — Ready to publish">
+                                Save as ready
+                            </Button>
+                        </>
                     ) : shopStatus === "DRAFT" ? (
                         <>
                             <Button type="button" onClick={() => void submit("ready")} disabled={busy}
@@ -1006,10 +1017,10 @@ export default function ProductForm({
                             Unpublish
                         </Button>
                     )}
-                    {initial?.id && canFlag && !attention ? (
-                        <Button type="button" variant="ghost" onClick={() => setFlagOpen(true)} disabled={busy}
-                            title="Something is wrong — send it to the Attention tab with a reason">
-                            Needs attention
+                    {initial?.id && canFlag && shopStatus === "DRAFT" && !drafting ? (
+                        <Button type="button" variant="ghost" className="text-orange-700" onClick={() => setFlagOpen(true)} disabled={busy}
+                            title="Work blocked until something is checked by hand — park it in Attention with the reason">
+                            Flag attention
                         </Button>
                     ) : null}
                     {onClose && (
@@ -1023,6 +1034,8 @@ export default function ProductForm({
                             ? `Unsaved changes${shopStatus === "PUBLISHED" ? " — Publish changes puts them live; Save as draft takes it off the shop" : ""}.`
                             : shopStatus === "DRAFT"
                                 ? "Draft — being worked on, not in the shop."
+                            : shopStatus === "ATTENTION"
+                                ? "Attention — parked until it is checked, not in the shop."
                             : shopStatus === "READY"
                                 ? `Ready — complete, waiting to be published${qualified ? "" : `; needs ${qualification.missing.join(", ").toLowerCase()}`}.`
                                 : shopStatus === "PUBLISHED"

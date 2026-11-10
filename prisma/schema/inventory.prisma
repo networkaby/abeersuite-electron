@@ -257,6 +257,11 @@ enum ShopStatus {
   UNPUBLISHED
   /// Being worked on, off the shop (owner, 2026-11-10: a stage again, one copy).
   DRAFT
+  /// Parked: work blocked until something is checked by hand (owner, 2026-11-11:
+  /// name and photo clash → verify the unit in the warehouse next working day).
+  /// Entered from Draft with a reason (shopAttention); off the shop; leaves by
+  /// Save as draft or Save as ready.
+  ATTENTION
   READY
   PUBLISHED
 }
@@ -360,10 +365,9 @@ model InvProduct {
   shopDraftJson           Json?
   /// When it was last saved as draft or Claude wrote on it (null = not in Draft).
   shopDraftAt             DateTime?
-  /// Needs attention (owner, 2026-11-11): a problem found on the product — photo
-  /// wrong, data clash, price doubt. Set by staff or by Claude's product-copy;
-  /// shown in its own Attention tab, beside any stage, so Draft stays for real
-  /// edits only. While set, Mark ready / Publish are refused. null = no problem.
+  /// Why the product was parked in ATTENTION (owner, 2026-11-11) — set by staff
+  /// from Draft or by Claude's review notes. Kept after Save as draft so whoever
+  /// picks it up sees what to check; Save as ready clears it. null = none.
   shopAttention           String?
   /// When it was flagged, and who (staff name, or "Claude").
   shopAttentionAt         DateTime?

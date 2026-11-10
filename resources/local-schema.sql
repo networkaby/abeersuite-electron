@@ -308,7 +308,7 @@ END $$;
 
 -- CreateEnum
 DO $$ BEGIN
-    CREATE TYPE "ShopStatus" AS ENUM ('UNPUBLISHED', 'DRAFT', 'READY', 'PUBLISHED');
+    CREATE TYPE "ShopStatus" AS ENUM ('UNPUBLISHED', 'DRAFT', 'ATTENTION', 'READY', 'PUBLISHED');
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;

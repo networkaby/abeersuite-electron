@@ -9,6 +9,7 @@ import { AI_PHOTO_LIMITS } from "@/shared/lib/constants/ai";
 import { OUTPUT_KEYS, type ProductCopy } from "@/modules/ecommerce/lib/aiProductCopy";
 import { readShopDraft, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
 import { updateShopProduct, type ShopProductPatch } from "@/modules/ecommerce/lib/updateShopProduct";
+import { parkInAttention } from "@/modules/ecommerce/lib/shopAttention";
 import { PHOTO_LOOK_OPTIONS, arrangeFrom, checkWrittenCopy, writtenCopySchema } from "@/modules/ecommerce/lib/aiVerifiedCopy";
 import { readGivenPages } from "@/modules/ecommerce/lib/aiPageReader";
 import { checkFact, normForCheck } from "@/modules/ecommerce/lib/aiFactCheck";
@@ -39,7 +40,7 @@ export const backlogQuery = z.object({
     /** Words to find in the name, SKU or a barcode — like the Products search. */
     q: z.string().trim().min(2).max(100).optional(),
     /** Which shop stage. Default: unpublished, or all when sku / q is sent. */
-    stage: z.enum(["unpublished", "draft", "ready", "published", "all"]).optional(),
+    stage: z.enum(["unpublished", "draft", "attention", "ready", "published", "all"]).optional(),
     /** copy = no description yet; all = every product. Default: copy, or all when sku / q is sent. */
     need: z.enum(["copy", "all"]).optional(),
     /** At least this many photos usable by AI ("Skip for AI" ones not counted). */
@@ -522,19 +523,16 @@ export const notesSchema = z.object({
 
 /**
  * Claude reviewed a product (or stopped on a clash) and only leaves notes — no
- * field changes, stage untouched. The notes become the product's Attention
- * reason (owner, 2026-11-11: problems go to Attention, Draft keeps real edits)
- * until staff fix them and Resolve. One note per line.
+ * field changes. The product is parked in Attention with the notes as its
+ * reason (owner, 2026-11-11), off the shop, until staff check it and Save as
+ * draft or Save as ready. One note per line.
  */
 export async function addReviewNotes(id: number, b: z.infer<typeof notesSchema>) {
     const p = await prisma.invProduct.findUnique({ where: { id }, select: { shopAttention: true } });
     if (!p) throw new AgentCopyError("Product not found");
     const before = b.replace ? [] : (p.shopAttention ?? "").split("\n").map((x) => x.trim()).filter(Boolean);
     const notes = [...new Set([...before, ...b.notes])].slice(-30);
-    await prisma.invProduct.update({
-        where: { id },
-        data: { shopAttention: notes.join("\n").slice(0, 10000), shopAttentionAt: new Date(), shopAttentionBy: "Claude" },
-    });
+    await parkInAttention([id], notes.join("\n").slice(0, 10000), "Claude", "any");
     return { notes: notes.length };
 }
 

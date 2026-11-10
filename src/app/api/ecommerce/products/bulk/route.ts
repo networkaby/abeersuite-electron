@@ -12,7 +12,7 @@ import { applyPublished } from "@/modules/ecommerce/lib/applyPublished";
 //   with no slug gets one (same as the single-product save).
 // - unpublish: Published / Pending → READY, off the shop (the work is finished).
 // A product in Draft is skipped and named — finish it (Save as ready) or Discard draft first.
-// A product needing attention is skipped for ready / publish — Resolve it first.
+// Attention (a parked Draft) is skipped the same way.
 
 const schema = z.object({
     ids: z.array(z.coerce.number().int().positive()).min(1).max(5000),
@@ -29,40 +29,29 @@ export async function POST(req: Request) {
 
     try {
         const inDraft = await prisma.invProduct.findMany({
-            where: { id: { in: ids }, shopStatus: "DRAFT" },
+            where: { id: { in: ids }, shopStatus: { in: ["DRAFT", "ATTENTION"] } },
             select: { id: true, name: true },
         });
         const skipped = { inDraft: inDraft.length, names: inDraft.slice(0, 5).map((p) => p.name) };
         const draftIds = new Set(inDraft.map((p) => p.id));
         ids = ids.filter((id) => !draftIds.has(id));
-        let attention = 0;
-        if (action !== "unpublish") {
-            const flagged = await prisma.invProduct.findMany({
-                where: { id: { in: ids }, shopAttention: { not: null } },
-                select: { id: true },
-            });
-            attention = flagged.length;
-            const flaggedIds = new Set(flagged.map((p) => p.id));
-            ids = ids.filter((id) => !flaggedIds.has(id));
-        }
-
         if (action === "ready") {
             const res = await prisma.invProduct.updateMany({
                 where: { id: { in: ids }, shopStatus: "UNPUBLISHED" },
                 data: { shopStatus: "READY", isListedInShop: false },
             });
-            return NextResponse.json({ published: 0, pending: 0, unpublished: 0, ready: res.count, skipped, attention });
+            return NextResponse.json({ published: 0, pending: 0, unpublished: 0, ready: res.count, skipped });
         }
         if (action === "unpublish") {
             const res = await prisma.invProduct.updateMany({
                 where: { id: { in: ids }, shopStatus: "PUBLISHED" },
                 data: { shopStatus: "READY", isListedInShop: false },
             });
-            return NextResponse.json({ published: 0, pending: 0, unpublished: res.count, skipped, attention });
+            return NextResponse.json({ published: 0, pending: 0, unpublished: res.count, skipped });
         }
 
         const { published, pending } = await applyPublished(ids);
-        return NextResponse.json({ published, pending, unpublished: 0, skipped, attention });
+        return NextResponse.json({ published, pending, unpublished: 0, skipped });
     } catch (e) {
         return handleApiError(e, "Bulk update failed");
     }

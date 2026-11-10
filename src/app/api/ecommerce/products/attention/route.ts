@@ -4,16 +4,16 @@ import { z } from "zod";
 import { requireModuleAccess, requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
+import { parkInAttention } from "@/modules/ecommerce/lib/shopAttention";
 
-// Attention (owner, 2026-11-11): flag products with a problem — photo wrong,
-// data clash, price doubt — so Draft keeps only real edits. The flag sits beside
-// the stage; Resolve (reason null) clears it and the product shows its stage again.
-// One route for a single row and for ticked rows.
+// POST /api/ecommerce/products/attention { ids, reason } — park Draft products in
+// the Attention stage (owner, 2026-11-11): work blocked until something is
+// checked by hand. Only Draft products move; the rest are named back.
+// Leaving Attention is Save as draft / Save as ready on the product (PATCH).
 
 const schema = z.object({
     ids: z.array(z.coerce.number().int().positive()).min(1).max(5000),
-    /** The problem in a few words; null = Resolve. */
-    reason: z.string().trim().min(1).max(1000).nullable(),
+    reason: z.string().trim().min(1).max(1000),
 });
 
 export async function POST(req: Request) {
@@ -24,17 +24,9 @@ export async function POST(req: Request) {
     const { data, error } = await validateRequest(req, schema);
     if (error) return error;
     try {
-        const by = data.reason
-            ? (await prisma.user.findUnique({ where: { id: gate.user.id }, select: { name: true } }))?.name ?? "Staff"
-            : null;
-        const res = await prisma.invProduct.updateMany({
-            where: { id: { in: data.ids } },
-            data: data.reason
-                ? { shopAttention: data.reason, shopAttentionAt: new Date(), shopAttentionBy: by }
-                : { shopAttention: null, shopAttentionAt: null, shopAttentionBy: null },
-        });
-        return NextResponse.json({ count: res.count });
+        const by = (await prisma.user.findUnique({ where: { id: gate.user.id }, select: { name: true } }))?.name ?? "Staff";
+        return NextResponse.json(await parkInAttention(data.ids, data.reason, by, ["DRAFT"]));
     } catch (e) {
-        return handleApiError(e, "Could not update attention");
+        return handleApiError(e, "Could not park in Attention");
     }
 }

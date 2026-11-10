@@ -50,7 +50,7 @@ import {
     // SlidersHorizontal,
 } from "lucide-react";
 import { productPreviewPath, productShopUrl } from "@/shared/lib/shop/productPublic";
-import { AttentionDialog, setAttention } from "@/modules/ecommerce/components/AttentionDialog";
+import { AttentionDialog } from "@/modules/ecommerce/components/AttentionDialog";
 import { useSession } from "next-auth/react";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -68,7 +68,7 @@ const COL_COUNT = 11;
 const PAGE_SIZE = 25;
 
 /** Stages: Unpublished → Draft → Ready → Published (live) / Pending — one stage per product (owner, 2026-11-10).
- *  Attention = a problem flagged, shown instead of the stage until resolved (owner, 2026-11-11). */
+ *  Attention = a Draft parked until a manual check is done; leaves by Save as draft / ready (owner, 2026-11-11). */
 type TabKey = "all" | ProductStatus["kind"];
 const TAB_KEYS: TabKey[] = ["all", "unpublished", "draft", "ready", "live", "pending", "attention"];
 const TAB_LABEL: Record<TabKey, string> = { all: "All", unpublished: "Unpublished", draft: "Draft", ready: "Ready", live: "Published", pending: "Pending", attention: "Attention" };
@@ -95,7 +95,7 @@ function loadSavedView(): Partial<SavedView> {
 function StatusBadge({ status, attention }: { status: ProductStatus; attention?: string | null }) {
     return status.kind === "attention" ? (
         <span className="inline-flex flex-col items-start gap-0.5">
-            <Badge variant="outline" className="gap-1 border-orange-200 bg-orange-50 text-orange-700" title={attention ?? ""}>
+            <Badge variant="outline" className="gap-1 border-orange-200 bg-orange-50 text-orange-700" title={`Parked — ${attention ?? ""}`}>
                 <AlertTriangle className="size-3" /> Attention
             </Badge>
             {attention ? (
@@ -168,7 +168,7 @@ export default function EcommerceProductsPage() {
     const restoredScrollTop = useRef(0);
 
     const [rechecking, setRechecking] = useState(false);
-    // Needs attention: who may flag / resolve, and the open reason box (ids, or null).
+    // Flag attention: who may park a Draft, and the open reason box (ids, or null).
     const { data: session } = useSession();
     const canFlag = hasPermissionWithScope(
         (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [],
@@ -385,7 +385,7 @@ export default function EcommerceProductsPage() {
                 <div>
                     <h1 className="text-2xl font-semibold tracking-tight">Products</h1>
                     <p className="text-muted-foreground text-sm">
-                        One catalogue across shop, POS and Sale vouchers. Unpublished → Ready (complete, waiting) → Published; a published product missing a publish rule waits as Pending. Draft = being worked on, off the shop until Save as ready. Attention = a problem flagged, waiting for someone to fix it and Resolve.
+                        One catalogue across shop, POS and Sale vouchers. Unpublished → Ready (complete, waiting) → Published; a published product missing a publish rule waits as Pending. Draft = being worked on, off the shop until Save as ready. Attention = a Draft parked until something is checked by hand — Save as draft or Save as ready from there.
                     </p>
                 </div>
                 <div className="flex gap-2">
@@ -487,21 +487,10 @@ export default function EcommerceProductsPage() {
                     <Button size="sm" variant="outline" disabled={bulkBusy} onClick={() => void runBulk("unpublish")}>
                         Unpublish
                     </Button>
-                    {canFlag ? (
-                        <>
-                            <Button size="sm" variant="outline" disabled={bulkBusy} onClick={() => setFlagIds([...selected])}>
-                                <AlertTriangle className="size-4" /> Needs attention
-                            </Button>
-                            {tab === "attention" ? (
-                                <Button size="sm" variant="outline" disabled={bulkBusy} onClick={async () => {
-                                    setBulkBusy(true);
-                                    if (await setAttention([...selected], null)) { clearSelection(); load(); }
-                                    setBulkBusy(false);
-                                }}>
-                                    Resolve
-                                </Button>
-                            ) : null}
-                        </>
+                    {canFlag && tab === "draft" ? (
+                        <Button size="sm" variant="outline" disabled={bulkBusy} onClick={() => setFlagIds([...selected])}>
+                            <AlertTriangle className="size-4" /> Flag attention
+                        </Button>
                     ) : null}
                     <Button size="sm" variant="outline" asChild>
                         <Link href="/office/ecommerce/products/ai" onClick={() => handOffAiPick([...selected])}>
@@ -613,25 +602,21 @@ export default function EcommerceProductsPage() {
                                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                             <div className="flex items-center justify-end gap-1.5">
                                                 {status.kind === "attention" ? (
-                                                    canFlag ? (
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            disabled={publishing.has(p.id)}
-                                                            title="The problem is fixed — show its stage again"
-                                                            onClick={async () => {
-                                                                setPublishing((s) => new Set(s).add(p.id));
-                                                                if (await setAttention([p.id], null)) load();
-                                                                setPublishing((s) => { const n = new Set(s); n.delete(p.id); return n; });
-                                                            }}
-                                                        >
-                                                            {publishing.has(p.id) ? "…" : "Resolve"}
-                                                        </Button>
-                                                    ) : null
-                                                ) : status.kind === "draft" ? (
-                                                    <Button size="sm" variant="outline" asChild>
-                                                        <Link href={`/office/ecommerce/products/${p.id}`}>Open draft</Link>
+                                                    <Button size="sm" variant="outline" asChild title="Check it, then Save as draft or Save as ready">
+                                                        <Link href={`/office/ecommerce/products/${p.id}`}>Open</Link>
                                                     </Button>
+                                                ) : status.kind === "draft" ? (
+                                                    <>
+                                                        <Button size="sm" variant="outline" asChild>
+                                                            <Link href={`/office/ecommerce/products/${p.id}`}>Open draft</Link>
+                                                        </Button>
+                                                        {canFlag ? (
+                                                            <Button size="sm" variant="ghost" className="text-orange-700" title="Work blocked — park it in Attention with the reason" onClick={() => setFlagIds([p.id])}>
+                                                                <AlertTriangle className="size-3.5" />
+                                                                Flag
+                                                            </Button>
+                                                        ) : null}
+                                                    </>
                                                 ) : status.kind === "unpublished" ? (
                                                     <Button
                                                         size="sm"
@@ -699,7 +684,9 @@ export default function EcommerceProductsPage() {
                                                         label="Shop status"
                                                         value={
                                                             status.kind === "attention"
-                                                                ? `Needs attention${p.shopAttentionBy ? ` (${p.shopAttentionBy}${p.shopAttentionAt ? `, ${new Date(p.shopAttentionAt).toLocaleDateString("en-IN")}` : ""})` : ""}: ${p.shopAttention}. Stage underneath: ${p.shopStatus.toLowerCase()}${p.isListedInShop ? ", still live in the shop" : ""}.`
+                                                                ? `Attention — parked${p.shopAttentionBy ? ` by ${p.shopAttentionBy}` : ""}${p.shopAttentionAt ? ` on ${new Date(p.shopAttentionAt).toLocaleDateString("en-IN")}` : ""}: ${p.shopAttention ?? "—"}. Off the shop; check it, then Save as draft or Save as ready.`
+                                                                : status.kind === "draft"
+                                                                ? `Draft — being worked on, not in the shop.${p.shopAttention ? ` Was parked for: ${p.shopAttention}` : ""}`
                                                                 : status.kind === "live"
                                                                 ? "Published — live on the storefront"
                                                                 : status.kind === "pending"
@@ -729,11 +716,6 @@ export default function EcommerceProductsPage() {
                                                                 <ExternalLink className="size-3.5" />
                                                             </a>
                                                         </Button>
-                                                        {canFlag && status.kind !== "attention" ? (
-                                                            <Button variant="outline" size="sm" onClick={() => setFlagIds([p.id])}>
-                                                                <AlertTriangle className="size-3.5" /> Needs attention
-                                                            </Button>
-                                                        ) : null}
                                                         {status.kind === "live" && canOpen(`/office/campaigns/posts/new`) ? (
                                                             <Button variant="outline" size="sm" asChild>
                                                                 <Link href={`/office/campaigns/posts/new?product=${p.id}`}>Make a post</Link>

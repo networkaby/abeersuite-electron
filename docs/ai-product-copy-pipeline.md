@@ -283,11 +283,11 @@ cost on the server:
 - **Shipping:** Claude quotes the package weight and size exactly as the source prints them; the server finds the text on the label or an accepted page, converts it itself (grams, whole cm rounded up) and sets it on the product.
 - **Photo order and looks (same as our photo AI):** Claude may send `photos.order` (our photo urls, best first) and `photos.look` (crop / focus / fixes / rotate / background from `photoLookOptions`). The server runs them through the same `arrangeFrom` as Step 5, so staff get the same **Use / Undo** card; a photo staff framed by hand keeps its framing.
 - **Photos through our server:** `GET /api/agent/products/{id}/photos/{n}` serves photo n of that product's own gallery (Skip-for-AI left out) — for when Claude's workspace blocks the photo host. Only the product's own photos, never any other URL.
-- **A clash stops Claude** (our data vs the photo): no copy is saved, but the clash and the other mistakes it saw go to the product's **Attention** reason (`/notes`), so staff see them in the Attention tab.
+- **A clash stops Claude** (our data vs the photo): no copy is saved, but the clash and the other mistakes it saw park the product in **Attention** with them as the reason (`/notes`), so staff see them in the Attention tab.
 - **No page read:** a draft saved with no page at all gets a note saying the copy is from the label and photos only. Notes on the copy POST: up to 40 lines.
-- **Review mode:** `POST /api/agent/products/{id}/notes` adds notes only (no field changes, stage untouched). They become the product's Attention reason (E-Commerce → Products → Attention tab, and a banner on the product page) until staff fix it and press Resolve; Mark ready / Publish are refused meanwhile (owner, 2026-11-11 — Draft keeps real edits only).
+- **Review mode:** `POST /api/agent/products/{id}/notes` adds notes only (no field changes) and parks the product in the Attention stage, off the shop, with the notes as the reason (Attention tab, banner on the product page) until staff Save as draft or Save as ready (owner, 2026-11-11).
 - **Compatibility:** the checked list is kept as the product's **"Compatible Models"** spec (no new column). Claude's compatibility-only mode (`POST /api/agent/products/{id}/compatibility`) refreshes just that list: the server keeps only models on an accepted page and replaces the old list on the product (which moves to Draft). The shop (`src/shared/lib/shop/compatibility.ts`) turns it into three product-page rows: **Made for this one** (printer → its inks and heads), **For the same machine** (black ink → the colours and the head), **Works with these** (ink → the printers we sell). A model matches only as a whole phrase in a product name ("Smart Tank 580" never matches "5800"), across brands. Search (results and the suggestion box) reads the list too.
-- **Claude only leaves products in Draft** (owner, 2026-11-08): it never presses Save as ready and never publishes. Review notes send it to Attention instead, leaving the stage as it is.
+- **Claude only leaves products in Draft** (owner, 2026-11-08): it never presses Save as ready and never publishes. Review notes park it in Attention instead.
 - **One skill file** tells Claude the steps and rules, including a mistake checklist (name, codes, brand, collections, group, photos, description, shipping).
 
 ### A9. Shop stages (Draft is a stage)
@@ -298,12 +298,13 @@ cost on the server:
 |---|---|---|---|---|
 | Unpublished | No | No | No | Someone to work on it |
 | Draft | Being done (staff, AI, Claude) | No | No | Save as ready |
+| Attention | Stopped — a manual check is needed | No | No | Someone to check it, then Save as draft / ready |
 | Ready | Yes, checked | Not yet, on purpose | No | Your decision (stock arriving, a festival) |
 | Pending | Yes | Yes | No, held back | A publish rule to be met; then live by itself |
 | Published | Yes | Yes | Yes | Nothing |
 
 - Pending isn't stored; it's worked out each time from "Published" and the publish rules.
-- **Attention** (owner, 2026-11-11) sits beside the stage, not in place of it: `InvProduct.shopAttention` (reason) + `shopAttentionAt` / `shopAttentionBy`. Staff flag it (row, ticked rows or the product page, `ecommerce:product:attention`, `POST /api/ecommerce/products/attention`) or Claude's notes set it. The list shows it in its own Attention tab instead of the stage; Mark ready / Publish are refused until Resolve. Unpublish and Discard draft still work, and a Published product stays live while flagged.
+- **Attention** (owner, 2026-11-11) is a stage: a Draft parked because the work is blocked on a manual check (name and photo clash → verify the unit in the warehouse next working day). Staff park it from Draft with **Flag attention** (row, ticked Draft rows or the product page; `ecommerce:product:attention`; `POST /api/ecommerce/products/attention`, [`shopAttention.ts`](src/modules/ecommerce/lib/shopAttention.ts)); Claude's review notes park it from any stage. Off the shop. It leaves only by **Save as draft** (back to work, the reason still shown) or **Save as ready** (reason cleared); Mark ready / Publish / bulk actions skip it. Reason, who and when: `shopAttention` / `shopAttentionBy` / `shopAttentionAt`.
 - The shop reads one "live now" flag: Published and the rules met.
 - Every edit goes straight onto the product. There is no second copy, so the list, Cowork and the shop all read the same data.
 

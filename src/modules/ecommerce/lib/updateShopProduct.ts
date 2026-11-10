@@ -8,6 +8,7 @@ import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { invProductToAdmin, readShopDraft, type ShopDraft, type ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { nextShopStatus, resolveShopListing, SHOP_STATUSES } from "@/modules/ecommerce/lib/shopListing";
+import type { ShopStatus } from "@/generated/prisma/enums";
 import { loadVariantAttrGaps } from "@/modules/ecommerce/lib/applyPublished";
 import { PHOTO_KIND_KEYS } from "@/modules/ecommerce/lib/photoChecklist";
 import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
@@ -154,17 +155,23 @@ export async function updateShopProduct(
         if (b.allowBackorder !== undefined) data.allowBackorder = b.allowBackorder;
         if (b.isActive !== undefined) data.isActive = b.isActive;
         // Draft stage: Save as draft remembers where it came from; Save as ready
-        // and Discard leave Draft and drop Claude's notes with it.
+        // and Discard leave Draft and drop Claude's notes with it. Attention (a
+        // parked Draft, shopAttention.ts) leaves only by Save as draft — back to
+        // work, the reason kept so it shows — or Save as ready, which clears it.
         const info = readShopDraft(existing.shopDraftJson);
-        let status = b.shopStatus;
+        const inWork = existing.shopStatus === "DRAFT" || existing.shopStatus === "ATTENTION";
+        if (existing.shopStatus === "ATTENTION" && b.shopStatus && !b.draft) {
+            return { response: NextResponse.json({ error: "Parked in Attention — Save as draft to work on it, or Save as ready." }, { status: 409 }) };
+        }
+        let status: ShopStatus | undefined = b.shopStatus;
         if (b.draft === "save") {
             status = "DRAFT";
-            const stageBefore = existing.shopStatus === "DRAFT" ? info?.stageBefore : existing.shopStatus;
+            const stageBefore = inWork ? info?.stageBefore : existing.shopStatus;
             const next: ShopDraft = { ...info, ...(stageBefore && { stageBefore }) };
             data.shopDraftJson = next as unknown as Prisma.InputJsonValue;
             data.shopDraftAt = new Date();
         } else if (b.draft === "ready" || b.draft === "discard") {
-            status = b.draft === "ready" ? "READY" : existing.shopStatus === "DRAFT" ? info?.stageBefore ?? "UNPUBLISHED" : existing.shopStatus;
+            status = b.draft === "ready" ? "READY" : inWork ? info?.stageBefore ?? "UNPUBLISHED" : existing.shopStatus;
             data.shopDraftJson = Prisma.DbNull;
             data.shopDraftAt = null;
         } else if (b.shopStatus && b.shopStatus !== "DRAFT" && existing.shopStatus === "DRAFT") {
@@ -173,9 +180,11 @@ export async function updateShopProduct(
             data.shopDraftAt = null;
         }
         const shopStatus = nextShopStatus(existing.shopStatus, { status, listed: b.isListedInShop });
-        // Needs attention: no step towards the shop until it is resolved.
-        if (existing.shopAttention && b.draft !== "discard" && shopStatus !== existing.shopStatus && (shopStatus === "READY" || shopStatus === "PUBLISHED")) {
-            return { response: NextResponse.json({ error: `Needs attention: ${existing.shopAttention} — Resolve it first.` }, { status: 409 }) };
+        // Out of the work stages → the Attention reason has been dealt with.
+        if (existing.shopAttention && shopStatus !== "DRAFT" && shopStatus !== "ATTENTION") {
+            data.shopAttention = null;
+            data.shopAttentionAt = null;
+            data.shopAttentionBy = null;
         }
         data.shopStatus = shopStatus;
 
