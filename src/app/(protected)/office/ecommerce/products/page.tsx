@@ -311,7 +311,7 @@ export default function EcommerceProductsPage() {
         if (ids.length === 0) return;
         setBulkBusy(true);
         try {
-            const { data } = await axios.post<{ published: number; pending: number; unpublished: number; ready?: number; skipped?: { inDraft: number; names: string[] }; attention?: number }>(
+            const { data } = await axios.post<{ published: number; pending: number; unpublished: number; ready?: number; skipped?: { inDraft: number; names: string[]; inAttention?: number; attentionNames?: string[] } }>(
                 "/api/ecommerce/products/bulk",
                 { ids, action }
             );
@@ -328,7 +328,10 @@ export default function EcommerceProductsPage() {
             if (data.skipped?.inDraft) {
                 toast.info(`${data.skipped.inDraft} skipped — in Draft (${data.skipped.names.join(", ")}${data.skipped.inDraft > data.skipped.names.length ? ", …" : ""}). Finish it with Save as ready, or Discard draft.`);
             }
-            if (data.attention) toast.info(`${data.attention} skipped — needs attention. Resolve it first.`);
+            if (data.skipped?.inAttention) {
+                const names = data.skipped.attentionNames ?? [];
+                toast.info(`${data.skipped.inAttention} skipped — parked in Attention (${names.join(", ")}${data.skipped.inAttention > names.length ? ", …" : ""}). Check it, then Save as draft or Save as ready.`);
+            }
             clearSelection();
             load();
         } catch {

@@ -45,6 +45,7 @@ const NOT_SEEN = Symbol("not seen");
 export default function ProductForm({
     initial,
     onSaved,
+    onReload,
     submitLabel = "Save product",
     onNameChange,
     onClose,
@@ -56,6 +57,8 @@ export default function ProductForm({
     onDirtyChange?: (dirty: boolean) => void;
     initial?: Partial<ShopProductAdmin> | null;
     onSaved?: (p: ShopProductAdmin) => void;
+    /** The row was changed outside a save (Flag attention) — take it without a "Saved" note. Falls back to onSaved. */
+    onReload?: (p: ShopProductAdmin) => void;
     submitLabel?: string;
     /** A saved product's Name is shown by the page header, not a box here —
      *  told the unsaved rebuilt name when Group / Brand change it. */
@@ -939,7 +942,7 @@ export default function ProductForm({
                             // Reload the row so the stage (and its buttons) read Attention.
                             try {
                                 const res = await axios.get<ShopProductAdmin>(`/api/ecommerce/products/${initial.id}`);
-                                onSaved?.(res.data);
+                                (onReload ?? onSaved)?.(res.data);
                             } catch { /* the list shows it on the next load */ }
                         }}
                     />

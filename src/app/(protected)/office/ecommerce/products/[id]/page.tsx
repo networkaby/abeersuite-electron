@@ -106,6 +106,7 @@ export default function EcommerceProductEditPage() {
                 onNameChange={setLiveName}
                 onDirtyChange={setDirty}
                 onClose={() => void close()}
+                onReload={setProduct}
                 onSaved={(p) => {
                     setProduct(p);
                     setLiveName(null);

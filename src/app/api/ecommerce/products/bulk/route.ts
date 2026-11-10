@@ -28,13 +28,20 @@ export async function POST(req: Request) {
     const { action } = data;
 
     try {
-        const inDraft = await prisma.invProduct.findMany({
+        const held = await prisma.invProduct.findMany({
             where: { id: { in: ids }, shopStatus: { in: ["DRAFT", "ATTENTION"] } },
-            select: { id: true, name: true },
+            select: { id: true, name: true, shopStatus: true },
         });
-        const skipped = { inDraft: inDraft.length, names: inDraft.slice(0, 5).map((p) => p.name) };
-        const draftIds = new Set(inDraft.map((p) => p.id));
-        ids = ids.filter((id) => !draftIds.has(id));
+        const inDraft = held.filter((p) => p.shopStatus === "DRAFT");
+        const inAttention = held.filter((p) => p.shopStatus === "ATTENTION");
+        const skipped = {
+            inDraft: inDraft.length,
+            names: inDraft.slice(0, 5).map((p) => p.name),
+            inAttention: inAttention.length,
+            attentionNames: inAttention.slice(0, 5).map((p) => p.name),
+        };
+        const heldIds = new Set(held.map((p) => p.id));
+        ids = ids.filter((id) => !heldIds.has(id));
         if (action === "ready") {
             const res = await prisma.invProduct.updateMany({
                 where: { id: { in: ids }, shopStatus: "UNPUBLISHED" },
