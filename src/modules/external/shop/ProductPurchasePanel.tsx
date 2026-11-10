@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
+import type { VariantOption } from "@/shared/lib/shop/variants";
+import VariantPicker from "@/modules/external/shop/VariantPicker";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { useShopCartStore } from "@/store/external/shopCartStore";
 import { useShopWishlistStore } from "@/store/external/shopWishlistStore";
@@ -17,8 +19,10 @@ import { cn } from "@/shared/lib/format/utils";
 export default function ProductPurchasePanel({
     product,
     preview = false,
+    variants = [],
 }: {
     product: ShopProductPublic;
+    variants?: VariantOption[];
     /**
      * Office full-page preview: no Share (it would copy the office address), no
      * View cart and no portal line — the desktop app has no shop pages, so those
@@ -61,6 +65,7 @@ export default function ProductPurchasePanel({
                 <Badge variant="outline">{product.category}</Badge>
             </div>
             <h1 className="text-3xl font-bold tracking-tight sm:text-4xl text-balance">{product.displayName}</h1>
+            <VariantPicker options={variants} />
             <div className="rounded-2xl border border-border/80 bg-card/60 p-6 shadow-sm backdrop-blur-sm">
                 <div className="flex flex-wrap items-end gap-3">
                     <span className="text-4xl font-bold tabular-nums">{formatRupeesFromPaise(product.pricePaise)}</span>

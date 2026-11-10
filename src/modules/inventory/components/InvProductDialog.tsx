@@ -32,6 +32,7 @@ import {
 } from "@/modules/inventory/components/InvProductFormFields";
 import { InventoryMasterDropdownQuickDialog, type MasterKind } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
 import { generateSku } from "@/modules/inventory/lib/sku";
+import ProductVariantsSection from "@/modules/inventory/components/ProductVariantsSection";
 import {
     DEFAULT_NAMING_CONFIG,
     type NamingConfigShape,
@@ -381,6 +382,8 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
                         defaultTab={defaultTab}
                         onCreateMaster={createMaster}
                     />
+                    {/* Saves on its own (not with Save) — needs a saved product. */}
+                    {editId != null ? <ProductVariantsSection productId={editId} /> : null}
                 </div>
                 <div className="flex justify-end gap-2 border-t bg-muted/30 px-6 py-3">
                     <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

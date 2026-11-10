@@ -279,6 +279,12 @@ model InvProduct {
   /// URL-safe handle for /shop/product/[handle]
   slug                    String? @unique
   shopSubheading          String?
+  /// Variant family (owner, 2026-11-10): products sharing this number are one
+  /// item in different options (XYZ Black / XYZ Blue). Hidden from staff — set by
+  /// "Add variant" on the product (modules/inventory/lib/variants.ts). null = no family.
+  variantFamilyId         Int?
+  /// The short text on the shop's option button ("Black", "6GB/128GB").
+  variantLabel            String?
   shopDescription         String?
   /// Display category label for storefront (falls back to InvCategory.name)
   shopCategory            String?
@@ -470,6 +476,7 @@ model InvProduct {
   @@index([gstRateId])
   @@index([isListedInShop])
   @@index([shopStatus])
+  @@index([variantFamilyId])
   @@index([openingBranchId])
   // Catalogue delta sync: the POS asks "which products changed since <ts>?" on
   // every till open. `stock` lives on this row and is rewritten after every

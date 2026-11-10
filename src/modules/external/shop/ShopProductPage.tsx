@@ -10,6 +10,7 @@ import { loadShopAdContext } from "@/shared/lib/shop/adContext";
 import { loadStorefrontProductsCached } from "@/shared/lib/shop/storefrontProducts";
 import { buildBridgeRows } from "@/shared/lib/shop/productRelations";
 import { buildCompatRows } from "@/shared/lib/shop/compatibility";
+import { buildVariantOptions } from "@/shared/lib/shop/variants";
 import { loadBoughtTogether } from "@/shared/lib/shop/salesSignals";
 import { dailyPick } from "@/shared/lib/shop/browseTiles";
 import { businessTodayIso } from "@/shared/lib/format/formatDate";
@@ -147,7 +148,7 @@ export default async function ShopProductPage({
                 </p>
             ) : null}
 
-            <ProductDetailView product={product} />
+            <ProductDetailView product={product} variants={buildVariantOptions(product, catalogue)} />
             <NoteViewed productId={product.id} />
 
             {pageAd ? <AdUnit ad={pageAd} className="mt-12" /> : null}

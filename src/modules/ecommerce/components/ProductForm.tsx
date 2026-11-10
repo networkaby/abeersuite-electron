@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import type { ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { productShopUrl, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import ProductGalleryUploader from "@/modules/ecommerce/components/ProductGalleryUploader";
+import ProductVariantsSection from "@/modules/inventory/components/ProductVariantsSection";
 import AiCopyPanel from "@/modules/ecommerce/components/AiCopyPanel";
 import type { ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
 import { PhotoChecklistRows } from "@/modules/ecommerce/components/AiPhotoPicker";
@@ -451,6 +452,9 @@ export default function ProductForm({
         collections: collectionNames,
         department: null,
         categoryPath: [],
+        // Edited in the Variants section, which saves on its own.
+        variantFamilyId: initial?.variantFamilyId ?? null,
+        variantLabel: initial?.variantLabel ?? null,
         pricePaise: shopPricePaise,
         mrpPaise: effectiveMrpPaise,
         badge: badge.trim() || null,
@@ -1028,6 +1032,9 @@ export default function ProductForm({
                         onSelectedChange={setSelectedImage}
                     />
                 </div>
+
+                {/* Option buttons on the shop page — saves on its own (lib/variants.ts). */}
+                {initial?.id ? <ProductVariantsSection productId={initial.id} /> : null}
 
                 <div className="rounded-lg border border-border p-3 space-y-2">
                     <div className="flex items-center justify-between">

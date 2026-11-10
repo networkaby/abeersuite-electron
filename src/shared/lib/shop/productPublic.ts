@@ -50,6 +50,10 @@ export type ShopProductPublic = {
      * breadcrumb chain without re-querying the product.
      */
     groupId: number | null;
+    /** Hidden variant family number (InvProduct.variantFamilyId) — products sharing it show as option buttons. */
+    variantFamilyId: number | null;
+    /** Text on this product's option button ("Black"). */
+    variantLabel: string | null;
     pricePaise: number;
     mrpPaise: number | null;
     badge: string | null;
@@ -160,6 +164,8 @@ export function invProductToPublic(
             ? p.collections.map((c) => c.category.name)
             : p.category ? [p.category.name] : [],
         groupId: p.groupId,
+        variantFamilyId: p.variantFamilyId,
+        variantLabel: p.variantLabel,
         // Shop price = printed barcode tag (shelf == shop == receipt) when bands are
         // supplied, else the materialized effectiveSalePricePaise. Exposed under the
         // stable shop field name `pricePaise` so the storefront UI is unchanged.

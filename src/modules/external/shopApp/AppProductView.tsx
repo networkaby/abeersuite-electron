@@ -10,6 +10,8 @@ import AppProductRail from "@/modules/external/shopApp/AppProductRail";
 import { ImageViewer } from "@/shared/components/ImageViewer";
 import { viewerPhotoUrl } from "@/shared/lib/cloudinaryImage";
 import type { CompatRows } from "@/shared/lib/shop/compatibility";
+import type { VariantOption } from "@/shared/lib/shop/variants";
+import VariantPicker from "@/modules/external/shop/VariantPicker";
 import type { BridgeRow } from "@/shared/lib/shop/productRelations";
 import { useCartCount } from "@/modules/external/shopApp/CustomerAppShell";
 import { APP } from "@/modules/external/shopApp/appPaths";
@@ -34,12 +36,15 @@ export default function AppProductView({
     similar,
     bridges = [],
     compat,
+    variants = [],
 }: {
     product: ShopProductPublic;
     similar: ShopProductPublic[];
     bridges?: BridgeRow[];
     /** printer ↔ ink, razor ↔ blade (compatibility.ts). */
     compat?: CompatRows;
+    /** Option buttons — the variant family (lib/shop/variants.ts). */
+    variants?: VariantOption[];
 }) {
     const router = useRouter();
     const add = useShopCartStore((s) => s.add);
@@ -156,6 +161,7 @@ export default function AppProductView({
             <div className="space-y-2 border-b bg-background px-4 py-4">
                 <p className="text-xs text-muted-foreground">{p.category}</p>
                 <h1 className="text-lg font-medium leading-snug">{p.displayName}</h1>
+                <VariantPicker options={variants} className="pt-1" />
                 <div className="flex flex-wrap items-baseline gap-2 pt-1">
                     {off > 0 && <span className="text-lg font-semibold text-emerald-600">↓{off}%</span>}
                     {off > 0 && p.mrpPaise && <span className="text-sm text-muted-foreground line-through tabular-nums">{formatRupeesFromPaise(p.mrpPaise)}</span>}
