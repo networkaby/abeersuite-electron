@@ -10,7 +10,8 @@ import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { toast } from "sonner";
 import type { ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
-import { DEFAULT_SHOP_PUBLISH_RULES, type ShopPublishRules } from "@/modules/ecommerce/lib/shopQualification";
+import { DEFAULT_SHOP_PUBLISH_RULES, recheckMessage, type RecheckResult, type ShopPublishRules } from "@/modules/ecommerce/lib/shopQualification";
+import { extractApiError } from "@/shared/lib/api";
 import {
     EMPTY_PRODUCT_FILTERS,
     activeFilterCount,
@@ -143,6 +144,7 @@ export default function EcommerceProductsPage() {
     const setQuery = (q: string) => setFilters((f) => ({ ...f, query: q }));
     const restoredScrollTop = useRef(0);
 
+    const [rechecking, setRechecking] = useState(false);
     const load = () => {
         fetchAdminProducts()
             .then(setProducts)
@@ -355,9 +357,33 @@ export default function EcommerceProductsPage() {
                         One catalogue across shop, POS and Sale vouchers. Unpublished → Ready (complete, waiting) → Published; a published product missing a publish rule waits as Pending. Draft = being worked on, off the shop until Save as ready.
                     </p>
                 </div>
-                <Button asChild variant="outline" size="sm">
-                    <Link href="/office/ecommerce/products/ai">Write descriptions with AI</Link>
-                </Button>
+                <div className="flex gap-2">
+                    {tab === "pending" && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={rechecking}
+                            title="Check every Published product against today's publish rules — those that pass go live"
+                            onClick={async () => {
+                                setRechecking(true);
+                                try {
+                                    const { data } = await axios.post<{ recheck: RecheckResult }>("/api/ecommerce/publish-rules");
+                                    toast.success(recheckMessage(data.recheck));
+                                    load();
+                                } catch (e: unknown) {
+                                    toast.error(extractApiError(e, "Re-check failed"));
+                                } finally {
+                                    setRechecking(false);
+                                }
+                            }}
+                        >
+                            {rechecking ? "Checking…" : "Re-check pending"}
+                        </Button>
+                    )}
+                    <Button asChild variant="outline" size="sm">
+                        <Link href="/office/ecommerce/products/ai">Write descriptions with AI</Link>
+                    </Button>
+                </div>
             </div>
 
             {/* Tabs + search + filter button */}

@@ -19,6 +19,8 @@ import {
     DEFAULT_SHOP_PUBLISH_RULES,
     SHOP_REQUIREMENT_LABELS,
     type ShopPublishRules,
+    type RecheckResult,
+    recheckMessage,
     type ShopRequirementKey,
 } from "@/modules/ecommerce/lib/shopQualification";
 import {
@@ -87,10 +89,10 @@ export default function EcommerceSettingsPage() {
     const save = async () => {
         setSaving(true);
         try {
-            const { data } = await axios.put<{ rules: ShopPublishRules }>("/api/ecommerce/publish-rules", rules);
+            const { data } = await axios.put<{ rules: ShopPublishRules; recheck: RecheckResult }>("/api/ecommerce/publish-rules", rules);
             setRules(data.rules);
             setSavedRules(data.rules);
-            toast.success("Publish rules saved");
+            toast.success(`Publish rules saved — ${recheckMessage(data.recheck)}`);
         } catch {
             toast.error("Failed to save publish rules");
         } finally {

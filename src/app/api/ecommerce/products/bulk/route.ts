@@ -1,12 +1,9 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { shopSlugClash } from "@/shared/lib/shop/shopSlug";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
-import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
-import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
-import { resolveShopListing } from "@/modules/ecommerce/lib/shopListing";
+import { applyPublished } from "@/modules/ecommerce/lib/applyPublished";
 
 // Bulk Mark ready / Publish / Unpublish for the E-Commerce Products list (owner, 2026-11-07).
 // - ready: Unpublished → READY (complete, waiting for a good time; not live).
@@ -53,71 +50,8 @@ export async function POST(req: Request) {
             return NextResponse.json({ published: 0, pending: 0, unpublished: res.count, skipped });
         }
 
-        const [bands, rules] = await Promise.all([loadBarcodeBands(), loadShopPublishRules()]);
-        const products = await prisma.invProduct.findMany({
-            where: { id: { in: ids } },
-            select: {
-                id: true, name: true, sku: true, imageUrl: true, galleryJson: true,
-                shopDescription: true, shopCategory: true, stock: true, savedSalePricePaise: true, barcodeManualPaise: true,
-                mrpPaise: true, effectiveSalePricePaise: true, slug: true,
-                groupId: true, brandId: true, allowBackorder: true, weightGrams: true,
-            },
-        });
-
-        const liveWithSlug: number[] = [];
-        const liveNeedSlug: { id: number; slug: string | null }[] = [];
-        const pending: number[] = [];
-
-        for (const p of products) {
-            const gallery = Array.isArray(p.galleryJson)
-                ? (p.galleryJson as unknown[]).filter((x): x is string => typeof x === "string")
-                : [];
-            const listing = resolveShopListing(
-                {
-                    name: p.name, sku: p.sku, imageUrl: p.imageUrl, galleryUrls: gallery,
-                    shopDescription: p.shopDescription, shopCategory: p.shopCategory,
-                    groupId: p.groupId, brandId: p.brandId,
-                    stock: p.stock, allowBackorder: p.allowBackorder,
-                    weightGrams: p.weightGrams,
-                    savedSalePricePaise: p.savedSalePricePaise, mrpPaise: p.mrpPaise,
-                    effectiveSalePricePaise: p.effectiveSalePricePaise, slug: p.slug,
-                },
-                { status: "PUBLISHED", bands, rules }
-            );
-            if (!listing.isListedInShop) pending.push(p.id);
-            else if (p.slug) liveWithSlug.push(p.id);
-            else liveNeedSlug.push({ id: p.id, slug: listing.slug });
-        }
-
-        if (pending.length) {
-            await prisma.invProduct.updateMany({
-                where: { id: { in: pending } },
-                data: { shopStatus: "PUBLISHED", isListedInShop: false },
-            });
-        }
-        let published = 0;
-        if (liveWithSlug.length) {
-            const r = await prisma.invProduct.updateMany({
-                where: { id: { in: liveWithSlug } },
-                data: { shopStatus: "PUBLISHED", isListedInShop: true },
-            });
-            published += r.count;
-        }
-        // Slug-less rows need per-row updates (unique slug). A rare slug clash
-        // leaves that one Pending — published, waiting for a slug.
-        for (const it of liveNeedSlug) {
-            const clash = it.slug ? await shopSlugClash(it.slug, { kind: "product", id: it.id }) : null;
-            await prisma.invProduct.update({
-                where: { id: it.id },
-                data: clash || !it.slug
-                    ? { shopStatus: "PUBLISHED", isListedInShop: false }
-                    : { shopStatus: "PUBLISHED", isListedInShop: true, slug: it.slug },
-            });
-            if (clash || !it.slug) pending.push(it.id);
-            else published++;
-        }
-
-        return NextResponse.json({ published, pending: pending.length, unpublished: 0, skipped });
+        const { published, pending } = await applyPublished(ids);
+        return NextResponse.json({ published, pending, unpublished: 0, skipped });
     } catch (e) {
         return handleApiError(e, "Bulk update failed");
     }

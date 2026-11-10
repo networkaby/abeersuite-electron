@@ -183,3 +183,15 @@ export function slugifyProduct(name: string, sku?: string | null): string {
     const slug = [base, tail].filter(Boolean).join("-");
     return slug || tail || "product";
 }
+
+/** What a re-check of every Published product changed (applyPublished.ts → recheckPublished). */
+export type RecheckResult = { wentLive: number; wentPending: number; live: number; pending: number };
+
+/** "12 went live · 3 moved to Pending" — or "nothing changed". */
+export function recheckMessage(r: RecheckResult): string {
+    const parts = [
+        r.wentLive ? `${r.wentLive} went live` : "",
+        r.wentPending ? `${r.wentPending} moved to Pending` : "",
+    ].filter(Boolean);
+    return parts.length ? parts.join(" · ") : `nothing changed (${r.live} live, ${r.pending} pending)`;
+}

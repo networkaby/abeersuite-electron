@@ -5,6 +5,7 @@ import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions"
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { normalizeShopPublishRules } from "@/modules/ecommerce/lib/shopQualification";
+import { recheckPublished } from "@/modules/ecommerce/lib/applyPublished";
 
 // Owner-configurable shop publish rules — which product fields are mandatory
 // before a product can be listed in /shop. Stored on OrgDefaults (singleton id=1).
@@ -31,6 +32,17 @@ const putSchema = z.object({
     weight: z.boolean().optional(),
 });
 
+/** "Re-check pending" (Products list): re-judge every Published product now. */
+export async function POST() {
+    const { response } = await requireModuleAccess("e-commerce");
+    if (response) return response;
+    try {
+        return NextResponse.json({ recheck: await recheckPublished() });
+    } catch (e) {
+        return handleApiError(e, "Re-check failed");
+    }
+}
+
 export async function PUT(req: Request) {
     const { response } = await requireModuleAccess("e-commerce");
     if (response) return response;
@@ -45,7 +57,10 @@ export async function PUT(req: Request) {
             where: { id: 1 },
             data: { shopPublishRulesJson: rules },
         });
-        return NextResponse.json({ rules });
+        // New rules re-judge every Published product: loosened → Pending ones go
+        // live, tightened → live ones that now fail wait as Pending.
+        const recheck = await recheckPublished();
+        return NextResponse.json({ rules, recheck });
     } catch (e) {
         return handleApiError(e, "Failed to save publish rules");
     }
