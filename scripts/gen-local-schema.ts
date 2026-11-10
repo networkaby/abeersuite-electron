@@ -160,7 +160,7 @@ function generate(): string {
     if (!cleaned.includes("CREATE TABLE")) {
         throw new Error("Generated SQL contains no CREATE TABLE — refusing to write it.");
     }
-    return `${HEADER}\n${makeIdempotent(cleaned)}\n${retiredIndexes()}\n${COUNTER_LOCAL_DDL}`;
+    return `${HEADER}\n${preSchemaFixes()}\n${makeIdempotent(cleaned)}\n${retiredIndexes()}\n${COUNTER_LOCAL_DDL}`;
 }
 
 /**
@@ -187,7 +187,42 @@ const RETIRED_INDEXES: { name: string; why: string }[] = [
         name: "pos_counters_epbxExtension_key",
         why: "an EPBX extension may now sit on several counters (parallel phone line)",
     },
+    {
+        // Migrations 20261110180000 / 20261110190000: attribute masters moved from
+        // collection to group, and the key became unique on its own.
+        name: "InvAttributeMaster_key_categoryId_key",
+        why: "attribute masters are keyed by key alone (collection scoping removed)",
+    },
+    {
+        name: "InvAttributeMaster_key_groupId_key",
+        why: "attribute key is unique on its own",
+    },
 ];
+
+/**
+ * Data fixes a replica needs BEFORE the schema below is applied — chiefly removing
+ * rows that would make a newly added unique index fail to build. A failed build
+ * aborts provisioning and leaves the till in live mode. Each fix mirrors the
+ * cloud migration that made the same change, is idempotent, and skips a table
+ * that does not exist yet (first run). The capture triggers fire on INSERT /
+ * UPDATE only, so these deletes are not queued back to the cloud.
+ */
+const PRE_SCHEMA_FIXES: { table: string; sql: string; why: string }[] = [
+    {
+        // Migration 20261110190000: attribute key became unique on its own.
+        table: "InvAttributeMaster",
+        sql: `DELETE FROM "InvAttributeMaster" a USING "InvAttributeMaster" b WHERE a."key" = b."key" AND a."id" > b."id"`,
+        why: "attribute key is unique on its own — keep the oldest row per key",
+    },
+];
+
+function preSchemaFixes(): string {
+    if (!PRE_SCHEMA_FIXES.length) return "";
+    const body = PRE_SCHEMA_FIXES.map((f) =>
+        `-- ${f.why}\nDO $$ BEGIN\n    IF to_regclass('public."${f.table}"') IS NOT NULL THEN\n        ${f.sql};\n    END IF;\nEND $$;`,
+    ).join("\n");
+    return `\n-- ── Pre-schema data fixes (PRE_SCHEMA_FIXES in scripts/gen-local-schema.ts) ──\n${body}\n`;
+}
 
 function retiredIndexes(): string {
     if (!RETIRED_INDEXES.length) return "";

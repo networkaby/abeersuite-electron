@@ -54,7 +54,7 @@ export async function POST(req: Request) {
         return NextResponse.json(row, { status: 201 });
     } catch (e: unknown) {
         if (e instanceof Error && e.message.includes("Unique constraint")) {
-            return NextResponse.json({ error: "Key already exists for this group" }, { status: 409 });
+            return NextResponse.json({ error: "This key already exists — keys must be unique (labels may repeat)" }, { status: 409 });
         }
         return handleApiError(e, "Failed to create attribute master");
     }

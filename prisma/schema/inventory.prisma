@@ -184,7 +184,9 @@ model InvWarrantyTerm {
 model InvAttributeMaster {
   id         Int          @id @default(autoincrement())
   /// Machine key stored in InvProduct.attrsJson (e.g. "ram", "storage", "os").
-  key        String
+  /// Unique on its own — one key is either global or belongs to one group.
+  /// The label (name) may repeat.
+  key        String       @unique
   /// Human-readable label shown on forms (e.g. "RAM", "Storage", "OS").
   name       String
   /// null = applies to all groups; non-null = shown only for products of this group.
@@ -195,7 +197,6 @@ model InvAttributeMaster {
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
 
-  @@unique([key, groupId])
   @@index([groupId])
 }
 

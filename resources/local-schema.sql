@@ -7,6 +7,15 @@
 -- run, by the desktop app. Source of truth is prisma/schema/ — edit that, then
 -- regenerate this.
 
+
+-- ── Pre-schema data fixes (PRE_SCHEMA_FIXES in scripts/gen-local-schema.ts) ──
+-- attribute key is unique on its own — keep the oldest row per key
+DO $$ BEGIN
+    IF to_regclass('public."InvAttributeMaster"') IS NOT NULL THEN
+        DELETE FROM "InvAttributeMaster" a USING "InvAttributeMaster" b WHERE a."key" = b."key" AND a."id" > b."id";
+    END IF;
+END $$;
+
 -- CreateSchema
 CREATE SCHEMA IF NOT EXISTS "public";
 
@@ -6066,10 +6075,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS "InvBrand_slug_key" ON "InvBrand"("slug");
 CREATE UNIQUE INDEX IF NOT EXISTS "InvBrand_name_key" ON "InvBrand"("name");
 
 -- CreateIndex
-CREATE INDEX IF NOT EXISTS "InvAttributeMaster_groupId_idx" ON "InvAttributeMaster"("groupId");
+CREATE UNIQUE INDEX IF NOT EXISTS "InvAttributeMaster_key_key" ON "InvAttributeMaster"("key");
 
 -- CreateIndex
-CREATE UNIQUE INDEX IF NOT EXISTS "InvAttributeMaster_key_groupId_key" ON "InvAttributeMaster"("key", "groupId");
+CREATE INDEX IF NOT EXISTS "InvAttributeMaster_groupId_idx" ON "InvAttributeMaster"("groupId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "InvProduct_sku_key" ON "InvProduct"("sku");
@@ -8177,6 +8186,8 @@ END $$;
 
 -- ── Retired indexes (RETIRED_INDEXES in scripts/gen-local-schema.ts) ─────────
 DROP INDEX IF EXISTS "pos_counters_epbxExtension_key"; -- an EPBX extension may now sit on several counters (parallel phone line)
+DROP INDEX IF EXISTS "InvAttributeMaster_key_categoryId_key"; -- attribute masters are keyed by key alone (collection scoping removed)
+DROP INDEX IF EXISTS "InvAttributeMaster_key_groupId_key"; -- attribute key is unique on its own
 
 
 -- ── Counter-local: outbox of local writes awaiting push ─────────────────────
