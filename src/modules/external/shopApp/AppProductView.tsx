@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { ChevronDown, ChevronLeft, Heart, MapPin, Search, Share2, ShoppingCart, Truck } from "lucide-react";
 import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import AppProductRail from "@/modules/external/shopApp/AppProductRail";
+import { ImageViewer } from "@/shared/components/ImageViewer";
+import { viewerPhotoUrl } from "@/shared/lib/cloudinaryImage";
 import type { CompatRows } from "@/shared/lib/shop/compatibility";
 import type { BridgeRow } from "@/shared/lib/shop/productRelations";
 import { useCartCount } from "@/modules/external/shopApp/CustomerAppShell";
@@ -50,6 +52,7 @@ export default function AppProductView({
 
     const photos = p.galleryUrls.length > 0 ? p.galleryUrls : p.imageUrl ? [p.imageUrl] : [];
     const [photo, setPhoto] = useState(0);
+    const [viewing, setViewing] = useState<number | null>(null);
     const off = p.mrpPaise && p.mrpPaise > p.pricePaise ? Math.round((1 - p.pricePaise / p.mrpPaise) * 100) : 0;
     const specs = Object.entries(p.specs);
 
@@ -107,7 +110,11 @@ export default function AppProductView({
                     className="flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 >
                     {(photos.length > 0 ? photos : [null]).map((u, i) => (
-                        <li key={`${u}-${i}`} className="relative aspect-square w-full shrink-0 snap-center">
+                        <li
+                            key={`${u}-${i}`}
+                            className="relative aspect-square w-full shrink-0 snap-center"
+                            onClick={u ? () => setViewing(i) : undefined}
+                        >
                             <ShopRemoteImage src={u} alt={i === 0 ? p.displayName : ""} fill sizes="100vw" frame="square" className="object-contain p-6" priority={i === 0} />
                         </li>
                     ))}
@@ -134,6 +141,17 @@ export default function AppProductView({
                     <Heart className={`size-5 ${wish ? "fill-rose-500 text-rose-500" : ""}`} />
                 </button>
             </div>
+            {/* Tap a photo → full screen: pinch zoom, swipe, phone Back closes. */}
+            {viewing !== null && (
+                <ImageViewer
+                    srcs={photos.map(viewerPhotoUrl)}
+                    startIndex={viewing}
+                    alt={p.displayName}
+                    tools={false}
+                    closeOnBack
+                    onClose={() => setViewing(null)}
+                />
+            )}
 
             <div className="space-y-2 border-b bg-background px-4 py-4">
                 <p className="text-xs text-muted-foreground">{p.category}</p>

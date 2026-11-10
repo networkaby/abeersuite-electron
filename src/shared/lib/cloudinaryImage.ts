@@ -275,3 +275,8 @@ export function imageLoaderFor(src: string, frame?: ImageFrame) {
 export function cloudinaryThumb(src: string, width: number, frame?: ImageFrame): string {
     return isCloudinaryUrl(src) ? buildUrl(src, { width, frame }) : src;
 }
+
+/** Full-screen viewer copy: sharp enough to zoom, capped so it never pulls the raw original. */
+export function viewerPhotoUrl(src: string): string {
+    return cloudinaryThumb(src, 2000);
+}

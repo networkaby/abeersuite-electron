@@ -2,11 +2,15 @@
 
 import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import { useState } from "react";
+import { Maximize2 } from "lucide-react";
 import { cn } from "@/shared/lib/format/utils";
+import { ImageViewer } from "@/shared/components/ImageViewer";
+import { viewerPhotoUrl } from "@/shared/lib/cloudinaryImage";
 
 export default function ProductGallery({ urls, alt }: { urls: string[]; alt: string }) {
     const safe = urls.filter(Boolean);
     const [i, setI] = useState(0);
+    const [viewing, setViewing] = useState(false);
     const main = safe[i] ?? safe[0];
 
     if (safe.length === 0) {
@@ -35,8 +39,14 @@ export default function ProductGallery({ urls, alt }: { urls: string[]; alt: str
                 ))}
             </div>
             {/* Square on every breakpoint so the CSS frame and the Cloudinary
-                aspect ratio agree — otherwise the browser re-crops on mobile. */}
-            <div className="relative aspect-square flex-1 overflow-hidden rounded-2xl border border-border/80 bg-muted/20">
+                aspect ratio agree — otherwise the browser re-crops on mobile.
+                Click → full-screen viewer with zoom. */}
+            <button
+                type="button"
+                onClick={() => setViewing(true)}
+                className="group relative aspect-square flex-1 cursor-zoom-in overflow-hidden rounded-2xl border border-border/80 bg-muted/20"
+                aria-label="View photo full screen"
+            >
                 {main ? (
                     <ShopRemoteImage
                         src={main}
@@ -48,7 +58,20 @@ export default function ProductGallery({ urls, alt }: { urls: string[]; alt: str
                         sizes="(max-width:1024px)100vw,45vw"
                     />
                 ) : null}
-            </div>
+                <span className="absolute bottom-3 right-3 flex size-9 items-center justify-center rounded-full bg-background/85 text-foreground shadow-sm opacity-80 transition-opacity group-hover:opacity-100">
+                    <Maximize2 className="size-4" />
+                </span>
+            </button>
+            {viewing && (
+                <ImageViewer
+                    srcs={safe.map(viewerPhotoUrl)}
+                    startIndex={i}
+                    alt={alt}
+                    tools={false}
+                    closeOnBack
+                    onClose={() => setViewing(false)}
+                />
+            )}
         </div>
     );
 }
