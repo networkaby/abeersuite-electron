@@ -84,9 +84,12 @@ export function ImageViewer({
         setRot(0);
     }, [count]);
 
-    // Non-passive wheel listener so the page behind does not scroll.
+    // Non-passive wheel listener so the page behind does not scroll. Keyed on the
+    // element itself: the Radix portal mounts it after this component's first
+    // effect, so a plain ref would still be null here and the wheel never zoomed.
+    const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null);
     useEffect(() => {
-        const el = stage.current;
+        const el = stageEl;
         if (!el) return;
         const onWheel = (e: WheelEvent) => {
             e.preventDefault();
@@ -95,7 +98,7 @@ export function ImageViewer({
         };
         el.addEventListener("wheel", onWheel, { passive: false });
         return () => el.removeEventListener("wheel", onWheel);
-    }, [zoomTo]);
+    }, [stageEl, zoomTo]);
 
     useEffect(() => {
         if (count < 2) return;
@@ -114,14 +117,20 @@ export function ImageViewer({
     useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
     useEffect(() => {
         if (!closeOnBack) return;
-        window.history.pushState({ ...(window.history.state ?? {}), imageViewer: true }, "");
-        pushedRef.current = true;
         const onPop = () => {
             pushedRef.current = false;
             onCloseRef.current();
         };
-        window.addEventListener("popstate", onPop);
+        // Deferred: a mount → unmount → mount (React dev / Strict Mode) cancels the
+        // timer instead of pushing and popping an entry — a pop that would land
+        // after the remount and close the viewer the moment it opened.
+        const t = window.setTimeout(() => {
+            window.history.pushState({ ...(window.history.state ?? {}), imageViewer: true }, "");
+            pushedRef.current = true;
+            window.addEventListener("popstate", onPop);
+        }, 0);
         return () => {
+            window.clearTimeout(t);
             window.removeEventListener("popstate", onPop);
             if (pushedRef.current) {
                 pushedRef.current = false;
@@ -161,7 +170,7 @@ export function ImageViewer({
                 <DialogPrimitive.Close className={btn} title="Close (Esc)"><X className="size-5" /></DialogPrimitive.Close>
             </div>
             <div
-                ref={stage}
+                ref={(el) => { stage.current = el; setStageEl(el); }}
                 className={`relative min-h-0 flex-1 touch-none select-none overflow-hidden ${scale > 1 ? "cursor-grab active:cursor-grabbing" : ""}`}
                 onPointerDown={(e) => {
                     touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
