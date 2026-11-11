@@ -74,11 +74,6 @@ export function defaultCopies(opts: {
 export const clampCopies = (n: number): number =>
     !isFinite(n) || n < 1 ? 1 : Math.min(999, Math.floor(n));
 
-/** ISO "YYYY-MM-DD" for today in IST (BUSINESS_TIME_ZONE), whatever the PC zone. */
-export function todayISO(): string {
-    return businessTodayIso();
-}
-
 /**
  * "YYYY-MM-DD" of an ISO timestamp in IST (BUSINESS_TIME_ZONE) — whatever the
  * PC's own clock zone is. NOT `iso.slice(0, 10)`, which is the UTC date and

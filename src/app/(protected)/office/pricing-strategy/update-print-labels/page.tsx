@@ -66,7 +66,8 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { localDateOf, todayISO } from "@/modules/inventory/lib/labelItems";
+import { localDateOf } from "@/modules/inventory/lib/labelItems";
+import { businessTodayIso } from "@/shared/lib/format/formatDate";
 import { secretDateCode } from "@/modules/inventory/lib/secretDateCode";
 import { useLabelPrintStore } from "@/store/labelPrintStore";
 import {
@@ -446,7 +447,7 @@ function daysSinceSale(r: Row): number {
     if (!r.lastSoldAt) return Infinity;
     const sold = new Date(`${r.lastSoldAt}T00:00:00`);
     if (isNaN(sold.getTime())) return Infinity;
-    const now = new Date(`${todayISO()}T00:00:00`);
+    const now = new Date(`${businessTodayIso()}T00:00:00`);
     return Math.floor((now.getTime() - sold.getTime()) / 86_400_000);
 }
 

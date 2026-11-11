@@ -18,7 +18,7 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Plus } from "lucide-react";
-import { formatInr } from "@/shared/lib/format/moneyInr";
+import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import {
     useComboboxNav, useProductCatalog, invalidateProductCatalog,
     useDropdownPortal, useValueChange, type DropdownPlacement,
@@ -85,10 +85,7 @@ type Props = {
     clearNonce?: number;
 };
 
-const formatINR = (paise: number | null) =>
-    paise != null
-        ? formatInr(paise / 100)
-        : "—";
+const formatINR = (paise: number | null) => (paise != null ? formatRupeesFromPaise(paise) : "—");
 
 function toSelected(p: ProductOption): SelectedProduct {
     return {

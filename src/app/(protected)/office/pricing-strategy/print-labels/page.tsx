@@ -22,9 +22,10 @@ import type { PricingItem } from "@/modules/pricing-strategy/lib/pricingItem";
 import { normalizeBarcodeBands, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
 import { LabelDesigner } from "@/modules/inventory/components/LabelDesigner";
 import {
-    clampCopies, defaultCopies, localDateOf, pricingItemToLabelItem, todayISO,
+    clampCopies, defaultCopies, localDateOf, pricingItemToLabelItem,
     type AddedProduct, type Item as LabelItem,
 } from "@/modules/inventory/lib/labelItems";
+import { businessTodayIso } from "@/shared/lib/format/formatDate";
 import { useLabelPrintStore } from "@/store/labelPrintStore";
 
 export default function PrintLabelsPage() {
@@ -78,7 +79,7 @@ export default function PrintLabelsPage() {
     // Queue → labels, in queue order. Ids the catalogue can't resolve (a product
     // added locally on the other page, never saved) simply don't print.
     const labels = useMemo<LabelItem[]>(() => {
-        const today = todayISO();
+        const today = businessTodayIso();
         return ids.flatMap((id) => {
             const it = itemById.get(id);
             if (!it) return [];

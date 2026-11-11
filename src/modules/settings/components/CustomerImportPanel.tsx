@@ -10,6 +10,7 @@ import { parseCsv } from "@/shared/lib/import/csvParse";
 import { type CustomerImportField } from "@/shared/lib/import/customerImportFields";
 import { toCsv } from "@/shared/lib/import/csvSerialize";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { formatInrLoose } from "@/shared/lib/format/moneyInr";
 
 const FIELD_LABELS: Record<CustomerImportField, string> = {
     name: "Name *",
@@ -104,8 +105,7 @@ function autoSuggestField(header: string): CustomerImportField | typeof IGNORE {
 
 function formatBalance(amt: number | null, type: "DEBIT" | "CREDIT" | null): string {
     if (amt == null || amt === 0 || type == null) return "—";
-    const formatted = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(amt);
-    return `₹${formatted} ${type === "DEBIT" ? "Dr" : "Cr"}`;
+    return `${formatInrLoose(amt)} ${type === "DEBIT" ? "Dr" : "Cr"}`;
 }
 
 export function CustomerImportPanel() {
