@@ -289,7 +289,31 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     // Only the kinds that move money offer them — see SERVICE_VOUCHER_TYPES.
     const canCarryServices = SERVICE_VOUCHER_TYPES.has(kind);
     const [allServices, setAllServices] = useState<SelectedService[]>([]);
-    const [serviceMenuOpen, setServiceMenuOpen] = useState(false);
+    // Where the "Add service" list sits on screen (null = closed). It is fixed-
+    // positioned because the item table's overflow-x-auto box clips anything
+    // absolutely positioned inside it.
+    const [serviceMenuPos, setServiceMenuPos] = useState<{ left: number; top?: number; bottom?: number; maxHeight: number } | null>(null);
+    const serviceMenuOpen = serviceMenuPos !== null;
+    const closeServiceMenu = useCallback(() => setServiceMenuPos(null), []);
+    const toggleServiceMenu = (btn: HTMLElement) => {
+        if (serviceMenuPos) { setServiceMenuPos(null); return; }
+        const r = btn.getBoundingClientRect();
+        const below = window.innerHeight - r.bottom - 8;
+        const above = r.top - 8;
+        const left = Math.max(8, Math.min(r.left, window.innerWidth - 428));
+        setServiceMenuPos(below >= 240 || below >= above
+            ? { left, top: r.bottom + 4, maxHeight: Math.min(320, below) }
+            : { left, bottom: window.innerHeight - r.top + 4, maxHeight: Math.min(320, above) });
+    };
+    useEffect(() => {
+        if (!serviceMenuOpen) return;
+        window.addEventListener("scroll", closeServiceMenu, true);
+        window.addEventListener("resize", closeServiceMenu);
+        return () => {
+            window.removeEventListener("scroll", closeServiceMenu, true);
+            window.removeEventListener("resize", closeServiceMenu);
+        };
+    }, [serviceMenuOpen, closeServiceMenu]);
     const [header, setHeader] = useState({
         date: today,
         description: "",
@@ -2013,15 +2037,18 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                                     variant="ghost"
                                                     size="sm"
                                                     tabIndex={-1}
-                                                    onClick={() => setServiceMenuOpen((o) => !o)}
+                                                    onClick={(e) => toggleServiceMenu(e.currentTarget)}
                                                     className="h-auto gap-1 border border-sky-300/50 bg-sky-50/50 px-1.5 py-1 text-xs text-sky-700 hover:bg-sky-100/70 dark:border-sky-500/30 dark:bg-sky-950/20 dark:text-sky-300 dark:hover:bg-sky-950/40"
                                                 >
                                                     <Wrench size={12} /> Add service
                                                 </Button>
-                                                {serviceMenuOpen && (
+                                                {serviceMenuPos && (
                                                     <>
-                                                        <div className="fixed inset-0 z-10" onClick={() => setServiceMenuOpen(false)} />
-                                                        <ul className="absolute left-0 bottom-full z-20 mb-1 max-h-80 w-80 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
+                                                        <div className="fixed inset-0 z-40" onClick={closeServiceMenu} />
+                                                        <ul
+                                                            style={{ left: serviceMenuPos.left, top: serviceMenuPos.top, bottom: serviceMenuPos.bottom, maxHeight: serviceMenuPos.maxHeight }}
+                                                            className="fixed z-50 w-[420px] max-w-[calc(100vw-16px)] overflow-y-auto rounded-md border border-border bg-popover shadow-lg"
+                                                        >
                                                             {allServices.length === 0 ? (
                                                                 <li className="px-3 py-2 text-xs text-muted-foreground">
                                                                     No services yet — add them in Settings → Services.
@@ -2030,7 +2057,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                                                 <li key={svc.id}>
                                                                     <button
                                                                         type="button"
-                                                                        onClick={() => { addServiceLine(svc); setServiceMenuOpen(false); }}
+                                                                        onClick={() => { addServiceLine(svc); closeServiceMenu(); }}
                                                                         className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
                                                                     >
                                                                         <Wrench size={12} className="shrink-0 text-sky-600 dark:text-sky-400" />
