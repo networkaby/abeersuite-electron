@@ -24,11 +24,13 @@ import { CALL_POPUP_MAX_AGE_MS, MESSAGE_FOLLOWUP_START, MESSAGE_REPLY_WINDOW_MS 
 // one answer serves the whole shop. Read on a realtime signal, never a timer.
 
 const SCAN = 300;
-/** Customer messages a popup card shows, newest last. */
+/** Customer messages counted as a card's waiting lines. */
 const RECENT = 3;
+/** Lines of the conversation (both sides) a popup card shows, newest last. */
+const THREAD = 6;
 
-/** One customer message on a card, with its attachment as a signed 1-hour link. */
-type Recent = { body: string; mediaUrl: string | null; downloadUrl: string | null; mediaType: string | null; fileName: string | null; mediaSize: number | null };
+/** One message on a card, with its attachment as a signed 1-hour link. `out` = sent by the shop. */
+type Recent = { body: string; out: boolean; mediaUrl: string | null; downloadUrl: string | null; mediaType: string | null; fileName: string | null; mediaSize: number | null };
 
 type Chat = {
     phone: string;
@@ -107,6 +109,7 @@ export async function GET() {
             if (!answered) { c.count++; c.firstAt = r.occurredAt; }
             if (c.recent.length < RECENT && (!answered || c.count === 0)) c.recent.unshift({
                 body: r.body,
+                out: false,
                 mediaUrl: mediaLink(r.mediaKey),
                 downloadUrl: r.mediaKey ? mediaLink(r.mediaKey, r.fileName, true) : null,
                 mediaType: r.mediaType, fileName: r.fileName, mediaSize: r.mediaSize,
@@ -130,6 +133,7 @@ export async function GET() {
             authorIds.length ? prisma.user.findMany({ where: { id: { in: authorIds } }, select: { id: true, name: true } }) : [],
         ]);
         const authorName = new Map(authors.map((u) => [u.id, u.name]));
+        const threads = await threadsByPhone([...byPhone.values()].filter((c) => c.lastInAt).map((c) => c.phone), from);
 
         const items = [...byPhone.values()].map((c) => ({
             phone: c.phone,
@@ -137,7 +141,7 @@ export async function GET() {
             lastId: c.lastId,
             lastInId: c.lastInId,
             body: c.recent[c.recent.length - 1]?.body ?? "",
-            recent: c.recent,
+            recent: threads.get(c.phone) ?? c.recent,
             count: c.count,
             lastAt: c.lastAt.toISOString(),
             lastInAt: c.lastInAt?.toISOString() ?? null,
@@ -150,6 +154,37 @@ export async function GET() {
     } catch (e) {
         return handleApiError(e, "Failed to load message alerts");
     }
+}
+
+/**
+ * The last THREAD lines of each chat, both sides, oldest first — so a reply
+ * sent from the Inbox shows on the popup too. One query over the popup's
+ * phones only; a chat with no line in range keeps its customer lines.
+ */
+async function threadsByPhone(phones: string[], since: Date): Promise<Map<string, Recent[]>> {
+    const out = new Map<string, Recent[]>();
+    if (!phones.length) return out;
+    const rows = await prisma.message.findMany({
+        where: {
+            phone: { in: phones }, occurredAt: { gte: since },
+            OR: [{ direction: "IN", spam: false }, { direction: "OUT" }],
+        },
+        orderBy: { occurredAt: "desc" },
+        take: Math.min(phones.length * THREAD * 3, SCAN),
+        select: { phone: true, direction: true, body: true, mediaKey: true, mediaType: true, fileName: true, mediaSize: true },
+    });
+    for (const r of rows) { // newest first
+        const list = out.get(r.phone!) ?? [];
+        if (list.length >= THREAD) continue;
+        list.unshift({
+            body: r.body, out: r.direction === "OUT",
+            mediaUrl: mediaLink(r.mediaKey),
+            downloadUrl: r.mediaKey ? mediaLink(r.mediaKey, r.fileName, true) : null,
+            mediaType: r.mediaType, fileName: r.fileName, mediaSize: r.mediaSize,
+        });
+        out.set(r.phone!, list);
+    }
+    return out;
 }
 
 /** Newest staff-written ticket log per phone, over the tickets its messages belong to. */

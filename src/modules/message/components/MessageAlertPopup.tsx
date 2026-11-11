@@ -135,8 +135,8 @@ type Alert = {
     body: string;
     /** Newest customer message — a ticket is raised from it. */
     lastInId: number | null;
-    /** Up to the last 3 customer messages (the waiting ones while any wait), oldest first. */
-    recent: (MediaInfo & { body: string })[];
+    /** The last few lines of the chat, both sides, oldest first; `out` = sent by the shop. */
+    recent: (MediaInfo & { body: string; out?: boolean })[];
     /** Customer messages still waiting for the shop to get back to them. */
     count: number;
     lastAt: string;
@@ -216,7 +216,6 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
         return () => clearTimeout(t);
     }, [flash]);
     const [place, setPlace] = useState<Place>({ right: EDGE, bottom: EDGE, minimised: false });
-    const boxRef = useRef<HTMLDivElement>(null);
     const bubbleRef = useRef<HTMLButtonElement>(null);
     const changePlace = (p: Place) => { setPlace(p); savePlace(p); };
     const dragStack = (e: React.PointerEvent<HTMLElement>, box: HTMLElement | null, onClick?: () => void) =>
@@ -287,9 +286,6 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
             return now - waitingSince >= MESSAGE_CLAIM_FALLBACK_MS;
         });
     }, [items, dismissed, me, now]);
-    const hasCards = visible.length > 0;
-    // The stack box mounts only when some chat sits in it — measure it then too.
-    const hasStack = visible.slice(0, MAX_CARDS).some((a) => !cards[a.phone]);
 
     // A moved card's spot lasts only while its chat is waiting. Dropped while
     // rendering (nothing fetched yet → every saved spot is kept); the copy in
@@ -307,14 +303,20 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
 
     // The stack grows upward from its spot; when it is taller than the room
     // above, it slides down so its top never leaves the screen.
+    // Observed through a callback ref: the box unmounts on the Messages screen
+    // and mounts afresh on return, and each new box must be measured — an
+    // effect keyed on state kept watching the old, detached one.
     const [boxH, setBoxH] = useState(0);
-    useEffect(() => {
-        const el = boxRef.current;
+    const boxObserver = useRef<ResizeObserver | null>(null);
+    const stackRef = useCallback((el: HTMLDivElement | null) => {
+        boxObserver.current?.disconnect();
+        boxObserver.current = null;
         if (!el) return;
+        setBoxH(el.offsetHeight);
         const ro = new ResizeObserver(() => setBoxH(el.offsetHeight));
         ro.observe(el);
-        return () => ro.disconnect();
-    }, [place.minimised, hasCards, hasStack]);
+        boxObserver.current = ro;
+    }, []);
     // A moved card's real height, so its top is kept on screen too.
     const [cardH, setCardH] = useState<Record<string, number>>({});
     const measureCard = (phone: string) => (el: HTMLDivElement | null) => {
@@ -478,6 +480,16 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
     const more = visible.length - shown.length;
     const stacked = shown.filter((a) => !cards[a.phone]);
 
+    /** Open the conversation at its newest line. */
+    // Only when a new line arrives — a redraw must not yank back someone reading up.
+    const scrollToEnd = (el: HTMLDivElement | null) => {
+        if (!el) return;
+        const n = String(el.childElementCount);
+        if (el.dataset.lines === n) return;
+        el.dataset.lines = n;
+        el.scrollTop = el.scrollHeight;
+    };
+
     const renderCard = (a: Alert) => {
         const mine = inChat(a, me);
         const isOwner = a.claim?.owner.id === me;
@@ -527,11 +539,11 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
                         </button>
                     )}
                 </div>
-                <div className="mt-2 space-y-1">
+                <div ref={scrollToEnd} className="mt-2 flex max-h-60 flex-col gap-1 overflow-y-auto">
                     {a.recent.map((m, i) => {
                         const caption = captionOf(m.body, !!(m.mediaUrl || m.mediaType));
                         return (
-                            <div key={i} className="w-fit max-w-full space-y-1 rounded-md bg-muted px-2 py-1 text-sm [&_img]:max-h-40 [&_video]:max-h-40">
+                            <div key={i} className={`w-fit max-w-[85%] shrink-0 space-y-1 rounded-md px-2 py-1 text-sm [&_img]:max-h-40 [&_video]:max-h-40 ${m.out ? "self-end bg-green-100 dark:bg-green-900" : "bg-muted"}`}>
                                 <MessageMedia m={m} />
                                 {caption && <p className="whitespace-pre-wrap break-words">{caption}</p>}
                             </div>
@@ -617,7 +629,7 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
                 );
             })}
             {stacked.length > 0 && !place.minimised && (
-                <div ref={boxRef} style={{ right: place.right, bottom: Math.max(0, Math.min(place.bottom, (typeof window === "undefined" ? 0 : window.innerHeight) - boxH - 8)) }} {...overDialogsProps} className="fixed z-[60] flex max-h-[calc(100vh-1rem)] w-96 max-w-[calc(100vw-1rem)] flex-col gap-1 overflow-y-auto">
+                <div ref={stackRef} style={{ right: place.right, bottom: Math.max(0, Math.min(place.bottom, (typeof window === "undefined" ? 0 : window.innerHeight) - boxH - 8)) }} {...overDialogsProps} className="fixed z-[60] flex max-h-[calc(100vh-1rem)] w-96 max-w-[calc(100vw-1rem)] flex-col gap-1 overflow-y-auto">
                     {(() => {
                         // The open chat is the first layer; every other chat is a strip below it.
                         const openPhone = stacked.some((x) => x.phone === front) ? front : stacked[0].phone;
