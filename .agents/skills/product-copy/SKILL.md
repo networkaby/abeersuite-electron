@@ -92,6 +92,7 @@ Never stop a product because a photo URL is blocked — use this.
 Never use your own memory of the product.
 
 1. **Clash** = our typed data (name, modelNo, barcodes, typedSpecs) disagrees with what is **printed**: another brand or model, another printed number (capacity, wattage, size, count). Not a clash: missing data, the same thing spelled differently, a count only *seen*, our support period shorter than the printed warranty.
+   **Unbranded is not a clash.** When `brand` is **Premium Unbranded** or **Unbranded** (the office's quality levels for no-name goods — older products may still say Special / Generic), a little-known name printed on the item (e.g. CLATE) is normal, and the brand word in our office name is not a typed brand. Do not stop: put the printed name in the online name (`title`) and a `Brand` spec row (source `"label"`), leave `brandId` alone, and do not ask for a new brand — these are one-off names, never master brands. Only other printed facts (model, capacity, size, count) can still clash.
    **Any clash → stop this product: no copy, nothing saved.** Report `field: typed "X", photo shows "Y"` (e.g. `capacity: typed "128GB", label shows "256G"`).
    Then **save what you found as notes** so staff see it in AbeerSuite, not only in this chat — the notes route (step R) changes no field and parks the product in the **Attention** stage (off the shop):
    ```bash
@@ -137,7 +138,8 @@ Follow the `writing` lines exactly (house style and keys: `title`, `summary`, `h
 
 - `brandId` from `masters.brands`, only when `brand` is empty.
 - `collectionIds` from `masters.collections` — **added** to `currentCollections`; nothing is removed, the main one stays. Only what clearly fits.
-- **Never invent an id.** Missing brand / collection → a note.
+- **Never invent an id.** Missing brand / collection → a note — except a one-off printed name on an Unbranded / Premium Unbranded product (step 2): that goes in the title and a spec row, never a note.
+- Never put "Premium Unbranded", "Unbranded", "Special" or "Generic" in the title, description or highlights.
 
 ## 6. Shipping weight and parcel size
 
