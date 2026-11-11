@@ -6,7 +6,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError, prismaUniqueError } from "@/shared/lib/api";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
-import { invProductToAdmin, readShopDraft, type ShopDraft, type ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
+import { invProductToAdmin, keptReviewNotes, readShopDraft, type ShopDraft, type ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { nextShopStatus, resolveShopListing, SHOP_STATUSES } from "@/modules/ecommerce/lib/shopListing";
 import type { ShopStatus } from "@/generated/prisma/enums";
 import { loadVariantAttrGaps } from "@/modules/ecommerce/lib/applyPublished";
@@ -102,7 +102,7 @@ export async function updateShopProduct(
                 name: true, sku: true, imageUrl: true, galleryJson: true,
                 shopDescription: true, shopCategory: true, stock: true, savedSalePricePaise: true, barcodeManualPaise: true,
                 mrpPaise: true, effectiveSalePricePaise: true, slug: true,
-                groupId: true, brandId: true, allowBackorder: true, weightGrams: true, shopStatus: true, shopDraftJson: true, shopAttention: true,
+                groupId: true, brandId: true, allowBackorder: true, weightGrams: true, shopStatus: true, shopDraftJson: true, shopAttention: true, shopDraftAt: true, shopAttentionAt: true,
             },
         });
         if (!existing) return { response: NextResponse.json({ error: "Not found" }, { status: 404 }) };
@@ -159,6 +159,11 @@ export async function updateShopProduct(
         // parked Draft, shopAttention.ts) leaves only by Save as draft — back to
         // work, the reason kept so it shows — or Save as ready, which clears it.
         const info = readShopDraft(existing.shopDraftJson);
+        // Publishing without acting on every note is allowed — the notes stay, dated (owner, 2026-11-12).
+        const keepNotes = () => {
+            const kept = keptReviewNotes(info, existing.shopAttention, existing.shopAttentionAt ?? existing.shopDraftAt);
+            return kept ? (kept as unknown as Prisma.InputJsonValue) : Prisma.DbNull;
+        };
         const inWork = existing.shopStatus === "DRAFT" || existing.shopStatus === "ATTENTION";
         if (existing.shopStatus === "ATTENTION" && b.shopStatus && !b.draft) {
             return { response: NextResponse.json({ error: "Parked in Attention — Save as draft to work on it, or Save as ready." }, { status: 409 }) };
@@ -172,11 +177,12 @@ export async function updateShopProduct(
             data.shopDraftAt = new Date();
         } else if (b.draft === "ready" || b.draft === "discard") {
             status = b.draft === "ready" ? "READY" : inWork ? info?.stageBefore ?? "UNPUBLISHED" : existing.shopStatus;
-            data.shopDraftJson = Prisma.DbNull;
+            // Ready keeps the AI's notes (dated) until the next review; Discard drops them.
+            data.shopDraftJson = b.draft === "ready" ? keepNotes() : Prisma.DbNull;
             data.shopDraftAt = null;
         } else if (b.shopStatus && b.shopStatus !== "DRAFT" && existing.shopStatus === "DRAFT") {
             // Leaving Draft by a stage button (Mark ready / Publish / Unpublish).
-            data.shopDraftJson = Prisma.DbNull;
+            data.shopDraftJson = keepNotes();
             data.shopDraftAt = null;
         }
         const shopStatus = nextShopStatus(existing.shopStatus, { status, listed: b.isListedInShop });

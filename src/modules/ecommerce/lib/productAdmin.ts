@@ -14,18 +14,40 @@ export type ShopDraft = {
     aiCopy?: ProductCopy;
     /** Review notes (Claude's review mode, /api/agent/products/[id]/notes) — things for staff to fix. */
     notes?: string[];
+    /** When those notes were written (ISO). */
+    notesAt?: string;
+    /** Notes kept after the product left Draft / Attention (owner, 2026-11-12) — shown until the next AI review replaces them. */
+    kept?: boolean;
 };
 
 export function readShopDraft(raw: unknown): ShopDraft | null {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-    const r = raw as { stageBefore?: unknown; aiCopy?: unknown; notes?: unknown };
+    const r = raw as { stageBefore?: unknown; aiCopy?: unknown; notes?: unknown; notesAt?: unknown; kept?: unknown };
     const notes = Array.isArray(r.notes) ? r.notes.filter((x): x is string => typeof x === "string") : [];
     const stages: unknown[] = ["UNPUBLISHED", "READY", "PUBLISHED"];
     return {
         ...(stages.includes(r.stageBefore) ? { stageBefore: r.stageBefore as ShopStatus } : {}),
         ...(r.aiCopy && typeof r.aiCopy === "object" ? { aiCopy: r.aiCopy as ProductCopy } : {}),
         ...(notes.length ? { notes } : {}),
+        ...(notes.length && typeof r.notesAt === "string" ? { notesAt: r.notesAt } : {}),
+        ...(notes.length && r.kept === true ? { kept: true } : {}),
     };
+}
+
+/**
+ * The AI's notes worth keeping when a product leaves Draft / Attention by Save
+ * as ready or a stage button: the review notes, the Attention reason and the
+ * AI copy's own notes and data flags. Null when there are none.
+ */
+export function keptReviewNotes(info: ShopDraft | null, attention: string | null, at: Date | null): ShopDraft | null {
+    const notes = [...new Set([
+        ...(info?.notes ?? []),
+        ...(attention ?? "").split("\n").map((x) => x.trim()).filter(Boolean),
+        ...(info?.aiCopy?.notes ?? []),
+        ...(info?.aiCopy?.flags ?? []),
+    ])].slice(0, 40);
+    if (!notes.length) return null;
+    return { notes, notesAt: info?.notesAt ?? at?.toISOString(), kept: true };
 }
 import { invProductToPublic, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { barcodeTagPaise, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";

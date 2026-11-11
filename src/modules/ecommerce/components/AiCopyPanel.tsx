@@ -11,17 +11,18 @@ import { fetchAiCopy, fetchAiPhotos, type PhotoAdvice, type ProductCopy } from "
 import { FlowButtons, PhotoAiSwitch, PremiumSwitch, useCopyFlow, usePhotoAi, usePremiumAi } from "@/modules/ecommerce/components/AiCopyControls";
 import { AiPhotoArrange, AiPhotoPicker } from "@/modules/ecommerce/components/AiPhotoPicker";
 import type { PhotoChecklist, PhotoKind } from "@/modules/ecommerce/lib/photoChecklist";
+import { AiNotesBox, type AiNotesBoxProps } from "@/modules/ecommerce/components/AiNotesBox";
 
 type SpecRow = { k: string; v: string };
 
 /** How the draft was made, what looks wrong in our own data, and what staff should check before saving. */
-export function AiDraftNotes({ draft }: { draft: ProductCopy }) {
+export function AiDraftNotes({ draft, notesElsewhere = false }: { draft: ProductCopy; notesElsewhere?: boolean }) {
     const sourced = Object.entries(draft.specSources ?? {});
     return (
         <>
             <p className="text-muted-foreground text-xs">{draft.note}</p>
-            {draft.flags.length > 0 && <DataFlags flags={draft.flags} />}
-            {(draft.notes?.length ?? 0) > 0 && (
+            {!notesElsewhere && draft.flags.length > 0 && <DataFlags flags={draft.flags} />}
+            {!notesElsewhere && (draft.notes?.length ?? 0) > 0 && (
                 <div className="text-xs text-sky-800 dark:text-sky-300">
                     <p className="font-medium">Notes for you:</p>
                     <ul className="ml-4 list-disc">
@@ -93,6 +94,8 @@ export default function AiCopyPanel({
     onAddPhotos,
     onParked,
     onGallery,
+    attention,
+    review,
 }: {
     /** Claude's (Cowork) copy, already written onto the product — shown for its notes and photo advice. */
     savedDraft?: ProductCopy | null;
@@ -125,6 +128,9 @@ export default function AiCopyPanel({
     onParked?: () => void;
     /** Photo AI's order / look, applied to the gallery. */
     onGallery: (next: (g: string[]) => string[]) => void;
+    /** Attention reason and Claude's review notes — shown in the one AI notes box with the copy run's notes. */
+    attention?: AiNotesBoxProps["attention"];
+    review?: AiNotesBoxProps["review"];
 }) {
     const [flow, setFlow] = useCopyFlow();
     const [premium, setPremium] = usePremiumAi();
@@ -223,6 +229,11 @@ export default function AiCopyPanel({
 
     return (
         <div className="space-y-3 rounded-md border border-dashed border-border p-3">
+            <AiNotesBox
+                attention={attention}
+                review={review}
+                copy={draft ? { source: fromSaved ? "Claude copy" : "In-app AI", notes: draft.notes ?? [], flags: draft.flags } : null}
+            />
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void run(false)}>
                     <Sparkles className="size-4" />
@@ -271,7 +282,7 @@ export default function AiCopyPanel({
                             onUse={() => onCollections?.([...(collectionIds ?? []), ...collectionsMissing.map((c) => c.id)])} />
                     )}
                     {brandDiffers && <DraftRow label="Brand" text={brandDiffers.name} onUse={() => onBrand?.(brandDiffers.id)} />}
-                    <AiDraftNotes draft={draft} />
+                    <AiDraftNotes draft={draft} notesElsewhere />
                     {titleDiffers && (
                         <DraftRow label="Online name" text={draft.title} onUse={() => onSubheading(draft.title)} />
                     )}

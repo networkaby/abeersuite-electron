@@ -417,7 +417,11 @@ export async function saveAgentCopy(id: number, body: z.infer<typeof agentCopySc
             }
         }
     }
-    const shopStatus = await writeAsDraft(id, { ...masterPatch, ...copyPatch }, () => ({ aiCopy: draft }));
+    const shopStatus = await writeAsDraft(id, { ...masterPatch, ...copyPatch }, (info) => ({
+        aiCopy: draft,
+        // A fresh run replaces the notes kept from the last review.
+        ...(info?.kept && { notes: undefined, notesAt: undefined, kept: undefined }),
+    }));
     return { draft, shopStatus };
 }
 
@@ -515,6 +519,13 @@ export async function addReviewNotes(id: number, b: z.infer<typeof notesSchema>)
     const before = b.replace ? [] : (p.shopAttention ?? "").split("\n").map((x) => x.trim()).filter(Boolean);
     const notes = [...new Set([...before, ...b.notes])].slice(-30);
     await parkInAttention([id], notes.join("\n").slice(0, 10000), "Claude", "any");
+    // A new review replaces the notes kept from the last one.
+    const row = await prisma.invProduct.findUnique({ where: { id }, select: { shopDraftJson: true } });
+    const info = readShopDraft(row?.shopDraftJson);
+    if (info?.kept) {
+        const { stageBefore, aiCopy } = info;
+        await prisma.invProduct.update({ where: { id }, data: { shopDraftJson: { ...(stageBefore && { stageBefore }), ...(aiCopy && { aiCopy }) } as unknown as Prisma.InputJsonValue } });
+    }
     return { notes: notes.length };
 }
 
