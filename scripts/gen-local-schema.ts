@@ -84,7 +84,36 @@ function makeIdempotent(sql: string): string {
     out = out.replace(/^(CREATE TYPE .+;)$/gm, (_m, stmt: string) => guard(stmt));
     out = out.replace(/^(ALTER TABLE .+ ADD CONSTRAINT .+;)$/gm, (_m, stmt: string) => guard(stmt));
 
-    return addColumnBackfills(out);
+    return addColumnBackfills(addEnumValueBackfills(out));
+}
+
+/**
+ * Re-declares every value of every enum as `ALTER TYPE ... ADD VALUE IF NOT EXISTS`
+ * right after its guarded `CREATE TYPE`, so a value added upstream reaches a replica
+ * that already has the type — the enum twin of addColumnBackfills(). Reproduced for
+ * real: v1.17.2 added `ShopStatus.ATTENTION`; on every counter provisioned before it
+ * the guarded `CREATE TYPE` was skipped, and the first product parked in Attention
+ * failed the whole InvProduct pull ("invalid input value for enum") → Copy incomplete.
+ *
+ * Each value goes `AFTER` the one before it, so the order matches the office's (an
+ * enum sorts by declaration order). The first value has no predecessor and is only
+ * appended if missing — in practice it always exists. PostgreSQL 12+ allows ADD
+ * VALUE inside the implicit transaction the provisioner runs this file in; the
+ * replica is PostgreSQL 17. A brand-new value cannot be USED in that same
+ * transaction (e.g. as a column DEFAULT added in the same release) — that would fail
+ * loudly on apply, and the next boot retries.
+ */
+function addEnumValueBackfills(sql: string): string {
+    return sql.replace(
+        /CREATE TYPE "([A-Za-z0-9_]+)" AS ENUM \(([^)]*)\);\nEXCEPTION\n {4}WHEN duplicate_object THEN NULL;\nEND \$\$;/g,
+        (block: string, type: string, list: string) => {
+            const values = [...list.matchAll(/'([^']*)'/g)].map((m) => m[1]);
+            const alters = values.map((v, i) =>
+                `ALTER TYPE "${type}" ADD VALUE IF NOT EXISTS '${v}'${i > 0 ? ` AFTER '${values[i - 1]}'` : ""};`,
+            );
+            return alters.length ? `${block}\n${alters.join("\n")}` : block;
+        },
+    );
 }
 
 /**
