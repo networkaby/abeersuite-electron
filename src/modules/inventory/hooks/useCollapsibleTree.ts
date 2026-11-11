@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { flattenTree } from "@/shared/lib/inventory/masterTree";
+import { flattenTree } from "@/shared/lib/tree";
 
 export type TreeRowMeta<T> = { row: T; depth: number; hasChildren: boolean };
 

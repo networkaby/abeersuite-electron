@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { subtreeIds, treeItemTotals } from "@/shared/lib/inventory/masterTree";
+import { subtreeIds, treeItemTotals } from "@/shared/lib/tree";
 
 type TreeRow = { id: number; parentId: number | null; _count?: { products: number } };
 

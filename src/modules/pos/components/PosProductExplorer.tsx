@@ -18,7 +18,7 @@
 // while open the search + all three facet rails come out of ONE memoised pass
 // over the catalogue, fed a deferred query so typing never waits on the grid.
 
-import { treeLabel } from "@/shared/lib/inventory/masterTree";
+import { type Nested, buildNestedTree, flattenNested, nestedIds, treeLabel } from "@/shared/lib/tree";
 import { memo, useDeferredValue, useEffect, useMemo, useRef, useState, useEffectEvent } from "react";
 import { ChevronRight, PackageSearch, X, Plus } from "lucide-react";
 import { useValueChange } from "@/shared/hooks";
@@ -55,45 +55,14 @@ async function cacheThumbnail(url: string): Promise<void> {
 /** Loose shape shared by the cached brand/category/group master rows —
  *  matching the `Opt`-style cast other master consumers already use. */
 type MasterOpt = { id: number; name?: string; parentId?: number | null; isActive?: boolean };
-type GroupNode = { id: number; name: string; children: GroupNode[] };
+type GroupNode = Nested<{ id: number; name: string; parentId?: number | null }>;
 
 /** Group and Category are both self-referential trees (see InvProductGroup /
  *  InvCategory) — this builds either into a nested tree, active rows only. */
 function buildTree(rows: MasterOpt[]): GroupNode[] {
-    const byId = new Map<number, GroupNode>();
-    for (const r of rows) {
-        if (r.isActive === false) continue;
-        byId.set(r.id, { id: r.id, name: r.name ?? "—", children: [] });
-    }
-    const roots: GroupNode[] = [];
-    for (const r of rows) {
-        if (r.isActive === false) continue;
-        const node = byId.get(r.id)!;
-        const parent = r.parentId != null ? byId.get(r.parentId) : undefined;
-        if (parent) parent.children.push(node);
-        else roots.push(node);
-    }
-    const sortRec = (nodes: GroupNode[]) => {
-        nodes.sort((a, b) => a.name.localeCompare(b.name));
-        nodes.forEach((n) => sortRec(n.children));
-    };
-    sortRec(roots);
-    return roots;
-}
-
-/** A node's own id plus every descendant's — selecting "Cameras" also matches
- *  products filed under its "Dome Cameras" / "PTZ" children. */
-function idsUnder(node: GroupNode): number[] {
-    return [node.id, ...node.children.flatMap(idsUnder)];
-}
-
-/** Depth-first flatten for a plain <select> — indents child names so the
- *  hierarchy is still legible in a flat dropdown. */
-function flattenNames(nodes: GroupNode[], depth = 0): { id: number; name: string }[] {
-    return nodes.flatMap((n) => [
-        { id: n.id, name: treeLabel({ name: n.name, depth }) },
-        ...flattenNames(n.children, depth + 1),
-    ]);
+    return buildNestedTree(
+        rows.filter((r) => r.isActive !== false).map((r) => ({ id: r.id, name: r.name ?? "—", parentId: r.parentId })),
+    );
 }
 
 /** Keep only nodes that (directly or via a descendant) have a matching
@@ -213,7 +182,7 @@ export const PosProductExplorer = memo(function PosProductExplorer({
     // stays flat (it's a cross-cutting merchandising tag more than a browse
     // hierarchy — see InvCategory's schema comment). Brand is flat too. All
     // three AND together with the text filter.
-    const allowedGroupIds = useMemo(() => selectedGroup ? new Set(idsUnder(selectedGroup)) : null, [selectedGroup]);
+    const allowedGroupIds = useMemo(() => selectedGroup ? new Set(nestedIds(selectedGroup)) : null, [selectedGroup]);
     const q = useDeferredValue(query.trim());
     const source = open ? products : NO_PRODUCTS;
 
@@ -393,7 +362,7 @@ export const PosProductExplorer = memo(function PosProductExplorer({
                             className="h-7 rounded-md border border-amber-300/70 bg-amber-50/50 px-1.5 text-[11px] text-amber-800 dark:border-amber-500/40 dark:bg-amber-950/20 dark:text-amber-200"
                         >
                             <option value="">All categories</option>
-                            {flattenNames(visibleCategoryTree).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            {flattenNested(visibleCategoryTree).map((c) => <option key={c.id} value={c.id}>{treeLabel(c)}</option>)}
                         </select>
                         {facetsActive && (
                             <button

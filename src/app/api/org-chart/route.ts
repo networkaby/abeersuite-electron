@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import type { OrgNode } from "@/shared/types/orgChart";
+import { buildNestedTree } from "@/shared/lib/tree";
 
 const USER_SELECT = {
     id:          true,
@@ -36,28 +37,12 @@ type FlatUser = {
     branches: { id: string; name: string }[];
 };
 
-function buildTree(users: FlatUser[]): OrgNode[] {
-    const map = new Map<number, OrgNode>();
-    for (const u of users) {
-        map.set(u.id, { ...u, children: [] });
-    }
-    const roots: OrgNode[] = [];
-    for (const u of users) {
-        const node = map.get(u.id)!;
-        if (u.managerId && map.has(u.managerId)) {
-            map.get(u.managerId)!.children.push(node);
-        } else {
-            roots.push(node);
-        }
-    }
-    // Sort by rank desc (highest rank first), then alphabetically
-    const sort = (nodes: OrgNode[]) => {
-        nodes.sort((a, b) => (b.userRole?.rank ?? 0) - (a.userRole?.rank ?? 0) || a.name.localeCompare(b.name));
-        nodes.forEach(n => sort(n.children));
-    };
-    sort(roots);
-    return roots;
-}
+// Highest rank first, then A–Z; a manager not in the list makes a root.
+const buildTree = (users: FlatUser[]): OrgNode[] => buildNestedTree(
+    users,
+    (u) => u.managerId,
+    (a, b) => (b.userRole?.rank ?? 0) - (a.userRole?.rank ?? 0) || a.name.localeCompare(b.name),
+);
 
 export async function GET() {
     const { response } = await requireAuth();

@@ -53,7 +53,7 @@ import {
     type MatchConditionsValue,
     type ConditionProduct,
 } from "@/modules/pricing-strategy/components/MatchConditions";
-import { flattenTree } from "@/shared/lib/inventory/masterTree";
+import { flattenTree } from "@/shared/lib/tree";
 import { PaginationBar } from "@/shared/components/PaginationBar";
 import type { PricingItem } from "@/modules/pricing-strategy/lib/pricingItem";
 import type { StrategyPoints } from "@/shared/lib/schemas/pricingSchemas";

@@ -3,6 +3,7 @@
 
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { childrenMap, subtreeIds } from "@/shared/lib/tree";
 import { FINANCE_BAR_POLL_MS } from "@/shared/lib/constants/polling";
 import { balanceDelta } from "./balance";
 import { computeTradingStockAdjustment } from "./tradingStockAdjustment";
@@ -247,24 +248,7 @@ export async function aggregateRolledUpByGroup(
     ]);
     const closingMap = await aggregateClosingAsOf(asOf, nbMap);
 
-    const childMap = new Map<number, number[]>();
-    for (const g of allGroups) {
-        if (g.parentId === null) continue;
-        const arr = childMap.get(g.parentId) ?? [];
-        arr.push(g.id);
-        childMap.set(g.parentId, arr);
-    }
-    const descendantIds = (rootId: number): number[] => {
-        const acc = [rootId];
-        const stack = [rootId];
-        while (stack.length) {
-            const top = stack.pop()!;
-            const kids = childMap.get(top) ?? [];
-            acc.push(...kids);
-            stack.push(...kids);
-        }
-        return acc;
-    };
+    const childMap = childrenMap(allGroups);
 
     // Index accounts by groupId for O(1) lookup per descendant.
     const byGroup = new Map<number, number[]>();
@@ -277,7 +261,7 @@ export async function aggregateRolledUpByGroup(
 
     for (const gid of groupIds) {
         let sum = 0;
-        for (const id of descendantIds(gid)) {
+        for (const id of subtreeIds(childMap, gid)) {
             const accIds = byGroup.get(id);
             if (!accIds) continue;
             for (const accId of accIds) sum += closingMap.get(accId) ?? 0;

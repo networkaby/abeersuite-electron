@@ -40,7 +40,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { useValueChange } from "@/shared/hooks/useValueChange";
-import { treeSelectOptions, type TreeNodeRow } from "@/shared/lib/inventory/masterTree";
+import { treeSelectOptions, type TreeNodeRow } from "@/shared/lib/tree";
 
 export type MasterKind = "category" | "brand" | "group" | "warranty" | "unit";
 

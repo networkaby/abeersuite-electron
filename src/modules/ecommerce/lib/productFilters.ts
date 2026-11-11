@@ -4,7 +4,7 @@
 
 import type { ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { shopQualification, type ShopPublishRules } from "@/modules/ecommerce/lib/shopQualification";
-import { flattenTree, subtreeIds, treeLabel, type TreeNodeRow } from "@/shared/lib/inventory/masterTree";
+import { flattenTree, subtreeIds, treeLabel, type TreeNodeRow } from "@/shared/lib/tree";
 
 export type StockFilter = "all" | "in" | "out" | "untracked";
 export type ActiveFilter = "all" | "active" | "inactive";

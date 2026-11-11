@@ -4,7 +4,7 @@ import { GatedLink } from "@/shared/components/GatedLink";
 import { useEffect, useRef, useEffectEvent } from "react";
 import { RefreshCw, Trash2 } from "lucide-react";
 import { type MasterKind } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
-import { treeSelectOptions } from "@/shared/lib/inventory/masterTree";
+import { treeSelectOptions } from "@/shared/lib/tree";
 import { SearchableSelect } from "@/shared/components/SearchableSelect";
 import { SearchableMultiSelect } from "@/shared/components/SearchableMultiSelect";
 import { Button } from "@/components/ui/button";

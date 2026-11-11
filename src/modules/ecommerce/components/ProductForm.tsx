@@ -31,7 +31,7 @@ import { useValueChange } from "@/shared/hooks/useValueChange";
 import { SearchableSelect } from "@/shared/components/SearchableSelect";
 import { MultiSelectChips, SearchableMultiSelect } from "@/shared/components/SearchableMultiSelect";
 import { InventoryMasterDropdownQuickDialog } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
-import { treeSelectOptions } from "@/shared/lib/inventory/masterTree";
+import { treeSelectOptions } from "@/shared/lib/tree";
 import { syncMasters, invalidateMasters, type Masters } from "@/shared/lib/inventory";
 import { useSession } from "next-auth/react";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";

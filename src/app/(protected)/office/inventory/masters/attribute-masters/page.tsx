@@ -20,7 +20,7 @@ import {
 import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableStates";
 import { useDeleteWithConfirm } from "@/shared/hooks";
 import { SearchableMultiSelect } from "@/shared/components/SearchableMultiSelect";
-import { treeSelectOptions } from "@/shared/lib/inventory/masterTree";
+import { treeSelectOptions } from "@/shared/lib/tree";
 
 type Group = { id: number; name: string; parentId?: number | null };
 type Row = {

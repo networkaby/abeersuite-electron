@@ -32,7 +32,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { flattenTree, treeItemTotals, treeLabel } from "@/shared/lib/inventory/masterTree";
+import { flattenTree, treeItemTotals, treeLabel } from "@/shared/lib/tree";
 import { useCollapsibleTree } from "@/modules/inventory/hooks";
 import { TreeItemsLink } from "@/modules/inventory/components/TreeItemsLink";
 

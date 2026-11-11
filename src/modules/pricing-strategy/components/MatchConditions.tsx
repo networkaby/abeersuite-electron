@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { flattenTree, productMatchesSearch, searchableText } from "@/shared/lib/inventory";
+import { childrenMap, flattenTree, productMatchesSearch, searchableText, subtreeIds } from "@/shared/lib/inventory";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -77,33 +77,6 @@ export const ATTR_OP_LABEL: Record<AttrOp, string> = {
 // descendant, so the boxes on screen are exactly the ids that will be matched.
 // Matching itself never expands anything — the ticks do their own job.
 
-/** id → its direct children ids, from the parentId links already on `items`. */
-function childrenMapOf(items: Master[]): Map<number, number[]> {
-    const m = new Map<number, number[]>();
-    for (const it of items) {
-        const pid = it.parentId ?? null;
-        if (pid == null) continue;
-        const arr = m.get(pid) ?? [];
-        arr.push(it.id);
-        m.set(pid, arr);
-    }
-    return m;
-}
-
-/** The id itself plus every descendant beneath it (cycle-safe). */
-function withDescendants(id: number, children: Map<number, number[]>): number[] {
-    const out: number[] = [];
-    const seen = new Set<number>();
-    const stack = [id];
-    while (stack.length) {
-        const cur = stack.pop()!;
-        if (seen.has(cur)) continue;
-        seen.add(cur);
-        out.push(cur);
-        for (const k of children.get(cur) ?? []) stack.push(k);
-    }
-    return out;
-}
 
 function MultiSelectGroup({
     label, helper, items, selected, onChange, icon: Icon, hierarchical = false,
@@ -125,12 +98,12 @@ function MultiSelectGroup({
         return items.filter((m) => productMatchesSearch(m, needle, { text: (x) => searchableText(x.name) }));
     }, [items, q]);
 
-    const children = useMemo(() => childrenMapOf(items), [items]);
+    const children = useMemo(() => childrenMap(items), [items]);
 
     const toggle = (id: number) => {
         const next = new Set(selected);
         // With the toggle on, a parent carries its whole subtree in/out with it.
-        const ids = hierarchical && includeChildren ? withDescendants(id, children) : [id];
+        const ids = hierarchical && includeChildren ? subtreeIds(children, id) : [id];
         if (next.has(id)) for (const i of ids) next.delete(i);
         else for (const i of ids) next.add(i);
         onChange(next);
@@ -143,7 +116,7 @@ function MultiSelectGroup({
         setIncludeChildren(on);
         if (!on || selected.size === 0) return;
         const next = new Set(selected);
-        for (const id of selected) for (const i of withDescendants(id, children)) next.add(i);
+        for (const id of selected) for (const i of subtreeIds(children, id)) next.add(i);
         if (next.size !== selected.size) onChange(next);
     };
 

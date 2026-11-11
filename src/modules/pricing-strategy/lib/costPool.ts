@@ -16,6 +16,7 @@
 // SUM / AVG / date-windowed, edit ONLY `getCurrentAdditionalCostByProduct`.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { subtreeIds } from "@/shared/lib/tree";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 
 /** Decimal rupees → integer paise. Matches resolveCost.ts's boundary convention. */
@@ -66,21 +67,7 @@ export async function getShippingPoolGroupId(): Promise<number | null> {
 /** Accounts (ledgers) under a group + all its descendant groups. */
 async function getPoolLedgers(groupId: number): Promise<{ id: number; name: string }[]> {
     const allGroups = await prisma.accountGroup.findMany({ select: { id: true, parentId: true } });
-    const childMap = new Map<number, number[]>();
-    for (const g of allGroups) {
-        if (g.parentId === null) continue;
-        const arr = childMap.get(g.parentId) ?? [];
-        arr.push(g.id);
-        childMap.set(g.parentId, arr);
-    }
-    const groupIds: number[] = [groupId];
-    const stack = [groupId];
-    while (stack.length) {
-        const top = stack.pop()!;
-        const kids = childMap.get(top) ?? [];
-        groupIds.push(...kids);
-        stack.push(...kids);
-    }
+    const groupIds = subtreeIds(allGroups, groupId);
     return prisma.account.findMany({
         where: { groupId: { in: groupIds } },
         select: { id: true, name: true },

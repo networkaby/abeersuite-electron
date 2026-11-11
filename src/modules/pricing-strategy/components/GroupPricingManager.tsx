@@ -24,7 +24,7 @@ import { useFieldSave } from "@/shared/hooks/useFieldSave";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { extractApiError } from "@/shared/lib/api";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
-import { treeSelectOptions } from "@/shared/lib/inventory/masterTree";
+import { treeSelectOptions } from "@/shared/lib/tree";
 import {
     GROUP_PRICE_TYPES, GROUP_PRICE_TYPE_LABEL, pctPriceType, type GroupPriceType,
 } from "@/modules/pricing-strategy/lib/groupPricing";

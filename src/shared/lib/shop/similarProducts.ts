@@ -5,6 +5,7 @@ import { loadShopGroupIndex } from "@/shared/lib/shop/groupCategory";
 import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
 import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
 import { sharedCollections } from "@/shared/lib/shop/productRelations";
+import { ancestorIds, childrenMap, subtreeIds } from "@/shared/lib/tree";
 
 /**
  * "Similar products" — substitutes for the item being viewed.
@@ -32,40 +33,9 @@ import { sharedCollections } from "@/shared/lib/shop/productRelations";
 /** How many "More like this" cards a product page shows. */
 export const SIMILAR_PRODUCTS_LIMIT = 12;
 
-/** groupId → its ancestor chain, nearest first: [parent, grandparent, …]. */
-async function loadAncestors(groupId: number): Promise<number[]> {
-    const rows = await prisma.invProductGroup.findMany({ select: { id: true, parentId: true } });
-    const parentOf = new Map(rows.map((g) => [g.id, g.parentId]));
-    const chain: number[] = [];
-    const seen = new Set<number>([groupId]);
-    let cur = parentOf.get(groupId) ?? null;
-    while (cur != null && !seen.has(cur)) {
-        chain.push(cur);
-        seen.add(cur);
-        cur = parentOf.get(cur) ?? null;
-    }
-    return chain;
-}
-
-/** Every group id in the subtree rooted at `rootId`, including itself. */
-async function loadSubtree(rootId: number): Promise<number[]> {
-    const rows = await prisma.invProductGroup.findMany({ select: { id: true, parentId: true } });
-    const childrenOf = new Map<number, number[]>();
-    for (const g of rows) {
-        if (g.parentId == null) continue;
-        childrenOf.set(g.parentId, [...(childrenOf.get(g.parentId) ?? []), g.id]);
-    }
-    const out: number[] = [];
-    const stack = [rootId];
-    const seen = new Set<number>();
-    while (stack.length) {
-        const id = stack.pop()!;
-        if (seen.has(id)) continue;
-        seen.add(id);
-        out.push(id);
-        stack.push(...(childrenOf.get(id) ?? []));
-    }
-    return out;
+/** Every group's id + parent, read once per request — both walks below use it. */
+async function loadGroupLinks() {
+    return prisma.invProductGroup.findMany({ select: { id: true, parentId: true } });
 }
 
 export async function loadSimilarProducts(
@@ -85,9 +55,12 @@ export async function loadSimilarProducts(
 
     // Widen one rung at a time: the exact group first, then each ancestor's
     // whole subtree. Stop as soon as the row is full.
-    const ancestors = await loadAncestors(product.groupId);
+    // One read of the group links (was one per ancestor).
+    const links = await loadGroupLinks();
+    const parentOf = new Map(links.map((g) => [g.id, g.parentId]));
+    const kids = childrenMap(links);
     const rungs: number[][] = [[product.groupId]];
-    for (const a of ancestors) rungs.push(await loadSubtree(a));
+    for (const a of ancestorIds(product.groupId, (id) => parentOf.get(id))) rungs.push(subtreeIds(kids, a));
 
     for (const groupIds of rungs) {
         if (picked.length >= limit) break;

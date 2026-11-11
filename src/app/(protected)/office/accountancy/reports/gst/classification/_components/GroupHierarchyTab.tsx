@@ -10,6 +10,7 @@ import { ChevronDown, ChevronRight, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RateCell, HsnCell, TaxabilityCell, type GstRateOpt } from "./InlineTaxCells";
 import type { GstClassificationPayload, GroupRow } from "./types";
+import { buildNestedTree, type Nested } from "@/shared/lib/tree";
 
 interface Props {
     data: GstClassificationPayload;
@@ -17,26 +18,8 @@ interface Props {
     onSaved: () => void;
 }
 
-type TreeNode = GroupRow & { children: TreeNode[] };
-
-function buildTree(groups: GroupRow[]): TreeNode[] {
-    const byId = new Map<number, TreeNode>();
-    for (const g of groups) byId.set(g.id, { ...g, children: [] });
-    const roots: TreeNode[] = [];
-    for (const n of byId.values()) {
-        if (n.parentId != null && byId.has(n.parentId)) {
-            byId.get(n.parentId)!.children.push(n);
-        } else {
-            roots.push(n);
-        }
-    }
-    const sortRec = (nodes: TreeNode[]) => {
-        nodes.sort((a, b) => a.name.localeCompare(b.name));
-        for (const n of nodes) sortRec(n.children);
-    };
-    sortRec(roots);
-    return roots;
-}
+type TreeNode = Nested<GroupRow>;
+const buildTree = (groups: GroupRow[]): TreeNode[] => buildNestedTree(groups);
 
 export function GroupHierarchyTab({ data, canEdit, onSaved }: Props) {
     const tree = useMemo(() => buildTree(data.groups), [data.groups]);

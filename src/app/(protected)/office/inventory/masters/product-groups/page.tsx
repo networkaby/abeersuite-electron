@@ -32,7 +32,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { flattenTree, treeItemTotals, treeLabel } from "@/shared/lib/inventory/masterTree";
+import { ancestorIds, flattenTree, treeItemTotals, treeLabel } from "@/shared/lib/tree";
 import { useCollapsibleTree } from "@/modules/inventory/hooks";
 import { TreeItemsLink } from "@/modules/inventory/components/TreeItemsLink";
 
@@ -130,15 +130,8 @@ export default function InventoryProductGroupsPage() {
         const out = {} as Record<typeof BAND_KEYS[number], { value: number | null; own: boolean }>;
         for (const key of BAND_KEYS) {
             if (r[key] != null) { out[key] = { value: r[key], own: true }; continue; }
-            let node = r.parentId != null ? byId.get(r.parentId) : undefined;
-            const seen = new Set<number>();
-            let value: number | null = null;
-            while (node && !seen.has(node.id)) {
-                seen.add(node.id);
-                if (node[key] != null) { value = node[key]; break; }
-                node = node.parentId != null ? byId.get(node.parentId) : undefined;
-            }
-            out[key] = { value: value ?? orgFallback[key], own: false };
+            const from = ancestorIds(r.id, (id) => byId.get(id)?.parentId).find((id) => byId.get(id)?.[key] != null);
+            out[key] = { value: (from != null ? byId.get(from)![key] : null) ?? orgFallback[key], own: false };
         }
         return out;
     };

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { aggregateClosingAsOf, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
+import { buildNestedTree } from "@/shared/lib/tree";
 import { groupSign } from "@/modules/accountancy/lib/groupNature";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -75,22 +76,12 @@ type GroupNode = FlatGroup & {
 };
 
 function buildTree(flat: FlatGroup[], ledgersByGroup: Map<number, LedgerRow[]>, search?: string): GroupNode[] {
-    const map = new Map<number, GroupNode>();
-    flat.forEach((g) => map.set(g.id, {
-        ...g,
-        children: [],
-        ledgers: ledgersByGroup.get(g.id) ?? [],
-        ledgerTotal: ledgersByGroup.get(g.id)?.length ?? 0,
-    }));
-    const roots: GroupNode[] = [];
-    flat.forEach((g) => {
-        const node = map.get(g.id)!;
-        if (g.parentId === null) {
-            roots.push(node);
-        } else {
-            map.get(g.parentId)?.children.push(node);
-        }
-    });
+    // Keeps the query's order (null compare); totalBalance is set by the rollup below.
+    const roots = buildNestedTree(
+        flat.map((g) => ({ ...g, ledgers: ledgersByGroup.get(g.id) ?? [], ledgerTotal: ledgersByGroup.get(g.id)?.length ?? 0 })),
+        undefined,
+        null,
+    ) as GroupNode[];
 
     // Roll up totalBalance bottom-up: own ledgers + every descendant group.
     // Runs on the FULL ledger arrays (before the display cap) so totals stay

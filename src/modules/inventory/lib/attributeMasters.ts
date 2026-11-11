@@ -1,6 +1,8 @@
 // Attribute masters ↔ groups (many-to-many, owner 2026-11-10). One place for the
 // API row shape and for "which attributes does a product in group X get".
 
+import { ancestorIds } from "@/shared/lib/tree";
+
 /** What the attribute-masters API includes to resolve its groups. */
 export const ATTR_MASTER_INCLUDE = {
     groups: { select: { group: { select: { id: true, name: true } } } },
@@ -40,11 +42,7 @@ export function attrAppliesToGroup(
     parentOf: (id: number) => number | null | undefined,
 ): boolean {
     if (attrGroupIds.length === 0) return true;
+    if (groupId == null) return false;
     const wanted = new Set(attrGroupIds);
-    const seen = new Set<number>();
-    for (let g = groupId; g != null && !seen.has(g); g = parentOf(g) ?? null) {
-        if (wanted.has(g)) return true;
-        seen.add(g);
-    }
-    return false;
+    return [groupId, ...ancestorIds(groupId, parentOf)].some((g) => wanted.has(g));
 }
