@@ -23,6 +23,7 @@ import { formatDate, todayIso } from "@/shared/lib/format/formatDate";
 import { cn } from "@/shared/lib/format/utils";
 import { EntityListPanel } from "@/shared/components/EntityListPanel";
 import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
+import { LinkContextMenu, useLinkContextMenu } from "@/shared/components/LinkContextMenu";
 import { VoucherActionsMenu, editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
 import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
@@ -122,6 +123,8 @@ function startOfYear(): string {
 
 export default function InventoryDetailsPage() {
     const router = useRouter();
+    // Right-click on Invoice / Party offers "Open in new window", as in the Day Book.
+    const { menu, close: closeMenu, onContainerContextMenu } = useLinkContextMenu();
     const params = useSearchParams();
     const [products, setProducts] = useState<ProductListItem[]>([]);
     const [search, setSearch] = useState("");
@@ -418,7 +421,7 @@ export default function InventoryDetailsPage() {
                             </div>
 
                             {/* Table */}
-                            <div className="flex-1 overflow-auto">
+                            <div className="flex-1 overflow-auto" onContextMenu={onContainerContextMenu}>
                                 {detail.transactions.length === 0 ? (
                                     <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
                                         <Box size={32} strokeWidth={1} />
@@ -527,6 +530,7 @@ export default function InventoryDetailsPage() {
             </section>
             </div>
 
+            <LinkContextMenu menu={menu} onClose={closeMenu} />
             <InvProductDialog
                 open={editOpen}
                 onOpenChange={setEditOpen}
