@@ -1,27 +1,17 @@
-# v1.17.3
+# v1.17.4
 
-Every counter should install this one. It fixes counters that showed **Copy incomplete** after a shop product was moved to the Attention stage — their product list stopped refreshing until this update. No database change.
+A small update for the office side of the app. Install it when convenient — billing and sync are unchanged, and there is no database change.
 
-## Counter sync
+## Product names
 
-- Fixed: a counter that already had the product list could not copy products in the new Attention stage, so the whole product list stopped updating. It now catches up by itself after the update.
-
-## Stock
-
-- A nightly check now finds stock totals that no longer match their entries and corrects them, so a published product is no longer held back as Pending by a wrong total.
+- A product's name now updates by itself whenever its brand, group, warranty, model number or custom part is changed — from any screen, including the online shop product page and the AI tools. Before, only the Inventory list did this.
+- New **Rebuild all names** button in Settings → Naming convention, for after imports or big clean-ups. It shows how many names changed. Products without a custom part keep the name you typed.
 
 ## Online shop products
 
-- **Generate with AI** now also picks collections, brand, shipping weight and parcel size, product codes, and writes notes for staff to check.
-- The AI Specs preview shows only the specs the product is still missing.
+- AI notes no longer disappear when a product is saved as ready or published. They stay, with their date, until the next AI review replaces them.
+- All AI notes — the Attention reason, review notes and the latest AI run's notes — now show together in one **AI notes** box at the top of the AI section.
 
 ## Inventory
 
-- Every inventory master list now has a search box.
-- In the Item Ledger, right-click an entry to open its invoice or party in a new window, as in the Day Book.
-
-## Small fixes
-
-- The Add service list on vouchers is no longer cut off by the item table.
-- The messages popup now shows both sides of the chat and keeps its header on screen.
-- Dates are shown the same way on every screen.
+- In the Products list, the frozen Name column now has a clear edge, so columns scrolled under it are easy to read.
