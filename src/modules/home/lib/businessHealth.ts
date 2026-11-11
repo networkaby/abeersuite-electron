@@ -1,6 +1,7 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { childrenMap, subtreeIds } from "@/shared/lib/tree";
 import { businessTodayIso } from "@/shared/lib/format/formatDate";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { aggregateClosingAsOf, loadNormalBalanceMap, netProfitLoss } from "@/modules/accountancy/lib/aggregateLedger";
@@ -65,21 +66,11 @@ const loadGroupAccounts = unstable_cache(
             prisma.accountGroup.findMany({ select: { id: true, parentId: true, name: true } }),
             prisma.account.findMany({ select: { id: true, groupId: true } }),
         ]);
-        const kids = new Map<number, number[]>();
-        for (const g of groups) {
-            if (g.parentId == null) continue;
-            kids.set(g.parentId, [...(kids.get(g.parentId) ?? []), g.id]);
-        }
+        const kids = childrenMap(groups);
         const accountsOf = (name: string): number[] => {
             const root = groups.find((g) => g.name === name);
             if (!root) return [];
-            const ids = new Set<number>();
-            const stack = [root.id];
-            while (stack.length) {
-                const id = stack.pop()!;
-                ids.add(id);
-                stack.push(...(kids.get(id) ?? []));
-            }
+            const ids = new Set(subtreeIds(kids, root.id));
             return accounts.filter((a) => a.groupId != null && ids.has(a.groupId)).map((a) => a.id);
         };
         return {
