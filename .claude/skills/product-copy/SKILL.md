@@ -137,7 +137,13 @@ Follow the `writing` lines exactly (house style and keys: `title`, `summary`, `h
 ## 5. Brand and collections
 
 - `brandId` from `masters.brands`, only when `brand` is empty.
-- `collectionIds` from `masters.collections` — **added** to `currentCollections`; nothing is removed, the main one stays. Only what clearly fits.
+- `collectionIds` from `masters.collections` — **added** to `currentCollections`; nothing is removed, the main one stays.
+- **Always pick collections — read the whole list every time.** A collection is a shop filter or a *buying need*, not only a product type. Add the product to every collection a shopper browsing it would expect to find it in:
+  - its own type ("CCTV › Power Supply", "Computer › Accessories › USB Hub");
+  - a **kit / setup / starter** collection it is part of — a CCTV SMPS, DVR, camera, BNC/DC connector, video cable or HDD all belong in "CCTV Starter Kit"; a mouse, keyboard or webcam in a "Work from home" set;
+  - a use or audience collection that clearly fits (gaming, office, gifting, festival offer only if its theme matches).
+  Skip only a collection that would surprise the shopper. Up to 10 per call.
+- **None added → a note is required**: "No collection added — none fits; suggest creating 'CCTV › Power Supply'". Never leave it silent.
 - **Never invent an id.** Missing brand / collection → a note — except a one-off printed name on an Unbranded / Premium Unbranded product (step 2): that goes in the title and a spec row, never a note.
 - Never put "Premium Unbranded", "Unbranded", "Special" or "Generic" in the title, description or highlights.
 
@@ -168,6 +174,7 @@ Go through this list for every product and write each problem as one short line 
 - **Name**: spelling ("8-in1 HUB-C" → "8-in-1 USB-C"), wrong order, missing model code, a better shop name.
 - **Model No / barcode** fields empty while the box prints them.
 - **Brand / collections**: missing from masters (say what to create), or the set one looks wrong.
+- **Collections**: no collection added, or an obvious kit / use collection missed (e.g. CCTV parts not in "CCTV Starter Kit").
 - **Group** looks wrong for the product (GST!) — say which fits; never change it yourself.
 - **Photos**: another model or old box version, someone else's watermark, blurry / dark, duplicates, no plain product front, no size photo, the main photo is not the best.
 - **Description already there**: a wrong spec, missing compatibility, our support period written as the maker's warranty.
