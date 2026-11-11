@@ -188,6 +188,11 @@ export default function AiCopyPanel({
 
     const descDiffers = draft && description.trim() && description.trim() !== draft.shopDescription.trim();
     const titleDiffers = draft && subheading.trim() && subheading.trim() !== draft.title.trim();
+    // AI spec rows whose label the product doesn't have yet — the only ones Use can add.
+    const haveSpec = new Set(specPairs.map((r) => r.k.trim().toLowerCase()).filter(Boolean));
+    const specsMissing = draft
+        ? Object.entries(draft.specs).filter(([k, v]) => k.trim() && v.trim() && !haveSpec.has(k.trim().toLowerCase()))
+        : [];
 
     return (
         <div className="space-y-3 rounded-md border border-dashed border-border p-3">
@@ -231,7 +236,9 @@ export default function AiCopyPanel({
                             )}
                         </div>
                     )}
-                    {fromSaved && <DraftRow label="Specs" text={Object.entries(draft.specs).map(([k, v]) => `${k}: ${v}`).join("\n")} onUse={() => onSpecs(mergeAiSpecs(specPairs, draft.specs))} />}
+                    {specsMissing.length > 0 && (
+                        <DraftRow label="Specs" text={specsMissing.map(([k, v]) => `${k}: ${v}`).join("\n")} onUse={() => onSpecs(mergeAiSpecs(specPairs, draft.specs))} />
+                    )}
                     <AiDraftNotes draft={draft} />
                     {titleDiffers && (
                         <DraftRow label="Online name" text={draft.title} onUse={() => onSubheading(draft.title)} />
