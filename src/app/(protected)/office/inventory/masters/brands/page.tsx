@@ -18,7 +18,8 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableStates";
-import { useApiResource, useDeleteWithConfirm } from "@/shared/hooks";
+import { useApiResource, useDeleteWithConfirm, useListSearch } from "@/shared/hooks";
+import { ListSearchInput } from "@/shared/components/ListSearchInput";
 
 type Row = { id: number; name: string; isActive: boolean };
 const empty = { name: "", isActive: true };
@@ -28,6 +29,7 @@ export default function InventoryBrandsPage() {
     // post-save refetch come from the shared hook. `reload()` keeps the rows on
     // screen while it re-fetches, so a save no longer flashes the table blank.
     const { data: rows = [], loading, error, reload } = useApiResource<Row[]>("/api/inventory/brands", { topics: ["catalogue"] });
+    const { query, setQuery, filtered } = useListSearch(rows, (r) => r.name);
     const [adding, setAdding] = useState(false);
     const [editId, setEditId] = useState<number | null>(null);
     const [form, setForm] = useState(empty);
@@ -76,10 +78,13 @@ export default function InventoryBrandsPage() {
                     <Tag className="size-5" aria-hidden />
                     Brands
                 </h2>
+                <div className="flex flex-wrap items-center gap-2">
+                <ListSearchInput value={query} onChange={setQuery} placeholder="Search brands…" />
                 <Button type="button" onClick={() => { setForm(empty); setEditId(null); setAdding(true); }} disabled={adding}>
                     <Plus className="size-4" />
                     New brand
                 </Button>
+                </div>
             </div>
 
             {adding || editId != null ? (
@@ -119,8 +124,10 @@ export default function InventoryBrandsPage() {
                             <TableLoadingRow colSpan={2} />
                         ) : rows.length === 0 ? (
                             <TableEmptyRow colSpan={2} message={error ? `Failed to load brands: ${error}` : "No brands yet."} />
+                        ) : filtered.length === 0 ? (
+                            <TableEmptyRow colSpan={2} message={`No brands match "${query.trim()}".`} />
                         ) : (
-                            rows.map((r) => (
+                            filtered.map((r) => (
                                 <TableRow key={r.id}>
                                     <TableCell className="font-medium">{r.name}</TableCell>
                                     <TableCell className="text-right space-x-2">

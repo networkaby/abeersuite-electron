@@ -9,7 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { useDeleteWithConfirm } from "@/shared/hooks";
+import { useDeleteWithConfirm, useListSearch } from "@/shared/hooks";
+import { TableEmptyRow } from "@/shared/components/DataTableStates";
+import { ListSearchInput } from "@/shared/components/ListSearchInput";
 import {
     Table,
     TableBody,
@@ -38,6 +40,7 @@ const empty = {
 
 export default function InventoryUnitsPage() {
     const [rows, setRows] = useState<InvUnit[]>([]);
+    const { query, setQuery, filtered } = useListSearch(rows, (u) => `${u.code} ${u.label} ${u.baseUnit?.code ?? ""}`);
     const [loading, setLoading] = useState(true);
     const [adding, setAdding] = useState(false);
     const [editId, setEditId] = useState<number | null>(null);
@@ -132,10 +135,13 @@ export default function InventoryUnitsPage() {
                     </h2>
                     <p className="text-muted-foreground text-sm">Codes are stored uppercase.</p>
                 </div>
+                <div className="flex flex-wrap items-center gap-2">
+                <ListSearchInput value={query} onChange={setQuery} placeholder="Search units…" />
                 <Button type="button" onClick={() => { setForm(empty); setEditId(null); setAdding(true); }} disabled={adding}>
                     <Plus className="size-4" />
                     New unit
                 </Button>
+                </div>
             </div>
 
             {adding || editId != null ? (
@@ -247,8 +253,10 @@ export default function InventoryUnitsPage() {
                                     No units yet.
                                 </TableCell>
                             </TableRow>
+                        ) : filtered.length === 0 ? (
+                            <TableEmptyRow colSpan={5} message={`No units match "${query.trim()}".`} />
                         ) : (
-                            rows.map((u) => (
+                            filtered.map((u) => (
                                 <TableRow key={u.id}>
                                     <TableCell className="font-mono text-sm">{u.code}</TableCell>
                                     <TableCell>{u.label}</TableCell>

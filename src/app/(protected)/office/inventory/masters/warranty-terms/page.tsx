@@ -10,7 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { useDeleteWithConfirm } from "@/shared/hooks";
+import { useDeleteWithConfirm, useListSearch } from "@/shared/hooks";
+import { TableEmptyRow } from "@/shared/components/DataTableStates";
+import { ListSearchInput } from "@/shared/components/ListSearchInput";
 import {
     Table,
     TableBody,
@@ -41,6 +43,7 @@ function formatDays(days: number | null): string {
 
 export default function InventoryWarrantyTermsPage() {
     const [rows, setRows] = useState<Row[]>([]);
+    const { query, setQuery, filtered } = useListSearch(rows, (r) => `${r.name} ${r.description ?? ""}`);
     const [loading, setLoading] = useState(true);
     const [adding, setAdding] = useState(false);
     const [editId, setEditId] = useState<number | null>(null);
@@ -116,10 +119,13 @@ export default function InventoryWarrantyTermsPage() {
                     <ShieldCheck className="size-5" aria-hidden />
                     Warranty terms
                 </h2>
+                <div className="flex flex-wrap items-center gap-2">
+                <ListSearchInput value={query} onChange={setQuery} placeholder="Search warranty terms…" />
                 <Button type="button" onClick={() => { setForm(empty); setEditId(null); setAdding(true); }} disabled={adding}>
                     <Plus className="size-4" />
                     New term
                 </Button>
+                </div>
             </div>
 
             {adding || editId != null ? (
@@ -186,8 +192,10 @@ export default function InventoryWarrantyTermsPage() {
                                     No warranty terms yet.
                                 </TableCell>
                             </TableRow>
+                        ) : filtered.length === 0 ? (
+                            <TableEmptyRow colSpan={3} message={`No warranty terms match "${query.trim()}".`} />
                         ) : (
-                            rows.map((r) => (
+                            filtered.map((r) => (
                                 <TableRow key={r.id}>
                                     <TableCell className="font-medium">{r.name}</TableCell>
                                     <TableCell className="text-right text-muted-foreground text-sm">

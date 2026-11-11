@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { useDeleteWithConfirm, useSessionScroll } from "@/shared/hooks";
+import { useDeleteWithConfirm, useListSearch, useSessionScroll } from "@/shared/hooks";
+import { ListSearchInput } from "@/shared/components/ListSearchInput";
 import {
     Select,
     SelectContent,
@@ -133,7 +134,12 @@ export default function InventoryCategoriesPage() {
 
     // Collapsible hierarchy view: parent → child ordering (via flattenTree) with
     // per-node expand/collapse. Shared with the product-groups master page.
-    const { visible, collapsed, toggle, expandAll, collapseAll, hasTree } = useCollapsibleTree(rows);
+    const tree = useCollapsibleTree(rows);
+    const { collapsed, toggle, expandAll, collapseAll } = tree;
+    // While searching, show matches as a flat list (a parent may not match).
+    const { query, setQuery, filtered, searching } = useListSearch(rows, (c) => `${c.name} ${c.slug ?? ""}`);
+    const hasTree = tree.hasTree && !searching;
+    const visible = searching ? filtered.map((row) => ({ row, depth: 0, hasChildren: false })) : tree.visible;
 
     return (
         <div className="flex h-full flex-col gap-4 overflow-hidden p-6">
@@ -144,7 +150,8 @@ export default function InventoryCategoriesPage() {
                         Collections
                     </h2>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                    <ListSearchInput value={query} onChange={setQuery} placeholder="Search collections…" />
                     {hasTree ? (
                         <>
                             <Button type="button" variant="outline" size="sm" onClick={expandAll}>Expand all</Button>
@@ -253,7 +260,7 @@ export default function InventoryCategoriesPage() {
                         ) : visible.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={4} className="text-muted-foreground">
-                                    No collections yet.
+                                    {searching ? `No collections match "${query.trim()}".` : "No collections yet."}
                                 </TableCell>
                             </TableRow>
                         ) : (

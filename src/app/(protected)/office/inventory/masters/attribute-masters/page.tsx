@@ -18,7 +18,8 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableStates";
-import { useDeleteWithConfirm } from "@/shared/hooks";
+import { useDeleteWithConfirm, useListSearch } from "@/shared/hooks";
+import { ListSearchInput } from "@/shared/components/ListSearchInput";
 import { SearchableMultiSelect } from "@/shared/components/SearchableMultiSelect";
 import { treeSelectOptions } from "@/shared/lib/tree";
 
@@ -37,6 +38,7 @@ const emptyForm = { key: "", name: "", groupIds: [] as number[], sortOrder: "0",
 
 export default function AttributeMastersPage() {
     const [rows, setRows] = useState<Row[]>([]);
+    const { query, setQuery, filtered } = useListSearch(rows, (r) => `${r.key} ${r.name} ${r.groups.map((g) => g.name).join(" ")}`);
     const [groups, setGroups] = useState<Group[]>([]);
     const [loading, setLoading] = useState(true);
     const [adding, setAdding] = useState(false);
@@ -135,10 +137,13 @@ export default function AttributeMastersPage() {
                     <ListChecks className="size-5" aria-hidden />
                     Attribute masters
                 </h2>
+                <div className="flex flex-wrap items-center gap-2">
+                <ListSearchInput value={query} onChange={setQuery} placeholder="Search attributes…" />
                 <Button type="button" onClick={openAdd} disabled={adding}>
                     <Plus className="size-4" />
                     New attribute
                 </Button>
+                </div>
             </div>
 
             <p className="flex-none text-sm text-muted-foreground">
@@ -219,8 +224,10 @@ export default function AttributeMastersPage() {
                             <TableLoadingRow colSpan={4} />
                         ) : rows.length === 0 ? (
                             <TableEmptyRow colSpan={4} message="No attributes yet." />
+                        ) : filtered.length === 0 ? (
+                            <TableEmptyRow colSpan={4} message={`No attributes match "${query.trim()}".`} />
                         ) : (
-                            rows.map((r) => (
+                            filtered.map((r) => (
                                 <TableRow key={r.id}>
                                     <TableCell className="font-mono text-xs">{r.key}</TableCell>
                                     <TableCell className="font-medium">{r.name}</TableCell>

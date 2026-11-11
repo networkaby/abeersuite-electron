@@ -18,7 +18,8 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableStates";
-import { useDeleteWithConfirm } from "@/shared/hooks";
+import { useDeleteWithConfirm, useListSearch } from "@/shared/hooks";
+import { ListSearchInput } from "@/shared/components/ListSearchInput";
 import { parseDecimalInput } from "@/shared/lib/format";
 
 type Row = { id: number; rate: string; label: string; description: string | null; isActive: boolean };
@@ -27,6 +28,7 @@ const empty = { rate: "", label: "", description: "", isActive: true };
 
 export default function GstRatesPage() {
     const [rows, setRows] = useState<Row[]>([]);
+    const { query, setQuery, filtered } = useListSearch(rows, (r) => `${r.rate} ${r.label} ${r.description ?? ""}`);
     const [loading, setLoading] = useState(true);
     const [adding, setAdding] = useState(false);
     const [editId, setEditId] = useState<number | null>(null);
@@ -92,10 +94,13 @@ export default function GstRatesPage() {
                     <Percent className="size-5" aria-hidden />
                     GST Rates
                 </h2>
+                <div className="flex flex-wrap items-center gap-2">
+                <ListSearchInput value={query} onChange={setQuery} placeholder="Search GST rates…" />
                 <Button type="button" onClick={() => { setForm(empty); setEditId(null); setAdding(true); }} disabled={adding}>
                     <Plus className="size-4" />
                     New rate
                 </Button>
+                </div>
             </div>
 
             {adding || editId != null ? (
@@ -154,8 +159,10 @@ export default function GstRatesPage() {
                             <TableLoadingRow colSpan={4} />
                         ) : rows.length === 0 ? (
                             <TableEmptyRow colSpan={4} message="No GST rates yet." />
+                        ) : filtered.length === 0 ? (
+                            <TableEmptyRow colSpan={4} message={`No GST rates match "${query.trim()}".`} />
                         ) : (
-                            rows.map((r) => (
+                            filtered.map((r) => (
                                 <TableRow key={r.id}>
                                     <TableCell className="font-mono">{Number(r.rate).toFixed(2)}%</TableCell>
                                     <TableCell className="font-medium">{r.label}</TableCell>

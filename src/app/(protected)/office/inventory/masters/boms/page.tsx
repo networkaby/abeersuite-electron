@@ -19,7 +19,8 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableStates";
-import { useDeleteWithConfirm } from "@/shared/hooks";
+import { useDeleteWithConfirm, useListSearch } from "@/shared/hooks";
+import { ListSearchInput } from "@/shared/components/ListSearchInput";
 import { InvProductPicker } from "@/modules/inventory/components/InvProductPicker";
 
 type LineForm = { productId: number; qty: string };
@@ -51,6 +52,7 @@ const emptyForm = {
 
 export default function InventoryBomsPage() {
     const [rows, setRows] = useState<Row[]>([]);
+    const { query, setQuery, filtered } = useListSearch(rows, (r) => `${r.name} ${r.description ?? ""} ${r.outputProduct?.sku ?? ""} ${r.outputProduct?.name ?? ""}`);
     const [loading, setLoading] = useState(true);
     const [adding, setAdding] = useState(false);
     const [editId, setEditId] = useState<number | null>(null);
@@ -152,10 +154,13 @@ export default function InventoryBomsPage() {
                         consumption line items. The journal scales consumption proportionally when you change the target output qty.
                     </p>
                 </div>
+                <div className="flex flex-wrap items-center gap-2">
+                <ListSearchInput value={query} onChange={setQuery} placeholder="Search BOMs…" />
                 <Button type="button" onClick={() => { setForm(emptyForm); setEditId(null); setAdding(true); }} disabled={adding || editId != null}>
                     <Plus className="size-4" />
                     New BOM
                 </Button>
+                </div>
             </div>
 
             {(adding || editId != null) && (
@@ -278,8 +283,10 @@ export default function InventoryBomsPage() {
                             <TableLoadingRow colSpan={5} />
                         ) : rows.length === 0 ? (
                             <TableEmptyRow colSpan={5} message="No BOMs yet — create one to enable BOM-driven manufacturing journals." />
+                        ) : filtered.length === 0 ? (
+                            <TableEmptyRow colSpan={5} message={`No BOMs match "${query.trim()}".`} />
                         ) : (
-                            rows.map((r) => (
+                            filtered.map((r) => (
                                 <TableRow key={r.id}>
                                     <TableCell className="font-medium">
                                         {r.name}
