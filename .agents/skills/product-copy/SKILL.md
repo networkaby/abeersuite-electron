@@ -137,13 +137,39 @@ Follow the `writing` lines exactly (house style and keys: `title`, `summary`, `h
 ## 5. Brand and collections
 
 - `brandId` from `masters.brands`, only when `brand` is empty.
-- `collectionIds` from `masters.collections` — **added** to `currentCollections`; nothing is removed, the main one stays.
-- **Always pick collections — read the whole list every time.** A collection is a shop filter or a *buying need*, not only a product type. Add the product to every collection a shopper browsing it would expect to find it in:
-  - its own type ("CCTV › Power Supply", "Computer › Accessories › USB Hub");
-  - a **kit / setup / starter** collection it is part of — a CCTV SMPS, DVR, camera, BNC/DC connector, video cable or HDD all belong in "CCTV Starter Kit"; a mouse, keyboard or webcam in a "Work from home" set;
-  - a use or audience collection that clearly fits (gaming, office, gifting, festival offer only if its theme matches).
-  Skip only a collection that would surprise the shopper. Up to 10 per call.
-- **None added → a note is required**: "No collection added — none fits; suggest creating 'CCTV › Power Supply'". Never leave it silent.
+- `collectionIds` from `masters.collections` — **added** to `currentCollections`; nothing is removed, the first one (★ main) stays.
+
+### How collections work here
+
+**Group = inventory segmentation**: what the item *is*. It drives GST/HSN and the shop category, and it is never yours to change. **Collection = customer segmentation**: *who buys it*, or *what they are setting up*. A product shows in the shop under its group anyway; collections are the extra shelves shoppers browse by need. Never pick a collection only because it repeats the product type.
+
+A product may sit in **several** collections (usually 1–3). **Every shop product needs at least one.** There is no fallback / "Other" collection.
+
+The collections (read `masters.collections` for the ids and any new ones):
+
+| Collection | Customer / setup | Typical items |
+|---|---|---|
+| Shop by Need › Office & Business | offices, businesses | printers, ink, toner, paper, lamination, PVC cards, monitors, desktops, UPS, mouse / keyboard, hubs, cables, phones, intercom |
+| Shop by Need › Home & Family | home users | mouse / keyboard, laptops, home Wi-Fi / 4G cameras, routers, Wi-Fi / BT adapters, speakers, headphones, door locks, inverters |
+| Shop by Need › Shop & Retail | shop owners | printers, billing / POS gear, business software, antivirus, desktops, fingerprint scanners |
+| Shop by Need › Industrial Security | factories, sites | bullet and IP bullet cameras |
+| Shop by Need › PC Upgrade & Repair | technicians, DIY upgraders | RAM, SSD / NVMe, HDD, PC SMPS, cooling, thermal paste, CMOS and laptop batteries, laptop adapters and parts, printer heads, HDD casings, sound cards |
+| Shop by Need › Mobile & Travel | phone users, travellers | earphones, Airdopes, chargers, car chargers, power banks, data cables, OTG, card readers, memory cards, pen drives, holders / tripods, laptop bags |
+| Shop by Need › TV & Home Entertainment | TV and speaker setups | HDMI, AV and audio cables, TV remotes, wall mounts, speakers |
+| Shop by Need › Electrical & Fittings | wiring, fitting, mounting | extension boards, spike guards, switches / sockets, wire, junction boxes, wall plugs, tools, inverter parts |
+| Shop by Need › Gaming | gamers | anything gaming / RGB / esports, graphics cards |
+| Setup Kits › New PC Build | building a PC | cabinet, motherboard, RAM, SSD, PC SMPS, cooling, graphics card |
+| Setup Kits › CCTV & Security Setup | CCTV install | cameras, DVR / NVR, HDD, CCTV power supply, BNC / DC connectors, video cable, racks, junction boxes, memory cards |
+| Setup Kits › Office Network Setup | office LAN / Wi-Fi | switches, routers, network cable, keystone jacks / face plates, LAN cards, racks, cable accessories |
+| Setup Kits › Billing Counter Setup | billing counter | barcode scanners, cash drawers, labels, POS accessories, UPS |
+| Offers › … | set by staff | **never pick** (Best Sellers, Clearance, New Arrivals) |
+
+How to pick:
+1. Who would buy this? Add each **Shop by Need** segment that clearly fits.
+2. Is it part of a setup? Add that **Setup Kit** too. A CCTV power supply goes to CCTV & Security Setup; a PC SMPS goes to New PC Build and PC Upgrade & Repair.
+3. Add **Gaming** only when the item says gaming / RGB / esports, or is a graphics card.
+4. The group looks wrong for the item (a webcam filed as CCTV, an Anchor switch filed as Network Switch, a phone filed as RAM) → pick collections by **what it really is**, and add a note: "Group looks wrong — should be X (GST!)".
+- **Nothing fits → a note is required**: "No collection fits — suggest creating 'Shop by Need › …'". Never leave it silent.
 - **Never invent an id.** Missing brand / collection → a note — except a one-off printed name on an Unbranded / Premium Unbranded product (step 2): that goes in the title and a spec row, never a note.
 - Never put "Premium Unbranded", "Unbranded", "Special" or "Generic" in the title, description or highlights.
 
@@ -174,7 +200,7 @@ Go through this list for every product and write each problem as one short line 
 - **Name**: spelling ("8-in1 HUB-C" → "8-in-1 USB-C"), wrong order, missing model code, a better shop name.
 - **Model No / barcode** fields empty while the box prints them.
 - **Brand / collections**: missing from masters (say what to create), or the set one looks wrong.
-- **Collections**: no collection added, or an obvious kit / use collection missed (e.g. CCTV parts not in "CCTV Starter Kit").
+- **Collections**: none set, a customer segment or Setup Kit missed (e.g. CCTV parts not in "CCTV & Security Setup"), or one picked only because it repeats the product type.
 - **Group** looks wrong for the product (GST!) — say which fits; never change it yourself.
 - **Photos**: another model or old box version, someone else's watermark, blurry / dark, duplicates, no plain product front, no size photo, the main photo is not the best.
 - **Description already there**: a wrong spec, missing compatibility, our support period written as the maker's warranty.
