@@ -795,7 +795,7 @@ export default function InventoryProductsPage() {
                                     ) : null}
                                     <TableHead className={`w-10 ${frozenHead}`} style={{ left: leftIndex }}>#</TableHead>
                                     {showCol("sku") ? <TableHead className={`w-28 ${frozenHead}`} style={{ left: leftSku }}><SortHead field="sku" sort={sort} onSort={cycleSort}>SKU</SortHead></TableHead> : null}
-                                    {showCol("name") ? <TableHead className={`min-w-64 border-r-2 border-border ${frozenHead}`} style={{ left: leftName }}><SortHead field="name" sort={sort} onSort={cycleSort}>Name</SortHead></TableHead> : null}
+                                    {showCol("name") ? <TableHead className={`min-w-64 ${frozenHead} ${GRID_FROZEN_EDGE}`} style={{ left: leftName }}><SortHead field="name" sort={sort} onSort={cycleSort}>Name</SortHead></TableHead> : null}
                                     {showCol("namePart") ? <TableHead className="min-w-40"><SortHead field="namePart" sort={sort} onSort={cycleSort}>Custom</SortHead></TableHead> : null}
                                     {showCol("category") ? (
                                         <TableHead className="min-w-44">

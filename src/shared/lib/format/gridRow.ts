@@ -77,6 +77,8 @@ export function gridRowClass(s: GridRowState): string {
 /// the row's state tint; give it a `left` offset via inline style.
 export const GRID_FROZEN_CELL = "sticky z-10 bg-inherit";
 export const GRID_FROZEN_HEAD = "sticky z-30 bg-inherit";
-/// Edge of the last frozen column — hairline + soft shadow so the freeze reads.
+/// Edge of the last frozen column — a solid 2px line + shadow so the freeze
+/// reads and a half-hidden column clearly sits UNDER it. A shadow, not a
+/// border: in a border-collapse table a sticky cell's border scrolls away.
 export const GRID_FROZEN_EDGE =
-    "shadow-[1px_0_0_var(--border),6px_0_8px_-6px_rgba(0,0,0,0.18)]";
+    "shadow-[2px_0_0_var(--border),8px_0_10px_-6px_rgba(0,0,0,0.28)]";
