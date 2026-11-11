@@ -87,11 +87,22 @@ export async function rebuildTotalsAfterPush(touches: TotalTouches): Promise<voi
     // `recompute*` take a transaction client; the live client has the same surface
     // for the reads and single-row writes they make, and one short transaction per
     // flush keeps the two rebuilds atomic with each other.
-    try {
-        await prismaLive.$transaction(async (tx) => {
+    const rebuild = () =>
+        prismaLive.$transaction(async (tx) => {
             await recomputeProductStock(tx as Prisma.TransactionClient, [...touches.productIds]);
             await recomputeGiftCardBalances(tx, [...touches.giftCardIds]);
         }, { timeout: 30_000 });
+    try {
+        // One retry in place, after a short pause. `carried` lives in memory: on the
+        // office relay (/api/sync/push, serverless) it dies with the request, and on a
+        // counter it dies when the app closes — so the retry that counts is this one.
+        // Anything still missed is repaired by the nightly /api/cron/stock-check.
+        try {
+            await rebuild();
+        } catch {
+            await new Promise((r) => setTimeout(r, 1500));
+            await rebuild();
+        }
     } catch (err) {
         merge(carried, touches);
         console.warn(

@@ -109,7 +109,7 @@ function StatusBadge({ status, attention }: { status: ProductStatus; attention?:
     ) : status.kind === "pending" ? (
         // The reason is written out, not only in a tooltip, so staff can act on it.
         <span className="inline-flex flex-col items-start gap-0.5">
-            <Badge variant="outline" className="gap-1 border-amber-200 bg-amber-50 text-amber-700" title={`Needs ${status.missing.join(", ").toLowerCase()}`}>
+            <Badge variant="outline" className="gap-1 border-amber-200 bg-amber-50 text-amber-700" title={status.missing.length ? `Needs ${status.missing.join(", ").toLowerCase()}` : "All rules met here — click Re-check pending"}>
                 <AlertCircle className="size-3" /> Pending
             </Badge>
             {status.missing.length ? (
@@ -693,7 +693,9 @@ export default function EcommerceProductsPage() {
                                                                 : status.kind === "live"
                                                                 ? "Published — live on the storefront"
                                                                 : status.kind === "pending"
-                                                                    ? `Pending — needs ${status.missing.join(", ").toLowerCase()}; goes live by itself once added`
+                                                                    ? status.missing.length
+                                                                        ? `Pending — needs ${status.missing.join(", ").toLowerCase()}; goes live by itself once added`
+                                                                        : "Pending — all rules are met on this screen; click Re-check pending to update it"
                                                                     : status.kind === "ready"
                                                                             ? `Ready — complete, waiting to be published${status.missing.length ? `; publishing now would wait as Pending (needs ${status.missing.join(", ").toLowerCase()})` : ""}.`
                                                                         : "Unpublished — not worked on yet. Mark ready when it is complete."
