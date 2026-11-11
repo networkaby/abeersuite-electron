@@ -12,7 +12,7 @@ import { updateShopProduct, type ShopProductPatch } from "@/modules/ecommerce/li
 import { parkInAttention } from "@/modules/ecommerce/lib/shopAttention";
 import { PHOTO_LOOK_OPTIONS, arrangeFrom, checkWrittenCopy, writtenCopySchema } from "@/modules/ecommerce/lib/aiVerifiedCopy";
 import { readGivenPages } from "@/modules/ecommerce/lib/aiPageReader";
-import { checkFact, normForCheck } from "@/modules/ecommerce/lib/aiFactCheck";
+import { checkFact, cmOf, gramsOf, normForCheck } from "@/modules/ecommerce/lib/aiFactCheck";
 import { COMPATIBLE_SPEC } from "@/shared/lib/shop/compatibility";
 import { PHOTO_KINDS, PHOTO_REMOVE_REASONS, checklistFrom, isPhotoKind, type PhotoKind, type PhotoRemoveReason, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
 
@@ -493,24 +493,6 @@ export async function readPageForAgent(b: z.infer<typeof readPageSchema>) {
 function specsOf(raw: unknown): Record<string, string> | null {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
     return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, String(v)]));
-}
-
-/** "~0.05 kg" / "50 g" / "1.2kg" → whole grams (rounded up); null when no weight is in the text. */
-function gramsOf(text: string): number | null {
-    const m = /(\d+(?:\.\d+)?)\s*(kg|kgs|g|gm|gms|grams?)\b/i.exec(text.replace(/,/g, ""));
-    if (!m) return null;
-    const g = Number(m[1]) * (m[2].toLowerCase().startsWith("k") ? 1000 : 1);
-    return g > 0 && g <= 1_000_000 ? Math.ceil(g) : null;
-}
-
-/** "116.26 x 36.46 x 100.94 mm" → [12, 4, 11] whole cm (rounded up); null when not three sizes. */
-function cmOf(text: string): [number, number, number] | null {
-    const m = /(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)\s*(mm|cm|in|inch|inches)?/i.exec(text.replace(/,/g, ""));
-    if (!m) return null;
-    const unit = (m[4] ?? "cm").toLowerCase();
-    const f = unit === "mm" ? 0.1 : unit.startsWith("in") ? 2.54 : 1;
-    const out = [m[1], m[2], m[3]].map((x) => Math.ceil(Number(x) * f)) as [number, number, number];
-    return out.every((x) => x > 0 && x <= 1000) ? out : null;
 }
 
 // ── Review mode: notes only ───────────────────────────────────────────────────

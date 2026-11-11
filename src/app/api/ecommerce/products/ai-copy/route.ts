@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
-import { AiDataCheckError, aiErrorMessage, generateProductCopy, isAiConfigured } from "@/modules/ecommerce/lib/aiProductCopy";
+import { AiDataCheckError, aiErrorMessage, generateProductCopy, isAiConfigured, type ProductCopy } from "@/modules/ecommerce/lib/aiProductCopy";
 import { parkInAttention } from "@/modules/ecommerce/lib/shopAttention";
 import { generatePhotoAdvice, generateVerifiedCopy } from "@/modules/ecommerce/lib/aiVerifiedCopy";
 import { type AiCopyFlow } from "@/shared/lib/constants/ai";
@@ -78,6 +78,9 @@ export async function POST(req: Request) {
             },
         });
         if (!p) return NextResponse.json({ error: "Product not found" }, { status: 404 });
+        // Bulk and Photos only skip the extras — no one is there to review them.
+        const inApp = !data.photosOnly && !data.bulk;
+        const masters = inApp ? await pickableMasters() : null;
         const base = {
             name: data.name ?? p.name,
             brand: p.brand?.name,
@@ -86,9 +89,9 @@ export async function POST(req: Request) {
             bulk: data.bulk,
             premium: data.premium,
             // Offers are set by staff, never by the AI. Cached 5 min (pickableMasters).
-            collections: data.photosOnly || data.bulk
-                ? []
-                : (await pickableMasters()).collections.filter((c) => !/^offers\b/i.test(c.path)),
+            collections: inApp ? masters!.collections.filter((c) => !/^offers\b/i.test(c.path)) : [],
+            // Brand list → brand pick, staff notes, shipping and label codes (in-app runs only).
+            brands: inApp ? masters!.brands : undefined,
         };
         const flow = data.photosOnly ? "verified" : data.flow ?? (await loadAiSetup()).copyFlow;
         const run = data.photosOnly ? generatePhotoAdvice : generateVerifiedCopy;
@@ -104,6 +107,7 @@ export async function POST(req: Request) {
                 photoAi: data.photoAi,
             })
             : await generateProductCopy(base);
+        if (inApp && "notes" in copy) await applyInAppExtras(data.productId, copy as ProductCopy);
         return NextResponse.json(copy);
     } catch (e) {
         // A clash parks the product in Attention, the same as Claude's (owner,
@@ -121,6 +125,38 @@ export async function POST(req: Request) {
         const reason = aiErrorMessage(e);
         if (reason) return NextResponse.json({ error: reason }, { status: 503 });
         return handleApiError(e, "AI could not write this product");
+    }
+}
+
+/**
+ * The in-app AI's server-side writes (owner, 2026-11-11 — staff still review
+ * before Save as ready): Model No. / barcode read off the label go straight
+ * onto the product when ours are empty — the form has no box for them. A
+ * barcode already on another product, or a known brand missing from the
+ * master, parks the product in Attention instead. Mutates `copy` (notes, parked).
+ */
+async function applyInAppExtras(productId: number, copy: ProductCopy) {
+    const notes = (copy.notes ??= []);
+    const attention = [...(copy.attention ?? [])];
+    const pick = copy.codePick;
+    if (pick?.modelNo) {
+        const n = await prisma.invProduct.updateMany({ where: { id: productId, OR: [{ modelNo: null }, { modelNo: "" }] }, data: { modelNo: pick.modelNo } });
+        if (n.count) notes.push(`Model No. set to "${pick.modelNo}" — printed on the box.`);
+    }
+    if (pick?.barcode) {
+        const owner = await prisma.invProductCode.findUnique({ where: { value: pick.barcode }, select: { productId: true, product: { select: { sku: true } } } });
+        if (owner && owner.productId !== productId) {
+            attention.push(`Barcode ${pick.barcode} printed on the box is already on SKU ${owner.product.sku} — same product twice?`);
+        } else if (!owner) {
+            await prisma.invProductCode.create({ data: { productId, kind: pick.barcode.length === 12 ? "UPC" : "EAN", value: pick.barcode } });
+            notes.push(`Barcode ${pick.barcode} added — printed on the box.`);
+        }
+    }
+    if (attention.length) {
+        copy.parked = await parkInAttention([productId], attention.join("\n"), "In-app AI", "any")
+            .then((r) => r.parked > 0)
+            .catch(() => false);
+        notes.unshift(...attention.map((a) => `ATTENTION — ${a}`));
     }
 }
 

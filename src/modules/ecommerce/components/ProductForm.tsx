@@ -754,6 +754,16 @@ export default function ProductForm({
                     onSpecs={setSpecPairs}
                     collectionIds={canEditMasters ? collectionIds : undefined}
                     onCollections={canEditMasters ? setCollectionIds : undefined}
+                    brandId={canEditMasters ? brandId : undefined}
+                    onBrand={canEditMasters ? setBrandId : undefined}
+                    onShipping={(s) => {
+                        // Empty boxes only — a weight or size staff typed wins.
+                        const fill = (set: (fn: (v: string) => string) => void, n?: number) => { if (n) set((v) => (v.trim() ? v : String(n))); };
+                        fill(setWeightGrams, s.weightGrams);
+                        fill(setLengthCm, s.lengthCm);
+                        fill(setBreadthCm, s.breadthCm);
+                        fill(setHeightCm, s.heightCm);
+                    }}
                     photoChecklist={photoChecklist}
                     onPhotoChecklist={savePhotoChecklist}
                     onGallery={setGalleryUrls}

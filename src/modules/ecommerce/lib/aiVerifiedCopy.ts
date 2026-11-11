@@ -2,11 +2,11 @@ import "server-only";
 import { z } from "zod";
 import { loadAiSetup, stepHasKey } from "@/shared/lib/ai/aiKeys";
 import { AI_PHOTO_LIMITS, type AiStep } from "@/shared/lib/constants/ai";
-import { checkFact, normForCheck, numbersOnPage } from "@/modules/ecommerce/lib/aiFactCheck";
+import { checkFact, cmOf, gramsOf, normForCheck, numbersOnPage } from "@/modules/ecommerce/lib/aiFactCheck";
 import { findProductPages, type PageRead } from "@/modules/ecommerce/lib/aiPageReader";
 import { loadResearch, saveResearch } from "@/modules/ecommerce/lib/aiResearchStore";
 import {
-    AiDataCheckError, OUTPUT_KEYS, assembleDescription, collectionLines, pickCollections, callParsed, callStep, cleanSpecs, copySchema, photoLines, photoParts,
+    AiDataCheckError, OUTPUT_KEYS, assembleDescription, collectionLines, inAppLines, pickCollections, withBrand, callParsed, callStep, cleanSpecs, copySchema, photoLines, photoParts,
     productLines, text, textList, type ProductCopy, type ProductCopyInput,
 } from "@/modules/ecommerce/lib/aiProductCopy";
 import { PHOTO_GROUPS, PHOTO_KINDS, PHOTO_REMOVE_REASONS, checklistFrom, isPhotoKind, type PhotoArrange, type PhotoKind, type PhotoRemoveReason, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
@@ -74,6 +74,8 @@ const checkSchema = z.object({
     labelWebsite: z.preprocess(text, z.string()).default(""),
     branded: z.boolean().default(false),
     searchQuery: z.preprocess(text, z.string()).default(""),
+    labelModel: z.preprocess(text, z.string()).default(""),
+    labelBarcode: z.preprocess(text, z.string()).default(""),
 });
 type Check = z.infer<typeof checkSchema>;
 
@@ -98,6 +100,7 @@ function checkPrompt(p: VerifiedCopyInput, photoCount: number): string {
         "1. clashes: every real disagreement between our typed data and the photo (typed data that is empty is never a clash) — a different brand or model, a different printed number (capacity, wattage, length, count printed on the box), or a photo that shows a different product. Not missing information, not spelling of the same thing (\"2 Yrs\" = \"2 Years\").",
         "   Warranty: our shop support period being SHORTER than the warranty printed on the box is normal, never a clash. Only a shop period LONGER than the printed warranty is a clash.",
         "   A count you can only see (sockets on one side, ports from one angle) is not printed — it can never be a clash.",
+        "   Brand typed as Unbranded / Premium Unbranded / Special / Generic is our no-name label: any little-known name printed on the item is NOT a clash.",
         "2. labelFacts: facts PRINTED on the product, box or label, copied as printed (label → value).",
         "3. seen: things only visible in the photo, worded \"at least N …\" for counts (label → value).",
         "4. identity: labels of the facts that tell this product apart from its sister models (capacity, volume, size, wattage, page yield, socket count…).",
@@ -105,7 +108,9 @@ function checkPrompt(p: VerifiedCopyInput, photoCount: number): string {
         "6. labelWebsite: a website printed on the box, else \"\".",
         "7. branded: true if this is a known brand with an exact model or part code (from the label or our data).",
         "8. searchQuery: brand + exact model/part code to find its official page; with no code but a website on the box, brand + product type + the main printed spec (e.g. \"CP PLUS Premium Series CCTV power supply 12V 10A\"); else \"\".",
-        'Return ONLY JSON: {"clashes":[{"field":string,"typed":string,"photo":string}],"labelFacts":{},"seen":{},"identity":[],"labelCodes":[],"labelWebsite":string,"branded":boolean,"searchQuery":string}',
+        "9. labelModel: the model number printed on the product or box, exactly as printed, else \"\".",
+        "10. labelBarcode: the digits printed under the EAN / UPC barcode on the box, else \"\".",
+        'Return ONLY JSON: {"clashes":[{"field":string,"typed":string,"photo":string}],"labelFacts":{},"seen":{},"identity":[],"labelCodes":[],"labelWebsite":string,"branded":boolean,"searchQuery":string,"labelModel":string,"labelBarcode":string}',
     ].filter(Boolean).join("\n");
 }
 
@@ -131,6 +136,8 @@ function writePrompt(p: VerifiedCopyInput, c: Check, pages: PageRead[]): string 
         '"pages": [{"page": "A", "accepted": boolean, "why": string}] for every page;',
         '"specSources": for every key in "specs", where the value came from: "label" or the page letter;',
         ...collectionLines(p.collections),
+        ...inAppLines(p),
+        ...(p.brands ? ['"shipping": {"weight": as printed, "dimensions": "L x B x H unit" as printed, "source": "label" or the page letter} — the PACKAGE weight and size if given, else the product\'s own; only values printed on the label or an accepted page; {} if none;'] : []),
         '"dataFlags": places where our typed data DISAGREES with the label or an accepted page, in simple words. Typed data that is empty or shorter is not a flag; our shop support period being shorter than the maker\'s warranty is not a flag.',
     ].filter(Boolean).join("\n");
 }
@@ -174,7 +181,7 @@ function photoPrompt(p: VerifiedCopyInput, ours: number, web: number): string {
         "- Box sides: list a side only if this product's box would carry something useful there (specs, feature list, compatibility list, barcode, contents). Never a blank side or one that repeats another.",
         "- Feel photos: always consider them, fitted to the product (a cable: size, working; a speaker: in_use, cinematic). size = any photo that lets the buyer gauge the size.",
         "- Never list a kind that makes no sense for this product.",
-        ours ? `remove: our photos (numbered 1 to ${ours} in the order given) that should go — why "duplicate" (almost the same picture as another of ours: keep the better one, list only the weaker; a box shot and a product shot are never duplicates), "irrelevant" (not this product, only a logo, a poster unrelated to it), or "quality" (blurry, dark, tiny, cut off, heavy watermark). note: a few words for staff. Empty when every photo is fine.` : "",
+        ours ? `remove: our photos (numbered 1 to ${ours} in the order given) that should go — why "duplicate" (almost the same picture as another of ours: keep the better one, list only the weaker; a box shot and a product shot are never duplicates), "irrelevant" (not this product, only a logo, a poster unrelated to it), or "quality" (blurry, dark, tiny, cut off, heavy watermark — our own shop logo or a camera date stamp is fine). note: a few words for staff. Empty when every photo is fine.` : "",
         web ? "web: for every web photo, its number, its kind, and same=false if it shows a different product, a different model or colour, only a logo, or is almost the same picture as one of ours." : "",
         ours > 1 ? "order: our photo numbers in the best order, leaving out any in remove — first a clear, sharp product front (it is the shop card and the search-result photo), then the other product sides and close-ups, then the box, then the feel photos." : "",
         ours ? [
@@ -323,6 +330,11 @@ export const writtenCopySchema = copySchema.extend({
     pages: z.preprocess((v) => (Array.isArray(v) ? v : []), z.array(z.object({ page: z.preprocess(text, z.string()), accepted: z.boolean().default(false), why: z.preprocess(text, z.string()).default("") }))).default([]),
     specSources: factMap.default({}),
     dataFlags: textList(8).default([]),
+    shipping: z.preprocess((v) => (v && typeof v === "object" && !Array.isArray(v) ? v : {}), z.object({
+        weight: z.preprocess(text, z.string()).default(""),
+        dimensions: z.preprocess(text, z.string()).default(""),
+        source: z.preprocess(text, z.string()).default(""),
+    })).default({ weight: "", dimensions: "", source: "" }),
 });
 export type WrittenCopy = z.infer<typeof writtenCopySchema>;
 
@@ -392,6 +404,7 @@ export function checkWrittenCopy(
         title: w.title, summary: w.summary, description: w.description, howToUse: w.howToUse,
         highlights: highlights.length ? highlights : [w.title], warranty, compatibility,
         specs: cleanSpecs(specs), unsure: [...new Set(unsure)], collections: w.collections,
+        printedBrand: w.printedBrand, knownBrand: w.knownBrand, notes: w.notes,
     };
     const rejected = found.pages.flatMap((pg, i) => (accepted.has(letter(i))
         ? []
@@ -443,6 +456,7 @@ export async function generateVerifiedCopy(p: VerifiedCopyInput): Promise<Produc
     return {
         ...checked.copy,
         collectionPicks: pickCollections(w.collections, p.collections),
+        ...(p.brands && inAppExtras(p, check, found.pages, trusted, checked.copy, w)),
         // Only photos from pages the copy kept: a rejected page may be another version.
         // A run without step 5 leaves the saved checklist alone (no photoChecklist sent).
         ...(photos5 && { photoChecklist: photos5.checklist }),
@@ -451,5 +465,48 @@ export async function generateVerifiedCopy(p: VerifiedCopyInput): Promise<Produc
             photoSuggestions: (photos5?.suggestions ?? web.map((x) => ({ ...x, kind: null })))
                 .filter((s) => trusted.some((pg) => pg.site === s.site)),
         }),
+    };
+}
+
+/**
+ * In-app extras on a Verified run (owner, 2026-11-11): brand from the master,
+ * shipping proven on its source, and Model No. / barcode read off the label
+ * for the route to write when ours are empty. Never invents: each value must
+ * be on the label or an accepted page.
+ */
+function inAppExtras(
+    p: VerifiedCopyInput, check: Check, pages: PageRead[], trusted: PageRead[],
+    copy: { notes?: string[] } & Parameters<typeof withBrand>[0], w: WrittenCopy,
+): Pick<ProductCopy, "brandPick" | "notes" | "attention" | "shippingPick" | "codePick"> {
+    const b = withBrand(copy, p);
+    const notes = [...b.notes];
+    const printedNorm = normForCheck([...Object.entries(check.labelFacts).flat(), ...Object.entries(check.seen).flat(), ...check.labelCodes].join(" "));
+
+    // Shipping: weight / size only when the named source really prints them.
+    let shippingPick: ProductCopy["shippingPick"];
+    const src = w.shipping.source.trim();
+    if (w.shipping.weight || w.shipping.dimensions) {
+        const i = src.length === 1 ? src.toUpperCase().charCodeAt(0) - 65 : -1;
+        const norm = src.toLowerCase() === "label" ? printedNorm : i >= 0 && trusted.includes(pages[i]) ? pages[i].norm : null;
+        if (!norm) notes.push(`Shipping size not used: "${src || "no source"}" is not the label or an accepted page.`);
+        else {
+            const g = w.shipping.weight && checkFact(norm, "Weight", w.shipping.weight) ? gramsOf(w.shipping.weight) : null;
+            const d = w.shipping.dimensions && checkFact(norm, "Dimensions", w.shipping.dimensions) ? cmOf(w.shipping.dimensions) : null;
+            if (g || d) shippingPick = { ...(g && { weightGrams: g }), ...(d && { lengthCm: d[0], breadthCm: d[1], heightCm: d[2] }) };
+        }
+    }
+
+    // Model No. / barcode: printed on the label, and only where ours are empty.
+    const codePick: ProductCopy["codePick"] = {};
+    const model = check.labelModel.trim();
+    if (!p.modelNo?.trim() && model && printedNorm.includes(normForCheck(model))) codePick.modelNo = model;
+    const digits = check.labelBarcode.replace(/\D/g, "");
+    if (!p.codes.length && /^(\d{8}|\d{12,13})$/.test(digits)) codePick.barcode = digits;
+
+    return {
+        ...(b.brandPick && { brandPick: b.brandPick }),
+        notes, attention: b.attention,
+        ...(shippingPick && { shippingPick }),
+        ...((codePick.modelNo || codePick.barcode) && { codePick }),
     };
 }

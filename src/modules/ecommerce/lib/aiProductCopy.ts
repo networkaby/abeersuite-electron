@@ -35,6 +35,8 @@ export type ProductCopyInput = {
     premium?: boolean;
     /** Collections the AI may pick from (full paths, Offers left out) — none = no picking. */
     collections?: { id: number; path: string }[];
+    /** Brand master the AI may pick from — given → it also returns printedBrand / notes (in-app runs). */
+    brands?: { id: number; name: string }[];
 };
 
 // The model's JSON drifts run to run (a spec value as a list or number, an
@@ -78,6 +80,11 @@ export const copySchema = z.object({
     unsure: textList(12).default([]),
     /** Collection paths picked from the given list (collectionLines) — mapped to ids by pickCollections. */
     collections: textList(5).default([]),
+    /** In-app runs (inAppLines): the brand printed on the item, and whether it is a well-known maker. */
+    printedBrand: looseText.default(""),
+    knownBrand: z.preprocess((v) => v === true || v === "true", z.boolean()).default(false),
+    /** In-app runs: problems in our data / photos for staff. */
+    notes: textList(10).default([]),
 });
 
 export type Copy = z.infer<typeof copySchema>;
@@ -92,8 +99,17 @@ export type ProductCopy = Copy & {
     note: string;
     /** Our own data looks wrong (typed name / specs vs photo or a matched page) — staff fix by hand. */
     flags: string[];
-    /** Claude's notes for staff: a brand / collection to create, a spelling mistake, a wrong group… */
+    /** Notes for staff (Claude's or the in-app AI's): a brand / collection to create, a spelling mistake, a wrong group… */
     notes?: string[];
+    /** In-app: a brand from the master to set — the form fills an empty Brand, else offers Use. */
+    brandPick?: { id: number; name: string };
+    /** In-app Verified: shipping proven on the label / an accepted page — the form fills empty boxes only. */
+    shippingPick?: { weightGrams?: number; lengthCm?: number; breadthCm?: number; heightCm?: number };
+    /** In-app: reasons to park in Attention (the route parks and sets `parked`). */
+    attention?: string[];
+    parked?: boolean;
+    /** In-app Verified: Model No. / barcode read off the label, for the route to write when ours are empty. */
+    codePick?: { modelNo?: string; barcode?: string };
     /** Verified only: where each spec came from ("Label" or a site name). */
     specSources?: Record<string, string>;
     /** Verified only: what kinds of photo the gallery has / misses (photoChecklist.ts). */
@@ -115,6 +131,54 @@ export function collectionLines(list: ProductCopyInput["collections"]): string[]
         '"collections": 1-3 entries copied EXACTLY from the list below. A collection is a CUSTOMER segment — who buys this ("Shop by Need › …") or the setup it belongs to ("Setup Kits › …") — not the product type. Add "Gaming" only for gaming / RGB / esports items or graphics cards. [] only if none fits.',
         `Collections: ${list.map((c) => c.path).join(" | ")}`,
     ];
+}
+
+/** Office-only quality levels for no-name goods (old names included) — not a real maker. */
+export const UNBRANDED_RE = /^(premium unbranded|unbranded\+?|special|generic)$/i;
+
+/** Prompt lines for the in-app extras (brand, staff notes) — empty unless a brand list was given. */
+export function inAppLines(p: ProductCopyInput): string[] {
+    if (!p.brands) return [];
+    return [
+        '"printedBrand": the brand name printed on the product or box, exactly as printed, else "";',
+        '"knownBrand": true only if that printed brand is a well-known maker sold under that name across India; false for a little-known or no-name label;',
+        '"notes": short lines for shop staff about problems in OUR data or photos — a misspelt product name, a product group that looks wrong for the item (GST), a model number or barcode printed but missing from the name, and: if the FIRST photo carries any logo, watermark, date stamp or text overlay (our own shop logo included), "Pick a clean primary photo — Google and Meta reject logos on the main image". A logo or watermark on the other photos is fine. [] if nothing.',
+    ];
+}
+
+const brandKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/**
+ * Brand from the master only (owner, 2026-11-11). A set real brand is left
+ * alone (a printed mismatch is the photo check's clash). Empty or Unbranded:
+ * the printed brand when it is in the list; a well-known brand missing from
+ * the list → Attention; otherwise Unbranded, the printed name staying in the title.
+ */
+export function resolveBrand(c: Copy, p: ProductCopyInput): { brandPick?: { id: number; name: string }; notes: string[]; attention?: string } {
+    const list = p.brands ?? [];
+    const cur = p.brand?.trim() ?? "";
+    if (!list.length || (cur && !UNBRANDED_RE.test(cur))) return { notes: [] };
+    const printed = c.printedBrand.trim();
+    const hit = printed ? list.find((b) => brandKey(b.name) === brandKey(printed)) : undefined;
+    if (hit && !UNBRANDED_RE.test(hit.name)) {
+        return hit.name === cur ? { notes: [] } : { brandPick: hit, notes: [`Brand set to "${hit.name}" — printed on the item.`] };
+    }
+    if (printed && c.knownBrand) {
+        return { notes: [], attention: `Brand "${printed}" is printed on the item but is not in the Brand list — create it, then set it.` };
+    }
+    if (cur) return { notes: [] };
+    const unb = list.find((b) => /^unbranded$/i.test(b.name)) ?? list.find((b) => /^generic$/i.test(b.name));
+    if (!unb) return { notes: ["No brand set — no \"Unbranded\" brand in the list to use."] };
+    return {
+        brandPick: unb,
+        notes: [`Brand set to ${unb.name}${printed ? ` — printed name "${printed}" kept in the title` : ""}. Change to Premium Unbranded if this is the good-quality line.`],
+    };
+}
+
+/** resolveBrand folded into the answer: brandPick, notes (AI's + brand's), attention reasons. */
+export function withBrand(c: Copy, p: ProductCopyInput): { brandPick?: { id: number; name: string }; notes: string[]; attention: string[] } {
+    const b = resolveBrand(c, p);
+    return { ...(b.brandPick && { brandPick: b.brandPick }), notes: [...c.notes, ...b.notes], attention: b.attention ? [b.attention] : [] };
 }
 
 /** The AI's picked paths → real collections (exact path, else a unique leaf name). */
@@ -188,6 +252,7 @@ function draftPrompt(p: ProductCopyInput, photoCount: number): string {
         "",
         ...OUTPUT_KEYS,
         ...collectionLines(p.collections),
+        ...inAppLines(p),
     ].filter(Boolean).join("\n");
 }
 
@@ -307,6 +372,7 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
         ...final,
         flow: "direct",
         collectionPicks: pickCollections(draft.collections, p.collections),
+        ...withBrand(final, p),
         sources: [],
         flags: [],
         note: photos.length

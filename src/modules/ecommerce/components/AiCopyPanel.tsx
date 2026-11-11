@@ -85,6 +85,9 @@ export default function AiCopyPanel({
     onSpecs,
     collectionIds,
     onCollections,
+    brandId,
+    onBrand,
+    onShipping,
     photoChecklist,
     onPhotoChecklist,
     onAddPhotos,
@@ -108,6 +111,11 @@ export default function AiCopyPanel({
     collectionIds?: number[];
     /** Adds the AI's picks after the ones set — never removes or reorders. */
     onCollections?: (ids: number[]) => void;
+    /** The form's brand. Left out → the AI's brand pick is not shown. */
+    brandId?: number | null;
+    onBrand?: (id: number) => void;
+    /** Shipping proven on the label / a page — the form fills only its empty boxes. */
+    onShipping?: (s: NonNullable<ProductCopy["shippingPick"]>) => void;
     /** Saved checklist under Product image — the AI's newer one replaces it. */
     photoChecklist: PhotoChecklist | null;
     onPhotoChecklist: (c: PhotoChecklist) => void;
@@ -171,6 +179,9 @@ export default function AiCopyPanel({
                 onCollections(copy.collectionPicks.map((c) => c.id));
                 filled.push("collections");
             }
+            if (onBrand && brandId == null && copy.brandPick) { onBrand(copy.brandPick.id); filled.push("brand"); }
+            if (onShipping && copy.shippingPick) { onShipping(copy.shippingPick); filled.push("shipping (empty boxes)"); }
+            if (copy.parked) { toast.info("Parked in Attention — see the notes"); onParked?.(); }
             toast.success(filled.length ? `AI filled ${filled.join(", ")} — review, then Save` : "AI draft ready — use what you like, then Save");
         } catch (e) {
             if (!onClash(e)) toast.error(extractApiError(e, "AI could not write this product"));
@@ -204,6 +215,7 @@ export default function AiCopyPanel({
     const specsMissing = draft
         ? Object.entries(draft.specs).filter(([k, v]) => k.trim() && v.trim() && !haveSpec.has(k.trim().toLowerCase()))
         : [];
+    const brandDiffers = draft?.brandPick && onBrand && brandId != null && brandId !== draft.brandPick.id ? draft.brandPick : null;
     // AI collection picks the product is not in yet.
     const collectionsMissing = draft?.collectionPicks && collectionIds && onCollections
         ? draft.collectionPicks.filter((c) => !collectionIds.includes(c.id))
@@ -258,6 +270,7 @@ export default function AiCopyPanel({
                         <DraftRow label="Collections" text={collectionsMissing.map((c) => c.path).join("\n")}
                             onUse={() => onCollections?.([...(collectionIds ?? []), ...collectionsMissing.map((c) => c.id)])} />
                     )}
+                    {brandDiffers && <DraftRow label="Brand" text={brandDiffers.name} onUse={() => onBrand?.(brandDiffers.id)} />}
                     <AiDraftNotes draft={draft} />
                     {titleDiffers && (
                         <DraftRow label="Online name" text={draft.title} onUse={() => onSubheading(draft.title)} />
