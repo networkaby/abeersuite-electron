@@ -28,8 +28,8 @@ Full design: `docs/ai-product-copy-pipeline.md`.
 
 ## Setup (ask once if missing)
 
-- `ABEERSUITE_URL` — the office site, e.g. `https://office.example.com` (no trailing `/`).
-- `PRODUCT_COPY_API_KEY` — the **Claude — Product copy** key from Settings → Incoming API.
+- `https://office.networkservice.in` — the office site, e.g. `https://office.example.com` (no trailing `/`).
+- `balkelaharami@420` — the **Claude — Product copy** key from Settings → Incoming API.
 
 Never print the key or write it into a file. `401` on any call → wrong key, or the
 card is switched off — stop and tell the owner.
