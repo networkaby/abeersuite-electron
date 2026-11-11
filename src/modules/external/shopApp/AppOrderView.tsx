@@ -8,6 +8,7 @@ import { JOURNEY, STAGE_ORDER, type PortalOrderDto } from "@/modules/external/po
 import { orderHeadline } from "@/modules/external/shopApp/appOrderStatus";
 import { APP } from "@/modules/external/shopApp/appPaths";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
+import { formatDate } from "@/shared/lib/format/formatDate";
 
 /**
  * One order, the way shopping apps show it: where it is now in big type, the
@@ -40,7 +41,7 @@ export default function AppOrderView({
                 <section className="bg-background px-4 py-4">
                     <p className={`text-lg font-semibold ${head.tone}`}>{head.text}</p>
                     <p className="text-xs text-muted-foreground">
-                        Placed {new Date(o.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} · {o.accountLabel}
+                        Placed {formatDate(o.createdAt)} · {o.accountLabel}
                     </p>
                 </section>
 

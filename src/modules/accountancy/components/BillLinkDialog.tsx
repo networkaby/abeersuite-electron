@@ -36,6 +36,7 @@ import { round2 } from "@/shared/lib/format/moneyInr";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { useValueChange } from "@/shared/hooks/useValueChange";
 import { planLinks, reconcilePicks, sumPicks, EPS, type LinkableDoc } from "@/modules/accountancy/lib/billLinkPlan";
+import { formatDateCompact } from "@/shared/lib/format/formatDate";
 
 /** Money that already moved cannot be settled by creating more money — it needs
  *  linking to a bill instead. The API refuses these too; this only hides the
@@ -323,7 +324,7 @@ export function BillLinkDialog({
                                                 <span className="ml-2 text-xs text-muted-foreground">{labelFor(d)}</span>
                                             </td>
                                             <td className="px-3 py-2 text-xs text-muted-foreground">
-                                                {new Date(d.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}
+                                                {formatDateCompact(d.date)}
                                             </td>
                                             <td className="px-3 py-2 text-right font-mono text-xs">{fmt(d.face)}</td>
                                             <td className="px-3 py-2 text-right font-mono text-xs text-muted-foreground">

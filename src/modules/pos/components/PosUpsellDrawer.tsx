@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatInr } from "@/shared/lib/format";
 import type { CouponHit, OnTopHit, PosOffer, ProductOption } from "@/modules/pos/lib/posDraftTypes";
 import { PosOfferCard } from "@/modules/pos/components/PosOffersPanel";
+import { formatDate } from "@/shared/lib/format/formatDate";
 
 export function PosUpsellDrawer({
     open,
@@ -177,7 +178,7 @@ export function PosUpsellDrawer({
                                                 <div className="mt-0.5 text-[10px] text-muted-foreground">
                                                     {isHistory && lastDate ? (
                                                         <span className="font-medium text-emerald-700 dark:text-emerald-300">
-                                                            {lastDate.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })}
+                                                            {formatDate(lastDate)}
                                                             {lastPrice != null ? ` · paid ${formatInr(lastPrice)}` : ""}
                                                         </span>
                                                     ) : isHot ? (

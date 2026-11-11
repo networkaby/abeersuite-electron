@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { Prisma } from "@/generated/prisma/client";
 import { isMissedCall } from "@/shared/lib/calls";
 import { phoneMatchKey } from "@/shared/lib/format";
+import { formatDate } from "@/shared/lib/format/formatDate";
 
 /**
  * Reconnect — the customer's own unified timeline.
@@ -97,7 +98,7 @@ function callDirection(data: unknown): "in" | "out" | undefined {
 /** dd Mon — compact human date for talking points. */
 function shortDate(iso: string): string {
     const d = new Date(iso);
-    return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    return formatDate(d);
 }
 
 /** "3 weeks ago" style relative age, Indian-English simple. */

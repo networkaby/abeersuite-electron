@@ -21,6 +21,7 @@ import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
 import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
 import { BillNotifyStatus } from "@/shared/components/BillNotifyStatus";
 import { useValueChange } from "@/shared/hooks/useValueChange";
+import { formatDate } from "@/shared/lib/format/formatDate";
 
 type Voucher = {
     id:             number;
@@ -181,7 +182,7 @@ export function InvVoucherDetail({ basePath, label, formPath }: {
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <Card label="Date">{new Date(voucher.date).toLocaleDateString()}</Card>
+                <Card label="Date">{formatDate(voucher.date)}</Card>
                 {voucher.branch && (
                     <Card label="Branch">{voucher.branch.name}</Card>
                 )}
@@ -193,7 +194,7 @@ export function InvVoucherDetail({ basePath, label, formPath }: {
                 )}
                 <Card label="Created by">
                     {voucher.createdBy.name}
-                    {voucher.postedAt && <p className="text-muted-foreground text-xs">Posted {new Date(voucher.postedAt).toLocaleDateString()}</p>}
+                    {voucher.postedAt && <p className="text-muted-foreground text-xs">Posted {formatDate(voucher.postedAt)}</p>}
                 </Card>
                 {voucher.journalEntryId && (
                     <Card label="GL Journal Entry">

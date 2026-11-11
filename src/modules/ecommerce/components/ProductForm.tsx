@@ -37,6 +37,7 @@ import { useSession } from "next-auth/react";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { AttentionDialog } from "@/modules/ecommerce/components/AttentionDialog";
+import { formatDate } from "@/shared/lib/format/formatDate";
 
 
 const sameList = (a: string[], b: string[]) => a.length === b.length && a.every((u, i) => u === b[i]);
@@ -930,7 +931,7 @@ export default function ProductForm({
                         <p className="font-medium">
                             {shopStatus === "ATTENTION" ? "Parked in Attention" : "Was parked in Attention"}
                             {initial.shopAttentionBy ? ` by ${initial.shopAttentionBy}` : ""}
-                            {initial.shopAttentionAt ? ` on ${new Date(initial.shopAttentionAt).toLocaleDateString("en-IN")}` : ""}:
+                            {initial.shopAttentionAt ? ` on ${formatDate(initial.shopAttentionAt)}` : ""}:
                         </p>
                         <p className="mt-1 whitespace-pre-line">{attention}</p>
                         <p className="mt-1 text-orange-800/80 dark:text-orange-300/80">

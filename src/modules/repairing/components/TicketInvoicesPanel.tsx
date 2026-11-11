@@ -5,6 +5,7 @@ import axios from "axios";
 import Link from "next/link";
 import { Receipt } from "lucide-react";
 import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
+import { formatDate } from "@/shared/lib/format/formatDate";
 
 // Reads InvVoucher rows linked to this ticket. The legacy Invoice/ticketId
 // path was retired with the Invoice → InvVoucher consolidation (Layer 3c,
@@ -53,7 +54,7 @@ export default function TicketInvoicesPanel({ ticketId }: { ticketId: number }) 
                             ) : (
                                 <span className="font-mono text-muted-foreground">{v.reference}</span>
                             )}
-                            <span className="text-muted-foreground">{new Date(v.date).toLocaleDateString()}</span>
+                            <span className="text-muted-foreground">{formatDate(v.date)}</span>
                             <span className="font-medium">₹{Number(v.totalAmount).toFixed(2)}</span>
                             <span className="text-xs uppercase tracking-wide text-muted-foreground">{v.status}</span>
                         </li>

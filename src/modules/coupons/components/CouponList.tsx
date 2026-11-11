@@ -24,6 +24,7 @@ import {
 } from "@/modules/coupons/lib/couponShare";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { formatDate } from "@/shared/lib/format/formatDate";
 
 const channelTone: Record<Coupon["channels"], string> = {
     BOTH: "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",
@@ -48,7 +49,7 @@ const CHAN_FILTERS = [
 ] as const;
 
 const DAY_MS = 86_400_000;
-const fmtDate = (iso: string) => new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+const fmtDate = (iso: string) => formatDate(iso);
 
 /// Validity read for a decision: what the date means right now, and its tone.
 function validity(c: Coupon): { label: string; tone: "muted" | "amber" | "rose" } {

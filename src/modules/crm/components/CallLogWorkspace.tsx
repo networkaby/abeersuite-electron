@@ -23,6 +23,7 @@ import { extractApiError } from "@/shared/lib/api";
 import { useRealtimeTopics } from "@/shared/hooks";
 import { usePartySearch } from "@/shared/hooks/usePartySearch";
 import { useValueChange } from "@/shared/hooks/useValueChange";
+import { formatDate } from "@/shared/lib/format/formatDate";
 
 // ── Wire type (mirrors GET /api/calls) ──────────────────────────────────────────
 type Direction = "INCOMING" | "OUTGOING" | "INTERNAL" | "UNKNOWN";
@@ -94,7 +95,7 @@ function toDayStr(d: Date): string {
 
 /** Day label used for the group-header rows that break the list up by date. */
 function dayLabel(iso: string): string {
-    return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+    return formatDate(iso);
 }
 
 export default function CallLogWorkspace() {

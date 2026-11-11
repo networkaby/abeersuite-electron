@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { ChevronDown, Download, ListOrdered, ReceiptText, Truck } from "lucide-react";
+import { formatDate } from "@/shared/lib/format/formatDate";
 
 // One order on the portal My Orders list. "View" expands the card IN PLACE —
 // no page hop — with two views: Details (items, totals, address, payment,
@@ -55,7 +56,7 @@ export default function PortalOrderCard({ order }: { order: PortalOrderDto }) {
                     <div className="space-y-1">
                         <p className="font-medium">Order #{order.id}</p>
                         <p className="text-xs text-muted-foreground">
-                            {new Date(order.createdAt).toLocaleDateString("en-IN")} · {order.accountLabel}
+                            {formatDate(order.createdAt)} · {order.accountLabel}
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">

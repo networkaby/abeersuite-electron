@@ -44,7 +44,7 @@ import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
-import { todayIso } from "@/shared/lib/format/formatDate";
+import { formatDate, todayIso } from "@/shared/lib/format/formatDate";
 
 // Per-type placeholder text for "heading" kind instances — the text a blank
 // field falls back to, i.e. what the component's own hardcoded default says.
@@ -168,7 +168,7 @@ function InstanceSummary({ inst }: { inst: HomeSectionInstance }) {
  */
 function formatDateShort(iso: string): string {
     const d = new Date(`${iso}T00:00:00`);
-    return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+    return formatDate(d);
 }
 
 /**

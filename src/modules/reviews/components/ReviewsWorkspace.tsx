@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PaginationBar } from "@/shared/components/PaginationBar";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { cn } from "@/shared/lib/format/utils";
+import { formatDate } from "@/shared/lib/format/formatDate";
 
 type Review = {
     id: number;
@@ -38,7 +39,7 @@ type ListReply = {
 type Replied = "" | "no" | "draft" | "yes";
 
 const PLATFORM_LABEL: Record<string, string> = { GOOGLE: "Google" };
-const dateText = (iso: string) => new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+const dateText = (iso: string) => formatDate(iso);
 
 function Stars({ n }: { n: number | null }) {
     if (!n) return <span className="text-xs text-muted-foreground">no stars</span>;

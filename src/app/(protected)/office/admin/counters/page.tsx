@@ -28,6 +28,7 @@ import { getGatewayProvider } from "@/modules/pos/lib/paymentGateways";
 import type { PosPayChannel } from "@/generated/prisma/client";
 import { splitExtensions } from "@/shared/lib/counter/idRange";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { formatDate } from "@/shared/lib/format/formatDate";
 
 type Branch = { id: string; number: number; name: string; isActive: boolean };
 
@@ -672,7 +673,7 @@ export default function CountersAdminPage() {
                                                             </span>
                                                         )}
                                                         {c.boundDeviceId && (
-                                                            <span className="flex items-center gap-1 text-foreground" title={`Locked to ${c.boundDeviceLabel ?? "a computer"}${c.boundAt ? ` since ${new Date(c.boundAt).toLocaleDateString()}` : ""}`}>
+                                                            <span className="flex items-center gap-1 text-foreground" title={`Locked to ${c.boundDeviceLabel ?? "a computer"}${c.boundAt ? ` since ${formatDate(c.boundAt)}` : ""}`}>
                                                                 <Lock size={11} /> Locked to {c.boundDeviceLabel ?? "a computer"}
                                                             </span>
                                                         )}
@@ -681,7 +682,7 @@ export default function CountersAdminPage() {
                                                                 <KeyRound size={11} /> Office key revoked
                                                             </span>
                                                         ) : c.officeKeyIssuedAt && (
-                                                            <span className="flex items-center gap-1" title={`Renewed every 30 days; last ${new Date(c.officeKeyIssuedAt).toLocaleDateString()}`}>
+                                                            <span className="flex items-center gap-1" title={`Renewed every 30 days; last ${formatDate(c.officeKeyIssuedAt)}`}>
                                                                 <KeyRound size={11} /> Office key
                                                             </span>
                                                         )}

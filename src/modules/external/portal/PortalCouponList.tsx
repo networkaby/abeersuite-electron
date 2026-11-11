@@ -1,8 +1,9 @@
 import { Percent, Sparkles } from "lucide-react";
 import type { PortalCoupon } from "@/modules/external/portal/portalCoupons";
 import { formatRupees } from "@/shared/lib/format/moneyInr";
+import { formatDate } from "@/shared/lib/format/formatDate";
 
-const day = (iso: string) => new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+const day = (iso: string) => formatDate(iso);
 
 /** The coupons a profile can use — ticket-style cards. The portal and the customer app share it. */
 export default function PortalCouponList({ coupons }: { coupons: PortalCoupon[] }) {

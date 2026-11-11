@@ -32,6 +32,7 @@ import {
     planLinks, autoLinkOrder, fitPicksToAmount, OPENING_SCALAR_ID, EPS,
     type LinkableDoc, type BillPicks,
 } from "@/modules/accountancy/lib/billLinkPlan";
+import { formatDateCompact } from "@/shared/lib/format/formatDate";
 
 export type { BillPicks };
 
@@ -401,7 +402,7 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
                                             <span className="block text-[10px] text-muted-foreground">
                                                 {noRef
                                                     ? "no reference yet — made into a bill on save"
-                                                    : new Date(d.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}
+                                                    : formatDateCompact(d.date)}
                                             </span>
                                         </td>
                                         <td className="py-1 pl-2 text-right font-mono tabular-nums text-muted-foreground whitespace-nowrap">{fmt(d.face)}</td>

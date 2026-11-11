@@ -1,8 +1,9 @@
 import { Gift, Star } from "lucide-react";
 import type { PortalWallet } from "@/modules/external/portal/portalWallet";
 import { formatRupees } from "@/shared/lib/format/moneyInr";
+import { formatDate } from "@/shared/lib/format/formatDate";
 
-const day = (iso: string) => new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+const day = (iso: string) => formatDate(iso);
 
 /**
  * A profile's wallet: loyalty points (balance, worth, next expiry, history) and

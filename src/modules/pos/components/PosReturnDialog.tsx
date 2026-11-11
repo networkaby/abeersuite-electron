@@ -27,6 +27,7 @@ import { fmt } from "@/shared/lib/format/moneyInr";
 import { extractApiError } from "@/shared/lib/api";
 import { openCashDrawer, printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
 import { SavePrintButtons, savePrintKey } from "@/modules/pos/components/SavePrintButtons";
+import { formatDate } from "@/shared/lib/format/formatDate";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -82,7 +83,7 @@ function InvoiceResultList({
                         <span className="font-semibold">₹{fmt(Number(inv.totalAmount))}</span>
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                        {inv.account?.name ?? "—"} · {new Date(inv.issueDate).toLocaleDateString("en-IN")}
+                        {inv.account?.name ?? "—"} · {formatDate(inv.issueDate)}
                         {inv.returns.length > 0 && (
                             <span className="ml-2 text-amber-600">
                                 · {inv.returns.length} return(s) already issued
@@ -418,7 +419,7 @@ export function PosReturnDialog({
                                 <div>
                                     <span className="font-mono font-medium">{selected.number}</span>
                                     <span className="ml-2 text-muted-foreground text-xs">
-                                        {selected.account?.name} · {new Date(selected.issueDate).toLocaleDateString("en-IN")}
+                                        {selected.account?.name} · {formatDate(selected.issueDate)}
                                     </span>
                                 </div>
                                 <button

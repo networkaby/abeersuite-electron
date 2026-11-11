@@ -12,6 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { extractApiError } from "@/shared/lib/api";
 import { parseSignedInput, formatInr } from "@/shared/lib/format";
+import { formatDate } from "@/shared/lib/format/formatDate";
 
 type LedgerRow = {
     id: number;
@@ -28,7 +29,7 @@ type Wallet = { balance: number; value: number; totalEarned: number; totalRedeem
 const REASON_LABEL: Record<LedgerRow["reason"], string> = {
     EARN_SALE: "Earned", REDEEM_SALE: "Redeemed", REVERSAL_RETURN: "Return reversal", ADMIN_ADJUST: "Adjustment", MILESTONE_BONUS: "Milestone bonus",
 };
-const fmtDate = (s: string) => new Date(s).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+const fmtDate = (s: string) => formatDate(s);
 
 export function LoyaltyPanel({ accountId, canManage = false }: { accountId: number; canManage?: boolean }) {
     // One customer's wallet: a reply for the customer the screen has moved away

@@ -10,6 +10,7 @@ import OnlinePayPanel from "@/modules/external/shop/OnlinePayPanel";
 import TrackPurchaseOnce from "@/modules/external/shop/TrackPurchaseOnce";
 import { DELIVERY_STAGE_LABEL } from "@/modules/delivery/lib/shiprocketStatus";
 import { customerOrderTicketWhere } from "@/modules/external/portal/portalOrders";
+import { formatDate } from "@/shared/lib/format/formatDate";
 
 /** Within the last two days — a new sale, not an old order opened again. */
 function isRecent(at: Date): boolean {
@@ -135,7 +136,7 @@ export default async function ShopOrderConfirmationPage({
                     </Badge>
                     {order.paidAt ? (
                         <span className="text-muted-foreground text-xs">
-                            Paid on {order.paidAt.toLocaleDateString("en-IN")}
+                            Paid on {formatDate(order.paidAt)}
                         </span>
                     ) : null}
                 </div>

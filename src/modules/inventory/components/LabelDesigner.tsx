@@ -55,6 +55,7 @@ import {
 } from "@/modules/inventory/lib/labelItems";
 import { secretBucketLabel, secretDateCode } from "@/modules/inventory/lib/secretDateCode";
 import type { LabelTemplate } from "@/shared/lib/schemas/orgDefaultsSchemas";
+import { formatDateCompact } from "@/shared/lib/format/formatDate";
 
 // ── Public types (shape lives in lib/labelItems — re-exported for call sites) ──
 
@@ -663,7 +664,7 @@ export function LabelDesigner({
                                 <TableBody>
                                     {filteredVouchers.map((v) => (
                                         <TableRow key={v.id} className="cursor-pointer" onClick={() => pickVoucher(v)}>
-                                            <TableCell className="text-xs tabular-nums">{new Date(v.date).toLocaleDateString("en-IN", { year: "2-digit", month: "short", day: "2-digit" })}</TableCell>
+                                            <TableCell className="text-xs tabular-nums">{formatDateCompact(v.date)}</TableCell>
                                             <TableCell className="text-xs">{v.type}</TableCell>
                                             <TableCell className="font-mono text-xs">{v.reference}</TableCell>
                                             <TableCell className="text-xs">{v.partyName ?? "—"}</TableCell>

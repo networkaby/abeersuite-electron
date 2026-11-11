@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Heart, MessageCircle, MessageSquare, Send } from "lucide-react";
 import UserAvatar from "@/shared/components/UserAvatar";
 import { extractApiError } from "@/shared/lib/api";
+import { formatDate } from "@/shared/lib/format/formatDate";
 
 // Shared types + presentational bits for the portal social surfaces (profile
 // page, feed, and the profile viewer) so the three never drift.
@@ -46,7 +47,7 @@ export function timeAgo(iso: string): string {
     if (hrs < 24) return `${hrs}h ago`;
     const days = Math.floor(hrs / 24);
     if (days < 30) return `${days}d ago`;
-    return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    return formatDate(iso);
 }
 export function joinedDate(iso: string): string {
     return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });

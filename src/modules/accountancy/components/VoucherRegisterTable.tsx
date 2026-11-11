@@ -36,6 +36,7 @@ import { removeVoucherLinks } from "@/modules/accountancy/lib/removeVoucherLinks
 import { clearPartyCache } from "@/modules/accountancy/components/PartyOutstandingsPanel";
 import type { CombinedRow } from "@/modules/accountancy/hooks/useDayBook";
 import { moduleTableHeadStyle } from "@/shared/lib/format/moduleTheme";
+import { formatDateCompact } from "@/shared/lib/format/formatDate";
 
 // ── Line shapes ───────────────────────────────────────────────────────────
 
@@ -270,9 +271,7 @@ export function VoucherRegisterTable({
 
                                     {/* Date */}
                                     <td className="px-3 py-2.5 text-muted-foreground text-xs whitespace-nowrap">
-                                        {new Date(r.date).toLocaleDateString("en-GB", {
-                                            day: "2-digit", month: "short", year: "2-digit",
-                                        })}
+                                        {formatDateCompact(r.date)}
                                     </td>
 
                                     {/* Type — with optional status pill when statusInline */}

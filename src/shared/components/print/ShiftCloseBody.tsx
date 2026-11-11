@@ -12,6 +12,7 @@
 
 import React from "react";
 import { fmt } from "@/shared/lib/format/moneyInr";
+import { formatDate } from "@/shared/lib/format/formatDate";
 
 export interface ShiftCloseBodyData {
     shiftId: number;
@@ -114,7 +115,7 @@ export function ShiftCloseBody({
     const durationStr = data.durationStr || (closedAt ? `${durationH}h ${durationM}m` : "In progress");
 
     const fmtTime = (d: Date) => d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
-    const fmtDateStr = (d: Date) => d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+    const fmtDateStr = (d: Date) => formatDate(d);
 
     const opening = toRupees(data.openingFloatPaise);
     const movement = toRupees(data.tillMovementPaise);

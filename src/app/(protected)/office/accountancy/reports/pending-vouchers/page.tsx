@@ -30,6 +30,7 @@ import { usePagedQuery } from "@/shared/hooks/usePagedQuery";
 import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 import { useEscape } from "@/shared/hooks/useEscape";
 import { useValueChange } from "@/shared/hooks/useValueChange";
+import { formatDateCompact } from "@/shared/lib/format/formatDate";
 
 type PendingType = "CHALLAN" | "GRN" | "REJECTION_IN" | "REJECTION_OUT";
 
@@ -243,7 +244,7 @@ function SettleDialog({
     if (!target) return null;
 
     const settleTypes = SETTLES_BY[target.type];
-    const dateStr = new Date(target.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" });
+    const dateStr = formatDateCompact(target.date);
 
     return (
         <Dialog open={!!target} onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -300,7 +301,7 @@ function SettleDialog({
                                     {linkable.map((v) => (
                                         <tr key={v.id} className="border-b last:border-0 hover:bg-muted/30">
                                             <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
-                                                {new Date(v.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}
+                                                {formatDateCompact(v.date)}
                                             </td>
                                             <td className="px-3 py-2">
                                                 <span className={`text-xs px-2 py-0.5 border font-medium rounded-sm ${SETTLING_COLOR[v.type] ?? "bg-muted text-muted-foreground border-border"}`}>
@@ -607,7 +608,7 @@ export default function PendingVouchersPage() {
                                                             onContextMenu={(e) => { e.preventDefault(); toggleExpand(r.id); }}
                                                         >
                                                             <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">
-                                                                {new Date(r.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}
+                                                                {formatDateCompact(r.date)}
                                                             </td>
                                                             <td className="px-3 py-2.5">
                                                                 <span className={`text-xs px-2 py-0.5 border font-medium rounded-sm ${TYPE_COLOR[r.type]}`}>
@@ -774,7 +775,7 @@ export default function PendingVouchersPage() {
                                                                 {l.branchName && <span className="ml-2 text-muted-foreground">{l.branchName}</span>}
                                                             </td>
                                                             <td className="px-3 py-1.5 text-xs text-muted-foreground">
-                                                                {new Date(l.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}
+                                                                {formatDateCompact(l.date)}
                                                             </td>
                                                             <td className="px-3 py-1.5 text-right font-mono text-xs tabular-nums text-cyan-700">
                                                                 {l.direction === "in" ? `+${l.quantity}` : ""}

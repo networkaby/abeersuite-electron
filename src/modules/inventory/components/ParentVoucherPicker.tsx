@@ -14,6 +14,7 @@ import { Loader2, X, Link2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useValueChange } from "@/shared/hooks/useValueChange";
+import { formatDateCompact } from "@/shared/lib/format/formatDate";
 
 export type ParentVoucherLine = {
     id:          number;
@@ -185,7 +186,7 @@ export function ParentVoucherPicker({
                                         <div className="flex items-center justify-between gap-2 text-xs">
                                             <span className="font-mono text-primary">{r.reference}</span>
                                             <span className="text-muted-foreground tabular-nums">
-                                                {new Date(r.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}
+                                                {formatDateCompact(r.date)}
                                             </span>
                                         </div>
                                         <div className="flex items-center justify-between gap-2 mt-0.5 text-xs text-muted-foreground">

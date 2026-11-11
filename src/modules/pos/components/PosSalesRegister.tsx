@@ -28,6 +28,7 @@ import { useApiResource } from "@/shared/hooks/useApiResource";
 import { useValueChange } from "@/shared/hooks/useValueChange";
 import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 import { EscapeBack } from "@/shared/components/EscapeBack";
+import { formatDate } from "@/shared/lib/format/formatDate";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -440,9 +441,7 @@ export function PosSalesRegister() {
                                                     {s.customerName ?? "Walk-in"}
                                                 </td>
                                                 <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">
-                                                    {new Date(s.date).toLocaleDateString("en-IN", {
-                                                        day: "2-digit", month: "short", year: "numeric",
-                                                    })}
+                                                    {formatDate(s.date)}
                                                 </td>
                                                 {tab === "returns" && (
                                                     <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">

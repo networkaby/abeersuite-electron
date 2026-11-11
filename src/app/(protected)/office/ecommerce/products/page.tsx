@@ -56,6 +56,7 @@ import { useSession } from "next-auth/react";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { formatDate } from "@/shared/lib/format/formatDate";
 
 // Sticky-header scroll frame (costing-page pattern): a plain overflow-auto div,
 // with the shadcn Table's own container overflow overridden so the header stays
@@ -689,7 +690,7 @@ export default function EcommerceProductsPage() {
                                                         label="Shop status"
                                                         value={
                                                             status.kind === "attention"
-                                                                ? `Attention — parked${p.shopAttentionBy ? ` by ${p.shopAttentionBy}` : ""}${p.shopAttentionAt ? ` on ${new Date(p.shopAttentionAt).toLocaleDateString("en-IN")}` : ""}: ${p.shopAttention ?? "—"}. Off the shop; check it, then Save as draft or Save as ready.`
+                                                                ? `Attention — parked${p.shopAttentionBy ? ` by ${p.shopAttentionBy}` : ""}${p.shopAttentionAt ? ` on ${formatDate(p.shopAttentionAt)}` : ""}: ${p.shopAttention ?? "—"}. Off the shop; check it, then Save as draft or Save as ready.`
                                                                 : status.kind === "draft"
                                                                 ? `Draft — being worked on, not in the shop.${p.shopAttention ? ` Was parked for: ${p.shopAttention}` : ""}`
                                                                 : status.kind === "live"

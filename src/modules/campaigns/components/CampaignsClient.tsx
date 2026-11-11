@@ -11,6 +11,7 @@ import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { CAMPAIGN_CHANNELS, CAMPAIGN_STATUSES, type CampaignRow } from "@/modules/campaigns/lib/campaign";
 import CampaignEditor from "./CampaignEditor";
+import { formatDate } from "@/shared/lib/format/formatDate";
 
 const STATUS_TONE: Record<string, string> = {
     DRAFT: "bg-muted text-muted-foreground",
@@ -109,7 +110,7 @@ export default function CampaignsClient() {
                                     )}
                                 </div>
                                 <div className="shrink-0 text-right text-xs text-muted-foreground">
-                                    <div>{new Date(c.sentAt ?? c.updatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</div>
+                                    <div>{formatDate(c.sentAt ?? c.updatedAt)}</div>
                                     {c.createdBy && <div>{c.createdBy.name}</div>}
                                 </div>
                             </button>

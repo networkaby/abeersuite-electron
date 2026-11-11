@@ -11,6 +11,7 @@ import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { POST_CHANNELS, channelOf, pendingChannels, type PostRow } from "@/modules/campaigns/lib/post";
 import CampaignsHeader from "./CampaignsHeader";
 import PostsCalendar, { postTime, weekStart } from "./PostsCalendar";
+import { formatDate } from "@/shared/lib/format/formatDate";
 
 type View = "calendar" | "list";
 type Tab = "queue" | "drafts" | "sent";
@@ -162,7 +163,7 @@ export default function PostsQueue() {
                             </Button>
                             <span className="px-1 text-sm font-medium">
                                 {week && weekEnd
-                                    ? `${week.toLocaleDateString("en-IN", { day: "numeric", month: "short" })} – ${weekEnd.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`
+                                    ? `${week.toLocaleDateString("en-IN", { day: "numeric", month: "short" })} – ${formatDate(weekEnd)}`
                                     : "…"}
                             </span>
                             <Button size="sm" variant="outline" onClick={() => data && setWeek(weekStart(new Date(data.at)))}>

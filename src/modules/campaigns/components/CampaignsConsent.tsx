@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import CampaignsHeader from "./CampaignsHeader";
+import { formatDate } from "@/shared/lib/format/formatDate";
 
 type Consent = {
     emails: { email: string; createdAt: string }[];
@@ -19,7 +20,7 @@ type Consent = {
     canEdit: boolean;
 };
 
-const date = (s: string) => new Date(s).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+const date = (s: string) => formatDate(s);
 
 /** Who said no to marketing, from what we actually record. */
 export default function CampaignsConsent() {
