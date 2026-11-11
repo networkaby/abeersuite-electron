@@ -115,6 +115,8 @@ export async function buildProductNaming(
 /// `all` is used when the naming convention itself changes. An empty scope is a
 /// no-op (guards against silently rewriting the whole catalog).
 export interface RegenNameScope {
+    /** Exact products — a single edit that changed a naming source. */
+    ids?: number[];
     brandId?: number;
     categoryId?: number;
     groupId?: number;
@@ -151,6 +153,7 @@ export async function regenerateProductNames(
 ): Promise<RegenNameResult> {
     const where = scope.all
         ? {}
+        : scope.ids?.length ? { id: { in: scope.ids } }
         : scope.brandId != null ? { brandId: scope.brandId }
         : scope.categoryId != null ? { categoryId: scope.categoryId }
         : scope.groupId != null ? { groupId: scope.groupId }
@@ -190,6 +193,15 @@ export async function regenerateProductNames(
     }
 
     return { scanned: products.length, updated: updates.length };
+}
+
+/// Product fields the generated name is built from. A save touching any of them
+/// rebuilds that product's name on the server — whichever screen or API saved it
+/// (owner, 2026-11-12: the e-commerce form, AI and bulk edits used to leave names stale).
+export const NAME_SOURCE_FIELDS = ["brandId", "groupId", "categoryId", "warrantyTermId", "unitId", "modelNo", "namePart", "attrsJson"] as const;
+
+export function touchesName(patch: object): boolean {
+    return NAME_SOURCE_FIELDS.some((k) => (patch as Record<string, unknown>)[k] !== undefined);
 }
 
 /// Best-effort wrapper for the master / naming-config edit routes: a name

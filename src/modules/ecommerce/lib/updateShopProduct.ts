@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { shopSlugClash } from "@/shared/lib/shop/shopSlug";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
+import { regenerateProductNamesSafe, touchesName } from "@/modules/inventory/lib/regenerateNames";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError, prismaUniqueError } from "@/shared/lib/api";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
@@ -247,7 +248,11 @@ export async function updateShopProduct(
             else await syncMainCollections(tx, [pid]);
             return tx.invProduct.findUniqueOrThrow({ where: { id: pid }, include: shopProductInclude });
         });
-        return { product: { ...invProductToAdmin(p, bands), variantAttrGaps: gaps.get(pid) ?? [] } };
+        // Group / brand / warranty changed here → rebuild the stored name (server-side, same builder as everywhere).
+        const named = touchesName(b)
+            ? (await regenerateProductNamesSafe({ ids: [pid] }), await prisma.invProduct.findUniqueOrThrow({ where: { id: pid }, include: shopProductInclude }))
+            : p;
+        return { product: { ...invProductToAdmin(named, bands), variantAttrGaps: gaps.get(pid) ?? [] } };
     } catch (e: unknown) {
         const conflict = prismaUniqueError(e, "SKU or slug already exists");
         if (conflict) return { response: conflict };

@@ -229,6 +229,7 @@ export default function NamingConventionPage() {
     const [cfg, setCfg] = useState<NamingConfigShape>(DEFAULT_NAMING_CONFIG);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [rebuilding, setRebuilding] = useState(false);
     useEffect(() => {
         axios
             .get<NamingConfigShape>("/api/inventory/naming-config")
@@ -263,6 +264,19 @@ export default function NamingConventionPage() {
         }
     };
 
+    // After imports or bulk clean-ups. A normal product edit already rebuilds its own name.
+    const rebuildAll = async () => {
+        setRebuilding(true);
+        try {
+            const { data } = await axios.post<{ scanned: number; updated: number }>("/api/inventory/naming-config/regenerate");
+            toast.success(`Names rebuilt — ${data.updated} changed of ${data.scanned} products`);
+        } catch (e: unknown) {
+            toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Rebuild failed");
+        } finally {
+            setRebuilding(false);
+        }
+    };
+
     if (loading) {
         return <p className="text-sm text-muted-foreground">Loading…</p>;
     }
@@ -275,9 +289,15 @@ export default function NamingConventionPage() {
                     <Wand2 className="size-5" aria-hidden />
                     Product naming convention
                 </h2>
-                <Button type="button" onClick={save} disabled={saving}>
-                    {saving ? "Saving…" : "Save"}
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button type="button" variant="outline" onClick={rebuildAll} disabled={saving || rebuilding}
+                        title="Rebuild every product's name from this convention now — products with no Custom part keep their typed name; online names and slugs are not touched">
+                        {rebuilding ? "Rebuilding…" : "Rebuild all names"}
+                    </Button>
+                    <Button type="button" onClick={save} disabled={saving}>
+                        {saving ? "Saving…" : "Save"}
+                    </Button>
+                </div>
             </div>
 
             <p className="text-sm text-muted-foreground">

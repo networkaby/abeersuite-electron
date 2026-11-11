@@ -1,3 +1,4 @@
+import { regenerateProductNamesSafe, touchesName } from "@/modules/inventory/lib/regenerateNames";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { shopSlugClash } from "@/shared/lib/shop/shopSlug";
 import { Prisma } from "@/generated/prisma/client";
@@ -226,6 +227,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 Sentry.captureException(err, { tags: { source: "price-recompute", productId: String(id) } });
                 console.error("[price-recompute] failed for product", id, err);
             });
+        }
+        // A naming source changed → rebuild this product's name on the server, so
+        // every caller (grid, dialog, e-commerce form, AI, bulk) gets the same name.
+        if (touchesName(b)) {
+            await regenerateProductNamesSafe({ ids: [id] });
+            const fresh = await prisma.invProduct.findUnique({ where: { id }, select: { name: true } });
+            if (fresh) row.name = fresh.name;
         }
         return NextResponse.json(row);
     } catch (e) {
