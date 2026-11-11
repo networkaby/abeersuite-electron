@@ -136,7 +136,11 @@ Follow the `writing` lines exactly (house style and keys: `title`, `summary`, `h
 
 ## 5. Brand and collections
 
-- `brandId` from `masters.brands`, only when `brand` is empty.
+- `brandId` from `masters.brands` **only** — same rule as the in-app AI:
+  - `brand` is a real brand already → leave it (a printed mismatch is a clash, step 2).
+  - `brand` empty or Unbranded / Premium Unbranded → the printed brand **if it is in the list**.
+  - A **well-known** brand printed but **missing from the list** → stop: notes route (Attention) with "Brand X is printed but not in the Brand list — create it, then set it".
+  - Little-known or no name, `brand` empty → the **Unbranded** id, plus a note "Change to Premium Unbranded if this is the good-quality line".
 - `collectionIds` from `masters.collections` — **added** to `currentCollections`; nothing is removed, the first one (★ main) stays.
 
 ### How collections work here
@@ -198,10 +202,11 @@ Only this exact model and colour; no watermark, no other brand's logo, sharp. Pr
 Go through this list for every product and write each problem as one short line in `notes`:
 
 - **Name**: spelling ("8-in1 HUB-C" → "8-in-1 USB-C"), wrong order, missing model code, a better shop name.
-- **Model No / barcode** fields empty while the box prints them.
+- **Model No / barcode** empty while the box prints them — give the exact value to copy in (the in-app AI fills them itself). A printed barcode that is already on another product → say which SKU (same product twice?).
 - **Brand / collections**: missing from masters (say what to create), or the set one looks wrong.
 - **Collections**: none set, a customer segment or Setup Kit missed (e.g. CCTV parts not in "CCTV & Security Setup"), or one picked only because it repeats the product type.
 - **Group** looks wrong for the product (GST!) — say which fits; never change it yourself.
+- **Primary photo** with any logo, watermark, date stamp or text overlay (our own shop logo too) → "Pick a clean primary photo — Google and Meta reject logos on the main image". Our logo or a camera stamp on the other photos is fine.
 - **Photos**: another model or old box version, someone else's watermark, blurry / dark, duplicates, no plain product front, no size photo, the main photo is not the best.
 - **Description already there**: a wrong spec, missing compatibility, our support period written as the maker's warranty.
 - **Shipping**: weight or size missing and not found anywhere.
