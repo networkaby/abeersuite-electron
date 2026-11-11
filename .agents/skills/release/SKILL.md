@@ -11,7 +11,7 @@ Sources of truth: `AGENTS.md` §8 and `docs/commands.md` §0 (the convention) an
 
 ## Ground rules
 
-- **`/release urgent` = no questions.** The owner has already decided: the notes go out as `[urgent]`, the `.env` variant is taken as it is (state `APP_MODE` / `LANDING_PAGE` in the report), and the notes are written and committed without waiting. Run the whole list straight through. Failures (non-fast-forward, `verify:package`, publish) still stop.
+- **`/release urgent` = no questions.** The owner has already decided: `minimumCounterVersion` is raised to this version, the `.env` variant is taken as it is (state `APP_MODE` / `LANDING_PAGE` in the report), and the notes are written and committed without waiting. Run the whole list straight through. Failures (non-fast-forward, `verify:package`, publish) still stop.
 
 - **`main` only.** Never release from `dev`, `d_office`, or a detached HEAD. The tag the script mints points at `HEAD`, so releasing off `dev` puts `v<version>` on a commit `main` does not contain and the two remotes stop agreeing about what that version is.
 - **Two source remotes, both must end level.** `origin` = `devloperakramul/abeersuite-electron`, `production` = `akramuljakir/abeersuite-electron`.
@@ -76,22 +76,22 @@ Read the actual diffs behind those commits — subject lines are not enough to k
 
 - **Customer-readable.** Plain Indian English, project vocabulary (`docs/vocabulary.md`). "The Offline Policies page now works", not "fix(policies): persist toggles to DB".
 - **Grouped by what a user notices** — one `##` heading per area (counter setup, billing, sync, printing), each with short bullets.
-- **First line is `# v<version>`**, optionally `[urgent]`. Then one short paragraph saying who should install it and why.
+- **First line is `# v<version>`** — never `[urgent]`; the release script adds or strips it from the minimum. Then one short paragraph saying who should install it and why.
 - **Call out a schema change explicitly** if the release adds or changes a table — say the counter must be updated first, and that its sync pauses until it is. The order is not a preference: `schemaGuard` halts a counter on a column the SOURCE has and the replica lacks, so migrating Supabase first makes every till print `SCHEMA DRIFT — refusing to sync` and stop **all** its tables, not just the changed one. Build first, migrate within minutes (`docs/commands.md` §0).
 
-**The urgency tier decides how counters take it** (`docs/commands.md` §9, `electron/updateManager.ts`):
+**`minimumCounterVersion` in `package.json` decides how counters take it** (`docs/commands.md` §9, `electron/updateManager.ts`). It is the oldest version a counter may keep running; each counter compares its own version with it.
 
-| Tier | Written as | What a counter sees |
+| Decision | When | What a counter sees |
 | --- | --- | --- |
-| quiet | *(no marker — the default)* | Corner card: Restart now / Later. Installs only at a safe moment — empty POS cart, window in the tray or on the login page. Never forced. |
-| urgent | `[urgent]` in the **first line only** | Blocking dialog with a countdown. Installs at 30 min regardless of what the cashier is doing. |
+| **Raise** it to this version → urgent | A migration, a common API, sync, sign-in / permissions, the counter app's own core, a serious POS bug | Below the minimum: blocking dialog with a countdown, installs at 30 min regardless. |
+| **Leave** it → quiet | One module or screen: bank reconciliation, a report, UI, colours | Corner card: Restart now / Later. Never installs by itself, not even on quit — staff may skip it until the next urgent one. |
 | schema | *(not chosen here — a counter picks this itself when its sync worker halts on `SCHEMA DRIFT`)* | Same dialog, schema wording. Installs at 5 min regardless. |
 
-`[urgent]` only when **every counter must restart today**. It interrupts people mid-sale — do not spend it on a nice-to-have.
+Raising it interrupts cashiers mid-sale — do not spend it on a nice-to-have. A new migration since the last release **must** raise it; `release-electron.ts --preflight` (first in `pnpm electron:release`) refuses otherwise. The version number does not decide urgency — bump it by the kind of change, as before.
 
 **The auto-generated part appends below yours.** `scripts/release-electron.ts` reads `RELEASE_NOTES.md`, then appends `### What's Changed in v<version>` — the raw `git log` since the previous tag plus a compare link — joined with a `---` separator. So the file holds **only** the hand-written half. Do not paste a commit list into it yourself; it would appear twice.
 
-**Show the drafted notes and the urgency tier to the owner and wait before committing them** — ask once, together with the variant question if it is still open. They know which change customers care about; you only know the commits.
+**Show the drafted notes and the minimum (raised or left, and why) to the owner and wait before committing them** — ask once, together with the variant question if it is still open. They know which change customers care about; you only know the commits.
 
 ### 4. Commit the bump and the notes on `main`
 
@@ -196,6 +196,14 @@ in the reminder:
 pnpm db:migrate:status
 ```
 
+**Post-deploy data steps.** Some migrations need a one-time data script on live after
+the `d_office` deploy has applied them. If a pending migration below is listed here,
+add its command to the reminder for the owner to run once the deploy is green:
+
+| Migration | Run once on live after deploy |
+|---|---|
+| `20261103090000_barcode_saved_price` | `pnpm seed:saved-barcodes` — saves today's barcode for products that never had one, so a later Sale Price change stops moving it |
+
 "Database schema is up to date!" → code-only deploy. Anything pending → tell the owner
 to push `d_office` only after the tills have updated. Judge drift on what physically
 changes: a new table is invisible to old tills; a new **column on a table counters
@@ -222,7 +230,7 @@ Handing a step back is **not** stopping the release: do everything either side o
 
 | Ask for | When |
 | --- | --- |
-| **The notes and the tier** | Always, once, before step 4. Show the drafted `RELEASE_NOTES.md` and whether it is `[urgent]`. |
+| **The notes and the minimum** | Always, once, before step 4. Show the drafted `RELEASE_NOTES.md` and whether `minimumCounterVersion` goes up to this version. |
 | **The variant** | Always, at preflight — `APP_MODE`, `LANDING_PAGE`. |
 | **A push they would rather run** | Whenever they say so — offer the exact command instead of running it. |
 | **Anything that would be a guess** | A version number that is not an obvious bump; a schema release's publish-then-migrate ordering; a repo that failed to publish. |
@@ -249,5 +257,5 @@ Handing a step back is **not** stopping the release: do everything either side o
 - `scripts/release-electron.ts` — tagging, notes assembly, multi-repo publish, `RELEASE_ONLY_REPO`.
 - `scripts/verify-package.ts` — the gate, and what each failure means.
 - `package.json` — `version`, `electron:pack`, `electron:release`, `verify:package`.
-- `electron/updateManager.ts` — how a counter reads `[urgent]` and decides when to install.
+- `electron/updateManager.ts` — how a counter compares itself with the minimum and decides when to install.
 - `RELEASE_NOTES.md` — the hand-written half; rewrite it every time.
