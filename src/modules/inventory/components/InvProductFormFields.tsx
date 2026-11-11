@@ -3,7 +3,8 @@
 import { GatedLink } from "@/shared/components/GatedLink";
 import { useEffect, useRef, useEffectEvent } from "react";
 import { RefreshCw, Trash2 } from "lucide-react";
-import { flattenTree, treeLabel, type MasterKind } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
+import { type MasterKind } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
+import { treeSelectOptions } from "@/shared/lib/inventory/masterTree";
 import { SearchableSelect } from "@/shared/components/SearchableSelect";
 import { SearchableMultiSelect } from "@/shared/components/SearchableMultiSelect";
 import { Button } from "@/components/ui/button";
@@ -436,12 +437,7 @@ export function InvProductFormFields({
                             createLabel="+ New collection…"
                             placeholder="Add a collection (optional)"
                             primaryLabel="Main collection"
-                            options={flattenTree(categories).map((r) => ({
-                                value: r.id,
-                                label: treeLabel(r),
-                                leaf: r.name,
-                                searchText: r.name,
-                            }))}
+                            options={treeSelectOptions(categories)}
                         />
                     </div>
                     <div className="space-y-2">
@@ -452,12 +448,7 @@ export function InvProductFormFields({
                             onCreate={onCreateMaster ? () => onCreateMaster("group") : undefined}
                             createLabel="+ New group…"
                             placeholder="Optional"
-                            options={flattenTree(groups).map((r) => ({
-                                value: r.id,
-                                label: treeLabel(r),
-                                leaf: r.name,
-                                searchText: r.name,
-                            }))}
+                            options={treeSelectOptions(groups)}
                         />
                     </div>
                     <div className="space-y-2">

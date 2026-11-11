@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { flattenTree } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
+import { flattenTree } from "@/shared/lib/inventory/masterTree";
 
 export type TreeRowMeta<T> = { row: T; depth: number; hasChildren: boolean };
 

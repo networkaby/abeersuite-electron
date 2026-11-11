@@ -18,6 +18,7 @@
 // while open the search + all three facet rails come out of ONE memoised pass
 // over the catalogue, fed a deferred query so typing never waits on the grid.
 
+import { treeLabel } from "@/shared/lib/inventory/masterTree";
 import { memo, useDeferredValue, useEffect, useMemo, useRef, useState, useEffectEvent } from "react";
 import { ChevronRight, PackageSearch, X, Plus } from "lucide-react";
 import { useValueChange } from "@/shared/hooks";
@@ -90,7 +91,7 @@ function idsUnder(node: GroupNode): number[] {
  *  hierarchy is still legible in a flat dropdown. */
 function flattenNames(nodes: GroupNode[], depth = 0): { id: number; name: string }[] {
     return nodes.flatMap((n) => [
-        { id: n.id, name: `${"— ".repeat(depth)}${n.name}` },
+        { id: n.id, name: treeLabel({ name: n.name, depth }) },
         ...flattenNames(n.children, depth + 1),
     ]);
 }

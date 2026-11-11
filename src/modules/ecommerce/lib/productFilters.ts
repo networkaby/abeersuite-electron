@@ -4,6 +4,7 @@
 
 import type { ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { shopQualification, type ShopPublishRules } from "@/modules/ecommerce/lib/shopQualification";
+import { flattenTree, subtreeIds, treeLabel, type TreeNodeRow } from "@/shared/lib/inventory/masterTree";
 
 export type StockFilter = "all" | "in" | "out" | "untracked";
 export type ActiveFilter = "all" | "active" | "inactive";
@@ -16,8 +17,11 @@ export type DescriptionFilter = "all" | "has" | "missing";
 
 export type ProductFilters = {
     query: string;
+    /** Collection id (InvCategory) or "all" — picking a parent matches its children too. */
     category: string;
+    /** Brand id or "all". */
     brand: string;
+    /** Product group id or "all" — picking a parent matches its children too. */
     group: string;
     stock: StockFilter;
     status: StatusFilter;
@@ -83,10 +87,34 @@ export function activeFilterCount(f: ProductFilters, defaults: ProductFilters = 
         .filter((k) => k !== "query" && f[k] !== defaults[k]).length;
 }
 
-export function matchesProductFilters(p: ShopProductAdmin, f: ProductFilters, rules: ShopPublishRules): boolean {
-    if (f.category !== "all" && p.category !== f.category) return false;
-    if (f.brand !== "all" && p.brandName !== f.brand) return false;
-    if (f.group !== "all" && p.groupName !== f.group) return false;
+/** The master trees the Collection / Group filters read (cached masters). */
+export type ProductFilterTrees = { categories: TreeNodeRow[]; groups: TreeNodeRow[] };
+
+/** Ids a picked node stands for: itself + every child. null = no filter.
+ *  A value saved before filters went by id (a name) is ignored. */
+function pickedIds(value: string, rows: TreeNodeRow[]): Set<number> | null {
+    const id = Number(value);
+    if (value === "all" || !Number.isInteger(id)) return null;
+    return new Set(subtreeIds(rows, id));
+}
+
+/** One matcher per filter change — the subtrees are worked out once, not per row. */
+export function productFilterMatcher(f: ProductFilters, rules: ShopPublishRules, trees: ProductFilterTrees) {
+    const collections = pickedIds(f.category, trees.categories);
+    const groups = pickedIds(f.group, trees.groups);
+    const brand = pickedIds(f.brand, []);
+    return (p: ShopProductAdmin) => matchesProductFilters(p, f, rules, { collections, groups, brand });
+}
+
+function matchesProductFilters(
+    p: ShopProductAdmin,
+    f: ProductFilters,
+    rules: ShopPublishRules,
+    ids: { collections: Set<number> | null; groups: Set<number> | null; brand: Set<number> | null },
+): boolean {
+    if (ids.collections && !p.collectionIds.some((c) => ids.collections!.has(c))) return false;
+    if (ids.groups && (p.groupId == null || !ids.groups.has(p.groupId))) return false;
+    if (ids.brand && (p.brandId == null || !ids.brand.has(p.brandId))) return false;
     if (f.stock === "untracked" && p.stock !== null) return false;
     if (f.stock === "in" && !(p.stock !== null && p.stock > 0)) return false;
     if (f.stock === "out" && p.stock !== 0) return false;
@@ -108,13 +136,29 @@ export function matchesProductFilters(p: ShopProductAdmin, f: ProductFilters, ru
     return true;
 }
 
-/** Sorted distinct values for the Category / Brand / Group dropdowns. */
-export function productFilterOptions(products: ShopProductAdmin[]) {
-    const distinct = (pick: (p: ShopProductAdmin) => string | null) =>
-        [...new Set(products.map(pick).filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b));
+export type FilterChoice = [value: string, label: string];
+
+/**
+ * Dropdown choices for Collection / Brand / Group, by id. Collections and
+ * groups come as the indented tree (shared `flattenTree`), trimmed to the
+ * nodes that hold a product or sit above one — no dead-end picks.
+ */
+export function productFilterOptions(
+    products: ShopProductAdmin[],
+    trees: ProductFilterTrees & { brands: TreeNodeRow[] },
+): { categories: FilterChoice[]; brands: FilterChoice[]; groups: FilterChoice[] } {
+    const tree = (rows: TreeNodeRow[], used: Set<number>): FilterChoice[] => {
+        const byId = new Map(rows.map((r) => [r.id, r]));
+        const keep = new Set<number>();
+        for (const id of used) {
+            for (let cur: number | null | undefined = id; cur != null && !keep.has(cur); cur = byId.get(cur)?.parentId) keep.add(cur);
+        }
+        return flattenTree(rows.filter((r) => keep.has(r.id))).map((r): FilterChoice => [String(r.id), treeLabel(r)]);
+    };
+    const usedBrands = new Set(products.map((p) => p.brandId).filter((x): x is number => x != null));
     return {
-        categories: distinct((p) => p.category),
-        brands: distinct((p) => p.brandName),
-        groups: distinct((p) => p.groupName),
+        categories: tree(trees.categories, new Set(products.flatMap((p) => p.collectionIds))),
+        brands: flattenTree(trees.brands.filter((b) => usedBrands.has(b.id))).map((r): FilterChoice => [String(r.id), r.name]),
+        groups: tree(trees.groups, new Set(products.map((p) => p.groupId).filter((x): x is number => x != null))),
     };
 }

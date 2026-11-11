@@ -49,11 +49,11 @@ import {
     MatchConditions,
     matchesConditions,
     emptyMatchConditions,
-    buildHierarchy,
     type Master,
     type MatchConditionsValue,
     type ConditionProduct,
 } from "@/modules/pricing-strategy/components/MatchConditions";
+import { flattenTree } from "@/shared/lib/inventory/masterTree";
 import { PaginationBar } from "@/shared/components/PaginationBar";
 import type { PricingItem } from "@/modules/pricing-strategy/lib/pricingItem";
 import type { StrategyPoints } from "@/shared/lib/schemas/pricingSchemas";
@@ -277,7 +277,7 @@ const flatRows = (list: Master[]): Row[] =>
 
 /** Parent→child ordered rows with depth — used for categories & groups. */
 const treeRows = (list: Master[]): Row[] =>
-    buildHierarchy(list).map((m) => ({ key: String(m.id), label: m.name, depth: m.depth }));
+    flattenTree(list).map((m) => ({ key: String(m.id), label: m.name, depth: m.depth }));
 
 /** Depth bullets: depth 1 → "•", depth 2 → "• •", … (empty for parents). */
 const depthBullets = (depth: number): string => Array(depth).fill("•").join(" ");

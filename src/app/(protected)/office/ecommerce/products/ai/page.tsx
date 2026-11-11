@@ -20,10 +20,11 @@ import { DEFAULT_SHOP_PUBLISH_RULES } from "@/modules/ecommerce/lib/shopQualific
 import {
     EMPTY_PRODUCT_FILTERS,
     hasDescription,
-    matchesProductFilters,
+    productFilterMatcher,
     productFilterOptions,
     type ProductFilters,
 } from "@/modules/ecommerce/lib/productFilters";
+import { useShopMasters } from "@/modules/mobile/hooks/useShopMasters";
 import {
     cachedAdminProducts,
     fetchAdminProducts,
@@ -98,7 +99,10 @@ export default function AiBulkCopyPage() {
     }, []);
 
     const query = useDebouncedValue(filters.query, 250);
-    const options = useMemo(() => productFilterOptions(products), [products]);
+    // Cached master lists (synced by delta) — the Collection / Group filters show their tree.
+    const { masters } = useShopMasters();
+    const trees = useMemo(() => ({ categories: masters?.category ?? [], groups: masters?.group ?? [], brands: masters?.brand ?? [] }), [masters]);
+    const options = useMemo(() => productFilterOptions(products, trees), [products, trees]);
     const rows = useMemo(() => {
         if (batch) {
             const byId = new Map(products.map((p) => [p.id, p]));
@@ -107,9 +111,9 @@ export default function AiBulkCopyPage() {
         const f = { ...filters, query };
         return products
             .filter((p) => (pick ? pick.has(p.id) && !work[p.id]?.saved : !hasDescription(p) && p.shopStatus !== "DRAFT" && p.shopStatus !== "ATTENTION"))
-            .filter((p) => matchesProductFilters(p, f, DEFAULT_SHOP_PUBLISH_RULES))
+            .filter(productFilterMatcher(f, DEFAULT_SHOP_PUBLISH_RULES, trees))
             .sort(priority);
-    }, [products, pick, filters, query, work, batch]);
+    }, [products, pick, filters, query, work, batch, trees]);
     const backlog = useMemo(() => products.filter((p) => p.isActive && !hasDescription(p) && p.shopStatus !== "DRAFT" && p.shopStatus !== "ATTENTION").length, [products]);
     const withPhoto = useMemo(() => products.filter((p) => p.isActive && !hasDescription(p) && p.shopStatus !== "DRAFT" && p.shopStatus !== "ATTENTION" && p.galleryUrls.length > 0).length, [products]);
 

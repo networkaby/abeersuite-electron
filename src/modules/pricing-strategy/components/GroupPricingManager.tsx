@@ -24,7 +24,7 @@ import { useFieldSave } from "@/shared/hooks/useFieldSave";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { extractApiError } from "@/shared/lib/api";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
-import { flattenTree, treeLabel } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
+import { treeSelectOptions } from "@/shared/lib/inventory/masterTree";
 import {
     GROUP_PRICE_TYPES, GROUP_PRICE_TYPE_LABEL, pctPriceType, type GroupPriceType,
 } from "@/modules/pricing-strategy/lib/groupPricing";
@@ -169,8 +169,7 @@ export function GroupPricingManager() {
 
     const groupOptions = useMemo(() => [
         { value: ALL_ITEMS, label: "All items", searchText: "all items" },
-        ...flattenTree((data?.productGroups ?? []).filter((g) => g.isActive))
-            .map((r) => ({ value: r.id, label: treeLabel(r), leaf: r.name, searchText: r.name })),
+        ...treeSelectOptions((data?.productGroups ?? []).filter((g) => g.isActive)),
     ], [data]);
 
     const patchRule = (key: number, patch: Partial<DraftRule>) =>

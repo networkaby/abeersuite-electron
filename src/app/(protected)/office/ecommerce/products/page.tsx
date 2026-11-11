@@ -15,13 +15,14 @@ import { extractApiError } from "@/shared/lib/api";
 import {
     EMPTY_PRODUCT_FILTERS,
     activeFilterCount,
-    matchesProductFilters,
+    productFilterMatcher,
     productFilterOptions,
     productPhotoCount,
     productStatus,
     type ProductFilters,
     type ProductStatus,
 } from "@/modules/ecommerce/lib/productFilters";
+import { useShopMasters } from "@/modules/mobile/hooks/useShopMasters";
 import { cachedAdminProducts, fetchAdminProducts, handOffAiPick, patchCachedAdminProduct } from "@/modules/ecommerce/lib/productListCache";
 import { ProductFilterButton, ProductFilterPanel } from "@/modules/ecommerce/components/ProductFilterPanel";
 import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
@@ -206,7 +207,10 @@ export default function EcommerceProductsPage() {
         restoredScrollTop.current = saved.scrollTop ?? 0;
     }, []);
 
-    const filterOptions = useMemo(() => productFilterOptions(products), [products]);
+    // Cached master lists (synced by delta) — the Collection / Group filters show their tree.
+    const { masters } = useShopMasters();
+    const trees = useMemo(() => ({ categories: masters?.category ?? [], groups: masters?.group ?? [], brands: masters?.brand ?? [] }), [masters]);
+    const filterOptions = useMemo(() => productFilterOptions(products, trees), [products, trees]);
 
     // One status per product, shared by the tab counts, the tab filter and the rows.
     const statusOf = useMemo(() => new Map(products.map((p) => [p.id, productStatus(p, rules)])), [products, rules]);
@@ -216,12 +220,10 @@ export default function EcommerceProductsPage() {
         return c;
     }, [products, statusOf]);
 
-    const filtered = useMemo(
-        () => products.filter((p) =>
-            (tab === "all" || statusOf.get(p.id)?.kind === tab)
-            && matchesProductFilters(p, filters, rules)),
-        [products, tab, filters, rules, statusOf]
-    );
+    const filtered = useMemo(() => {
+        const matches = productFilterMatcher(filters, rules, trees);
+        return products.filter((p) => (tab === "all" || statusOf.get(p.id)?.kind === tab) && matches(p));
+    }, [products, tab, filters, rules, statusOf, trees]);
 
     // Reset to page 1 when the filter actually changes — but NOT on the initial
     // mount, so a restored page (from sessionStorage) survives. Compare filter

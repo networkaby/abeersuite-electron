@@ -20,7 +20,7 @@ import {
 import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableStates";
 import { useDeleteWithConfirm } from "@/shared/hooks";
 import { SearchableMultiSelect } from "@/shared/components/SearchableMultiSelect";
-import { flattenTree, treeLabel } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
+import { treeSelectOptions } from "@/shared/lib/inventory/masterTree";
 
 type Group = { id: number; name: string; parentId?: number | null };
 type Row = {
@@ -181,12 +181,7 @@ export default function AttributeMastersPage() {
                                 value={form.groupIds}
                                 onChange={(ids) => setForm((f) => ({ ...f, groupIds: ids }))}
                                 placeholder="All groups (global)"
-                                options={flattenTree(groups).map((r) => ({
-                                    value: r.id,
-                                    label: treeLabel(r),
-                                    leaf: r.name,
-                                    searchText: r.name,
-                                }))}
+                                options={treeSelectOptions(groups)}
                             />
                         </div>
                         <div className="space-y-2 w-20">

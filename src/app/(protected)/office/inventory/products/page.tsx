@@ -38,7 +38,8 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
-import { InventoryMasterDropdownQuickDialog, type MasterKind, flattenTree, treeLabel } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
+import { InventoryMasterDropdownQuickDialog, type MasterKind } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
+import { flattenTree, treeLabel } from "@/shared/lib/inventory/masterTree";
 import {
     buildOfflineName,
     DEFAULT_NAMING_CONFIG,

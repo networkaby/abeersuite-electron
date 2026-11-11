@@ -40,10 +40,11 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { useValueChange } from "@/shared/hooks/useValueChange";
+import { treeSelectOptions, type TreeNodeRow } from "@/shared/lib/inventory/masterTree";
 
 export type MasterKind = "category" | "brand" | "group" | "warranty" | "unit";
 
-type Opt = { id: number; name?: string; code?: string; label?: string; parentId?: number | null };
+type Opt = TreeNodeRow;
 type GstRateOpt = { id: number; rate: string | number; label: string; isActive?: boolean };
 
 const KIND_META: Record<MasterKind, { title: string; endpoint: string }> = {
@@ -60,62 +61,6 @@ const TAXABILITY_OPTIONS = [
     { value: "NIL_RATED", label: "Nil Rated (0%)" },
     { value: "NON_GST", label: "Non-GST" },
 ] as const;
-
-function optLabel(o: Opt): string {
-    if (o.name) return o.name;
-    const composed = `${o.code ?? ""} ${o.label ?? ""}`.trim();
-    return composed || `#${o.id}`;
-}
-
-/// Walk a parented list (category / group) depth-first and emit each row
-/// with its own name + depth. Call sites format the visible label however
-/// they like — the most common is one "-" per depth level so the tree
-/// reads vertically:
-///
-///   grand father
-///   -father
-///   -father1
-///   --son
-///   --son1
-///   grand father1
-///   -father
-///
-/// Sort within siblings is alphabetical. Orphans (parentId points to a row
-/// that isn't in the list — usually a deactivated parent) bubble to the
-/// top at depth 0 so they're still pickable.
-export function flattenTree(rows: Opt[]): { id: number; name: string; depth: number }[] {
-    const byParent = new Map<number | null, Opt[]>();
-    for (const r of rows) {
-        const pid: number | null = r.parentId ?? null;
-        const arr = byParent.get(pid) ?? [];
-        arr.push(r);
-        byParent.set(pid, arr);
-    }
-    const out: { id: number; name: string; depth: number }[] = [];
-    const seen = new Set<number>();
-    function walk(parent: number | null, depth: number) {
-        const kids = (byParent.get(parent) ?? []).slice().sort((a, b) =>
-            optLabel(a).localeCompare(optLabel(b)),
-        );
-        for (const k of kids) {
-            if (seen.has(k.id)) continue;
-            seen.add(k.id);
-            out.push({ id: k.id, name: optLabel(k), depth });
-            walk(k.id, depth + 1);
-        }
-    }
-    walk(null, 0);
-    for (const r of rows) {
-        if (!seen.has(r.id)) out.push({ id: r.id, name: optLabel(r), depth: 0 });
-    }
-    return out;
-}
-
-/// Format helper that turns a `flattenTree` row into the indented label.
-/// Centralised so every picker draws the tree the same way.
-export function treeLabel(row: { name: string; depth: number }): string {
-    return row.depth === 0 ? row.name : `${"-".repeat(row.depth)}${row.name}`;
-}
 
 export interface InventoryMasterDropdownQuickDialogProps {
     open: boolean;
@@ -288,17 +233,7 @@ export function InventoryMasterDropdownQuickDialog({
                             <Label>Parent {kind}</Label>
                             <SearchableSelect
                                 value={parentId === "" ? null : Number(parentId)}
-                                options={flattenTree(siblings).map((r) => ({
-                                    value: r.id,
-                                    // Indented "-/--/---" prefix per depth in the open list.
-                                    label: treeLabel(r),
-                                    // Closed trigger shows just the bare name — indent only
-                                    // makes sense in the open tree context.
-                                    leaf: r.name,
-                                    // Search matches the bare name so typing "son" finds
-                                    // "--son" without the user typing the dashes.
-                                    searchText: r.name,
-                                }))}
+                                options={treeSelectOptions(siblings)}
                                 onChange={(id) => setParentId(id == null ? "" : String(id))}
                                 placeholder="— none —"
                             />

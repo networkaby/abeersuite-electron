@@ -30,7 +30,8 @@ import type { ProductNaming } from "@/modules/inventory/lib/regenerateNames";
 import { useValueChange } from "@/shared/hooks/useValueChange";
 import { SearchableSelect } from "@/shared/components/SearchableSelect";
 import { MultiSelectChips, SearchableMultiSelect } from "@/shared/components/SearchableMultiSelect";
-import { InventoryMasterDropdownQuickDialog, flattenTree, treeLabel } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
+import { InventoryMasterDropdownQuickDialog } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
+import { treeSelectOptions } from "@/shared/lib/inventory/masterTree";
 import { syncMasters, invalidateMasters, type Masters } from "@/shared/lib/inventory";
 import { useSession } from "next-auth/react";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
@@ -154,9 +155,7 @@ export default function ProductForm({
     const masterName = (rows: Masters[keyof Masters] | undefined, id: number | null, fallback?: string | null) =>
         id == null ? null : (rows?.find((r) => r.id === id)?.name as string | undefined) ?? fallback ?? null;
     const groupName = masterName(masters?.groups, groupId, initial?.groupName);
-    const collectionOptions = flattenTree(masters?.categories ?? []).map((r) => ({
-        value: r.id, label: treeLabel(r), leaf: r.name, searchText: r.name,
-    }));
+    const collectionOptions = treeSelectOptions(masters?.categories ?? []);
     const collectionNames = collectionIds
         .map((id) => masterName(masters?.categories, id))
         .filter((n): n is string => !!n);
@@ -693,9 +692,7 @@ export default function ProductForm({
                                 onCreate={() => openCreateMaster("group")}
                                 createLabel="+ New group…"
                                 placeholder="No group"
-                                options={flattenTree(masters?.groups ?? []).map((r) => ({
-                                    value: r.id, label: treeLabel(r), leaf: r.name, searchText: r.name,
-                                }))}
+                                options={treeSelectOptions(masters?.groups ?? [])}
                             />
                         ) : (
                             <Input value={groupName ?? ""} placeholder="No group" disabled />

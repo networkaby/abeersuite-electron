@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { productMatchesSearch, searchableText } from "@/shared/lib/inventory";
+import { flattenTree, productMatchesSearch, searchableText } from "@/shared/lib/inventory";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -66,39 +66,6 @@ export const ATTR_OP_LABEL: Record<AttrOp, string> = {
     lte: "≤",
     between: "between",
 };
-
-// ── Hierarchy helper ─────────────────────────────────────────────────────────
-
-/// Depth-first sort with depth markers so the list shows parents above their
-/// children. Items with a missing parent (parentId pointing to nothing in the
-/// list) surface at the end so they remain pickable.
-export function buildHierarchy(rows: Master[]): (Master & { depth: number })[] {
-    const byParent = new Map<number | null, Master[]>();
-    for (const r of rows) {
-        const pid: number | null = r.parentId ?? null;
-        const arr = byParent.get(pid) ?? [];
-        arr.push(r);
-        byParent.set(pid, arr);
-    }
-    const out: (Master & { depth: number })[] = [];
-    const seen = new Set<number>();
-    function walk(parent: number | null, depth: number) {
-        const kids = (byParent.get(parent) ?? [])
-            .slice()
-            .sort((a, b) => a.name.localeCompare(b.name));
-        for (const k of kids) {
-            if (seen.has(k.id)) continue;
-            seen.add(k.id);
-            out.push({ ...k, depth });
-            walk(k.id, depth + 1);
-        }
-    }
-    walk(null, 0);
-    for (const r of rows) {
-        if (!seen.has(r.id)) out.push({ ...r, depth: 0 });
-    }
-    return out;
-}
 
 // ── Multi-select checkbox group ──────────────────────────────────────────────
 // Inline searchable checkbox list. Renders compact chips for selected ids on
@@ -351,14 +318,14 @@ export function MatchConditions({
                     <MultiSelectGroup
                         label="Groups" icon={FolderTree}
                         hierarchical
-                        items={buildHierarchy(groups)}
+                        items={flattenTree(groups)}
                         selected={value.groupIds}
                         onChange={(ids) => onChange({ groupIds: ids })}
                     />
                     <MultiSelectGroup
                         label="Collections" icon={Boxes}
                         hierarchical
-                        items={buildHierarchy(categories)}
+                        items={flattenTree(categories)}
                         selected={value.categoryIds}
                         onChange={(ids) => onChange({ categoryIds: ids })}
                     />

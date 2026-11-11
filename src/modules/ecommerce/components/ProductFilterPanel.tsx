@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
     EMPTY_PRODUCT_FILTERS,
     activeFilterCount,
+    type FilterChoice,
     type ProductFilters,
 } from "@/modules/ecommerce/lib/productFilters";
 
@@ -41,7 +42,7 @@ export function ProductFilterPanel({
 }: {
     value: ProductFilters;
     onChange: (next: ProductFilters) => void;
-    options: { categories: string[]; brands: string[]; groups: string[] };
+    options: { categories: FilterChoice[]; brands: FilterChoice[]; groups: FilterChoice[] };
     /** Filters this screen fixes itself (e.g. description on the AI screen). */
     hide?: Key[];
     /** What Clear goes back to — a screen may start with its own defaults. */
@@ -61,11 +62,11 @@ export function ProductFilterPanel({
                 </Select>
             </div>
         ) : null;
-    const list = (all: string, xs: string[]): [string, string][] => [["all", all], ...xs.map((x): [string, string] => [x, x])];
+    const list = (all: string, xs: FilterChoice[]): FilterChoice[] => [["all", all], ...xs];
 
     return (
         <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-muted/20 p-3">
-            {choice("category", "Category", list("All categories", options.categories), "w-40")}
+            {choice("category", "Collection", list("All collections", options.categories), "w-40")}
             {choice("brand", "Brand", list("All brands", options.brands), "w-40")}
             {choice("group", "Group", list("All groups", options.groups), "w-40")}
             {choice("status", "Shop status", [["all", "Any status"], ["unpublished", "Unpublished"], ["draft", "Draft"], ["ready", "Ready"], ["live", "Published"], ["pending", "Pending"], ["attention", "Attention"]])}

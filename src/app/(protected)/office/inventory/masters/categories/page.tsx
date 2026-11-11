@@ -32,9 +32,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { flattenTree, treeLabel } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
+import { flattenTree, treeItemTotals, treeLabel } from "@/shared/lib/inventory/masterTree";
 import { useCollapsibleTree } from "@/modules/inventory/hooks";
-import { treeItemTotals } from "@/modules/inventory/lib/treeItems";
 import { TreeItemsLink } from "@/modules/inventory/components/TreeItemsLink";
 
 type InvCategory = {
