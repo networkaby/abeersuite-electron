@@ -10,6 +10,7 @@ import { type AiCopyFlow } from "@/shared/lib/constants/ai";
 import { loadAiSetup } from "@/shared/lib/ai/aiKeys";
 import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
 import { photosForAi } from "@/shared/lib/shop/photoMark";
+import { pickableMasters } from "@/modules/ecommerce/lib/agentProductCopy";
 
 // AI product copy (keys and order from Settings → AI Setup). Nothing is written here — the
 // caller shows the draft and saves through the normal product PATCH, so staff
@@ -84,6 +85,10 @@ export async function POST(req: Request) {
             imageUrls: photosForAi(data.imageUrls ?? productGalleryUrls(p.galleryJson, p.imageUrl)),
             bulk: data.bulk,
             premium: data.premium,
+            // Offers are set by staff, never by the AI. Cached 5 min (pickableMasters).
+            collections: data.photosOnly || data.bulk
+                ? []
+                : (await pickableMasters()).collections.filter((c) => !/^offers\b/i.test(c.path)),
         };
         const flow = data.photosOnly ? "verified" : data.flow ?? (await loadAiSetup()).copyFlow;
         const run = data.photosOnly ? generatePhotoAdvice : generateVerifiedCopy;

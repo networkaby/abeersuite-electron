@@ -752,6 +752,8 @@ export default function ProductForm({
                     onDescription={setDescription}
                     onSubheading={(v) => { subheadingTouched.current = true; setSubheading(v); }}
                     onSpecs={setSpecPairs}
+                    collectionIds={canEditMasters ? collectionIds : undefined}
+                    onCollections={canEditMasters ? setCollectionIds : undefined}
                     photoChecklist={photoChecklist}
                     onPhotoChecklist={savePhotoChecklist}
                     onGallery={setGalleryUrls}

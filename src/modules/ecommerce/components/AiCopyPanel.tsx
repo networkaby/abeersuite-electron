@@ -83,6 +83,8 @@ export default function AiCopyPanel({
     onDescription,
     onSubheading,
     onSpecs,
+    collectionIds,
+    onCollections,
     photoChecklist,
     onPhotoChecklist,
     onAddPhotos,
@@ -102,6 +104,10 @@ export default function AiCopyPanel({
     onDescription: (v: string) => void;
     onSubheading: (v: string) => void;
     onSpecs: (rows: SpecRow[]) => void;
+    /** The form's collections (first = main). Left out → the AI's picks are not shown. */
+    collectionIds?: number[];
+    /** Adds the AI's picks after the ones set — never removes or reorders. */
+    onCollections?: (ids: number[]) => void;
     /** Saved checklist under Product image — the AI's newer one replaces it. */
     photoChecklist: PhotoChecklist | null;
     onPhotoChecklist: (c: PhotoChecklist) => void;
@@ -160,6 +166,11 @@ export default function AiCopyPanel({
                 onSpecs(merged);
                 filled.push("specs");
             }
+            // Empty box only — collections already set are staff's choice; the rest shows below with Use.
+            if (onCollections && collectionIds && !collectionIds.length && copy.collectionPicks?.length) {
+                onCollections(copy.collectionPicks.map((c) => c.id));
+                filled.push("collections");
+            }
             toast.success(filled.length ? `AI filled ${filled.join(", ")} — review, then Save` : "AI draft ready — use what you like, then Save");
         } catch (e) {
             if (!onClash(e)) toast.error(extractApiError(e, "AI could not write this product"));
@@ -192,6 +203,10 @@ export default function AiCopyPanel({
     const haveSpec = new Set(specPairs.map((r) => r.k.trim().toLowerCase()).filter(Boolean));
     const specsMissing = draft
         ? Object.entries(draft.specs).filter(([k, v]) => k.trim() && v.trim() && !haveSpec.has(k.trim().toLowerCase()))
+        : [];
+    // AI collection picks the product is not in yet.
+    const collectionsMissing = draft?.collectionPicks && collectionIds && onCollections
+        ? draft.collectionPicks.filter((c) => !collectionIds.includes(c.id))
         : [];
 
     return (
@@ -238,6 +253,10 @@ export default function AiCopyPanel({
                     )}
                     {specsMissing.length > 0 && (
                         <DraftRow label="Specs" text={specsMissing.map(([k, v]) => `${k}: ${v}`).join("\n")} onUse={() => onSpecs(mergeAiSpecs(specPairs, draft.specs))} />
+                    )}
+                    {collectionsMissing.length > 0 && (
+                        <DraftRow label="Collections" text={collectionsMissing.map((c) => c.path).join("\n")}
+                            onUse={() => onCollections?.([...(collectionIds ?? []), ...collectionsMissing.map((c) => c.id)])} />
                     )}
                     <AiDraftNotes draft={draft} />
                     {titleDiffers && (

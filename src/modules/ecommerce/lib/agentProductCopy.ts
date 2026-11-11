@@ -139,7 +139,7 @@ const MASTERS_CACHE_MS = 5 * 60_000;
 let mastersCache: { at: number; brands: { id: number; name: string }[]; collections: { id: number; path: string }[] } | null = null;
 
 /** Active brands and every collection with its full path ("Computer › Accessories › USB Hub"), cached 5 min. */
-async function pickableMasters() {
+export async function pickableMasters() {
     if (mastersCache && Date.now() - mastersCache.at < MASTERS_CACHE_MS) return mastersCache;
     const [brands, cats] = await Promise.all([
         prisma.invBrand.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),

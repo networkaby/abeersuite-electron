@@ -6,7 +6,7 @@ import { checkFact, normForCheck, numbersOnPage } from "@/modules/ecommerce/lib/
 import { findProductPages, type PageRead } from "@/modules/ecommerce/lib/aiPageReader";
 import { loadResearch, saveResearch } from "@/modules/ecommerce/lib/aiResearchStore";
 import {
-    AiDataCheckError, OUTPUT_KEYS, assembleDescription, callParsed, callStep, cleanSpecs, copySchema, photoLines, photoParts,
+    AiDataCheckError, OUTPUT_KEYS, assembleDescription, collectionLines, pickCollections, callParsed, callStep, cleanSpecs, copySchema, photoLines, photoParts,
     productLines, text, textList, type ProductCopy, type ProductCopyInput,
 } from "@/modules/ecommerce/lib/aiProductCopy";
 import { PHOTO_GROUPS, PHOTO_KINDS, PHOTO_REMOVE_REASONS, checklistFrom, isPhotoKind, type PhotoArrange, type PhotoKind, type PhotoRemoveReason, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
@@ -130,6 +130,7 @@ function writePrompt(p: VerifiedCopyInput, c: Check, pages: PageRead[]): string 
         ...OUTPUT_KEYS,
         '"pages": [{"page": "A", "accepted": boolean, "why": string}] for every page;',
         '"specSources": for every key in "specs", where the value came from: "label" or the page letter;',
+        ...collectionLines(p.collections),
         '"dataFlags": places where our typed data DISAGREES with the label or an accepted page, in simple words. Typed data that is empty or shorter is not a flag; our shop support period being shorter than the maker\'s warranty is not a flag.',
     ].filter(Boolean).join("\n");
 }
@@ -390,7 +391,7 @@ export function checkWrittenCopy(
     const final = {
         title: w.title, summary: w.summary, description: w.description, howToUse: w.howToUse,
         highlights: highlights.length ? highlights : [w.title], warranty, compatibility,
-        specs: cleanSpecs(specs), unsure: [...new Set(unsure)],
+        specs: cleanSpecs(specs), unsure: [...new Set(unsure)], collections: w.collections,
     };
     const rejected = found.pages.flatMap((pg, i) => (accepted.has(letter(i))
         ? []
@@ -441,6 +442,7 @@ export async function generateVerifiedCopy(p: VerifiedCopyInput): Promise<Produc
     console.info(`[aiVerifiedCopy] done in ${Date.now() - started} ms · check ${checkKey} · write ${writeKey} · pages ${found.pages.length} read, ${trusted.length} used · specs ${Object.keys(checked.copy.specs).length} kept`);
     return {
         ...checked.copy,
+        collectionPicks: pickCollections(w.collections, p.collections),
         // Only photos from pages the copy kept: a rejected page may be another version.
         // A run without step 5 leaves the saved checklist alone (no photoChecklist sent).
         ...(photos5 && { photoChecklist: photos5.checklist }),

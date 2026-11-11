@@ -33,6 +33,8 @@ export type ProductCopyInput = {
     bulk?: boolean;
     /** Staff switched "Use Premium API" on. Off = regular (free) keys only — nothing is spent unknowingly. */
     premium?: boolean;
+    /** Collections the AI may pick from (full paths, Offers left out) — none = no picking. */
+    collections?: { id: number; path: string }[];
 };
 
 // The model's JSON drifts run to run (a spec value as a list or number, an
@@ -74,6 +76,8 @@ export const copySchema = z.object({
     ).default([]),
     /** Facts left out because the model was not sure — staff "Please check". */
     unsure: textList(12).default([]),
+    /** Collection paths picked from the given list (collectionLines) — mapped to ids by pickCollections. */
+    collections: textList(5).default([]),
 });
 
 export type Copy = z.infer<typeof copySchema>;
@@ -98,7 +102,34 @@ export type ProductCopy = Copy & {
     photoSuggestions?: PhotoSuggestion[];
     /** Verified with Photo AI: a better order and look for our gallery, for staff to apply. */
     photoArrange?: PhotoArrange;
+    /** In-app AI's collection picks, checked against the real list — the form fills an empty box or offers Use. */
+    collectionPicks?: { id: number; path: string }[];
 };
+
+// Collections = customer segmentation (who buys / what they set up); the group
+// is inventory (GST). Same rule Claude follows in the product-copy skill.
+/** Prompt lines asking for "collections" — empty when no list was given. */
+export function collectionLines(list: ProductCopyInput["collections"]): string[] {
+    if (!list?.length) return [];
+    return [
+        '"collections": 1-3 entries copied EXACTLY from the list below. A collection is a CUSTOMER segment — who buys this ("Shop by Need › …") or the setup it belongs to ("Setup Kits › …") — not the product type. Add "Gaming" only for gaming / RGB / esports items or graphics cards. [] only if none fits.',
+        `Collections: ${list.map((c) => c.path).join(" | ")}`,
+    ];
+}
+
+/** The AI's picked paths → real collections (exact path, else a unique leaf name). */
+export function pickCollections(picked: string[], list: ProductCopyInput["collections"]): { id: number; path: string }[] {
+    if (!list?.length) return [];
+    const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+    const out = new Map<number, { id: number; path: string }>();
+    for (const raw of picked) {
+        const n = norm(raw);
+        const hit = list.find((c) => norm(c.path) === n)
+            ?? (() => { const leaf = list.filter((c) => norm(c.path.split("›").pop() ?? "") === n); return leaf.length === 1 ? leaf[0] : undefined; })();
+        if (hit) out.set(hit.id, hit);
+    }
+    return [...out.values()];
+}
 
 const USE = "product_copy";
 
@@ -156,6 +187,7 @@ function draftPrompt(p: ProductCopyInput, photoCount: number): string {
         ...STRICT_RULES,
         "",
         ...OUTPUT_KEYS,
+        ...collectionLines(p.collections),
     ].filter(Boolean).join("\n");
 }
 
@@ -274,6 +306,7 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
     return {
         ...final,
         flow: "direct",
+        collectionPicks: pickCollections(draft.collections, p.collections),
         sources: [],
         flags: [],
         note: photos.length
