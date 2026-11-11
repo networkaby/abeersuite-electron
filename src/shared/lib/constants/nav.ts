@@ -456,39 +456,6 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         ],
     },
 
-    // Business Intelligence (management decision reports — customer/item profit,
-    // FSN, movement. Distinct from the accountant's operational reports under
-    // Accountancy → Financial Insights.)
-    {
-        label: "Business Intelligence",
-        icon: BarChart3,
-        key: "bi",
-        dashboardHref: "/office/bi",
-        pathPrefixes: ["/office/bi"],
-        children: [
-            { label: "Customer Profit", icon: CircleDollarSign, href: "/office/bi/customer-profit" },
-            { label: "Bill Profit", icon: ReceiptText, href: "/office/bi/bill-profit" },
-            { label: "Top Customers", icon: Crown, href: "/office/bi/top-customers" },
-            { label: "RFM Segmentation", icon: Target, href: "/office/bi/rfm" },
-            { label: "Party Sale & Purchase", icon: Split, href: "/office/bi/party-sale-purchase" },
-            { label: "Ledger vs Ledger", icon: GitCompareArrows, href: "/office/bi/ledger-vs-ledger" },
-            { label: "GST Purchase Planning", icon: CalendarRange, href: "/office/bi/gst-purchase-planning", sidebarKey: "gst-purchase-planning" },
-            { label: "Item Profit", icon: BadgeIndianRupee, href: "/office/bi/item-profit" },
-            { label: "Item by Party", icon: Grid2x2, href: "/office/bi/item-by-party" },
-            { label: "ABC Analysis", icon: ChartPie, href: "/office/bi/abc" },
-            { label: "FSN & Dead Stock", icon: Snowflake, href: "/office/bi/fsn" },
-            { label: "Stock Health", icon: HeartPulse, href: "/office/bi/stock-health" },
-            { label: "Stock Turnover", icon: TrendingUp, href: "/office/bi/stock-turnover" },
-            { label: "Movement Register", icon: ArrowDownUp, href: "/office/bi/movement-register" },
-            { label: "Sales Trend", icon: ChartLine, href: "/office/bi/sales-trend" },
-            { label: "Branch Comparison", icon: GitCompare, href: "/office/bi/branch-comparison" },
-            { label: "Discount Impact", icon: TicketPercent, href: "/office/bi/discount-impact" },
-            { label: "Basket Analysis", icon: ShoppingBasket, href: "/office/bi/basket" },
-            { label: "Supplier Purchases", icon: Warehouse, href: "/office/bi/supplier-purchases" },
-            { label: "Price Variance", icon: ArrowUpDown, href: "/office/bi/purchase-price-variance" },
-            { label: "Inactive Customers", icon: UserMinus, href: "/office/bi/inactive-customers" },
-        ],
-    },
 
     // Inventory
     {
@@ -549,6 +516,41 @@ export const MODULE_SECTIONS: ModuleSection[] = [
 
         ],
     },
+
+    // Business Intelligence (management decision reports — customer/item profit,
+    // FSN, movement. Distinct from the accountant's operational reports under
+    // Accountancy → Financial Insights.)
+    {
+        label: "Business Intelligence",
+        icon: BarChart3,
+        key: "bi",
+        dashboardHref: "/office/bi",
+        pathPrefixes: ["/office/bi"],
+        children: [
+            { label: "Customer Profit", icon: CircleDollarSign, href: "/office/bi/customer-profit" },
+            { label: "Bill Profit", icon: ReceiptText, href: "/office/bi/bill-profit" },
+            { label: "Top Customers", icon: Crown, href: "/office/bi/top-customers" },
+            { label: "RFM Segmentation", icon: Target, href: "/office/bi/rfm" },
+            { label: "Party Sale & Purchase", icon: Split, href: "/office/bi/party-sale-purchase" },
+            { label: "Ledger vs Ledger", icon: GitCompareArrows, href: "/office/bi/ledger-vs-ledger" },
+            { label: "GST Purchase Planning", icon: CalendarRange, href: "/office/bi/gst-purchase-planning", sidebarKey: "gst-purchase-planning" },
+            { label: "Item Profit", icon: BadgeIndianRupee, href: "/office/bi/item-profit" },
+            { label: "Item by Party", icon: Grid2x2, href: "/office/bi/item-by-party" },
+            { label: "ABC Analysis", icon: ChartPie, href: "/office/bi/abc" },
+            { label: "FSN & Dead Stock", icon: Snowflake, href: "/office/bi/fsn" },
+            { label: "Stock Health", icon: HeartPulse, href: "/office/bi/stock-health" },
+            { label: "Stock Turnover", icon: TrendingUp, href: "/office/bi/stock-turnover" },
+            { label: "Movement Register", icon: ArrowDownUp, href: "/office/bi/movement-register" },
+            { label: "Sales Trend", icon: ChartLine, href: "/office/bi/sales-trend" },
+            { label: "Branch Comparison", icon: GitCompare, href: "/office/bi/branch-comparison" },
+            { label: "Discount Impact", icon: TicketPercent, href: "/office/bi/discount-impact" },
+            { label: "Basket Analysis", icon: ShoppingBasket, href: "/office/bi/basket" },
+            { label: "Supplier Purchases", icon: Warehouse, href: "/office/bi/supplier-purchases" },
+            { label: "Price Variance", icon: ArrowUpDown, href: "/office/bi/purchase-price-variance" },
+            { label: "Inactive Customers", icon: UserMinus, href: "/office/bi/inactive-customers" },
+        ],
+    },
+
 
     // CRM
     {
@@ -636,54 +638,6 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Payroll", icon: WalletMinimal, href: "/office/hr/payroll", sidebarKey: "payroll" },
         ],
     },
-
-    // Delivery
-    // {
-    //     label: "Delivery",
-    //     icon: Truck,
-    //     key: "delivery",
-    //     dashboardHref: "",
-    //     pathPrefixes: [""],
-    //     children: [
-    //         // Live: the Delivery board (P8) is under Ecommerce → Orders (order
-    //         // detail delivery panel); courier config (Shiprocket / Custom / Local
-    //         // boy) is under Settings → Couriers (/office/settings/couriers).
-    //         // Still roadmap:
-    //         // { label: "Proof of delivery", icon: FileText, href: "/office/roadmap/delivery/pod" },
-    //     ],
-    // },
-
-    // Field Service
-    // {
-    //     label: "Field Service",
-    //     icon: MapPin,
-    //     key: "field-service",
-    //     dashboardHref: "/office/roadmap/field-service",
-    //     pathPrefixes: ["/office/roadmap/field-service"],
-    //     children: [
-    //         // { label: "Overview", icon: ChartArea, href: "/office/roadmap/field-service" },
-    //         { label: "Jobs", icon: Wrench, href: "/office/roadmap/field-service/jobs" },
-    //         { label: "Schedule", icon: Calendar, href: "/office/roadmap/field-service/schedule" },
-    //         { label: "Van stock", icon: Box, href: "/office/roadmap/field-service/van-stock" },
-    //     ],
-    // },
-
-
-
-    // Projects
-    // {
-    //     label: "Projects",
-    //     icon: Briefcase,
-    //     key: "projects",
-    //     dashboardHref: "/office/roadmap/projects",
-    //     pathPrefixes: ["/office/roadmap/projects"],
-    //     children: [
-    //         // { label: "Overview", icon: ChartArea, href: "/office/roadmap/projects" },
-    //         { label: "Active", icon: PlayCircle, href: "/office/roadmap/projects/active" },
-    //         { label: "Tasks", icon: FolderKanban, href: "/office/roadmap/projects/tasks" },
-    //         { label: "Time log", icon: ClipboardList, href: "/office/roadmap/projects/time" },
-    //     ],
-    // },
 
 
 
