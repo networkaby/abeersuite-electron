@@ -10,8 +10,8 @@ export default function AppSettingsPage() {
                 <div>
                     <h1 className="text-xl font-semibold">App Settings</h1>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        WhatsApp number ids and other plain ids. A value saved here wins; a blank box uses the server&apos;s .env value.
-                        Tokens and secrets are never kept here — they stay in Vercel.
+                        Ids, keys and passwords for WhatsApp, Meta, couriers, payments and email. A value saved here wins; a blank box uses the server&apos;s .env value.
+                        Secrets are saved scrambled and never shown back — only their last 4 characters. Move them to Vercel and clear them here when done testing.
                     </p>
                 </div>
                 <AppSettingsForm />
