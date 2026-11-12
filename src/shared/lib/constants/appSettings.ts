@@ -9,10 +9,18 @@
  * Client-safe — the form imports it.
  */
 
+export const APP_SETTING_SECTIONS = ["Messaging", "Couriers", "Payments", "Email & SMS"] as const;
+export type AppSettingSection = (typeof APP_SETTING_SECTIONS)[number];
+
 export type AppSettingDef = {
     key: string;
     label: string;
-    group: "WhatsApp" | "Meta app" | "Couriers" | "Payments" | "Email & SMS";
+    /** Page heading — what it is for. */
+    section: AppSettingSection;
+    /** Card inside the section — whose key it is. */
+    provider: string;
+    /** Not needed for the provider to work (the card's Ready check skips it). */
+    optional?: boolean;
     hint: string;
     /** Allowed values — the form shows a dropdown. */
     options?: readonly string[];
@@ -23,47 +31,47 @@ export type AppSettingDef = {
 };
 
 export const APP_SETTING_DEFS = [
-    { key: "META_WA_PHONE_NUMBER_ID", label: "OTP number (Phone number ID)", group: "WhatsApp", numeric: true,
+    { key: "META_WA_PHONE_NUMBER_ID", label: "OTP number (Phone number ID)", section: "Messaging", provider: "WhatsApp (Meta Cloud API)", numeric: true,
       hint: "Login codes go from this number. WhatsApp Manager → Phone numbers → click the number." },
-    { key: "WA_CONVERSATION_NUMBER_ID", label: "Bills & replies number (Phone number ID)", group: "WhatsApp", numeric: true,
+    { key: "WA_CONVERSATION_NUMBER_ID", label: "Bills & replies number (Phone number ID)", section: "Messaging", provider: "WhatsApp (Meta Cloud API)", optional: true, numeric: true,
       hint: "Bills, reminders and new staff replies go from this number. Blank = the OTP number. Pick only a Connected number, or every bill fails." },
-    { key: "META_WA_BUSINESS_ACCOUNT_ID", label: "WhatsApp Business Account ID", group: "WhatsApp", numeric: true,
+    { key: "META_WA_BUSINESS_ACCOUNT_ID", label: "Business Account ID", section: "Messaging", provider: "WhatsApp (Meta Cloud API)", numeric: true,
       hint: "The account both numbers sit in; templates are sent for approval here." },
-    { key: "WA_OTP_TEMPLATE", label: "OTP template name", group: "WhatsApp",
+    { key: "WA_OTP_TEMPLATE", label: "Template name", section: "Messaging", provider: "WhatsApp login code (OTP template)",
       hint: "Name of the approved AUTHENTICATION template." },
-    { key: "WA_OTP_LANG", label: "OTP template language", group: "WhatsApp",
+    { key: "WA_OTP_LANG", label: "Language", section: "Messaging", provider: "WhatsApp login code (OTP template)", optional: true,
       hint: "Language code of that template; blank = en." },
-    { key: "WA_OTP_BUTTON", label: "OTP template button", group: "WhatsApp", options: ["none", "copy_code", "one_tap"],
+    { key: "WA_OTP_BUTTON", label: "Button", section: "Messaging", provider: "WhatsApp login code (OTP template)", optional: true, options: ["none", "copy_code", "one_tap"],
       hint: "copy_code for a website login; none if the template has no button." },
-    { key: "META_WA_SIGNUP_CONFIG_ID", label: "Connect-number setup ID", group: "WhatsApp", numeric: true,
+    { key: "META_WA_SIGNUP_CONFIG_ID", label: "Connect-number setup ID", section: "Messaging", provider: "WhatsApp (Meta Cloud API)", optional: true, numeric: true,
       hint: "Embedded Signup configuration used by the Connect number button." },
-    { key: "META_APP_ID", label: "Meta app ID", group: "Meta app", numeric: true,
+    { key: "META_APP_ID", label: "App ID", section: "Messaging", provider: "Meta app (Facebook / Instagram connect)", numeric: true,
       hint: "The Meta app (loginapi)." },
-    { key: "META_APP_SECRET", label: "Meta app secret", group: "Meta app", secret: true,
+    { key: "META_APP_SECRET", label: "App secret", section: "Messaging", provider: "Meta app (Facebook / Instagram connect)", secret: true,
       hint: "Meta app → App settings → Basic → App secret. Used for Facebook / Instagram connect." },
-    { key: "META_WA_ACCESS_TOKEN", label: "WhatsApp access token", group: "WhatsApp", secret: true,
+    { key: "META_WA_ACCESS_TOKEN", label: "Access token", section: "Messaging", provider: "WhatsApp (Meta Cloud API)", secret: true,
       hint: "System-user token with whatsapp_business_messaging + management." },
-    { key: "SHIPROCKET_EMAIL", label: "Shiprocket API user email", group: "Couriers",
+    { key: "SHIPROCKET_EMAIL", label: "API user email", section: "Couriers", provider: "Shiprocket",
       hint: "Shiprocket → Settings → API → API user." },
-    { key: "SHIPROCKET_PASSWORD", label: "Shiprocket API user password", group: "Couriers", secret: true,
+    { key: "SHIPROCKET_PASSWORD", label: "API user password", section: "Couriers", provider: "Shiprocket", secret: true,
       hint: "Password of that API user." },
-    { key: "SHIPWAY_USERNAME", label: "Shipway account email", group: "Couriers",
+    { key: "SHIPWAY_USERNAME", label: "Account email", section: "Couriers", provider: "Shipway",
       hint: "Login email of the Shipway account." },
-    { key: "SHIPWAY_LICENSE", label: "Shipway licence key", group: "Couriers", secret: true,
+    { key: "SHIPWAY_LICENSE", label: "Licence key", section: "Couriers", provider: "Shipway", secret: true,
       hint: "Shipway → Profile → Manage profile → License Key." },
-    { key: "CASHFREE_APP_ID", label: "Cashfree app ID", group: "Payments",
+    { key: "CASHFREE_APP_ID", label: "App ID", section: "Payments", provider: "Cashfree",
       hint: "Cashfree → Developers → API keys." },
-    { key: "CASHFREE_SECRET_KEY", label: "Cashfree secret key", group: "Payments", secret: true,
+    { key: "CASHFREE_SECRET_KEY", label: "Secret key", section: "Payments", provider: "Cashfree", secret: true,
       hint: "The secret shown with that app ID." },
-    { key: "PAYU_MERCHANT_KEY", label: "PayU merchant key", group: "Payments",
+    { key: "PAYU_MERCHANT_KEY", label: "Merchant key", section: "Payments", provider: "PayU",
       hint: "PayU dashboard → Developers → Key and salt." },
-    { key: "PAYU_MERCHANT_SALT", label: "PayU merchant salt", group: "Payments", secret: true,
+    { key: "PAYU_MERCHANT_SALT", label: "Merchant salt", section: "Payments", provider: "PayU", secret: true,
       hint: "The salt shown with that key." },
-    { key: "EMAIL_FROM", label: "Email sender", group: "Email & SMS",
+    { key: "EMAIL_FROM", label: "Email sender", section: "Email & SMS", provider: "Resend (email)",
       hint: "From address on emails, e.g. Network Service <no-reply@networkservice.in>." },
-    { key: "RESEND_API_KEY", label: "Resend API key", group: "Email & SMS", secret: true,
+    { key: "RESEND_API_KEY", label: "API key", section: "Email & SMS", provider: "Resend (email)", secret: true,
       hint: "resend.com → API keys." },
-    { key: "HANU_OTP_TEMPLATE_ID", label: "SMS OTP template ID", group: "Email & SMS",
+    { key: "HANU_OTP_TEMPLATE_ID", label: "OTP template ID", section: "Email & SMS", provider: "HanuOTP (SMS)", optional: true,
       hint: "HanuOTP template for login codes; blank = default." },
 ] as const satisfies readonly AppSettingDef[];
 
