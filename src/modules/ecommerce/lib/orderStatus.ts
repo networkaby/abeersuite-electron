@@ -149,7 +149,7 @@ async function autoBookCourier(orderId: number, actorUserId: number, link: strin
     });
     const kind = ((order?.shippingAddress ?? {}) as { courierKind?: string }).courierKind;
     const ready =
-        kind === "SHIPROCKET" ? shiprocketEnvReady() : kind === "SHIPWAY" ? shipwayEnvReady() : false;
+        kind === "SHIPROCKET" ? await shiprocketEnvReady() : kind === "SHIPWAY" ? await shipwayEnvReady() : false;
     if (!ready) return; // non-API courier, or creds absent (dev) — manual path
 
     const delivery = await prisma.ticketDelivery.findFirst({

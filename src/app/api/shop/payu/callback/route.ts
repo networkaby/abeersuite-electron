@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     const txnid = body.txnid ?? "";
     const fallbackId = ticketIdFromTxnid(txnid);
 
-    const creds = payuCreds();
+    const creds = await payuCreds();
     // Reject anything we can't cryptographically trust or that PayU didn't mark paid.
     if (!creds || !verifyPayuResponse(creds.salt, body) || body.status !== "success") {
         return backToOrder(req, fallbackId, true);

@@ -1,3 +1,4 @@
+import { appSetting } from "@/shared/lib/settings/appSettings.server";
 import "server-only";
 
 /**
@@ -117,7 +118,7 @@ async function sendVia(
     url.searchParams.set("number", mobile);
     url.searchParams.set("OTP", code);
     url.searchParams.set("apikey", key);
-    url.searchParams.set("templatesid", process.env.HANU_OTP_TEMPLATE_ID?.trim() || "default");
+    url.searchParams.set("templatesid", (await appSetting("HANU_OTP_TEMPLATE_ID")) || "default");
 
     const res = await fetch(url, { cache: "no-store" });
     const body = await res.text();

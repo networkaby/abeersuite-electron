@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { extractApiError } from "@/shared/lib/api";
 import { getWithRetry } from "@/shared/lib/http/getWithRetry";
 import { parseDigitsInput } from "@/shared/lib/format";
-import { APP_SETTING_DEFS, type AppSettingKey, type AppSettingValues } from "@/shared/lib/constants/appSettings";
+import { APP_SETTING_DEFS, SECRET_APP_SETTING_KEYS, type AppSettingKey, type AppSettingValues } from "@/shared/lib/constants/appSettings";
 
 type Loaded = { values: AppSettingValues; env: Record<string, string> };
 type WaNumber = { id: string; display: string; name: string; status: string; nameStatus: string; quality: string };
@@ -34,6 +34,9 @@ export function AppSettingsForm() {
     }, []);
 
     const set = (k: AppSettingKey, v: string) => setValues((c) => ({ ...c, [k]: v }));
+    // Secrets come back masked; only the ones typed (or cleared) here are sent.
+    const [secretEdits, setSecretEdits] = useState<Partial<Record<AppSettingKey, string>>>({});
+    const setSecret = (k: AppSettingKey, v: string) => setSecretEdits((c) => ({ ...c, [k]: v }));
 
     const loadNumbers = async () => {
         setNumbersBusy(true);
@@ -50,8 +53,10 @@ export function AppSettingsForm() {
     const save = async () => {
         setSaving(true);
         try {
-            const { data } = await axios.put<{ values: AppSettingValues }>("/api/settings/app-settings", values);
+            const plain = Object.fromEntries(Object.entries(values).filter(([k]) => !SECRET_APP_SETTING_KEYS.has(k)));
+            const { data } = await axios.put<{ values: AppSettingValues }>("/api/settings/app-settings", { ...plain, ...secretEdits });
             setValues(data.values);
+            setSecretEdits({});
             toast.success("App settings saved — counters pick them up within a few minutes");
         } catch (e) {
             toast.error(extractApiError(e, "Save failed"));
@@ -110,16 +115,35 @@ export function AppSettingsForm() {
                     )}
 
                     {APP_SETTING_DEFS.filter((d) => d.group === g).map((d) => {
-                        const v = values[d.key] ?? "";
+                        const isSecret = "secret" in d && d.secret;
+                        const edit = secretEdits[d.key];
+                        const v = isSecret ? (edit ?? values[d.key] ?? "") : (values[d.key] ?? "");
                         const envV = env[d.key] ?? "";
-                        const source = v ? "Saved here" : envV ? `Using .env: ${envV}` : "Not set";
+                        const source = isSecret && edit !== undefined
+                            ? (edit ? "New value — Save to keep" : "Will be cleared on Save")
+                            : v ? `Saved here${isSecret ? ` ${v}` : ""}` : envV ? `Using .env: ${envV}` : "Not set";
                         const id = `as-${d.key}`;
                         return (
                             <div key={d.key} className="space-y-1">
                                 <Label htmlFor={id}>
                                     {d.label} <span className="ml-1 font-mono text-xs font-normal text-muted-foreground">.env: {d.key}</span>
                                 </Label>
-                                {"options" in d ? (
+                                {isSecret ? (
+                                    <div className="flex gap-2">
+                                        <Input
+                                            id={id}
+                                            type="password"
+                                            autoComplete="new-password"
+                                            value={edit ?? ""}
+                                            placeholder={values[d.key] ? `Saved ${values[d.key]} — type to replace` : envV ? `Using .env ${envV}` : ""}
+                                            onChange={(e) => setSecret(d.key, e.target.value)}
+                                            className="font-mono"
+                                        />
+                                        {values[d.key] && (
+                                            <Button type="button" size="sm" variant="outline" onClick={() => setSecret(d.key, "")}>Clear</Button>
+                                        )}
+                                    </div>
+                                ) : "options" in d ? (
                                     <select
                                         id={id}
                                         value={v}

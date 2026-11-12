@@ -27,7 +27,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         if (!payu) {
             return NextResponse.json({ error: "PayU is not enabled for online checkout." }, { status: 400 });
         }
-        const creds = payuCreds();
+        const creds = await payuCreds();
         if (!creds) {
             return NextResponse.json(
                 { error: "PayU keys are not set (PAYU_MERCHANT_KEY / PAYU_MERCHANT_SALT)." },

@@ -19,7 +19,7 @@ export async function GET(req: Request) {
     const ticketId = Number(url.searchParams.get("ticketId"));
     if (!Number.isInteger(ticketId) || ticketId < 1) return backToOrder(req, null, true);
 
-    const creds = cashfreeCreds();
+    const creds = await cashfreeCreds();
     if (!creds) return backToOrder(req, ticketId, true);
 
     const order = await prisma.ticketOrder.findUnique({

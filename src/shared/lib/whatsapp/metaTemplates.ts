@@ -31,15 +31,14 @@ import {
 const GRAPH = "https://graph.facebook.com/v21.0";
 const LANG = "en";
 
-function token() {
-    return process.env.META_WA_ACCESS_TOKEN;
-}
+/** Settings → App Settings, else .env. */
+const token = () => appSetting("META_WA_ACCESS_TOKEN");
 
 export async function isTemplateApiConfigured(): Promise<boolean> {
-    return Boolean(token() && (await wabaId()));
+    return Boolean((await token()) && (await wabaId()));
 }
 export async function isBillSendConfigured(): Promise<boolean> {
-    return Boolean(token() && (await conversationNumberId()));
+    return Boolean((await token()) && (await conversationNumberId()));
 }
 
 /** WABA id — Settings → App Settings, else .env. */

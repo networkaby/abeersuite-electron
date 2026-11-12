@@ -12,22 +12,24 @@
 //   200 → { success: "success", rate_card: [ { carrier_id, courier_name,
 //           delivery_charge (₹), rto_charge, charged_weight (kg), zone }, … ] }
 
+import { appSetting } from "@/shared/lib/settings/appSettings.server";
+
 const BASE = process.env.SHIPWAY_API_BASE?.trim() || "https://app.shipway.com/api";
 
 /** The full Authorization header value — HTTP Basic base64(email:licenseKey).
  *  SHIPWAY_TOKEN, if set, is used verbatim (an escape hatch / pre-built header). */
-function authHeader(): string | null {
+async function authHeader(): Promise<string | null> {
     const token = process.env.SHIPWAY_TOKEN?.trim();
     if (token) return token;
-    const email = process.env.SHIPWAY_USERNAME?.trim();
-    const license = process.env.SHIPWAY_LICENSE?.trim();
+    const email = await appSetting("SHIPWAY_USERNAME");
+    const license = await appSetting("SHIPWAY_LICENSE");
     if (email && license) return `Basic ${Buffer.from(`${email}:${license}`).toString("base64")}`;
     return null;
 }
 
 /** True when Shipway credentials (email + license key) are present in env. */
-export function shipwayEnvReady(): boolean {
-    return authHeader() != null;
+export async function shipwayEnvReady(): Promise<boolean> {
+    return (await authHeader()) != null;
 }
 
 const toPaise = (rupees: unknown): number => Math.round(Number(rupees ?? 0) * 100) || 0;
@@ -46,7 +48,7 @@ export type ShipwayCourierQuote = {
  */
 /** Authenticated Shipway fetch — throws with the API's message on failure. */
 async function swFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const header = authHeader();
+    const header = await authHeader();
     if (!header) throw new Error("Shipway credentials are not configured");
     const res = await fetch(`${BASE}${path}`, {
         ...init,
@@ -225,7 +227,7 @@ export async function shipwayServiceability(params: {
     weightGrams: number;
     cod: boolean;
 }): Promise<ShipwayCourierQuote[]> {
-    const header = authHeader();
+    const header = await authHeader();
     if (!header) return [];
     const weightKg = Math.max(0.05, params.weightGrams / 1000);
     const qs = new URLSearchParams({

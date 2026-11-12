@@ -6,6 +6,7 @@
 // to PayU's _payment page, pays, and PayU POSTs back to our callback with a `hash`
 // we re-compute (the "reverse" sequence) to prove the result is genuine.
 
+import { appSetting } from "@/shared/lib/settings/appSettings.server";
 import { createHash } from "crypto";
 
 export type PayuEnv = "TEST" | "LIVE";
@@ -20,9 +21,9 @@ export function payuEndpoint(env: PayuEnv): string {
 }
 
 /** Merchant key + salt from env, or null when either is missing. */
-export function payuCreds(): { key: string; salt: string } | null {
-    const key = process.env.PAYU_MERCHANT_KEY?.trim();
-    const salt = process.env.PAYU_MERCHANT_SALT?.trim();
+export async function payuCreds(): Promise<{ key: string; salt: string } | null> {
+    const key = await appSetting("PAYU_MERCHANT_KEY");
+    const salt = await appSetting("PAYU_MERCHANT_SALT");
     if (!key || !salt) return null;
     return { key, salt };
 }

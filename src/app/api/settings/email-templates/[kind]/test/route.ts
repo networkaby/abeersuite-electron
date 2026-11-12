@@ -21,7 +21,7 @@ export async function POST(req: Request, { params }: RouteCtx) {
     if (!isEmailAnyKind(kind)) return NextResponse.json({ error: "Unknown template kind" }, { status: 404 });
     const { data, error } = await validateRequest(req, schema);
     if (error) return error;
-    if (!isEmailConfigured()) return NextResponse.json({ error: "Email sending is not set up on this server." }, { status: 422 });
+    if (!(await isEmailConfigured())) return NextResponse.json({ error: "Email sending is not set up on this server." }, { status: 422 });
 
     const t = await getEmailTemplate(kind);
     const out = await sendFilled(data.email, t.draft, emailSampleValues(kind));

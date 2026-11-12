@@ -5,27 +5,29 @@
 // refreshed on expiry or a 401. Everything degrades to "not configured" when the
 // env creds are absent, so checkout still works with the CUSTOM / OWN_BOY couriers.
 
+import { appSetting } from "@/shared/lib/settings/appSettings.server";
+
 const BASE = "https://apiv2.shiprocket.in/v1/external";
 // Refresh a little before Shiprocket's 240h expiry.
 const TOKEN_TTL_MS = 9 * 24 * 60 * 60 * 1000;
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
-function creds(): { email: string | null; password: string | null } {
+async function creds(): Promise<{ email: string | null; password: string | null }> {
     return {
-        email: process.env.SHIPROCKET_EMAIL?.trim() || null,
-        password: process.env.SHIPROCKET_PASSWORD?.trim() || null,
+        email: (await appSetting("SHIPROCKET_EMAIL")) ?? null,
+        password: (await appSetting("SHIPROCKET_PASSWORD")) ?? null,
     };
 }
 
 /** True when the API user credentials are present in env. */
-export function shiprocketEnvReady(): boolean {
-    const c = creds();
+export async function shiprocketEnvReady(): Promise<boolean> {
+    const c = await creds();
     return !!(c.email && c.password);
 }
 
 async function login(): Promise<string> {
-    const c = creds();
+    const c = await creds();
     if (!c.email || !c.password) throw new Error("Shiprocket credentials are not configured");
     const res = await fetch(`${BASE}/auth/login`, {
         method: "POST",

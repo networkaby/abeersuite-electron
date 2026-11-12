@@ -67,7 +67,7 @@ async function send(email: string) {
         return NextResponse.json({ error: TOO_MANY }, { status: 429 });
     }
     recordLoginFailure(key);
-    if (!isEmailConfigured()) {
+    if (!(await isEmailConfigured())) {
         return NextResponse.json({ error: "Email is not set up on this server. Ask the office to reset it." }, { status: 503 });
     }
 

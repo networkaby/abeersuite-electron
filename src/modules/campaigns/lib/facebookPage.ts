@@ -1,3 +1,4 @@
+import { appSetting } from "@/shared/lib/settings/appSettings.server";
 import "server-only";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { lockSecret, unlockSecret, hasSharedSecret } from "@/shared/lib/ai/secretBox";
@@ -28,10 +29,10 @@ const SCOPES = ["pages_show_list", "pages_read_engagement", "pages_manage_posts"
 
 export const FACEBOOK_LINK_ID = 1;
 
-/** App id: Settings → App Settings, else .env. The secret is Vercel-only. */
+/** App id + secret: Settings → App Settings, else .env. */
 const env = async () => ({
     appId: await metaAppId(),
-    appSecret: process.env.META_APP_SECRET?.trim() || "",
+    appSecret: (await appSetting("META_APP_SECRET")) ?? "",
 });
 
 /** Where Facebook sends the browser back; must be a Valid OAuth Redirect URI on the app. */

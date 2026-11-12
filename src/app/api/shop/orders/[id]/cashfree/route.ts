@@ -27,7 +27,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         if (!cf) {
             return NextResponse.json({ error: "Cashfree is not enabled for online checkout." }, { status: 400 });
         }
-        const creds = cashfreeCreds();
+        const creds = await cashfreeCreds();
         if (!creds) {
             return NextResponse.json(
                 { error: "Cashfree keys are not set (CASHFREE_APP_ID / CASHFREE_SECRET_KEY)." },

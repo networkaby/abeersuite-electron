@@ -64,7 +64,7 @@ export class WhatsAppNotConfiguredError extends Error {
 }
 
 export async function isWhatsAppConfigured(): Promise<boolean> {
-    return Boolean(process.env.META_WA_ACCESS_TOKEN && (await phoneNumberId()) && (await templateName()));
+    return Boolean((await appSetting("META_WA_ACCESS_TOKEN")) && (await phoneNumberId()) && (await templateName()));
 }
 
 /**
@@ -75,7 +75,7 @@ export async function isWhatsAppConfigured(): Promise<boolean> {
 export async function sendOtpWhatsApp(mobile: string, code: string): Promise<void> {
     const numberId = await phoneNumberId();
     const template = await templateName();
-    const metaToken = process.env.META_WA_ACCESS_TOKEN;
+    const metaToken = await appSetting("META_WA_ACCESS_TOKEN");
 
     if (!numberId) throw new WhatsAppNotConfiguredError();
     if (!template) throw new WhatsAppNotConfiguredError("WA_OTP_TEMPLATE missing");

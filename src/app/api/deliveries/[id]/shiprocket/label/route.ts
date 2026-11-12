@@ -13,7 +13,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
 
     const id = Number((await ctx.params).id);
     if (!Number.isInteger(id) || id < 1) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-    if (!shiprocketEnvReady()) {
+    if (!(await shiprocketEnvReady())) {
         return NextResponse.json({ error: "Shiprocket is not connected." }, { status: 400 });
     }
 

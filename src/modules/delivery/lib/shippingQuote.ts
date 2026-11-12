@@ -280,7 +280,7 @@ export async function quoteShipping(params: {
             });
         } else if (m.kind === "SHIPROCKET") {
             const cfg = m.configJson as ShiprocketConfig;
-            if (!shiprocketEnvReady() || !cfg.pickupPincode) continue;
+            if (!(await shiprocketEnvReady()) || !cfg.pickupPincode) continue;
             const couriers = await shiprocketServiceability({
                 pickupPincode: String(cfg.pickupPincode),
                 deliveryPincode: params.deliveryPincode,
@@ -305,7 +305,7 @@ export async function quoteShipping(params: {
             }
         } else if (m.kind === "SHIPWAY") {
             const cfg = m.configJson as ShipwayConfig;
-            if (!shipwayEnvReady() || !cfg.pickupPincode) continue;
+            if (!(await shipwayEnvReady()) || !cfg.pickupPincode) continue;
             const couriers = await shipwayServiceability({
                 pickupPincode: String(cfg.pickupPincode),
                 deliveryPincode: params.deliveryPincode,

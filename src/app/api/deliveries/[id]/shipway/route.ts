@@ -16,7 +16,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
     const id = Number((await ctx.params).id);
     if (!Number.isInteger(id) || id < 1) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
-    if (!shipwayEnvReady()) {
+    if (!(await shipwayEnvReady())) {
         return NextResponse.json(
             { error: "Shipway is not connected. Set SHIPWAY_USERNAME / SHIPWAY_LICENSE in the environment." },
             { status: 400 }

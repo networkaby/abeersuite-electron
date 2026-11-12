@@ -54,7 +54,7 @@ export async function sendTemplatedEmail(d: {
         const tpl = await getEmailTemplate(kind);
         if (!tpl.enabled) return { status: "skipped", reason: "template off" };
         if (hasAutoSendSwitch(kind) && !d.manual && !tpl.autoSend) return { status: "skipped", reason: "auto off" };
-        if (!isEmailConfigured()) return { status: "skipped", reason: "email not configured" };
+        if (!(await isEmailConfigured())) return { status: "skipped", reason: "email not configured" };
         const to = pickEmail(d.emails);
         if (!to) return { status: "skipped", reason: "no email" };
         const marketing = isMarketingKind(kind);
@@ -143,7 +143,7 @@ export async function sendFilled(to: string, draft: EmailTemplateDraft, values: 
 
 /** Per kind, whether the 3-dot menu's "Send email" works now. */
 export async function emailSendStates(): Promise<Record<EmailTemplateKind, EmailSendState>> {
-    const configured = isEmailConfigured();
+    const configured = await isEmailConfigured();
     const pairs = await Promise.all(
         EMAIL_TEMPLATE_KINDS.map(async (k) => [k, !configured ? "not-configured" : (await getEmailTemplate(k)).enabled ? "ready" : "off"] as const),
     );

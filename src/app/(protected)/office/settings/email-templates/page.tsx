@@ -19,7 +19,7 @@ export default async function EmailTemplatesPage() {
                         email. No approval needed — the saved wording is sent.
                     </p>
                 </div>
-                <EmailTemplatesPanel initialTemplates={templates} sendReady={isEmailConfigured()} />
+                <EmailTemplatesPanel initialTemplates={templates} sendReady={await isEmailConfigured()} />
             </div>
         </ScrollArea>
     );

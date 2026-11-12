@@ -2,6 +2,8 @@
 // CASHFREE_APP_ID / CASHFREE_SECRET_KEY. Secrets never leave the server — the browser
 // only gets the payment_session_id, which the Cashfree JS SDK uses to launch checkout.
 
+import { appSetting } from "@/shared/lib/settings/appSettings.server";
+
 export type CashfreeEnv = "TEST" | "LIVE";
 
 const BASE: Record<CashfreeEnv, string> = {
@@ -15,9 +17,9 @@ export function cashfreeMode(env: CashfreeEnv): "sandbox" | "production" {
     return env === "LIVE" ? "production" : "sandbox";
 }
 
-export function cashfreeCreds(): { appId: string; secret: string } | null {
-    const appId = process.env.CASHFREE_APP_ID?.trim();
-    const secret = process.env.CASHFREE_SECRET_KEY?.trim();
+export async function cashfreeCreds(): Promise<{ appId: string; secret: string } | null> {
+    const appId = await appSetting("CASHFREE_APP_ID");
+    const secret = await appSetting("CASHFREE_SECRET_KEY");
     if (!appId || !secret) return null;
     return { appId, secret };
 }

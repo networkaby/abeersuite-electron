@@ -1,3 +1,4 @@
+import { appSetting } from "@/shared/lib/settings/appSettings.server";
 import "server-only";
 
 /**
@@ -17,8 +18,8 @@ export class EmailNotConfiguredError extends Error {
     }
 }
 
-export function isEmailConfigured(): boolean {
-    return Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
+export async function isEmailConfigured(): Promise<boolean> {
+    return Boolean((await appSetting("RESEND_API_KEY")) && (await appSetting("EMAIL_FROM")));
 }
 
 export type OutgoingEmail = {
@@ -32,16 +33,16 @@ export type OutgoingEmail = {
 };
 
 export async function sendEmail(msg: OutgoingEmail): Promise<void> {
-    if (!isEmailConfigured()) throw new EmailNotConfiguredError();
+    if (!(await isEmailConfigured())) throw new EmailNotConfiguredError();
 
     const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
-            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+            Authorization: `Bearer ${await appSetting("RESEND_API_KEY")}`,
             "Content-Type": "application/json",
         },
         body: JSON.stringify({
-            from: process.env.EMAIL_FROM,
+            from: await appSetting("EMAIL_FROM"),
             to: [msg.to],
             subject: msg.subject,
             text: msg.text,

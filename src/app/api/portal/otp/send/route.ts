@@ -116,7 +116,7 @@ export async function POST(req: Request) {
         // is the fallback for customers WhatsApp cannot reach.
         const smsOnly = !asEmail && data.via === "sms";
         const configured = asEmail
-            ? isEmailConfigured()
+            ? await isEmailConfigured()
             : smsOnly
               ? isSmsConfigured()
               : (await isWhatsAppConfigured()) || isSmsConfigured();
