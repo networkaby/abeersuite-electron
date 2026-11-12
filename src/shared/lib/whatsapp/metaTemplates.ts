@@ -35,14 +35,21 @@ const LANG = "en";
 const token = () => appSetting("META_WA_ACCESS_TOKEN");
 
 export async function isTemplateApiConfigured(): Promise<boolean> {
-    return Boolean((await token()) && (await wabaId()));
+    return Boolean((await token()) && (await billWabaId()));
 }
 export async function isBillSendConfigured(): Promise<boolean> {
     return Boolean((await token()) && (await conversationNumberId()));
 }
 
-/** WABA id — Settings → App Settings, else .env. */
+/** The OTP number's WABA — Settings → App Settings, else .env. */
 const wabaId = () => appSetting("META_WA_BUSINESS_ACCOUNT_ID");
+
+/**
+ * The WABA the bills number sits in, where bill templates must live (a template
+ * can only be sent from a number in its own WABA). Differs from wabaId() when the
+ * bills number was onboarded into another business (coexistence, 2026-11-13).
+ */
+const billWabaId = async () => (await appSetting("WA_CONVERSATION_BUSINESS_ACCOUNT_ID")) || (await wabaId());
 
 /**
  * The number bills, reminders and new replies go out from: WA_CONVERSATION_NUMBER_ID,
@@ -77,15 +84,15 @@ async function graph<T>(path: string, init?: { method?: string; body?: unknown }
     return json;
 }
 
-/**
- * Upload a sample picture for a photo-header template. Meta wants a handle from
- * its Resumable Upload API (app-level), not a link, as the header example.
- */
 /** The shop's Meta app (loginapi) — Settings → App Settings, else .env; read when
  *  needed so a server without it says so instead of calling Meta with an empty id. */
 export const metaAppId = async () => (await appSetting("META_APP_ID")) || "";
 export const META_APP_ID_MISSING = "META_APP_ID is not set (Settings → App Settings or .env).";
 
+/**
+ * Upload a sample picture for a photo-header template. Meta wants a handle from
+ * its Resumable Upload API (app-level), not a link, as the header example.
+ */
 async function uploadHeaderSample(bytes: Uint8Array, mime: string): Promise<string> {
     const appId = await metaAppId();
     if (!appId) throw new Error(META_APP_ID_MISSING);
@@ -151,7 +158,7 @@ async function components(kind: WaAnyKind, draft: WaTemplateDraft) {
  *  APPROVED straight away for a clean utility template). */
 export async function submitTemplate(kind: WaAnyKind, name: string, draft: WaTemplateDraft): Promise<{ id: string; status: string }> {
     const r = await graph<{ id: string; status: string }>(
-        `${await wabaId()}/message_templates`,
+        `${await billWabaId()}/message_templates`,
         { method: "POST", body: { name, language: LANG, category: "UTILITY", components: await components(kind, draft) } },
     );
     return { id: r.id, status: r.status };
@@ -162,7 +169,7 @@ export type MetaTemplateStatus = { status: string; rejectReason: string | null }
 /** Current approval status of a submitted template; null when Meta has no such name. */
 export async function fetchTemplateStatus(name: string): Promise<MetaTemplateStatus> {
     const r = await graph<{ data: { name: string; status: string; rejected_reason?: string }[] }>(
-        `${await wabaId()}/message_templates?name=${encodeURIComponent(name)}&fields=name,status,rejected_reason`,
+        `${await billWabaId()}/message_templates?name=${encodeURIComponent(name)}&fields=name,status,rejected_reason`,
     );
     const row = r.data.find((t) => t.name === name);
     if (!row) return null;
@@ -290,33 +297,41 @@ export async function downloadWaMedia(mediaId: string): Promise<{ bytes: ArrayBu
     return { bytes, mime: info.mime_type?.split(";")[0].trim() || "application/octet-stream", size: bytes.byteLength };
 }
 
-export type WaPhoneNumber = { id: string; display: string; name: string; status: string; nameStatus: string; quality: string };
+/** `wabaId` = the WhatsApp account the number sits in; "Use for bills" saves it too. */
+export type WaPhoneNumber = { id: string; display: string; name: string; status: string; nameStatus: string; quality: string; wabaId: string };
 
-/** Every number in the WABA, for the App Settings picker. Throws Meta's wording. */
+/** Every number in the OTP and bills WABAs (one list when they are the same),
+ *  for the App Settings picker. Throws Meta's wording. */
 export async function listWaPhoneNumbers(): Promise<WaPhoneNumber[]> {
-    const waba = await wabaId();
-    if (!(await token()) || !waba) throw new Error("Set the WhatsApp Business Account ID (and META_WA_ACCESS_TOKEN in Vercel) first.");
+    const wabas = [...new Set([await wabaId(), await appSetting("WA_CONVERSATION_BUSINESS_ACCOUNT_ID")].filter((w): w is string => Boolean(w)))];
+    if (!(await token()) || !wabas.length) throw new Error("Set the WhatsApp Business Account ID (and META_WA_ACCESS_TOKEN in Vercel) first.");
     type Row = { id: string; display_phone_number?: string; verified_name?: string; status?: string; name_status?: string; quality_rating?: string };
-    const r = await graph<{ data: Row[] }>(`${waba}/phone_numbers?fields=id,display_phone_number,verified_name,status,name_status,quality_rating`);
-    return r.data.map((n) => ({
-        id: n.id,
-        display: n.display_phone_number ?? "",
-        name: n.verified_name ?? "",
-        status: n.status ?? "",
-        nameStatus: n.name_status ?? "",
-        quality: n.quality_rating ?? "",
-    }));
+    const lists = await Promise.all(
+        wabas.map(async (waba) => {
+            const r = await graph<{ data: Row[] }>(`${waba}/phone_numbers?fields=id,display_phone_number,verified_name,status,name_status,quality_rating`);
+            return r.data.map((n) => ({
+                id: n.id,
+                display: n.display_phone_number ?? "",
+                name: n.verified_name ?? "",
+                status: n.status ?? "",
+                nameStatus: n.name_status ?? "",
+                quality: n.quality_rating ?? "",
+                wabaId: waba,
+            }));
+        }),
+    );
+    return lists.flat();
 }
 
-/** Register a cloud number with its 2-step PIN — the step that takes it from
- *  Pending to Connected (WhatsApp Manager has no button for it). The PIN is set
- *  here on first registration; keep it, Meta asks for it on any re-register. */
 /** Set or change a Connected number's 2-step PIN (no old PIN needed — the token's
  *  admin rights are enough). Used later by Register if the number is ever re-added. */
 export async function setWaTwoStepPin(phoneNumberId: string, pin: string): Promise<void> {
     await graph<{ success?: boolean }>(phoneNumberId, { method: "POST", body: { pin } });
 }
 
+/** Register a cloud number with its 2-step PIN — the step that takes it from
+ *  Pending to Connected (WhatsApp Manager has no button for it). The PIN is set
+ *  here on first registration; keep it, Meta asks for it on any re-register. */
 export async function registerWaPhoneNumber(phoneNumberId: string, pin: string): Promise<void> {
     await graph<{ success?: boolean }>(`${phoneNumberId}/register`, {
         method: "POST",

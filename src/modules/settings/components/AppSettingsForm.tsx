@@ -13,7 +13,7 @@ import { parseDigitsInput } from "@/shared/lib/format";
 import { APP_SETTING_DEFS, APP_SETTING_SECTIONS, SECRET_APP_SETTING_KEYS, type AppSettingKey, type AppSettingValues } from "@/shared/lib/constants/appSettings";
 
 type Loaded = { values: AppSettingValues; env: Record<string, string> };
-type WaNumber = { id: string; display: string; name: string; status: string; nameStatus: string; quality: string };
+type WaNumber = { id: string; display: string; name: string; status: string; nameStatus: string; quality: string; wabaId: string };
 
 const PICKABLE: AppSettingKey[] = ["META_WA_PHONE_NUMBER_ID", "WA_CONVERSATION_NUMBER_ID"];
 
@@ -33,6 +33,25 @@ export function AppSettingsForm() {
     }, []);
 
     const set = (k: AppSettingKey, v: string) => setValues((c) => ({ ...c, [k]: v }));
+
+    /** "Use for OTP / bills": the number and the WhatsApp account it sits in go
+     *  together — a bill template only sends from a number in its own account. */
+    const pickNumber = (k: AppSettingKey, n: WaNumber) =>
+        setValues((c) => {
+            const mainWaba = c.META_WA_BUSINESS_ACCOUNT_ID || env.META_WA_BUSINESS_ACCOUNT_ID || "";
+            if (k === "WA_CONVERSATION_NUMBER_ID") {
+                // Blank when it is the main account, so a later OTP move cannot drag it along.
+                return { ...c, WA_CONVERSATION_NUMBER_ID: n.id, WA_CONVERSATION_BUSINESS_ACCOUNT_ID: n.wabaId === mainWaba ? "" : n.wabaId };
+            }
+            // OTP moves account: pin the bills account first if it was following the old main.
+            const keepBills = !c.WA_CONVERSATION_BUSINESS_ACCOUNT_ID && mainWaba && mainWaba !== n.wabaId && c.WA_CONVERSATION_NUMBER_ID;
+            return {
+                ...c,
+                META_WA_PHONE_NUMBER_ID: n.id,
+                META_WA_BUSINESS_ACCOUNT_ID: n.wabaId,
+                ...(keepBills ? { WA_CONVERSATION_BUSINESS_ACCOUNT_ID: mainWaba } : {}),
+            };
+        });
     // Secrets come back masked; only the ones typed (or cleared) here are sent.
     const [secretEdits, setSecretEdits] = useState<Partial<Record<AppSettingKey, string>>>({});
     const setSecret = (k: AppSettingKey, v: string) => setSecretEdits((c) => ({ ...c, [k]: v }));
@@ -156,7 +175,7 @@ export function AppSettingsForm() {
                             </Button>
                             {numbers && (
                                 <div className="rounded border text-sm divide-y">
-                                    {numbers.length === 0 && <div className="p-2 text-muted-foreground">No numbers in this account.</div>}
+                                    {numbers.length === 0 && <div className="p-2 text-muted-foreground">No numbers in these accounts.</div>}
                                     {numbers.map((n) => {
                                         const connected = n.status === "CONNECTED";
                                         return (
@@ -164,7 +183,7 @@ export function AppSettingsForm() {
                                                 <div className="min-w-0 flex-1">
                                                     <div className="font-medium">{n.display} · {n.name}</div>
                                                     <div className="text-xs text-muted-foreground font-mono">
-                                                        {n.id} · {n.status || "?"} · name {n.nameStatus || "?"}{n.quality ? ` · quality ${n.quality}` : ""}
+                                                        {n.id} · {n.status || "?"} · name {n.nameStatus || "?"}{n.quality ? ` · quality ${n.quality}` : ""} · account {n.wabaId}
                                                     </div>
                                                 </div>
                                                 {regFor !== n.id && (
@@ -197,7 +216,7 @@ export function AppSettingsForm() {
                                                         variant={values[k] === n.id ? "default" : "outline"}
                                                         disabled={!connected}
                                                         title={connected ? undefined : "Only a Connected number can send"}
-                                                        onClick={() => set(k, n.id)}
+                                                        onClick={() => pickNumber(k, n)}
                                                     >
                                                         {k === "META_WA_PHONE_NUMBER_ID" ? "Use for OTP" : "Use for bills"}
                                                     </Button>
