@@ -59,7 +59,7 @@ type GraphError = { error?: { message?: string; error_user_msg?: string } };
 async function graph<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
     const res = await fetch(`${GRAPH}/${path}`, {
         method: init?.method ?? "GET",
-        headers: { Authorization: `Bearer ${token()}`, "Content-Type": "application/json" },
+        headers: { Authorization: `Bearer ${await token()}`, "Content-Type": "application/json" },
         body: init?.body ? JSON.stringify(init.body) : undefined,
         cache: "no-store",
     });
@@ -95,7 +95,7 @@ async function uploadHeaderSample(bytes: Uint8Array, mime: string): Promise<stri
     );
     const res = await fetch(`${GRAPH}/${session.id}`, {
         method: "POST",
-        headers: { Authorization: `OAuth ${token()}`, file_offset: "0" },
+        headers: { Authorization: `OAuth ${await token()}`, file_offset: "0" },
         body: Buffer.from(bytes),
         cache: "no-store",
     });
@@ -284,7 +284,7 @@ export async function sendMediaMessage(args: {
 export async function downloadWaMedia(mediaId: string): Promise<{ bytes: ArrayBuffer; mime: string; size: number }> {
     const info = await graph<{ url?: string; mime_type?: string; file_size?: number }>(mediaId);
     if (!info.url) throw new Error("Meta gave no media URL");
-    const res = await fetch(info.url, { headers: { Authorization: `Bearer ${token()}` }, cache: "no-store" });
+    const res = await fetch(info.url, { headers: { Authorization: `Bearer ${await token()}` }, cache: "no-store" });
     if (!res.ok) throw new Error(`Meta media download failed (${res.status})`);
     const bytes = await res.arrayBuffer();
     return { bytes, mime: info.mime_type?.split(";")[0].trim() || "application/octet-stream", size: bytes.byteLength };
@@ -295,7 +295,7 @@ export type WaPhoneNumber = { id: string; display: string; name: string; status:
 /** Every number in the WABA, for the App Settings picker. Throws Meta's wording. */
 export async function listWaPhoneNumbers(): Promise<WaPhoneNumber[]> {
     const waba = await wabaId();
-    if (!token() || !waba) throw new Error("Set the WhatsApp Business Account ID (and META_WA_ACCESS_TOKEN in Vercel) first.");
+    if (!(await token()) || !waba) throw new Error("Set the WhatsApp Business Account ID (and META_WA_ACCESS_TOKEN in Vercel) first.");
     type Row = { id: string; display_phone_number?: string; verified_name?: string; status?: string; name_status?: string; quality_rating?: string };
     const r = await graph<{ data: Row[] }>(`${waba}/phone_numbers?fields=id,display_phone_number,verified_name,status,name_status,quality_rating`);
     return r.data.map((n) => ({
