@@ -91,6 +91,25 @@ export function additivePrice(
 }
 
 /**
+ * Reverse of `additivePriceWithSurcharge`: the margin % (2 dp, the column's
+ * scale) that turns this cost into `pricePaise`. Null when there is no usable
+ * cost. Used to give a Computed product its first margin from the sell price
+ * typed when it was created.
+ */
+export function marginForPrice(
+    baseCostPaise: number | null,
+    additionalCostPaise: number,
+    pricePaise: number,
+    gstRatePct: number = 0,
+): number | null {
+    if (baseCostPaise == null) return null;
+    const costIncl = Math.round((baseCostPaise + additionalCostPaise) * (1 + gstRatePct / 100));
+    if (costIncl <= 0) return null;
+    const pct = Math.round((pricePaise / costIncl - 1) * 10000) / 100;
+    return Math.min(9999.99, Math.max(-99.99, pct)); // Decimal(6,2)
+}
+
+/**
  * `additivePrice` with the pricing-strategy "additional cost" surcharge folded in.
  * The surcharge (shipping/courier, GST-EXCLUSIVE paise) is added to the base cost
  * BEFORE the GST gross-up — this is the ONE documented home for that rule. The

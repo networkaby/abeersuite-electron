@@ -15,7 +15,7 @@ import * as Sentry from "@sentry/nextjs";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { resolveCostBatch } from "@/modules/pricing-strategy/lib/resolveCost";
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
-import { loadStrategyPoints, additiveMarginPct, additivePriceWithSurcharge } from "@/modules/pricing-strategy/lib/additiveMargin";
+import { loadStrategyPoints, additiveMarginPct, additivePriceWithSurcharge, marginForPrice } from "@/modules/pricing-strategy/lib/additiveMargin";
 import { getCurrentAdditionalCostByProduct } from "@/modules/pricing-strategy/lib/costPool";
 
 export interface RecomputeResult {
@@ -105,17 +105,29 @@ export async function recomputePricesForProducts(
         for (const p of products) {
             const gstRatePct = taxByProduct.get(p.id)?.gstRate ?? 0;
             let effective: number | null;
+            let newMargin: number | null = null;
+            const computed = p.effectiveSalePriceSource === "COMPUTED";
+            const cost = costById.get(p.id) ?? null;
 
             if (p.effectiveSalePriceSource === "SAVED" && p.savedSalePricePaise != null) {
                 // SAVED → the human price, MRP-capped. No cost needed.
                 effective = mrpCap(p.savedSalePricePaise, p.mrpPaise);
+            } else if (computed && cost == null && p.savedSalePricePaise != null) {
+                // COMPUTED with no cost yet (new product, nothing bought) →
+                // the Saved price is the fallback until a cost lands.
+                effective = mrpCap(p.savedSalePricePaise, p.mrpPaise);
             } else {
-                const cost = costById.get(p.id) ?? null;
                 const extra = additionalById.get(p.id) ?? 0;
+                // COMPUTED with no margin yet but a Saved price → its first
+                // margin is the one that makes cost reach the Saved price
+                // (a product created with a sell price, e.g. from a purchase).
+                if (computed && p.marginPercent == null && p.savedSalePricePaise != null) {
+                    newMargin = marginForPrice(cost, extra, mrpCap(p.savedSalePricePaise, p.mrpPaise), gstRatePct);
+                }
                 // COMPUTED → the product's own margin %; STRATEGY (default) →
                 // the additive-margin engine. Both mark up the landed cost.
-                const margin = p.effectiveSalePriceSource === "COMPUTED" && p.marginPercent != null
-                    ? Number(p.marginPercent)
+                const margin = newMargin != null ? newMargin
+                    : computed && p.marginPercent != null ? Number(p.marginPercent)
                     : additiveMarginPct(p, points);
                 effective = additivePriceWithSurcharge(cost, extra, margin, p.mrpPaise, gstRatePct).pricePaise;
             }
@@ -127,7 +139,10 @@ export async function recomputePricesForProducts(
             try {
                 await tx.invProduct.update({
                     where: { id: p.id },
-                    data:  { effectiveSalePricePaise: effective },
+                    data:  {
+                        effectiveSalePricePaise: effective,
+                        ...(newMargin != null ? { marginPercent: newMargin.toFixed(2) } : {}),
+                    },
                 });
                 result.updated += 1;
             } catch {

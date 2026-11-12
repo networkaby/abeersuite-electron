@@ -145,6 +145,10 @@ export async function POST(req: Request) {
                     attrsJson: b.attrsJson ?? Prisma.DbNull,
                     effectiveSalePricePaise: b.effectiveSalePricePaise ?? null,
                     savedSalePricePaise: b.savedSalePricePaise ?? null,
+                    // A sell price typed at create → sells on Computed. The Saved
+                    // price stands in until a cost lands; the first cost then sets
+                    // the margin % that reaches it (recomputePrices.ts).
+                    ...(b.savedSalePricePaise != null ? { effectiveSalePriceSource: "COMPUTED" as const } : {}),
                     mrpPaise:   b.mrpPaise   ?? null,
                     // Books-beginning opening stock — server computes openingValue.
                     openingStock:     b.openingStock ?? null,
