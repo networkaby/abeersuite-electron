@@ -50,6 +50,23 @@ export function AppSettingsForm() {
         }
     };
 
+    const [regFor, setRegFor] = useState<string | null>(null);
+    const [pin, setPin] = useState("");
+    const register = async (id: string) => {
+        setNumbersBusy(true);
+        try {
+            await axios.post("/api/settings/app-settings", { phoneNumberId: id, pin });
+            toast.success("Registered — refreshing the list");
+            setRegFor(null);
+            setPin("");
+            await loadNumbers();
+        } catch (e) {
+            toast.error(extractApiError(e, "Register failed"));
+        } finally {
+            setNumbersBusy(false);
+        }
+    };
+
     const save = async () => {
         setSaving(true);
         try {
@@ -94,6 +111,29 @@ export function AppSettingsForm() {
                                                         {n.id} · {n.status || "?"} · name {n.nameStatus || "?"}{n.quality ? ` · quality ${n.quality}` : ""}
                                                     </div>
                                                 </div>
+                                                {!connected && regFor !== n.id && (
+                                                    <Button size="sm" variant="outline" onClick={() => { setRegFor(n.id); setPin(""); }}>
+                                                        Register
+                                                    </Button>
+                                                )}
+                                                {regFor === n.id && (
+                                                    <div className="flex basis-full items-center gap-2">
+                                                        <Input
+                                                            type="password"
+                                                            inputMode="numeric"
+                                                            autoComplete="off"
+                                                            placeholder="6-digit 2-step PIN"
+                                                            value={pin}
+                                                            onChange={(e) => setPin(parseDigitsInput(e.target.value).slice(0, 6))}
+                                                            className="w-44 font-mono"
+                                                        />
+                                                        <Button size="sm" disabled={pin.length !== 6 || numbersBusy} onClick={() => register(n.id)}>
+                                                            Register with Meta
+                                                        </Button>
+                                                        <Button size="sm" variant="ghost" onClick={() => setRegFor(null)}>Cancel</Button>
+                                                        <span className="text-xs text-muted-foreground">Keep this PIN safe — Meta asks for it again.</span>
+                                                    </div>
+                                                )}
                                                 {PICKABLE.map((k) => (
                                                     <Button
                                                         key={k}

@@ -307,3 +307,13 @@ export async function listWaPhoneNumbers(): Promise<WaPhoneNumber[]> {
         quality: n.quality_rating ?? "",
     }));
 }
+
+/** Register a cloud number with its 2-step PIN — the step that takes it from
+ *  Pending to Connected (WhatsApp Manager has no button for it). The PIN is set
+ *  here on first registration; keep it, Meta asks for it on any re-register. */
+export async function registerWaPhoneNumber(phoneNumberId: string, pin: string): Promise<void> {
+    await graph<{ success?: boolean }>(`${phoneNumberId}/register`, {
+        method: "POST",
+        body: { messaging_product: "whatsapp", pin },
+    });
+}
