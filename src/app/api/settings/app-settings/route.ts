@@ -8,7 +8,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { APP_SETTING_DEFS, SECRET_APP_SETTING_KEYS, maskSecret, normalizeAppSettings, type AppSettingKey, type AppSettingValues } from "@/shared/lib/constants/appSettings";
 import { APP_SETTINGS_TAG, envAppSetting, openSavedSecret } from "@/shared/lib/settings/appSettings.server";
 import { hasSharedSecret, lockSecret } from "@/shared/lib/ai/secretBox";
-import { listWaPhoneNumbers, registerWaPhoneNumber } from "@/shared/lib/whatsapp/metaTemplates";
+import { listWaPhoneNumbers, registerWaPhoneNumber, setWaTwoStepPin } from "@/shared/lib/whatsapp/metaTemplates";
 
 // Settings → App Settings. Stored on OrgDefaults.appSettingsJson; a blank key falls
 // back to .env. Secrets may be saved here too (owner, 2026-11-12 — for testing
@@ -106,16 +106,20 @@ export async function PUT(req: Request) {
 const registerSchema = z.object({
     phoneNumberId: z.string().regex(/^\d+$/, "Phone number ID: digits only"),
     pin: z.string().regex(/^\d{6}$/, "PIN must be 6 digits"),
+    /** "register" (Pending → Connected) or "pin" (change a Connected number's PIN). */
+    action: z.enum(["register", "pin"]).default("register"),
 });
 
-/** POST — register a Pending number with Meta (2-step PIN typed by staff, never stored). */
+/** POST — register a Pending number, or change a Connected number's 2-step PIN.
+ *  The PIN is typed by staff and never stored here. */
 export async function POST(req: Request) {
     const { response } = await requirePermission(PERMISSIONS.SETTINGS_APP_MANAGE);
     if (response) return response;
     const { data, error } = await validateRequest(req, registerSchema);
     if (error) return error;
     try {
-        await registerWaPhoneNumber(data.phoneNumberId, data.pin);
+        if (data.action === "pin") await setWaTwoStepPin(data.phoneNumberId, data.pin);
+        else await registerWaPhoneNumber(data.phoneNumberId, data.pin);
         return NextResponse.json({ ok: true });
     } catch (e) {
         return NextResponse.json({ error: (e as Error).message }, { status: 502 });

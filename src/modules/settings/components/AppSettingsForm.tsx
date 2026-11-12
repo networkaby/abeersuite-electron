@@ -50,18 +50,19 @@ export function AppSettingsForm() {
         }
     };
 
+    // PIN box for one number: register a Pending one, or change a Connected one's PIN.
     const [regFor, setRegFor] = useState<string | null>(null);
     const [pin, setPin] = useState("");
-    const register = async (id: string) => {
+    const register = async (id: string, action: "register" | "pin") => {
         setNumbersBusy(true);
         try {
-            await axios.post("/api/settings/app-settings", { phoneNumberId: id, pin });
-            toast.success("Registered — refreshing the list");
+            await axios.post("/api/settings/app-settings", { phoneNumberId: id, pin, action });
+            toast.success(action === "pin" ? "PIN changed — save it in .env / Vercel as META_WA_2FA_PIN_<last 5 digits>" : "Registered — refreshing the list");
             setRegFor(null);
             setPin("");
             await loadNumbers();
         } catch (e) {
-            toast.error(extractApiError(e, "Register failed"));
+            toast.error(extractApiError(e, action === "pin" ? "PIN change failed" : "Register failed"));
         } finally {
             setNumbersBusy(false);
         }
@@ -111,9 +112,9 @@ export function AppSettingsForm() {
                                                         {n.id} · {n.status || "?"} · name {n.nameStatus || "?"}{n.quality ? ` · quality ${n.quality}` : ""}
                                                     </div>
                                                 </div>
-                                                {!connected && regFor !== n.id && (
+                                                {regFor !== n.id && (
                                                     <Button size="sm" variant="outline" onClick={() => { setRegFor(n.id); setPin(""); }}>
-                                                        Register
+                                                        {connected ? "Change PIN" : "Register"}
                                                     </Button>
                                                 )}
                                                 {regFor === n.id && (
@@ -127,8 +128,8 @@ export function AppSettingsForm() {
                                                             onChange={(e) => setPin(parseDigitsInput(e.target.value).slice(0, 6))}
                                                             className="w-44 font-mono"
                                                         />
-                                                        <Button size="sm" disabled={pin.length !== 6 || numbersBusy} onClick={() => register(n.id)}>
-                                                            Register with Meta
+                                                        <Button size="sm" disabled={pin.length !== 6 || numbersBusy} onClick={() => register(n.id, connected ? "pin" : "register")}>
+                                                            {connected ? "Set PIN at Meta" : "Register with Meta"}
                                                         </Button>
                                                         <Button size="sm" variant="ghost" onClick={() => setRegFor(null)}>Cancel</Button>
                                                         <span className="text-xs text-muted-foreground">Keep this PIN safe — Meta asks for it again.</span>
