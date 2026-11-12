@@ -116,7 +116,9 @@ export function AppSettingsForm() {
                         const id = `as-${d.key}`;
                         return (
                             <div key={d.key} className="space-y-1">
-                                <Label htmlFor={id}>{d.label}</Label>
+                                <Label htmlFor={id}>
+                                    {d.label} <span className="ml-1 font-mono text-xs font-normal text-muted-foreground">.env: {d.key}</span>
+                                </Label>
                                 {"options" in d ? (
                                     <select
                                         id={id}
