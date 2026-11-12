@@ -709,6 +709,17 @@ const GATEWAYS = [
         settlementLedger: "Cashfree",
         configJson: {},
     },
+    {
+        provider: "pinelabs",
+        displayName: "Pine Labs",
+        environment: "TEST",
+        enabledForCounter: false,
+        enabledForOnline: true,
+        isActive: false,
+        sortOrder: 40,
+        settlementLedger: "Pine Labs",
+        configJson: {},
+    },
 ] as const;
 
 const DEPARTMENTS: { id: string; name: string; description: string; isAllAccess?: boolean }[] = [
@@ -1000,6 +1011,7 @@ async function main() {
     await upsertLedger("Razorpay", "Payment Gateway", "DEBIT");
     await upsertLedger("Payu", "Payment Gateway", "DEBIT");
     await upsertLedger("Cashfree", "Payment Gateway", "DEBIT");
+    await upsertLedger("Pine Labs", "Payment Gateway", "DEBIT");
     await upsertLedger("ShipRoket COD", "Payment Gateway", "DEBIT");
     await upsertLedger("Accounts Receivable", "Sundry Debtors", "DEBIT");
     await upsertLedger("Accounts Payable", "Sundry Creditors", "CREDIT");

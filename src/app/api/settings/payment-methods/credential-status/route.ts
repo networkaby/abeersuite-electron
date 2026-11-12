@@ -21,9 +21,9 @@ export async function GET(req: Request) {
         const environment = envParam === "LIVE" ? "LIVE" : "TEST";
 
         if (provider) {
-            return NextResponse.json({ status: credentialStatusFor(provider, environment) });
+            return NextResponse.json({ status: await credentialStatusFor(provider, environment) });
         }
-        return NextResponse.json({ statuses: credentialStatusForAll(PAYMENT_GATEWAY_PROVIDERS) });
+        return NextResponse.json({ statuses: await credentialStatusForAll(PAYMENT_GATEWAY_PROVIDERS) });
     } catch (e) {
         return handleApiError(e, "Failed to read credential status");
     }

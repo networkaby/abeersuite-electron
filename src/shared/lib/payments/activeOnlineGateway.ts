@@ -24,6 +24,7 @@ export const ONLINE_PAYABLE_PROVIDERS: ReadonlySet<string> = new Set([
     "payu",
     "razorpay",
     "cashfree",
+    "pinelabs",
 ]);
 
 /// All gateways enabled for online (active), in display order.

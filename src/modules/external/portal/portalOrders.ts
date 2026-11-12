@@ -10,6 +10,7 @@ const GATEWAY_LABEL: Record<string, string> = {
     razorpay: "Razorpay",
     payu: "PayU",
     cashfree: "Cashfree",
+    pinelabs: "Pine Labs",
     demo: "Demo gateway",
 };
 

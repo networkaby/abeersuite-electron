@@ -97,6 +97,22 @@ export const payuProvider: PaymentGatewayProvider = {
     available: true,
 };
 
+export const pineLabsProvider: PaymentGatewayProvider = {
+    id: "pinelabs",
+    label: "Pine Labs",
+    kind: "GATEWAY",
+    envVars: {
+        test: ["PINELABS_CLIENT_ID", "PINELABS_CLIENT_SECRET"],
+        live: ["PINELABS_CLIENT_ID", "PINELABS_CLIENT_SECRET"],
+    },
+    supportsOnline: true,
+    // Online checkout only for now — no counter collection flow is wired.
+    supportsCounter: false,
+    channel: "GATEWAY",
+    configFields: [],
+    available: true,
+};
+
 export const manualUpiProvider: PaymentGatewayProvider = {
     id: "manual_upi",
     label: "Generic UPI / manual",
@@ -191,6 +207,7 @@ export const PAYMENT_GATEWAY_PROVIDERS: PaymentGatewayProvider[] = [
     razorpayProvider,
     payuProvider,
     cashfreeProvider,
+    pineLabsProvider,
     manualUpiProvider,
     demoProvider,
 ];
@@ -265,6 +282,16 @@ export const PAYMENT_METHOD_DEFAULTS: {
         enabledForOnline: false,
         isActive: false,
         sortOrder: 30,
+        configJson: {},
+    },
+    {
+        provider: "pinelabs",
+        displayName: "Pine Labs",
+        environment: "TEST",
+        enabledForCounter: false,
+        enabledForOnline: false,
+        isActive: false,
+        sortOrder: 40,
         configJson: {},
     },
 ];

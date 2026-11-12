@@ -155,6 +155,12 @@ export default function OnlinePayPanel({
         // Redirects away; nothing after this runs.
     };
 
+    const payPineLabs = async () => {
+        const { data } = await axios.post<{ redirectUrl: string }>(`/api/shop/orders/${orderId}/pinelabs`);
+        window.location.assign(data.redirectUrl);
+        // Leaves for Pine Labs' page; it brings the customer back via the callback.
+    };
+
     const pay = async () => {
         setBusy(true);
         setError("");
@@ -163,6 +169,7 @@ export default function OnlinePayPanel({
             else if (selected === "payu") await payPayu();
             else if (selected === "razorpay") await payRazorpay();
             else if (selected === "cashfree") await payCashfree();
+            else if (selected === "pinelabs") await payPineLabs();
             else fail("Unknown payment method.");
         } catch (e) {
             fail(errMsg(e) || (e instanceof Error ? e.message : "Could not start payment."));

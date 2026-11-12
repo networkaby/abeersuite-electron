@@ -81,7 +81,7 @@ const pageProxy = auth((req) => {
         return NextResponse.redirect(new URL(SHOP_APP_INSTALL, req.url));
     }
     // Inside the app, website addresses that lead into it land on the app's own
-    // screen: a payment gateway's return to the order page (PayU, Cashfree) and
+    // screen: a payment gateway's return to the order page (PayU, Cashfree, Pine Labs) and
     // the short link every customer message carries.
     if (isShopNativeRequest(req.headers.get("user-agent") ?? "", req.cookies.get(SHOP_NATIVE_DEV_COOKIE)?.value)) {
         const inApp = appScreenFor(pathname);

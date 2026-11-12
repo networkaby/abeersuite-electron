@@ -1,8 +1,10 @@
-// SERVER-ONLY. Reads process.env to report whether a payment provider's required
-// env vars are present — booleans only, NEVER the values. Kept separate from the
+// SERVER-ONLY. Reports whether a payment provider's required keys are present —
+// in Settings → App Settings or in process.env — booleans only, NEVER the values. Kept separate from the
 // client-safe registry (src/modules/pos/lib/paymentGateways.ts) because it touches
 // process.env. Do not import this from a client component.
 
+import { appSetting } from "@/shared/lib/settings/appSettings.server";
+import { APP_SETTING_DEFS, type AppSettingKey } from "@/shared/lib/constants/appSettings";
 import {
     getGatewayProvider,
     envVarsFor,
@@ -24,22 +26,28 @@ export type GatewayCredentialStatus = {
     checkedOnOffice: boolean;
 };
 
-function statusForNames(names: string[]): EnvVarStatus[] {
-    return names.map((name) => ({
-        name,
-        // Presence = a non-empty trimmed value. We never read or return the value.
-        present: Boolean(process.env[name]?.trim()),
-    }));
+const APP_SETTING_KEYS = new Set<string>(APP_SETTING_DEFS.map((d) => d.key));
+
+async function statusForNames(names: string[]): Promise<EnvVarStatus[]> {
+    return Promise.all(
+        names.map(async (name) => ({
+            name,
+            // Presence = a non-empty value (App Settings first, then .env). Never returned.
+            present: APP_SETTING_KEYS.has(name)
+                ? Boolean(await appSetting(name as AppSettingKey))
+                : Boolean(process.env[name]?.trim()),
+        })),
+    );
 }
 
 /// Credential status for a known provider in a given environment.
-export function credentialStatusFor(
+export async function credentialStatusFor(
     providerId: string,
     environment: GatewayEnvironment,
-): GatewayCredentialStatus {
+): Promise<GatewayCredentialStatus> {
     const provider = getGatewayProvider(providerId);
     const names = provider ? envVarsFor(provider, environment) : [];
-    const vars = statusForNames(names);
+    const vars = await statusForNames(names);
     return {
         provider: providerId,
         environment,
@@ -52,14 +60,14 @@ export function credentialStatusFor(
 
 /// Credential status for every registered provider, both environments. Used by the
 /// Settings form to render ✓/✗ without leaking any secret values.
-export function credentialStatusForAll(
+export async function credentialStatusForAll(
     providers: PaymentGatewayProvider[],
-): Record<string, { test: GatewayCredentialStatus; live: GatewayCredentialStatus }> {
+): Promise<Record<string, { test: GatewayCredentialStatus; live: GatewayCredentialStatus }>> {
     const out: Record<string, { test: GatewayCredentialStatus; live: GatewayCredentialStatus }> = {};
     for (const p of providers) {
         out[p.id] = {
-            test: credentialStatusFor(p.id, "TEST"),
-            live: credentialStatusFor(p.id, "LIVE"),
+            test: await credentialStatusFor(p.id, "TEST"),
+            live: await credentialStatusFor(p.id, "LIVE"),
         };
     }
     return out;

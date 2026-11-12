@@ -23,7 +23,7 @@ export async function GET() {
             orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
             include: { _count: { select: { counterAccounts: true } } },
         });
-        const gateways = rows.map((g) => ({
+        const gateways = await Promise.all(rows.map(async (g) => ({
             id: g.id,
             provider: g.provider,
             displayName: g.displayName,
@@ -35,11 +35,11 @@ export async function GET() {
             isActive: g.isActive,
             counterCount: g._count.counterAccounts,
             // Names + booleans only — never the secret values.
-            credentialStatus: credentialStatusFor(
+            credentialStatus: await credentialStatusFor(
                 g.provider,
                 g.environment === "LIVE" ? "LIVE" : "TEST",
             ),
-        }));
+        })));
         return NextResponse.json({ gateways, providers: PAYMENT_GATEWAY_PROVIDERS });
     } catch (e) {
         return handleApiError(e, "Failed to load payment methods");

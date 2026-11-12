@@ -25,7 +25,7 @@ export type MarkOrderPaidResult =
  * @param ticketId  the order (TicketOrder.ticketId)
  * @param opts.paymentId  PSP payment reference to record (e.g. PayU mihpayid)
  * @param opts.gatewayLabel  short label for the staff notification ("PayU", "demo")
- * @param opts.provider  gateway registry id ("razorpay" | "payu" | "cashfree" | "demo")
+ * @param opts.provider  gateway registry id ("razorpay" | "payu" | "cashfree" | "pinelabs" | "demo")
  *                       — drives the auto-posted Receipt's settlement ledger
  * @param opts.customerId  when set, the order must belong to this customer
  */
