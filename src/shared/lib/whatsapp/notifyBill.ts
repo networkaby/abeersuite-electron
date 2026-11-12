@@ -510,7 +510,7 @@ async function sendWhatsApp(kind: WaAnyKind, linkCode: string, mobile: string | 
         if (kind === "DEAL_CREATED" || kind === "HELP_CREATED") {
             const draft = await getWaTemplateDraft(kind);
             const text = fillBody(draft.body, values);
-            if (text && isBillSendConfigured()) {
+            if (text && (await isBillSendConfigured())) {
                 try {
                     const extId = await sendTextMessage(mobile, text);
                     if (extId) return { status: "sent", messageId: extId };
@@ -521,7 +521,7 @@ async function sendWhatsApp(kind: WaAnyKind, linkCode: string, mobile: string | 
         }
         return { status: "disabled" };
     }
-    if (!isBillSendConfigured()) return { status: "not-configured" };
+    if (!(await isBillSendConfigured())) return { status: "not-configured" };
     try {
         const messageId = await sendBillTemplate({ mobile10: mobile, name: tpl.name, approved: tpl.draft, values, linkCode, headerImage });
         return { status: "sent", messageId };

@@ -23,8 +23,8 @@ export default async function WhatsAppTemplatesPage() {
                 <WhatsAppConnectCard />
                 <WhatsAppTemplatesPanel
                     initialTemplates={templates}
-                    templateApiReady={isTemplateApiConfigured()}
-                    sendReady={isBillSendConfigured()}
+                    templateApiReady={await isTemplateApiConfigured()}
+                    sendReady={await isBillSendConfigured()}
                 />
             </div>
         </ScrollArea>

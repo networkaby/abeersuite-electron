@@ -661,6 +661,9 @@ export const SIDEBAR_LINK_EXTRA_TOGGLE: Record<string, ExtraToggle | ExtraToggle
     // Tracking Codes — the page opens on its link; saving puts code on every shop
     // page, so it is settings:tracking:manage (no other box grants it).
     [sidebarChildPermissionId("settings", "tracking-codes")]: { id: "settings:tracking:manage", label: "Can edit tracking codes" },
+    // App Settings — the page opens on its link; saving changes which number every
+    // bill and login code goes from, so it is settings:app:manage (no other box grants it).
+    [sidebarChildPermissionId("settings", "app-settings")]: { id: "settings:app:manage", label: "Can edit app settings" },
     // CRM → Messages — reading opens on the link; a reply is a paid WhatsApp message.
     [sidebarChildPermissionId("crm", "messages")]: { id: "messages:reply", label: "Can reply on WhatsApp" },
     // Campaigns — writing opens on the link; sending goes to every customer at once.

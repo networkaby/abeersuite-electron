@@ -216,6 +216,8 @@ export const PERMISSIONS = {
     SETTINGS_MANAGE: "settings:manage",
     SETTINGS_AI_MANAGE: "settings:ai:manage",
     SETTINGS_TRACKING_MANAGE: "settings:tracking:manage",
+    // Settings → App Settings — WhatsApp number ids etc. (DB first, .env fallback).
+    SETTINGS_APP_MANAGE: "settings:app:manage",
     // Settings → Incoming API — every outside caller's key; one tick for the whole page.
     SETTINGS_INCOMING_MANAGE: "settings:incoming:manage",
 

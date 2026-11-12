@@ -14,11 +14,11 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
     const { response } = await requireFacebookConnect();
     if (response) return response;
-    const problem = facebookSetupProblem();
+    const problem = await facebookSetupProblem();
     if (problem) return NextResponse.redirect(new URL(`/office/campaigns/channels?facebook=${encodeURIComponent(problem)}`, req.url));
 
     const state = crypto.randomBytes(24).toString("base64url");
-    const res = NextResponse.redirect(facebookAuthUrl(state));
+    const res = NextResponse.redirect(await facebookAuthUrl(state));
     res.cookies.set(FACEBOOK_STATE_COOKIE, state, { httpOnly: true, secure: true, sameSite: "lax", path: "/api/campaigns/facebook", maxAge: 600 });
     return res;
 }

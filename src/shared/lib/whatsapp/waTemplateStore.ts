@@ -174,7 +174,7 @@ export async function renameCustomWaTemplate(kind: WaAnyKind, name: string): Pro
 
 /** Send the saved draft to Meta under a fresh versioned name. */
 export async function submitWaTemplate(kind: WaAnyKind): Promise<WaTemplateView> {
-    if (!isTemplateApiConfigured()) {
+    if (!(await isTemplateApiConfigured())) {
         throw new WaTemplateError("WhatsApp template sending is not set up — META_WA_BUSINESS_ACCOUNT_ID or META_WA_ACCESS_TOKEN is missing.");
     }
     const cur = await getOne(kind);
@@ -206,7 +206,7 @@ export async function submitWaTemplate(kind: WaAnyKind): Promise<WaTemplateView>
 /** Ask Meta where the submitted copy stands; on APPROVED it becomes the one bills use. */
 export async function refreshWaTemplate(kind: WaAnyKind): Promise<WaTemplateView> {
     const cur = await getOne(kind);
-    if (!cur.metaName || cur.status !== "PENDING" || !isTemplateApiConfigured()) return cur;
+    if (!cur.metaName || cur.status !== "PENDING" || !(await isTemplateApiConfigured())) return cur;
     const s = await fetchTemplateStatus(cur.metaName);
     if (!s) return cur;
     if (s.status === "APPROVED") {

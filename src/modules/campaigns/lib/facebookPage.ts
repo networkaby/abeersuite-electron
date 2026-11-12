@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { lockSecret, unlockSecret, hasSharedSecret } from "@/shared/lib/ai/secretBox";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
+import { metaAppId } from "@/shared/lib/whatsapp/metaTemplates";
 import { mediaLink } from "@/modules/message/lib/customerMessages";
 import { facebookAutoBlock, facebookReelBlock, facebookStoryBlock, postCaption } from "@/modules/campaigns/lib/post";
 
@@ -27,8 +28,9 @@ const SCOPES = ["pages_show_list", "pages_read_engagement", "pages_manage_posts"
 
 export const FACEBOOK_LINK_ID = 1;
 
-const env = () => ({
-    appId: process.env.META_APP_ID?.trim() || "",
+/** App id: Settings → App Settings, else .env. The secret is Vercel-only. */
+const env = async () => ({
+    appId: await metaAppId(),
     appSecret: process.env.META_APP_SECRET?.trim() || "",
 });
 
@@ -37,16 +39,16 @@ export const facebookRedirectUrl = () =>
     process.env.FACEBOOK_REDIRECT_URL?.trim() || `${COMPANY_DETAILS.sites.office}/api/campaigns/facebook/callback`;
 
 /** Why this server cannot connect Facebook, or null when it can. */
-export function facebookSetupProblem(): string | null {
-    const { appId, appSecret } = env();
+export async function facebookSetupProblem(): Promise<string | null> {
+    const { appId, appSecret } = await env();
     if (!appId || !appSecret) return "META_APP_ID and META_APP_SECRET are not set on this server.";
     if (!hasSharedSecret()) return "AI_KEY_SECRET is not set on this server — it locks the saved Facebook access.";
     return null;
 }
 
-export function facebookAuthUrl(state: string): string {
+export async function facebookAuthUrl(state: string): Promise<string> {
     const q = new URLSearchParams({
-        client_id: env().appId,
+        client_id: (await env()).appId,
         redirect_uri: facebookRedirectUrl(),
         response_type: "code",
         scope: SCOPES.join(","),
@@ -90,7 +92,7 @@ export const noteFacebookError = (lastError: string | null) =>
  * link. A new sign-in keeps the picked page only when it is the same person.
  */
 export async function saveFacebookConnection(code: string, user: { id: number; name: string | null }): Promise<string | null> {
-    const { appId, appSecret } = env();
+    const { appId, appSecret } = await env();
     try {
         const short = await graph<{ access_token?: string }>("/oauth/access_token", {
             params: { client_id: appId, client_secret: appSecret, redirect_uri: facebookRedirectUrl(), code },
@@ -131,7 +133,7 @@ export type FacebookPage = { id: string; name: string; category: string | null; 
 type PageRow = { id: string; name: string; category?: string; access_token?: string; tasks?: string[] };
 
 async function userToken(): Promise<string> {
-    const problem = facebookSetupProblem();
+    const problem = await facebookSetupProblem();
     if (problem) throw new FacebookError(problem);
     const row = await prisma.facebookPageLink.findUnique({ where: { id: FACEBOOK_LINK_ID }, select: { userTokenEnc: true } });
     if (!row) throw new FacebookError("Facebook is not connected — Campaigns → Channels → Connect.");
@@ -196,20 +198,21 @@ export async function facebookStatus() {
         where: { id: FACEBOOK_LINK_ID },
         select: { fbUserName: true, pageId: true, pageName: true, igUsername: true, igUserId: true, connectedByName: true, lastError: true, updatedAt: true },
     });
-    const ready = !!row?.pageId && !facebookSetupProblem();
-    return { setupProblem: facebookSetupProblem(), connected: !!row, ...row, ready, instagramReady: ready && !!row?.igUserId };
+    const setupProblem = await facebookSetupProblem();
+    const ready = !!row?.pageId && !setupProblem;
+    return { setupProblem, connected: !!row, ...row, ready, instagramReady: ready && !!row?.igUserId };
 }
 
 /** Is Facebook posting fully set up (connected and a page picked)? */
 export async function facebookReady(): Promise<boolean> {
-    if (facebookSetupProblem()) return false;
+    if (await facebookSetupProblem()) return false;
     const row = await prisma.facebookPageLink.findUnique({ where: { id: FACEBOOK_LINK_ID }, select: { pageId: true } });
     return !!row?.pageId;
 }
 
 /** The picked page, its opened token and its linked Instagram id — for every API post. */
 export async function pageAccess(): Promise<{ pageId: string; token: string; igUserId: string | null }> {
-    const problem = facebookSetupProblem();
+    const problem = await facebookSetupProblem();
     if (problem) throw new FacebookError(problem);
     const row = await prisma.facebookPageLink.findUnique({ where: { id: FACEBOOK_LINK_ID }, select: { pageId: true, pageTokenEnc: true, igUserId: true } });
     if (!row?.pageId || !row.pageTokenEnc) throw new FacebookError("Pick the shop's page on Campaigns → Channels first.");

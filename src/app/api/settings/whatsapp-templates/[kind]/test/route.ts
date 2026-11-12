@@ -28,7 +28,7 @@ export async function POST(req: Request, { params }: RouteCtx) {
 
     const mobile10 = normalizeMobile10(data.mobile);
     if (!mobile10) return NextResponse.json({ error: "Enter a 10-digit mobile number." }, { status: 422 });
-    if (!isBillSendConfigured()) return NextResponse.json({ error: "WhatsApp sending is not set up on this server." }, { status: 422 });
+    if (!(await isBillSendConfigured())) return NextResponse.json({ error: "WhatsApp sending is not set up on this server." }, { status: 422 });
 
     const t = (await listWaTemplates()).find((x) => x.kind === kind);
     if (!t?.approved) return NextResponse.json({ error: "Nothing approved yet — a test can only use an approved template." }, { status: 422 });

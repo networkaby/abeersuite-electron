@@ -211,7 +211,7 @@ export async function sendPostToInstagram(postId: number, by: { userId: number |
 
 /** Is Instagram posting set up (Facebook page picked, and it has a linked Instagram)? */
 export async function instagramReady(): Promise<boolean> {
-    if (facebookSetupProblem()) return false;
+    if (await facebookSetupProblem()) return false;
     const row = await prisma.facebookPageLink.findUnique({ where: { id: FACEBOOK_LINK_ID }, select: { pageId: true, igUserId: true } });
     return !!row?.pageId && !!row.igUserId;
 }

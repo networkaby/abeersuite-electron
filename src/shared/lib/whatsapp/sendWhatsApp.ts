@@ -1,4 +1,5 @@
 import "server-only";
+import { appSetting } from "@/shared/lib/settings/appSettings.server";
 
 /**
  * WhatsApp OTP delivery — the cheapest pipe for a mobile code.
@@ -14,7 +15,8 @@ import "server-only";
  * removed 2026-10-06.
  *
  * ── Setup (see docs/portal-passwordless-setup.md) ───────────────────────────
- *   META_WA_ACCESS_TOKEN        permanent system-user token
+ *   META_WA_ACCESS_TOKEN        permanent system-user token (Vercel only)
+ *   The four below may also be set on Settings → App Settings, which wins.
  *   META_WA_PHONE_NUMBER_ID     from the Meta app dashboard
  *   WA_OTP_TEMPLATE             approved AUTHENTICATION template *name*
  *   WA_OTP_LANG                 template language, default "en"
@@ -29,15 +31,9 @@ import "server-only";
 /** Meta Cloud API version we target. */
 const GRAPH_VERSION = "v21.0";
 
-function phoneNumberId(): string | undefined {
-    return process.env.META_WA_PHONE_NUMBER_ID;
-}
-function templateName(): string | undefined {
-    return process.env.WA_OTP_TEMPLATE;
-}
-function templateLang(): string {
-    return process.env.WA_OTP_LANG || "en";
-}
+const phoneNumberId = () => appSetting("META_WA_PHONE_NUMBER_ID");
+const templateName = () => appSetting("WA_OTP_TEMPLATE");
+const templateLang = async () => (await appSetting("WA_OTP_LANG")) || "en";
 /**
  * Which button the approved template has, if any — these are NOT
  * interchangeable at template-creation time, but both send the same payload:
@@ -51,8 +47,8 @@ function templateLang(): string {
  */
 type OtpButtonKind = "copy_code" | "one_tap" | "none";
 
-function templateButtonKind(): OtpButtonKind {
-    const raw = (process.env.WA_OTP_BUTTON || "").toLowerCase();
+async function templateButtonKind(): Promise<OtpButtonKind> {
+    const raw = ((await appSetting("WA_OTP_BUTTON")) || "").toLowerCase();
     if (raw === "one_tap" || raw === "url") return "one_tap";
     // Legacy "1" meant "has some button" — copy_code is the correct default
     // for a website, and is what the template wizard calls "Copy code".
@@ -67,8 +63,8 @@ export class WhatsAppNotConfiguredError extends Error {
     }
 }
 
-export function isWhatsAppConfigured(): boolean {
-    return Boolean(phoneNumberId() && templateName() && process.env.META_WA_ACCESS_TOKEN);
+export async function isWhatsAppConfigured(): Promise<boolean> {
+    return Boolean(process.env.META_WA_ACCESS_TOKEN && (await phoneNumberId()) && (await templateName()));
 }
 
 /**
@@ -77,8 +73,8 @@ export function isWhatsAppConfigured(): boolean {
  * code because Meta always wants the number in full international form.
  */
 export async function sendOtpWhatsApp(mobile: string, code: string): Promise<void> {
-    const numberId = phoneNumberId();
-    const template = templateName();
+    const numberId = await phoneNumberId();
+    const template = await templateName();
     const metaToken = process.env.META_WA_ACCESS_TOKEN;
 
     if (!numberId) throw new WhatsAppNotConfiguredError();
@@ -92,7 +88,7 @@ export async function sendOtpWhatsApp(mobile: string, code: string): Promise<voi
     // in the same url-button shape; a plain authentication template has
     // a body parameter only.
     const components: unknown[] = [{ type: "body", parameters: [{ type: "text", text: code }] }];
-    const buttonKind = templateButtonKind();
+    const buttonKind = await templateButtonKind();
     // Meta sends BOTH button kinds of an authentication template as a "url"
     // button carrying the code as text — a `copy_code`/`coupon_code` shape is
     // refused with 132018 "Button at index 0 must be of type Url" (2026-10-06).
@@ -115,7 +111,7 @@ export async function sendOtpWhatsApp(mobile: string, code: string): Promise<voi
             type: "template",
             template: {
                 name: template,
-                language: { code: templateLang() },
+                language: { code: await templateLang() },
                 components,
             },
         }),

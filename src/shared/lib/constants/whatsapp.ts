@@ -1,24 +1,11 @@
 /**
- * WhatsApp numbers (Meta phone_number_id — not secret; the token stays in .env).
- *
- * OTP always goes from the main number, META_WA_PHONE_NUMBER_ID in .env.
- * Bills, reminders and new staff replies go from WA_CONVERSATION_NUMBER_ID;
- * null = everything on the main number. A reply to a customer always goes back
- * from the number that customer last wrote to, whichever it was.
- *
- * Both numbers sit in the Network Service WABA, so one token and one set of
- * approved templates serve both.
+ * WhatsApp number ids, WABA id, the Meta app id and the Connect-number setup id
+ * live on Settings → App Settings (DB first, then .env) — see
+ * constants/appSettings.ts. Numbers (owner, 2026-11-12): 96977 = OTP + fallback,
+ * cloud only; 96996 = bills & replies (id 1426171653917236, set it there once
+ * WhatsApp Manager shows it Connected); 96988 = AbeerSoft's own number.
+ * The token stays in Vercel (META_WA_ACCESS_TOKEN).
  */
-
-/** +91 88769 96996 — conversation-only number. Its Meta id is 1426171653917236
- *  (re-added 2026-11-12 after the Business-app trial; code-verified, display name in review, not yet registered): set it here only once
- *  WhatsApp Manager shows it Connected, or every bill would fail to send. */
-export const WA_CONVERSATION_NUMBER_ID: string | null = null;
-
-/** The "AbeerSuite coexistence" Embedded Signup setup — the Connect-number button
- *  on WhatsApp Templates. Public id, not a secret; META_WA_SIGNUP_CONFIG_ID in .env
- *  overrides it. The Meta app itself is META_APP_ID in .env (metaAppId()). */
-export const META_WA_SIGNUP_CONFIG_ID = "1061577020211736";
 
 /** Cloudflare R2 bucket for WhatsApp chat attachments (private; signed links
  *  only). Account id + keys live in .env: CLOUDFLARE_ACCOUNT_ID,

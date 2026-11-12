@@ -60,7 +60,7 @@ async function sendMobileOtp(
     smsOnly: boolean,
     smsTry: number
 ): Promise<{ via: "whatsapp" | "sms"; remote: boolean; partner?: string }> {
-    if (!smsOnly && isWhatsAppConfigured()) {
+    if (!smsOnly && (await isWhatsAppConfigured())) {
         try {
             await sendOtpWhatsApp(mobile, code);
             return { via: "whatsapp", remote: false };
@@ -119,7 +119,7 @@ export async function POST(req: Request) {
             ? isEmailConfigured()
             : smsOnly
               ? isSmsConfigured()
-              : isWhatsAppConfigured() || isSmsConfigured();
+              : (await isWhatsAppConfigured()) || isSmsConfigured();
         if (!configured) {
             return NextResponse.json(
                 {

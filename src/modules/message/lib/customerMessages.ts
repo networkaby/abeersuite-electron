@@ -30,6 +30,7 @@ import { isAutoSend, getWaTemplateDraft } from "@/shared/lib/whatsapp/waTemplate
 import { fillBody } from "@/shared/lib/whatsapp/billTemplates";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { isSupplierAccount, notifyDealCreated, notifyHelpCreated } from "@/shared/lib/whatsapp/notifyBill";
+import { appSetting } from "@/shared/lib/settings/appSettings.server";
 
 /**
  * Customer messages — the logic behind the Meta webhook and the Messages screen.
@@ -406,8 +407,8 @@ async function sendAutoText(args: {
     ticketId: number | null;
     businessNumberId: string | null;
 }): Promise<void> {
-    if (!isBillSendConfigured() || !args.text) return;
-    const fromNumberId = args.businessNumberId || conversationNumberId() || null;
+    if (!(await isBillSendConfigured()) || !args.text) return;
+    const fromNumberId = args.businessNumberId || (await conversationNumberId()) || null;
     try {
         const extId = await sendTextMessage(args.phone, args.text, fromNumberId);
         const at = new Date();
@@ -508,7 +509,7 @@ export async function menuAfterTemplateApplies(phone: string): Promise<boolean> 
         select: { closedReason: true },
     });
     if (latest?.closedReason !== "AFTER_TEMPLATE") return false;
-    if (!isBillSendConfigured() || !(await isAutoSend("TICKET_AUTO_REPLY"))) return false;
+    if (!(await isBillSendConfigured()) || !(await isAutoSend("TICKET_AUTO_REPLY"))) return false;
     const owner = (await ownersByPhone([phone])).get(phone) ?? null;
     return (await findCustomerActiveTickets(phone, owner)).length > 0;
 }
@@ -546,7 +547,7 @@ async function routeInbound(args: {
     }
     if (!conv) {
         const active = await findCustomerActiveTickets(phone, owner);
-        const menuOn = active.length > 0 && isBillSendConfigured() && (await isAutoSend("TICKET_AUTO_REPLY"));
+        const menuOn = active.length > 0 && (await isBillSendConfigured()) && (await isAutoSend("TICKET_AUTO_REPLY"));
         const opened = await openConversation(phone, menuOn ? "ASKING" : "NEW", at, menuOn ? active.map((t) => t.id) : []);
         const base = { phone, conversationId: opened.id, businessNumberId: args.businessNumberId };
         const afterStore = menuOn
@@ -924,7 +925,7 @@ export async function recordBillMessage(args: {
                 direction: "OUT",
                 phone: phoneMatchKey(args.mobile10),
                 address: args.mobile10,
-                businessNumberId: conversationNumberId() ?? null,
+                businessNumberId: (await conversationNumberId()) ?? null,
                 kind: "template",
                 body: args.body,
                 externalId: args.externalId,
@@ -987,13 +988,13 @@ export function checkOutgoingMedia(type: string, size: number): string | null {
 
 /** Send a staff reply on WhatsApp and store it on the customer's thread. */
 export async function sendReply(args: { phone: string; text: string; userId: number; media?: OutgoingMedia | null }) {
-    if (!isBillSendConfigured()) throw new ReplyRefusedError("WhatsApp sending is not set up on this server.");
+    if (!(await isBillSendConfigured())) throw new ReplyRefusedError("WhatsApp sending is not set up on this server.");
     const { open, fromNumberId } = await replyWindowOpen(args.phone);
     if (!open) {
         throw new ReplyRefusedError("More than 24 hours since the customer last wrote. WhatsApp only allows an approved template now.");
     }
     // Old rows carry no number = the main one, the only one back then.
-    const from = fromNumberId ?? process.env.META_WA_PHONE_NUMBER_ID ?? null;
+    const from = fromNumberId ?? (await appSetting("META_WA_PHONE_NUMBER_ID")) ?? null;
     const media = args.media ?? null;
     if (media) {
         if (!isR2Configured()) throw new ReplyRefusedError("File storage (R2) is not set up on this server.");

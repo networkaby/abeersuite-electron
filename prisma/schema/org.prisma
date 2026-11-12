@@ -220,6 +220,13 @@ model OrgDefaults {
   // it untouched.
   trackingCodesJson Json @default("{}")
 
+  // Settings → App Settings: low-sensitivity ids the owner may keep here instead of
+  // in .env / Vercel (WhatsApp number ids, WABA id, Meta app id, OTP template).
+  // Shape: { [ENV_KEY]: string } for keys in APP_SETTING_DEFS
+  // (src/shared/lib/constants/appSettings.ts). A blank or missing key falls back
+  // to process.env. Secrets never go here — they stay in Vercel.
+  appSettingsJson Json @default("{}")
+
   // Product description option every product page opens on (Settings → AI
   // Setup): "direct" | "verified" (AI_COPY_FLOWS). Staff may switch for one
   // write. Admin-chosen, so bootstrap-seed leaves it untouched.

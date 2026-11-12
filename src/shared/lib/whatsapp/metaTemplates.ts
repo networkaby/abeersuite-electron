@@ -1,6 +1,6 @@
 import "server-only";
 import QRCode from "qrcode";
-import { WA_CONVERSATION_NUMBER_ID } from "@/shared/lib/constants/whatsapp";
+import { appSetting } from "@/shared/lib/settings/appSettings.server";
 import {
     WA_APP_LINK,
     WA_BILL_LINK_BASE,
@@ -35,20 +35,23 @@ function token() {
     return process.env.META_WA_ACCESS_TOKEN;
 }
 
-export function isTemplateApiConfigured(): boolean {
-    return Boolean(token() && process.env.META_WA_BUSINESS_ACCOUNT_ID);
+export async function isTemplateApiConfigured(): Promise<boolean> {
+    return Boolean(token() && (await wabaId()));
 }
-export function isBillSendConfigured(): boolean {
-    return Boolean(token() && conversationNumberId());
+export async function isBillSendConfigured(): Promise<boolean> {
+    return Boolean(token() && (await conversationNumberId()));
 }
 
+/** WABA id — Settings → App Settings, else .env. */
+const wabaId = () => appSetting("META_WA_BUSINESS_ACCOUNT_ID");
+
 /**
- * The number bills, reminders and new replies go out from. OTP stays on
- * META_WA_PHONE_NUMBER_ID (sendWhatsApp.ts); the second, conversation-only
- * number is WA_CONVERSATION_NUMBER_ID in constants/whatsapp.ts.
+ * The number bills, reminders and new replies go out from: WA_CONVERSATION_NUMBER_ID,
+ * else the OTP number META_WA_PHONE_NUMBER_ID. Both are Settings → App Settings
+ * values (DB first, then .env).
  */
-export function conversationNumberId(): string | undefined {
-    return WA_CONVERSATION_NUMBER_ID || process.env.META_WA_PHONE_NUMBER_ID;
+export async function conversationNumberId(): Promise<string | undefined> {
+    return (await appSetting("WA_CONVERSATION_NUMBER_ID")) || (await appSetting("META_WA_PHONE_NUMBER_ID"));
 }
 
 type GraphError = { error?: { message?: string; error_user_msg?: string } };
@@ -79,13 +82,13 @@ async function graph<T>(path: string, init?: { method?: string; body?: unknown }
  * Upload a sample picture for a photo-header template. Meta wants a handle from
  * its Resumable Upload API (app-level), not a link, as the header example.
  */
-/** The shop's Meta app (loginapi) — META_APP_ID in .env, read when needed so a
- *  server without it says so instead of calling Meta with an empty id. */
-export const metaAppId = () => process.env.META_APP_ID?.trim() || "";
-export const META_APP_ID_MISSING = "META_APP_ID is not set on this server.";
+/** The shop's Meta app (loginapi) — Settings → App Settings, else .env; read when
+ *  needed so a server without it says so instead of calling Meta with an empty id. */
+export const metaAppId = async () => (await appSetting("META_APP_ID")) || "";
+export const META_APP_ID_MISSING = "META_APP_ID is not set (Settings → App Settings or .env).";
 
 async function uploadHeaderSample(bytes: Uint8Array, mime: string): Promise<string> {
-    const appId = metaAppId();
+    const appId = await metaAppId();
     if (!appId) throw new Error(META_APP_ID_MISSING);
     const session = await graph<{ id: string }>(
         `${appId}/uploads?file_length=${bytes.byteLength}&file_type=${encodeURIComponent(mime)}`,
@@ -149,7 +152,7 @@ async function components(kind: WaAnyKind, draft: WaTemplateDraft) {
  *  APPROVED straight away for a clean utility template). */
 export async function submitTemplate(kind: WaAnyKind, name: string, draft: WaTemplateDraft): Promise<{ id: string; status: string }> {
     const r = await graph<{ id: string; status: string }>(
-        `${process.env.META_WA_BUSINESS_ACCOUNT_ID}/message_templates`,
+        `${await wabaId()}/message_templates`,
         { method: "POST", body: { name, language: LANG, category: "UTILITY", components: await components(kind, draft) } },
     );
     return { id: r.id, status: r.status };
@@ -160,7 +163,7 @@ export type MetaTemplateStatus = { status: string; rejectReason: string | null }
 /** Current approval status of a submitted template; null when Meta has no such name. */
 export async function fetchTemplateStatus(name: string): Promise<MetaTemplateStatus> {
     const r = await graph<{ data: { name: string; status: string; rejected_reason?: string }[] }>(
-        `${process.env.META_WA_BUSINESS_ACCOUNT_ID}/message_templates?name=${encodeURIComponent(name)}&fields=name,status,rejected_reason`,
+        `${await wabaId()}/message_templates?name=${encodeURIComponent(name)}&fields=name,status,rejected_reason`,
     );
     const row = r.data.find((t) => t.name === name);
     if (!row) return null;
@@ -194,7 +197,7 @@ export async function sendBillTemplate(args: {
     if (args.approved.viewButton?.trim()) {
         comps.push({ type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: args.linkCode }] });
     }
-    const r = await graph<{ messages?: { id?: string }[] }>(`${conversationNumberId()}/messages`, {
+    const r = await graph<{ messages?: { id?: string }[] }>(`${await conversationNumberId()}/messages`, {
         method: "POST",
         body: {
             messaging_product: "whatsapp",
@@ -215,7 +218,7 @@ export async function sendBillTemplate(args: {
  * (customerMessages.ts `replyWindowOpen`). Returns Meta's message id.
  */
 export async function sendTextMessage(mobile10: string, text: string, fromNumberId?: string | null): Promise<string> {
-    const r = await graph<{ messages?: { id?: string }[] }>(`${fromNumberId || conversationNumberId()}/messages`, {
+    const r = await graph<{ messages?: { id?: string }[] }>(`${fromNumberId || (await conversationNumberId())}/messages`, {
         method: "POST",
         body: {
             messaging_product: "whatsapp",
@@ -269,7 +272,7 @@ export async function sendMediaMessage(args: {
     const media: Record<string, string> = { link: args.link };
     if (args.caption && type !== "audio") media.caption = args.caption;
     if (type === "document" && args.fileName) media.filename = args.fileName;
-    const r = await graph<{ messages?: { id?: string }[] }>(`${args.fromNumberId || conversationNumberId()}/messages`, {
+    const r = await graph<{ messages?: { id?: string }[] }>(`${args.fromNumberId || (await conversationNumberId())}/messages`, {
         method: "POST",
         body: { messaging_product: "whatsapp", recipient_type: "individual", to: `+91${args.mobile10}`, type, [type]: media },
     });
@@ -286,4 +289,22 @@ export async function downloadWaMedia(mediaId: string): Promise<{ bytes: ArrayBu
     if (!res.ok) throw new Error(`Meta media download failed (${res.status})`);
     const bytes = await res.arrayBuffer();
     return { bytes, mime: info.mime_type?.split(";")[0].trim() || "application/octet-stream", size: bytes.byteLength };
+}
+
+export type WaPhoneNumber = { id: string; display: string; name: string; status: string; nameStatus: string; quality: string };
+
+/** Every number in the WABA, for the App Settings picker. Throws Meta's wording. */
+export async function listWaPhoneNumbers(): Promise<WaPhoneNumber[]> {
+    const waba = await wabaId();
+    if (!token() || !waba) throw new Error("Set the WhatsApp Business Account ID (and META_WA_ACCESS_TOKEN in Vercel) first.");
+    type Row = { id: string; display_phone_number?: string; verified_name?: string; status?: string; name_status?: string; quality_rating?: string };
+    const r = await graph<{ data: Row[] }>(`${waba}/phone_numbers?fields=id,display_phone_number,verified_name,status,name_status,quality_rating`);
+    return r.data.map((n) => ({
+        id: n.id,
+        display: n.display_phone_number ?? "",
+        name: n.verified_name ?? "",
+        status: n.status ?? "",
+        nameStatus: n.name_status ?? "",
+        quality: n.quality_rating ?? "",
+    }));
 }

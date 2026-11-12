@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
-import { META_WA_SIGNUP_CONFIG_ID } from "@/shared/lib/constants/whatsapp";
+import { appSetting } from "@/shared/lib/settings/appSettings.server";
 import { META_APP_ID_MISSING, metaAppId } from "@/shared/lib/whatsapp/metaTemplates";
 import { incomingSecret } from "@/modules/incoming/lib/incomingApi";
 
@@ -14,7 +14,7 @@ import { incomingSecret } from "@/modules/incoming/lib/incomingApi";
  * and ask Meta to copy the app's contacts and chat history — Meta allows that
  * only in the first 24 hours after onboarding, so it is done right away.
  *
- *   META_APP_ID               .env (metaAppId)
+ *   META_APP_ID               Settings → App Settings or .env (metaAppId)
  *   META_WA_APP_SECRET        same app's secret, already used by the webhook
  */
 const GRAPH = "https://graph.facebook.com/v23.0";
@@ -35,16 +35,16 @@ export async function GET() {
     const { response } = await requirePermission("settings:manage");
     if (response) return response;
 
-    const appId = metaAppId();
+    const appId = await metaAppId();
     if (!appId) return NextResponse.json({ error: META_APP_ID_MISSING }, { status: 503 });
-    return NextResponse.json({ appId, configId: process.env.META_WA_SIGNUP_CONFIG_ID?.trim() || META_WA_SIGNUP_CONFIG_ID });
+    return NextResponse.json({ appId, configId: await appSetting("META_WA_SIGNUP_CONFIG_ID") });
 }
 
 export async function POST(req: Request) {
     const { response } = await requirePermission("settings:manage");
     if (response) return response;
 
-    const appId = metaAppId();
+    const appId = await metaAppId();
     if (!appId) return NextResponse.json({ error: META_APP_ID_MISSING }, { status: 503 });
     const { value: secret } = await incomingSecret("META_WA_APP");
     if (!secret) return NextResponse.json({ error: "WhatsApp app secret not set — Settings → Incoming API (or META_WA_APP_SECRET)" }, { status: 503 });
