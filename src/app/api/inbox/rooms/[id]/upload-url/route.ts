@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
-import { R2_MESSAGES_BUCKET } from "@/shared/lib/constants/whatsapp";
-import { isR2Configured, presignR2 } from "@/shared/lib/storage/r2";
+import { isR2Configured, messagesBucket, presignR2 } from "@/shared/lib/storage/r2";
 import { checkTeamFile, getAccessibleRoom, teamFileKey } from "@/modules/message/lib/inbox";
 
 // POST /api/inbox/rooms/:id/upload-url — { name, type, size } → { key, putUrl }.
@@ -32,7 +31,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         if (bad) return NextResponse.json({ error: bad }, { status: 400 });
 
         const key = teamFileKey(room.id, data.name);
-        const putUrl = presignR2({ bucket: R2_MESSAGES_BUCKET, key, method: "PUT", contentType: data.type, expiresSec: 600 });
+        const putUrl = presignR2({ bucket: messagesBucket(), key, method: "PUT", contentType: data.type, expiresSec: 600 });
         return NextResponse.json({ key, putUrl });
     } catch (e) {
         return handleApiError(e, "Could not prepare the upload");

@@ -7,11 +7,6 @@
  * The token stays in Vercel (META_WA_ACCESS_TOKEN).
  */
 
-/** Cloudflare R2 bucket for WhatsApp chat attachments (private; signed links
- *  only). Account id + keys live in .env: CLOUDFLARE_ACCOUNT_ID,
- *  R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY. */
-export const R2_MESSAGES_BUCKET = "abeersuite-messages";
-
 /** Largest file staff may attach in a Team chat (direct or group). */
 export const TEAM_FILE_MAX_BYTES = 25 * 1024 * 1024;
 /** File types a Team chat refuses — programs and scripts, nothing else. */

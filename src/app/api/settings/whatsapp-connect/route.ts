@@ -37,7 +37,9 @@ export async function GET() {
 
     const appId = await metaAppId();
     if (!appId) return NextResponse.json({ error: META_APP_ID_MISSING }, { status: 503 });
-    return NextResponse.json({ appId, configId: await appSetting("META_WA_SIGNUP_CONFIG_ID") });
+    const configId = await appSetting("META_WA_SIGNUP_CONFIG_ID");
+    if (!configId) return NextResponse.json({ error: "META_WA_SIGNUP_CONFIG_ID is not set (Settings → App Settings or .env)." }, { status: 503 });
+    return NextResponse.json({ appId, configId });
 }
 
 export async function POST(req: Request) {

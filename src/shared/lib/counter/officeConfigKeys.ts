@@ -45,6 +45,8 @@ const CLOUDFLARE_KEYS = [
     "CLOUDFLARE_ZONE_ID",
     "R2_ACCESS_KEY_ID",
     "R2_SECRET_ACCESS_KEY",
+    // Bucket name — App Settings (synced DB) wins; this .env copy is the fallback.
+    "R2_MESSAGES_BUCKET",
 ];
 
 /** Change courier prices — Shiprocket/Shipway through a GET. */
@@ -68,7 +70,7 @@ const GOOGLE_BUSINESS_KEYS = ["GOOGLE_BUSINESS_CLIENT_ID", "GOOGLE_BUSINESS_CLIE
 const FACEBOOK_KEYS = ["META_APP_ID", "META_APP_SECRET", "FACEBOOK_REDIRECT_URL"];
 
 /** Settings → WhatsApp Templates: approval status and test sends run on the counter. */
-const WHATSAPP_KEYS = ["META_WA_ACCESS_TOKEN", "META_WA_PHONE_NUMBER_ID", "META_WA_BUSINESS_ACCOUNT_ID"];
+const WHATSAPP_KEYS = ["META_WA_ACCESS_TOKEN", "META_WA_PHONE_NUMBER_ID", "META_WA_BUSINESS_ACCOUNT_ID", "META_WA_SIGNUP_CONFIG_ID"];
 
 /** Opens the keys pasted on Settings → AI Setup. The `.env` keys the AI Setup rows name
  *  are added at answer time from `ai_keys.envName`, so a new one needs no code change. */

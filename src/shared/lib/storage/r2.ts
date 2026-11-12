@@ -18,8 +18,17 @@ const SERVICE = "s3";
 
 export function isR2Configured(): boolean {
     return Boolean(
-        process.env.CLOUDFLARE_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY,
+        process.env.CLOUDFLARE_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY && process.env.R2_MESSAGES_BUCKET,
     );
+}
+
+/** Private bucket for chat files, campaign photos and the product feed — .env only
+ *  (R2_MESSAGES_BUCKET), never hardcoded (owner, 2026-11-12). Sync because
+ *  mediaLink() is sync and has many callers. */
+export function messagesBucket(): string {
+    const b = process.env.R2_MESSAGES_BUCKET?.trim();
+    if (!b) throw new Error("R2_MESSAGES_BUCKET is not set on this server.");
+    return b;
 }
 
 const hmac = (key: Buffer | string, data: string) => createHmac("sha256", key).update(data, "utf8").digest();

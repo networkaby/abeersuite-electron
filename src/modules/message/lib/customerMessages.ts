@@ -16,9 +16,8 @@ import {
     setWaUserBlocked,
     waMediaTypeFor,
 } from "@/shared/lib/whatsapp/metaTemplates";
-import { deleteR2, isR2Configured, presignR2, putR2 } from "@/shared/lib/storage/r2";
+import { deleteR2, isR2Configured, messagesBucket, presignR2, putR2 } from "@/shared/lib/storage/r2";
 import {
-    R2_MESSAGES_BUCKET,
     WA_KEEP_INBOUND_MAX_BYTES,
     WA_MEDIA_LINK_SECONDS,
     WA_SEND_LIMIT_BYTES,
@@ -682,7 +681,7 @@ async function keepInboundMedia(m: WaInbound): Promise<MediaFields> {
         const file = await downloadWaMedia(mediaId);
         if (file.size > WA_KEEP_INBOUND_MAX_BYTES) return { ...NO_MEDIA, mediaType: file.mime, mediaSize: file.size };
         const key = `in/${new Date().toISOString().slice(0, 7)}/${m.id.replace(/[^A-Za-z0-9_-]/g, "")}${extFor(file.mime, m.document?.filename)}`;
-        await putR2(R2_MESSAGES_BUCKET, key, file.bytes, file.mime);
+        await putR2(messagesBucket(), key, file.bytes, file.mime);
         return { mediaKey: key, mediaType: file.mime, fileName: m.document?.filename ?? null, mediaSize: file.size };
     } catch (e) {
         console.error("[messages] could not keep attachment", m.id, e);
@@ -711,7 +710,7 @@ export function mediaLink(key: string | null, fileName?: string | null, download
     if (!key || !isR2Configured()) return null;
     const windowMs = WA_MEDIA_LINK_SECONDS * 1000;
     return presignR2({
-        bucket: R2_MESSAGES_BUCKET, key, method: "GET", expiresSec: WA_MEDIA_LINK_SECONDS * 2,
+        bucket: messagesBucket(), key, method: "GET", expiresSec: WA_MEDIA_LINK_SECONDS * 2,
         signedAt: new Date(Math.floor(Date.now() / windowMs) * windowMs),
         cacheSeconds: WA_MEDIA_LINK_SECONDS,
         downloadName: download ? fileName ?? key.split("/").pop() : undefined,
@@ -771,7 +770,7 @@ export async function deleteSpamFiles(phone: string): Promise<number> {
     const done: number[] = [];
     for (const r of rows) {
         try {
-            await deleteR2(R2_MESSAGES_BUCKET, r.mediaKey!);
+            await deleteR2(messagesBucket(), r.mediaKey!);
             done.push(r.id);
         } catch (e) {
             console.error("[messages] spam file delete failed", r.mediaKey, e);

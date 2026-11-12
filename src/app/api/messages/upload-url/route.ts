@@ -4,8 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { phoneMatchKey } from "@/shared/lib/format";
-import { R2_MESSAGES_BUCKET } from "@/shared/lib/constants/whatsapp";
-import { isR2Configured, presignR2 } from "@/shared/lib/storage/r2";
+import { isR2Configured, messagesBucket, presignR2 } from "@/shared/lib/storage/r2";
 import { checkOutgoingMedia, outgoingMediaKey } from "@/modules/message/lib/customerMessages";
 
 // POST /api/messages/upload-url — { phone, name, type, size } → { key, putUrl }.
@@ -33,7 +32,7 @@ export async function POST(req: Request) {
         if (bad) return NextResponse.json({ error: bad }, { status: 400 });
 
         const key = outgoingMediaKey(phone, data.name);
-        const putUrl = presignR2({ bucket: R2_MESSAGES_BUCKET, key, method: "PUT", contentType: data.type, expiresSec: 600 });
+        const putUrl = presignR2({ bucket: messagesBucket(), key, method: "PUT", contentType: data.type, expiresSec: 600 });
         return NextResponse.json({ key, putUrl });
     } catch (e) {
         return handleApiError(e, "Could not prepare the upload");

@@ -13,8 +13,6 @@ export type AppSettingDef = {
     label: string;
     group: "WhatsApp" | "Meta app";
     hint: string;
-    /** Used when neither the DB nor .env has a value. */
-    fallback?: string;
     /** Allowed values — the form shows a dropdown. */
     options?: readonly string[];
     /** Digits only (Meta ids). */
@@ -30,11 +28,11 @@ export const APP_SETTING_DEFS = [
       hint: "The account both numbers sit in; templates are sent for approval here." },
     { key: "WA_OTP_TEMPLATE", label: "OTP template name", group: "WhatsApp",
       hint: "Name of the approved AUTHENTICATION template." },
-    { key: "WA_OTP_LANG", label: "OTP template language", group: "WhatsApp", fallback: "en",
-      hint: "Language code of that template, usually en." },
+    { key: "WA_OTP_LANG", label: "OTP template language", group: "WhatsApp",
+      hint: "Language code of that template; blank = en." },
     { key: "WA_OTP_BUTTON", label: "OTP template button", group: "WhatsApp", options: ["none", "copy_code", "one_tap"],
       hint: "copy_code for a website login; none if the template has no button." },
-    { key: "META_WA_SIGNUP_CONFIG_ID", label: "Connect-number setup ID", group: "WhatsApp", numeric: true, fallback: "1061577020211736",
+    { key: "META_WA_SIGNUP_CONFIG_ID", label: "Connect-number setup ID", group: "WhatsApp", numeric: true,
       hint: "Embedded Signup configuration used by the Connect number button." },
     { key: "META_APP_ID", label: "Meta app ID", group: "Meta app", numeric: true,
       hint: "The Meta app (loginapi). Its secret stays in Vercel." },

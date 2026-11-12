@@ -112,8 +112,7 @@ export function AppSettingsForm() {
                     {APP_SETTING_DEFS.filter((d) => d.group === g).map((d) => {
                         const v = values[d.key] ?? "";
                         const envV = env[d.key] ?? "";
-                        const fallback = "fallback" in d ? d.fallback : "";
-                        const source = v ? "Saved here" : envV ? `Using .env: ${envV}` : fallback ? `Using default: ${fallback}` : "Not set";
+                        const source = v ? "Saved here" : envV ? `Using .env: ${envV}` : "Not set";
                         const id = `as-${d.key}`;
                         return (
                             <div key={d.key} className="space-y-1">
@@ -134,7 +133,7 @@ export function AppSettingsForm() {
                                         type="text"
                                         inputMode={"numeric" in d ? "numeric" : undefined}
                                         value={v}
-                                        placeholder={envV || fallback || ""}
+                                        placeholder={envV}
                                         onChange={(e) => set(d.key, "numeric" in d ? parseDigitsInput(e.target.value) : e.target.value)}
                                         className="font-mono"
                                     />

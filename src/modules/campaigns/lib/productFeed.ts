@@ -2,8 +2,7 @@ import "server-only";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { BUSINESS_TIME_ZONE } from "@/shared/lib/constants/business";
-import { R2_MESSAGES_BUCKET } from "@/shared/lib/constants/whatsapp";
-import { isR2Configured, presignR2, putR2 } from "@/shared/lib/storage/r2";
+import { isR2Configured, messagesBucket, presignR2, putR2 } from "@/shared/lib/storage/r2";
 import { productPath, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { loadStorefrontProducts } from "@/shared/lib/shop/storefrontProducts";
 
@@ -70,7 +69,7 @@ async function inputsHash(): Promise<string> {
 
 async function readState(): Promise<FeedState | null> {
     try {
-        const res = await fetch(presignR2({ bucket: R2_MESSAGES_BUCKET, key: STATE_KEY, method: "GET", expiresSec: 60 }), { cache: "no-store" });
+        const res = await fetch(presignR2({ bucket: messagesBucket(), key: STATE_KEY, method: "GET", expiresSec: 60 }), { cache: "no-store" });
         return res.ok ? ((await res.json()) as FeedState) : null;
     } catch {
         return null;
@@ -78,7 +77,7 @@ async function readState(): Promise<FeedState | null> {
 }
 
 const writeState = (s: FeedState) =>
-    putR2(R2_MESSAGES_BUCKET, STATE_KEY, new TextEncoder().encode(JSON.stringify(s)).buffer as ArrayBuffer, "application/json");
+    putR2(messagesBucket(), STATE_KEY, new TextEncoder().encode(JSON.stringify(s)).buffer as ArrayBuffer, "application/json");
 
 // ── Building ───────────────────────────────────────────────────────────────
 
@@ -190,8 +189,8 @@ async function rebuild(hash: string): Promise<FeedState> {
 
     const enc = (s: string) => new TextEncoder().encode(s).buffer as ArrayBuffer;
     await Promise.all([
-        putR2(R2_MESSAGES_BUCKET, FEED_FILES.google.key, enc(googleXml(items)), FEED_FILES.google.type),
-        putR2(R2_MESSAGES_BUCKET, FEED_FILES.meta.key, enc(metaCsv(items)), FEED_FILES.meta.type),
+        putR2(messagesBucket(), FEED_FILES.google.key, enc(googleXml(items)), FEED_FILES.google.type),
+        putR2(messagesBucket(), FEED_FILES.meta.key, enc(metaCsv(items)), FEED_FILES.meta.type),
     ]);
     const now = new Date().toISOString();
     const state: FeedState = { day: today(), hash, builtAt: now, checkedAt: now, count: items.length };
@@ -219,7 +218,7 @@ export async function ensureFeeds(force = false): Promise<FeedState> {
 
 /** A short signed link to one stored feed file — where the public route redirects. */
 export const feedFileLink = (kind: FeedKind) =>
-    presignR2({ bucket: R2_MESSAGES_BUCKET, key: FEED_FILES[kind].key, method: "GET", expiresSec: LINK_SECONDS });
+    presignR2({ bucket: messagesBucket(), key: FEED_FILES[kind].key, method: "GET", expiresSec: LINK_SECONDS });
 
 /** The stored state only — no hash, no rebuild. For the office page. */
 export const feedState = () => (isR2Configured() ? readState() : Promise.resolve(null));

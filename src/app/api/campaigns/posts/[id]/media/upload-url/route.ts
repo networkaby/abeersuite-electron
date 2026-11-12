@@ -4,8 +4,7 @@ import { z } from "zod";
 // ("Post not found" on its photo upload), so it went out text-only.
 import { prismaAuthoritative as prisma } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError, parseIdParam, validateRequest } from "@/shared/lib/api";
-import { R2_MESSAGES_BUCKET } from "@/shared/lib/constants/whatsapp";
-import { isR2Configured, presignR2 } from "@/shared/lib/storage/r2";
+import { isR2Configured, messagesBucket, presignR2 } from "@/shared/lib/storage/r2";
 import { checkPostMedia } from "@/modules/campaigns/lib/post";
 import { postMediaKey } from "@/modules/campaigns/lib/postServer";
 import { requirePostsPage } from "@/modules/campaigns/lib/campaignAccess";
@@ -37,7 +36,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         }
 
         const key = postMediaKey(id, data.name);
-        const putUrl = presignR2({ bucket: R2_MESSAGES_BUCKET, key, method: "PUT", contentType: data.type, expiresSec: 600 });
+        const putUrl = presignR2({ bucket: messagesBucket(), key, method: "PUT", contentType: data.type, expiresSec: 600 });
         return NextResponse.json({ key, putUrl });
     } catch (e) {
         return handleApiError(e, "Could not prepare the upload");

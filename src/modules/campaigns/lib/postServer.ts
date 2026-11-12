@@ -5,8 +5,7 @@ import { NextResponse } from "next/server";
 // GET reads the local copy (loadPost(id, prismaRouted)) and refreshes when the copy has it.
 import { prismaAuthoritative as prisma } from "@/shared/lib/prisma/prismaClient";
 import { mediaLink } from "@/modules/message/lib/customerMessages";
-import { R2_MESSAGES_BUCKET } from "@/shared/lib/constants/whatsapp";
-import { isR2Configured, putR2 } from "@/shared/lib/storage/r2";
+import { isR2Configured, messagesBucket, putR2 } from "@/shared/lib/storage/r2";
 import { buildUrl, isCloudinaryUrl } from "@/shared/lib/cloudinaryImage";
 import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
 import { POST_SELECT, channelPost, variantOf, checkPostMedia, pendingChannels, postPhotos, type PostPhoto, type PostVariants } from "@/modules/campaigns/lib/post";
@@ -66,7 +65,7 @@ export async function copyProductPhoto(postId: number, productId: number): Promi
         if (bad) return `Product photo skipped: ${bad}`;
         const name = `product-${productId}.${type.split("/")[1]}`;
         const key = postMediaKey(postId, name);
-        await putR2(R2_MESSAGES_BUCKET, key, body, type);
+        await putR2(messagesBucket(), key, body, type);
         await prisma.post.update({ where: { id: postId }, data: { mediaKey: key, mediaType: type, mediaName: name, mediaSize: body.byteLength } });
         return null;
     } catch (e) {

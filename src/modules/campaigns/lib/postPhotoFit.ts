@@ -4,8 +4,7 @@ import sharp from "sharp";
 // ("Post not found" on its photo upload), so it went out text-only.
 import { prismaAuthoritative as prisma } from "@/shared/lib/prisma/prismaClient";
 import { mediaLink } from "@/modules/message/lib/customerMessages";
-import { R2_MESSAGES_BUCKET } from "@/shared/lib/constants/whatsapp";
-import { isR2Configured, putR2 } from "@/shared/lib/storage/r2";
+import { isR2Configured, messagesBucket, putR2 } from "@/shared/lib/storage/r2";
 import {
     CHANNEL_SPECS,
     checkPostMedia,
@@ -142,7 +141,7 @@ function cutter(postId: number, extras: PostPhoto[]) {
         const bad = checkPostMedia("image/jpeg", out.byteLength);
         if (bad) throw new PhotoFitError(bad);
         const key = postMediaKey(postId, name);
-        await putR2(R2_MESSAGES_BUCKET, key, out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength) as ArrayBuffer, "image/jpeg");
+        await putR2(messagesBucket(), key, out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength) as ArrayBuffer, "image/jpeg");
         extras.push({ key, type: "image/jpeg", name, size: out.byteLength, from: source.key, crop });
         if (!crop) made.set(`${source.key}:${shape}`, key);
         return key;
@@ -240,7 +239,7 @@ export async function attachPostPhoto(postId: number, file: { bytes: ArrayBuffer
     const asExtra = extra && !!row.mediaKey;
     if (asExtra && originalsOf(list).length >= EXTRA_MEDIA_MAX) throw new PhotoFitError(`A post holds ${EXTRA_MEDIA_MAX + 1} photos at most.`);
     const key = postMediaKey(postId, file.name);
-    await putR2(R2_MESSAGES_BUCKET, key, file.bytes, file.type);
+    await putR2(messagesBucket(), key, file.bytes, file.type);
     const photo: PostPhoto = { key, type: file.type, name: file.name, size: file.bytes.byteLength };
     await prisma.post.update({
         where: { id: postId },

@@ -1,8 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { AI_RESEARCH_STORE } from "@/shared/lib/constants/ai";
-import { R2_MESSAGES_BUCKET } from "@/shared/lib/constants/whatsapp";
-import { getR2Text, isR2Configured, putR2 } from "@/shared/lib/storage/r2";
+import { getR2Text, isR2Configured, messagesBucket, putR2 } from "@/shared/lib/storage/r2";
 
 // What a Verified run found (steps 1–2) kept outside the DB, so "Photos only"
 // can run step 5 later without paying for the Check call or searching again
@@ -25,7 +24,7 @@ const keyFor = (productId: number) => `${AI_RESEARCH_STORE.prefix}${productId}.j
 export async function loadResearch(productId: number, name: string): Promise<AiResearch | null> {
     if (!isR2Configured()) return null;
     try {
-        const raw = await getR2Text(R2_MESSAGES_BUCKET, keyFor(productId));
+        const raw = await getR2Text(messagesBucket(), keyFor(productId));
         if (!raw) return null;
         const r = researchSchema.parse(JSON.parse(raw));
         const fresh = Date.now() - r.at < AI_RESEARCH_STORE.maxAgeDays * 86_400_000;
@@ -41,7 +40,7 @@ export async function saveResearch(productId: number, r: Omit<AiResearch, "at">)
     if (!isR2Configured()) return;
     try {
         const body = new TextEncoder().encode(JSON.stringify({ ...r, at: Date.now() }));
-        await putR2(R2_MESSAGES_BUCKET, keyFor(productId), body.buffer as ArrayBuffer, "application/json");
+        await putR2(messagesBucket(), keyFor(productId), body.buffer as ArrayBuffer, "application/json");
     } catch (e) {
         console.warn("[aiResearchStore] save failed", e);
     }
