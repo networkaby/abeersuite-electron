@@ -121,7 +121,7 @@ export function AppSettingsForm() {
                         const envV = env[d.key] ?? "";
                         const source = isSecret && edit !== undefined
                             ? (edit ? "New value — Save to keep" : "Will be cleared on Save")
-                            : v ? `Saved here${isSecret ? ` ${v}` : ""}` : envV ? `Using .env: ${envV}` : "Not set";
+                            : v ? `Saved here${isSecret ? ` ${v}` : ""} · .env: ${envV || "none"}` : envV ? `Using .env: ${envV}` : "Not set";
                         const id = `as-${d.key}`;
                         return (
                             <div key={d.key} className="space-y-1">
