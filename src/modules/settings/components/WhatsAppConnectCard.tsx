@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import { Loader2, Smartphone } from "lucide-react";
 import { extractApiError } from "@/shared/lib/api";
 import { Button } from "@/components/ui/button";
+import { useIsDesktopApp } from "@/shared/lib/bridge";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 
 /**
  * Connect a second number that stays on the WhatsApp Business app (Meta
@@ -61,7 +63,16 @@ export function WhatsAppConnectCard() {
         return () => window.removeEventListener("message", onMsg);
     }, []);
 
+    // Meta's sign-in only runs on an https site listed in the Meta app, never on the
+    // counter's http://localhost — so the counter hands the job to the office website
+    // (window.open of an outside URL goes to the PC's browser).
+    const isCounter = useIsDesktopApp();
+
     async function start() {
+        if (isCounter) {
+            window.open(`${COMPANY_DETAILS.sites.office}/office/settings/whatsapp-templates`, "_blank");
+            return;
+        }
         setBusy(true);
         try {
             // The server says why when META_APP_ID is missing (503) — shown by the catch.
@@ -105,6 +116,7 @@ export function WhatsAppConnectCard() {
             <Button onClick={start} disabled={busy} size="sm">
                 {busy && <Loader2 className="mr-1 h-4 w-4 animate-spin" />} Connect number
             </Button>
+            {isCounter && <p className="text-xs text-muted-foreground">Opens the office website — Meta sign-in works only there.</p>}
             {done && (
                 <div className="text-sm rounded bg-emerald-50 dark:bg-emerald-950 p-2">
                     Connected {done.display} ({done.name}). Phone number ID <b className="select-all">{done.phoneNumberId}</b>
