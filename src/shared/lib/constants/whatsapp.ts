@@ -10,8 +10,8 @@
  * approved templates serve both.
  */
 
-/** +91 88769 96996 — conversation-only number. Its Meta id is 1412417001952698
- *  (added 2026-10-08, not yet verified / registered): set it here only once
+/** +91 88769 96996 — conversation-only number. Its Meta id is 1426171653917236
+ *  (re-added 2026-11-12 after the Business-app trial; code-verified, display name in review, not yet registered): set it here only once
  *  WhatsApp Manager shows it Connected, or every bill would fail to send. */
 export const WA_CONVERSATION_NUMBER_ID: string | null = null;
 
