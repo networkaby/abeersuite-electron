@@ -5887,18 +5887,6 @@ ALTER TABLE "SavedFilter" ADD COLUMN IF NOT EXISTS "payload" JSONB NOT NULL;
 ALTER TABLE "SavedFilter" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE "SavedFilter" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
 
--- CreateTable
-CREATE TABLE IF NOT EXISTS "LoginFailure" (
-    "id" TEXT NOT NULL,
-    "key" TEXT NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "LoginFailure_pkey" PRIMARY KEY ("id")
-);
-ALTER TABLE "LoginFailure" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL;
-ALTER TABLE "LoginFailure" ADD COLUMN IF NOT EXISTS "key" TEXT NOT NULL;
-ALTER TABLE "LoginFailure" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
-
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "AccountGroup_parentId_sortOrder_idx" ON "AccountGroup"("parentId", "sortOrder");
 
@@ -6816,12 +6804,6 @@ CREATE INDEX IF NOT EXISTS "SavedFilter_surface_ownerUserId_idx" ON "SavedFilter
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "SavedFilter_surface_isShared_idx" ON "SavedFilter"("surface", "isShared");
-
--- CreateIndex
-CREATE INDEX IF NOT EXISTS "LoginFailure_key_createdAt_idx" ON "LoginFailure"("key", "createdAt");
-
--- CreateIndex
-CREATE INDEX IF NOT EXISTS "LoginFailure_createdAt_idx" ON "LoginFailure"("createdAt");
 
 -- AddForeignKey
 DO $$ BEGIN
@@ -9166,11 +9148,6 @@ DO $$ BEGIN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "leave_types";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "leave_types"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
-    END IF;
-END $$;
-DO $$ BEGIN
-    IF to_regclass('public."LoginFailure"') IS NOT NULL THEN
-        DROP TRIGGER IF EXISTS "_outbox_capture" ON "LoginFailure"; -- never pushed
     END IF;
 END $$;
 DO $$ BEGIN

@@ -497,7 +497,11 @@ function main(): void {
     const tables: Record<string, TableEntry> = {};
     let nextNumber = prev.nextNumber;
 
+    // `ignore` doubles as the server-only list: such a model stays on Supabase and is
+    // never copied to a counter (gen-local-schema.ts leaves it out of the replica too).
+    const serverOnly = new Set(prev.ignore ?? []);
     for (const model of models) {
+        if (serverOnly.has(model.name)) continue;
         const c = classify(model);
         if ("error" in c) {
             errors.push(c.error);

@@ -189,7 +189,29 @@ function generate(): string {
     if (!cleaned.includes("CREATE TABLE")) {
         throw new Error("Generated SQL contains no CREATE TABLE — refusing to write it.");
     }
-    return `${HEADER}\n${preSchemaFixes()}\n${makeIdempotent(cleaned)}\n${retiredIndexes()}\n${COUNTER_LOCAL_DDL}`;
+    return `${HEADER}\n${preSchemaFixes()}\n${makeIdempotent(dropServerOnly(cleaned))}\n${retiredIndexes()}\n${COUNTER_LOCAL_DDL}`;
+}
+
+/**
+ * Server-only tables (the registry's `ignore` list, e.g. LoginFailure) never exist on
+ * a counter: their CREATE TABLE / INDEX / ALTER statements are dropped here, and the
+ * sync worker's schema guard skips them. A foreign key from a replicated table INTO
+ * one would break the replica, so that refuses instead of guessing.
+ */
+function dropServerOnly(sql: string): string {
+    const registry = JSON.parse(fs.readFileSync(REGISTRY_FILE, "utf8")) as { ignore?: string[] };
+    const names = (registry.ignore ?? []).filter((n) => !n.startsWith("_"));
+    if (names.length === 0) return sql;
+    const owns = (stmt: string, n: string) =>
+        new RegExp(`(CREATE TABLE|ALTER TABLE|ON) "${n}"[\\s(]`).test(stmt);
+    const kept = sql.split(/;\s*\n/).filter((stmt) => {
+        const owner = names.find((n) => owns(stmt, n));
+        if (owner) return false;
+        const ref = names.find((n) => stmt.includes(`REFERENCES "${n}"`));
+        if (ref) throw new Error(`A replicated table references server-only "${ref}" — cannot drop it from the counter schema.`);
+        return true;
+    });
+    return kept.join(";\n\n");
 }
 
 /**
