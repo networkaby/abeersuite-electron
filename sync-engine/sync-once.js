@@ -291,6 +291,11 @@ async function main(opts, cfg, pools = null, hooks = {}) {
             throw e;
         }
 
+        // A model that left the registry (retired, or made server-only) keeps its old
+        // _sync_state row forever, and a stale last_error there holds the "Copy
+        // incomplete" badge red with nothing left to retry. Skipped under --only.
+        if (!DRY && !ONLY) await state.pruneExcept(local, Object.values(tables).map((t) => t.n)).catch(() => {});
+
         // Checked once, up front: without the grant the first 'full' table dies on a
         // foreign key, which reads like corrupt data and is not.
         if (!(await canSuspendForeignKeys(local))) {

@@ -146,4 +146,9 @@ async function recordVerified(client, entry, count, checksum) {
     );
 }
 
-module.exports = { ensure, readAll, cursorFor, recordSuccess, recordFailure, recordVerified, markChildrenPending, TABLE };
+/** Drop rows for table numbers no longer in the registry (retired or server-only models). */
+async function pruneExcept(client, nums) {
+    await client.query(`DELETE FROM ${q(TABLE)} WHERE NOT (table_num = ANY($1::int[]))`, [nums]);
+}
+
+module.exports = { ensure, pruneExcept, readAll, cursorFor, recordSuccess, recordFailure, recordVerified, markChildrenPending, TABLE };
