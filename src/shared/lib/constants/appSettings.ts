@@ -19,6 +19,8 @@ export type AppSettingDef = {
     section: AppSettingSection;
     /** Card inside the section — whose key it is. */
     provider: string;
+    /** WhatsApp card only: ① Number 1 (OTP), ② Number 2 (bills), or the shared connection. */
+    group?: "n1" | "n2" | "conn";
     /** Not needed for the provider to work (the card's Ready check skips it). */
     optional?: boolean;
     hint: string;
@@ -31,27 +33,27 @@ export type AppSettingDef = {
 };
 
 export const APP_SETTING_DEFS = [
-    { key: "META_WA_PHONE_NUMBER_ID", label: "OTP number (Phone number ID)", section: "Messaging", provider: "WhatsApp (Meta Cloud API)", numeric: true,
+    { key: "META_WA_PHONE_NUMBER_ID", label: "Phone number ID", group: "n1", section: "Messaging", provider: "WhatsApp (Meta Cloud API)", numeric: true,
       hint: "Login codes go from this number. WhatsApp Manager → Phone numbers → click the number." },
-    { key: "WA_CONVERSATION_NUMBER_ID", label: "Bills & replies number (Phone number ID)", section: "Messaging", provider: "WhatsApp (Meta Cloud API)", optional: true, numeric: true,
-      hint: "Bills, reminders and new staff replies go from this number. Blank = the OTP number. Pick only a Connected number, or every bill fails." },
-    { key: "META_WA_BUSINESS_ACCOUNT_ID", label: "Business Account ID (OTP number's)", section: "Messaging", provider: "WhatsApp (Meta Cloud API)", numeric: true,
-      hint: "The WhatsApp account the OTP number sits in. Also the bills account when the next box is blank." },
-    { key: "WA_CONVERSATION_BUSINESS_ACCOUNT_ID", label: "Bills & replies account ID", section: "Messaging", provider: "WhatsApp (Meta Cloud API)", optional: true, numeric: true,
-      hint: "Only when the bills number sits in another WhatsApp account (another business). Bill templates are sent for approval here. Blank = the Business Account ID." },
+    { key: "META_WA_BUSINESS_ACCOUNT_ID", label: "WhatsApp account ID", group: "n1", section: "Messaging", provider: "WhatsApp (Meta Cloud API)", numeric: true,
+      hint: "The WhatsApp Business account Number 1 sits in. Also Number 2's when Number 2 is in the same account." },
+    { key: "WA_CONVERSATION_NUMBER_ID", label: "Phone number ID", group: "n2", section: "Messaging", provider: "WhatsApp (Meta Cloud API)", optional: true, numeric: true,
+      hint: "Bills, reminders and new staff replies go from this number. Blank = Number 1. Pick only a Connected number, or every bill fails." },
+    { key: "WA_CONVERSATION_BUSINESS_ACCOUNT_ID", label: "WhatsApp account ID", group: "n2", section: "Messaging", provider: "WhatsApp (Meta Cloud API)", optional: true, numeric: true,
+      hint: "Only when Number 2 sits in another business's WhatsApp account. Bill templates are sent for approval there. Blank = Number 1's account." },
     { key: "WA_OTP_TEMPLATE", label: "Template name", section: "Messaging", provider: "WhatsApp login code (OTP template)",
       hint: "Name of the approved AUTHENTICATION template." },
     { key: "WA_OTP_LANG", label: "Language", section: "Messaging", provider: "WhatsApp login code (OTP template)", optional: true,
       hint: "Language code of that template; blank = en." },
     { key: "WA_OTP_BUTTON", label: "Button", section: "Messaging", provider: "WhatsApp login code (OTP template)", optional: true, options: ["none", "copy_code", "one_tap"],
       hint: "copy_code for a website login; none if the template has no button." },
-    { key: "META_WA_SIGNUP_CONFIG_ID", label: "Connect-number setup ID", section: "Messaging", provider: "WhatsApp (Meta Cloud API)", optional: true, numeric: true,
+    { key: "META_WA_SIGNUP_CONFIG_ID", label: "Connect-number setup ID", group: "conn", section: "Messaging", provider: "WhatsApp (Meta Cloud API)", optional: true, numeric: true,
       hint: "Embedded Signup configuration used by the Connect number button." },
     { key: "META_APP_ID", label: "App ID", section: "Messaging", provider: "Meta app (Facebook / Instagram connect)", numeric: true,
       hint: "The Meta app (loginapi)." },
     { key: "META_APP_SECRET", label: "App secret", section: "Messaging", provider: "Meta app (Facebook / Instagram connect)", secret: true,
       hint: "Meta app → App settings → Basic → App secret. Used for Facebook / Instagram connect." },
-    { key: "META_WA_ACCESS_TOKEN", label: "Access token", section: "Messaging", provider: "WhatsApp (Meta Cloud API)", secret: true,
+    { key: "META_WA_ACCESS_TOKEN", label: "Access token", group: "conn", section: "Messaging", provider: "WhatsApp (Meta Cloud API)", secret: true,
       hint: "System-user token with whatsapp_business_messaging + management." },
     { key: "SHIPROCKET_EMAIL", label: "API user email", section: "Couriers", provider: "Shiprocket",
       hint: "Shiprocket → Settings → API → API user." },
