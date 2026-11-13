@@ -1,6 +1,6 @@
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { triggerWorkflow } from "@/shared/lib/backup/githubDispatch";
+import { backupWorkflowFile, triggerWorkflow } from "@/shared/lib/backup/githubDispatch";
 import { makeBackupFileName } from "@/shared/lib/backup/dropbox";
 import { libpqUrl, projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
 import { backupAvailability, COUNTER_ONLY_MESSAGE } from "@/shared/lib/backup/availability";
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     // A build without the GitHub keys has no way to make a dump at all. Refuse here, in
     // words a staff member can act on, rather than letting triggerWorkflow throw
     // "GITHUB_DISPATCH_TOKEN is not set." into a toast on the shop floor.
-    const { canBackup, missing } = backupAvailability();
+    const { canBackup, missing } = await backupAvailability();
     if (!canBackup) {
         return Response.json({ error: COUNTER_ONLY_MESSAGE, counterOnly: true, missing }, { status: 503 });
     }
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
     // ── end of database URL block ───────────────────────────────────────────────
 
     try {
-        await triggerWorkflow(process.env.GITHUB_BACKUP_WORKFLOW?.trim() || "backup.yml", inputs);
+        await triggerWorkflow(await backupWorkflowFile(), inputs);
     } catch (err) {
         return Response.json({ error: (err as Error).message }, { status: 500 });
     }

@@ -1,7 +1,7 @@
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { triggerWorkflow } from "@/shared/lib/backup/githubDispatch";
-import { isUnderBackupFolder } from "@/shared/lib/backup/dropbox";
+import { restoreWorkflowFile, triggerWorkflow } from "@/shared/lib/backup/githubDispatch";
+import { backupFolder, isUnderBackupFolder } from "@/shared/lib/backup/dropbox";
 import { backupAvailability, COUNTER_ONLY_MESSAGE } from "@/shared/lib/backup/availability";
 
 export const runtime = "nodejs";
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     // Checked before the confirm text: on a machine that cannot restore at all, asking the
     // operator to type RESTORE is noise, and the failure would otherwise arrive as
     // "DROPBOX_APP_KEY is not set." after they had already typed it.
-    const { canRestore, missing } = backupAvailability();
+    const { canRestore, missing } = await backupAvailability();
     if (!canRestore) {
         return Response.json({ error: COUNTER_ONLY_MESSAGE, counterOnly: true, missing }, { status: 503 });
     }
@@ -45,12 +45,12 @@ export async function POST(req: Request) {
             { status: 400 },
         );
     }
-    if (!isUnderBackupFolder(body.path)) {
+    if (!isUnderBackupFolder(body.path, await backupFolder())) {
         return Response.json({ error: "Invalid or unsupported backup path." }, { status: 400 });
     }
 
     try {
-        await triggerWorkflow(process.env.GITHUB_RESTORE_WORKFLOW?.trim() || "restore.yml", {
+        await triggerWorkflow(await restoreWorkflowFile(), {
             file_path: body.path,
             target_db_url: targetDbUrl,
         });

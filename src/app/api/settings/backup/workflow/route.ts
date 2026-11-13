@@ -29,7 +29,7 @@ export async function GET() {
 
     // A counter build ships without the GitHub keys; say so in words a staff member
     // can act on rather than letting the helper throw a key name into a toast.
-    const { canBackup, missing } = backupAvailability();
+    const { canBackup, missing } = await backupAvailability();
     if (!canBackup) {
         return NextResponse.json({ error: COUNTER_ONLY_MESSAGE, counterOnly: true, missing }, { status: 503 });
     }
@@ -46,7 +46,7 @@ export async function PUT(req: Request) {
     const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
     if (response) return response;
 
-    const { canBackup, missing } = backupAvailability();
+    const { canBackup, missing } = await backupAvailability();
     if (!canBackup) {
         return NextResponse.json({ error: COUNTER_ONLY_MESSAGE, counterOnly: true, missing }, { status: 503 });
     }

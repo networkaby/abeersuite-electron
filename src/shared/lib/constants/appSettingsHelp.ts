@@ -114,29 +114,6 @@ export const ENV_ONLY_PROVIDERS: EnvOnlyProvider[] = [
             { key: "VAPID_SUBJECT", label: "Contact (mailto:)" },
         ],
     },
-    {
-        provider: "Dropbox (backup copy)",
-        section: "Backup",
-        why: "Read by the backup job.",
-        keys: [
-            { key: "DROPBOX_APP_KEY", label: "App key" },
-            { key: "DROPBOX_APP_SECRET", label: "App secret" },
-            { key: "DROPBOX_REFRESH_TOKEN", label: "Refresh token" },
-            { key: "DROPBOX_FOLDER", label: "Folder" },
-        ],
-    },
-    {
-        provider: "GitHub (backup & restore runs)",
-        section: "Backup",
-        why: "Read by the backup and restore buttons that start GitHub Actions.",
-        keys: [
-            { key: "GITHUB_DISPATCH_TOKEN", label: "Fine-grained token" },
-            { key: "GITHUB_REPO", label: "Repository (owner/name)" },
-            { key: "GITHUB_BACKUP_WORKFLOW", label: "Backup workflow file" },
-            { key: "GITHUB_RESTORE_WORKFLOW", label: "Restore workflow file" },
-            { key: "GITHUB_WORKFLOW_REF", label: "Branch" },
-        ],
-    },
 ];
 
 export const ENV_ONLY_KEYS: string[] = ENV_ONLY_PROVIDERS.flatMap((p) => p.keys.map((k) => k.key));
@@ -402,11 +379,18 @@ export const PROVIDER_HELP: Record<string, ProviderHelp> = {
             { key: "DROPBOX_REFRESH_TOKEN", theirs: "Refresh token (offline access)" },
         ],
         steps: ["dropbox.com/developers/apps → the app → Settings: App key and App secret.", "The refresh token comes from one offline-access sign-in — see docs/commands.md."],
+        note: "Keep these in .env / Vercel too: if the database is lost, App Settings go with it, and Restore needs these keys to list the backups.",
         link: { label: "Dropbox App Console", url: "https://www.dropbox.com/developers/apps" },
     },
     "GitHub (backup & restore runs)": {
         about: "Starts the backup / restore GitHub Actions.",
-        terms: [{ key: "GITHUB_DISPATCH_TOKEN", theirs: "Fine-grained personal access token (Actions: Read and write)" }],
+        terms: [
+            { key: "GITHUB_DISPATCH_TOKEN", theirs: "Fine-grained personal access token (Actions: Read and write)" },
+            { key: "GITHUB_REPO", theirs: "owner/repository name" },
+            { key: "GITHUB_WORKFLOW_REF", theirs: "Branch name" },
+            { key: "GITHUB_BACKUP_WORKFLOW / GITHUB_RESTORE_WORKFLOW", theirs: "Workflow file names in .github/workflows" },
+        ],
+        note: "Keep these in .env / Vercel too: if the database is lost, App Settings go with it, and Restore needs these keys to run.",
         steps: ["github.com → Settings → Developer settings → Fine-grained tokens → Generate new token → only the backup repository → Actions: Read and write."],
         link: { label: "GitHub — tokens", url: "https://github.com/settings/tokens?type=beta" },
     },

@@ -1,3 +1,5 @@
+import { appSetting } from "@/shared/lib/settings/appSettings.server";
+
 /**
  * dotenv strips a trailing `# comment` from .env values, but the Vercel env UI
  * does not — pasting a commented line there stores it verbatim, giving values
@@ -13,16 +15,16 @@ export function cleanEnvValue(value: string | undefined): string | undefined {
  * pg_restore on a GitHub runner (which has the Postgres client tools) because
  * Vercel functions don't ship those binaries.
  *
- * Requires env: GITHUB_DISPATCH_TOKEN (fine-grained PAT with this repo in its
+ * Requires (Settings → App Settings, else env): GITHUB_DISPATCH_TOKEN (fine-grained PAT with this repo in its
  * access list and Actions: read+write), GITHUB_REPO ("owner/repo"), and
  * optionally GITHUB_WORKFLOW_REF (branch holding the workflow, defaults to
  * "main"). The branch must exist on the remote — GitHub resolves the ref by
  * name, not by commit, so two branches sharing a commit are not interchangeable.
  */
 export async function triggerWorkflow(workflowFile: string, inputs: Record<string, string>): Promise<void> {
-    const token = cleanEnvValue(process.env.GITHUB_DISPATCH_TOKEN);
-    const repo = cleanEnvValue(process.env.GITHUB_REPO);
-    const ref = cleanEnvValue(process.env.GITHUB_WORKFLOW_REF) || "main";
+    const token = cleanEnvValue(await appSetting("GITHUB_DISPATCH_TOKEN"));
+    const repo = cleanEnvValue(await appSetting("GITHUB_REPO"));
+    const ref = cleanEnvValue(await appSetting("GITHUB_WORKFLOW_REF")) || "main";
     const workflow = cleanEnvValue(workflowFile);
     if (!token) throw new Error("GITHUB_DISPATCH_TOKEN is not set.");
     if (!repo) throw new Error("GITHUB_REPO is not set (expected 'owner/repo').");
@@ -66,9 +68,9 @@ export async function triggerWorkflow(workflowFile: string, inputs: Record<strin
 export const SCHEDULED_BACKUP_WORKFLOW = "backup-scheduled.yml";
 
 /** Shared token/repo resolution, so the callers below cannot drift from triggerWorkflow. */
-function githubConfig(): { token: string; repo: string } {
-    const token = cleanEnvValue(process.env.GITHUB_DISPATCH_TOKEN);
-    const repo = cleanEnvValue(process.env.GITHUB_REPO);
+async function githubConfig(): Promise<{ token: string; repo: string }> {
+    const token = cleanEnvValue(await appSetting("GITHUB_DISPATCH_TOKEN"));
+    const repo = cleanEnvValue(await appSetting("GITHUB_REPO"));
     if (!token) throw new Error("GITHUB_DISPATCH_TOKEN is not set.");
     if (!repo) throw new Error("GITHUB_REPO is not set (expected 'owner/repo').");
     return { token, repo };
@@ -105,7 +107,7 @@ function githubError(action: string, status: number, body: string, repo: string,
  * other is a push.
  */
 export async function getScheduledBackupState(): Promise<{ enabled: boolean; state: string }> {
-    const { token, repo } = githubConfig();
+    const { token, repo } = await githubConfig();
     const workflow = SCHEDULED_BACKUP_WORKFLOW;
 
     const res = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/${workflow}`, {
@@ -125,7 +127,7 @@ export async function getScheduledBackupState(): Promise<{ enabled: boolean; sta
 
 /** Turn the schedule on or off. Takes effect immediately — no commit, no deploy. */
 export async function setScheduledBackupEnabled(enabled: boolean): Promise<void> {
-    const { token, repo } = githubConfig();
+    const { token, repo } = await githubConfig();
     const workflow = SCHEDULED_BACKUP_WORKFLOW;
 
     const res = await fetch(
@@ -139,3 +141,7 @@ export async function setScheduledBackupEnabled(enabled: boolean): Promise<void>
     }
 }
 
+
+/** Workflow file names — Settings → App Settings, else env, else the default. */
+export const backupWorkflowFile = async () => cleanEnvValue(await appSetting("GITHUB_BACKUP_WORKFLOW")) || "backup.yml";
+export const restoreWorkflowFile = async () => cleanEnvValue(await appSetting("GITHUB_RESTORE_WORKFLOW")) || "restore.yml";

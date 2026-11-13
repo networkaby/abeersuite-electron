@@ -12,15 +12,17 @@
  * — a developer's error message, on a page that looked fully working, shown to a staff
  * member who cannot act on a key name.
  *
- * Presence only. Values are never read here, and only KEY names are ever returned.
+ * Presence only (Settings → App Settings, else .env). Only KEY names are ever returned.
  */
 import { cleanEnvValue } from "@/shared/lib/backup/githubDispatch";
+import { appSetting } from "@/shared/lib/settings/appSettings.server";
+import type { AppSettingKey } from "@/shared/lib/constants/appSettings";
 
 /** What `triggerWorkflow` needs. `GITHUB_WORKFLOW_REF` is optional — it defaults to "main". */
-const GITHUB_KEYS = ["GITHUB_DISPATCH_TOKEN", "GITHUB_REPO"];
+const GITHUB_KEYS: AppSettingKey[] = ["GITHUB_DISPATCH_TOKEN", "GITHUB_REPO"];
 
 /** What `getDropboxAccessToken` needs. `DROPBOX_FOLDER` is optional — it defaults to the app-folder root. */
-const DROPBOX_KEYS = ["DROPBOX_APP_KEY", "DROPBOX_APP_SECRET", "DROPBOX_REFRESH_TOKEN"];
+const DROPBOX_KEYS: AppSettingKey[] = ["DROPBOX_APP_KEY", "DROPBOX_APP_SECRET", "DROPBOX_REFRESH_TOKEN"];
 
 export interface BackupAvailability {
     /** Backup needs GitHub only — the runner uploads to Dropbox with the repo's own secrets. */
@@ -35,12 +37,14 @@ export interface BackupAvailability {
 export const COUNTER_ONLY_MESSAGE =
     "Counter-only machine — backup and restore are not available here. Use the office app.";
 
-export function backupAvailability(): BackupAvailability {
+export async function backupAvailability(): Promise<BackupAvailability> {
     // GitHub values go through `cleanEnvValue` because `triggerWorkflow` does: a value pasted
     // into the Vercel env UI with a trailing "# comment" is present but unusable, and has to
     // count as missing here too — otherwise this reports "available" and the dispatch 401s.
-    const missingGithub = GITHUB_KEYS.filter((key) => !cleanEnvValue(process.env[key]));
-    const missingDropbox = DROPBOX_KEYS.filter((key) => !process.env[key]?.trim());
+    const gh = await Promise.all(GITHUB_KEYS.map(async (key) => [key, cleanEnvValue(await appSetting(key))] as const));
+    const db = await Promise.all(DROPBOX_KEYS.map(async (key) => [key, (await appSetting(key))?.trim()] as const));
+    const missingGithub = gh.filter(([, v]) => !v).map(([k]) => k);
+    const missingDropbox = db.filter(([, v]) => !v).map(([k]) => k);
     const hasGithub = missingGithub.length === 0;
 
     return {

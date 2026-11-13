@@ -1,4 +1,4 @@
-import { triggerWorkflow } from "@/shared/lib/backup/githubDispatch";
+import { backupWorkflowFile, triggerWorkflow } from "@/shared/lib/backup/githubDispatch";
 import { makeBackupFileName } from "@/shared/lib/backup/dropbox";
 import { libpqUrl, projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
 import { backupAvailability } from "@/shared/lib/backup/availability";
@@ -40,7 +40,7 @@ export async function GET(req: Request) {
         return Response.json({ skipped: true, reason: `Not the office site (${productionHost}); ${officeHost} takes the nightly backup.` });
     }
 
-    const { canBackup, missing } = backupAvailability();
+    const { canBackup, missing } = await backupAvailability();
     if (!canBackup) {
         console.error("[cron/backup] 503: backup keys missing:", missing);
         return Response.json(
@@ -74,7 +74,7 @@ export async function GET(req: Request) {
     // ── end of database URL block ───────────────────────────────────────────────
 
     try {
-        await triggerWorkflow(process.env.GITHUB_BACKUP_WORKFLOW?.trim() || "backup.yml", inputs);
+        await triggerWorkflow(await backupWorkflowFile(), inputs);
     } catch (err) {
         console.error("[cron/backup] 500: workflow dispatch failed:", (err as Error).message);
         return Response.json({ error: (err as Error).message }, { status: 500 });

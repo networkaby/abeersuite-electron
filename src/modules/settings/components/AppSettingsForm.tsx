@@ -13,26 +13,10 @@ import { getWithRetry } from "@/shared/lib/http/getWithRetry";
 import { parseDigitsInput } from "@/shared/lib/format";
 import { cn } from "@/shared/lib/format/utils";
 import { APP_SETTING_DEFS, APP_SETTING_SECTIONS, SECRET_APP_SETTING_KEYS, type AppSettingKey, type AppSettingValues } from "@/shared/lib/constants/appSettings";
-import { ENV_ONLY_PROVIDERS, PROVIDER_HELP, type EnvOnlyProvider } from "@/shared/lib/constants/appSettingsHelp";
+import { ENV_ONLY_PROVIDERS, type EnvOnlyProvider } from "@/shared/lib/constants/appSettingsHelp";
 
 type Loaded = { values: AppSettingValues; env: Record<string, string>; envOnly: Record<string, boolean> };
 
-/** The (?) on a card header — help for that provider in a new tab. */
-function HelpLink({ provider }: { provider: string }) {
-    if (!PROVIDER_HELP[provider]) return null;
-    return (
-        <a
-            href={`/office/settings/app-settings/help?p=${encodeURIComponent(provider)}`}
-            target="_blank"
-            rel="noreferrer"
-            title={`Where to get these from ${provider}`}
-            className="text-muted-foreground hover:text-primary"
-        >
-            <CircleHelp size={18} />
-            <span className="sr-only">Help for {provider}</span>
-        </a>
-    );
-}
 type WaNumber = { id: string; display: string; name: string; status: string; nameStatus: string; quality: string; wabaId: string };
 type Def = (typeof APP_SETTING_DEFS)[number];
 
@@ -270,7 +254,6 @@ export function AppSettingsForm() {
                         ) : (
                             <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300">{gaps} missing</span>
                         )}
-                        <HelpLink provider={p.provider} />
                     </div>
                 </div>
                 <p className="text-xs text-muted-foreground">{p.why}</p>
@@ -457,7 +440,6 @@ export function AppSettingsForm() {
                                             <h3 className="text-base font-semibold">{provider}</h3>
                                             <div className="flex items-center gap-3">
                                                 {readyBadge(missing(defs))}
-                                                <HelpLink provider={provider} />
                                             </div>
                                         </div>
                                         {isWa ? (
@@ -485,6 +467,11 @@ export function AppSettingsForm() {
                 <span className={cn("text-sm", dirtyCount ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground")}>
                     {dirtyCount ? `${dirtyCount} change${dirtyCount > 1 ? "s" : ""} not saved` : "All saved"}
                 </span>
+                <Button asChild variant="outline" className="ml-auto">
+                    <a href="/office/settings/app-settings/help" target="_blank" rel="noreferrer">
+                        <CircleHelp size={14} className="mr-1" /> Help — where to get each key
+                    </a>
+                </Button>
             </div>
         </div>
     );

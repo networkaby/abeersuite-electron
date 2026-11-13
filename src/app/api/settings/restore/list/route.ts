@@ -21,7 +21,7 @@ export async function GET() {
     const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
     if (response) return response;
 
-    const availability = backupAvailability();
+    const availability = await backupAvailability();
     if (!availability.canRestore) {
         return Response.json({ backups: [], ...availability });
     }
