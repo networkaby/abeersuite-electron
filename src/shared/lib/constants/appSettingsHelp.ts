@@ -70,14 +70,14 @@ export const ENV_ONLY_PROVIDERS: EnvOnlyProvider[] = [
     {
         provider: "Cloudflare (file storage & staff mail)",
         section: "Files & media",
-        why: "One Cloudflare account: R2 keeps chat files, post photos and the product feed, Email Routing forwards staff mail. R2 is used in about 65 places that must answer instantly (every file link), so all of it stays in .env.",
+        why: "Both jobs must be in the SAME Cloudflare account: they read the one CLOUDFLARE_ACCOUNT_ID. R2 is used in about 65 places that must answer instantly (every file link), so all of it stays in .env.",
         keys: [
-            { key: "CLOUDFLARE_ACCOUNT_ID", label: "Account ID (shared)" },
-            { key: "R2_ACCESS_KEY_ID", label: "R2 access key ID" },
-            { key: "R2_SECRET_ACCESS_KEY", label: "R2 secret access key" },
-            { key: "R2_MESSAGES_BUCKET", label: "R2 bucket name" },
-            { key: "CLOUDFLARE_API_TOKEN", label: "Mail forwarding API token" },
-            { key: "CLOUDFLARE_ZONE_ID", label: "Mail forwarding zone ID (networkservice.in)" },
+            { key: "CLOUDFLARE_ACCOUNT_ID", label: "Account ID", group: "Shared by both" },
+            { key: "R2_ACCESS_KEY_ID", label: "R2 access key ID", group: "File storage (R2) — chat files, post photos, product feed" },
+            { key: "R2_SECRET_ACCESS_KEY", label: "R2 secret access key", group: "File storage (R2) — chat files, post photos, product feed" },
+            { key: "R2_MESSAGES_BUCKET", label: "Bucket name", group: "File storage (R2) — chat files, post photos, product feed" },
+            { key: "CLOUDFLARE_API_TOKEN", label: "API token", group: "Staff mail forwarding (Email Routing)" },
+            { key: "CLOUDFLARE_ZONE_ID", label: "Zone ID (networkservice.in)", group: "Staff mail forwarding (Email Routing)" },
         ],
     },
     {
