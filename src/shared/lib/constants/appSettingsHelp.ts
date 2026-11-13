@@ -68,23 +68,16 @@ export const ENV_ONLY_PROVIDERS: EnvOnlyProvider[] = [
         ],
     },
     {
-        provider: "Cloudflare R2 (chat files, post photos, product feed)",
+        provider: "Cloudflare (file storage & staff mail)",
         section: "Files & media",
-        why: "Used in about 65 places that must answer instantly (every file link), and shares the account ID with mail forwarding — kept together in .env.",
+        why: "One Cloudflare account: R2 keeps chat files, post photos and the product feed, Email Routing forwards staff mail. R2 is used in about 65 places that must answer instantly (every file link), so all of it stays in .env.",
         keys: [
-            { key: "CLOUDFLARE_ACCOUNT_ID", label: "Account ID" },
+            { key: "CLOUDFLARE_ACCOUNT_ID", label: "Account ID (shared)" },
             { key: "R2_ACCESS_KEY_ID", label: "R2 access key ID" },
             { key: "R2_SECRET_ACCESS_KEY", label: "R2 secret access key" },
-            { key: "R2_MESSAGES_BUCKET", label: "Bucket name" },
-        ],
-    },
-    {
-        provider: "Cloudflare (staff mail forwarding)",
-        section: "Files & media",
-        why: "Same Cloudflare account as R2 — the account ID is shared, so these stay beside it in .env.",
-        keys: [
-            { key: "CLOUDFLARE_API_TOKEN", label: "API token" },
-            { key: "CLOUDFLARE_ZONE_ID", label: "Zone ID (networkservice.in)" },
+            { key: "R2_MESSAGES_BUCKET", label: "R2 bucket name" },
+            { key: "CLOUDFLARE_API_TOKEN", label: "Mail forwarding API token" },
+            { key: "CLOUDFLARE_ZONE_ID", label: "Mail forwarding zone ID (networkservice.in)" },
         ],
     },
     {
@@ -332,32 +325,24 @@ export const PROVIDER_HELP: Record<string, ProviderHelp> = {
         steps: ["sentry.io → Settings → Projects → the project → Client Keys (DSN)."],
         link: { label: "Sentry", url: "https://sentry.io/" },
     },
-    "Cloudflare R2 (chat files, post photos, product feed)": {
-        about: "Private file storage.",
+    "Cloudflare (file storage & staff mail)": {
+        about: "One Cloudflare account: R2 private file storage (chat files, post photos, product feed) and Email Routing (name@networkservice.in → each staff member's own inbox).",
         terms: [
-            { key: "CLOUDFLARE_ACCOUNT_ID", theirs: "Account ID" },
-            { key: "R2_ACCESS_KEY_ID", theirs: "Access Key ID" },
-            { key: "R2_SECRET_ACCESS_KEY", theirs: "Secret Access Key" },
-            { key: "R2_MESSAGES_BUCKET", theirs: "Bucket name" },
+            { key: "CLOUDFLARE_ACCOUNT_ID", theirs: "Account ID — used by both" },
+            { key: "R2_ACCESS_KEY_ID", theirs: "R2 Access Key ID" },
+            { key: "R2_SECRET_ACCESS_KEY", theirs: "R2 Secret Access Key" },
+            { key: "R2_MESSAGES_BUCKET", theirs: "R2 bucket name" },
+            { key: "CLOUDFLARE_API_TOKEN", theirs: "API Token (Email Routing)" },
+            { key: "CLOUDFLARE_ZONE_ID", theirs: "Zone ID of networkservice.in" },
         ],
         steps: [
             "dash.cloudflare.com → R2 Object Storage. The Account ID is on the right of the R2 overview.",
-            "Manage R2 API Tokens → Create API token → Object Read & Write on the bucket. Copy Access Key ID and Secret Access Key (shown once).",
+            "R2 → Manage R2 API Tokens → Create API token → Object Read & Write on the bucket. Copy Access Key ID and Secret Access Key (shown once).",
             "The bucket name is the private bucket's name in the R2 list.",
-        ],
-        link: { label: "Cloudflare dashboard", url: "https://dash.cloudflare.com/" },
-    },
-    "Cloudflare (staff mail forwarding)": {
-        about: "Forwards name@networkservice.in to each staff member's own inbox.",
-        terms: [
-            { key: "CLOUDFLARE_API_TOKEN", theirs: "API Token" },
-            { key: "CLOUDFLARE_ZONE_ID", theirs: "Zone ID" },
-        ],
-        steps: [
-            "dash.cloudflare.com → networkservice.in → Overview: Zone ID is on the right.",
+            "Mail: open networkservice.in → Overview — the Zone ID is on the right.",
             "My Profile → API Tokens → Create Token → Custom: Email Routing Rules Edit (zone) + Email Routing Addresses Edit (account).",
         ],
-        link: { label: "Cloudflare — API tokens", url: "https://dash.cloudflare.com/profile/api-tokens" },
+        link: { label: "Cloudflare dashboard", url: "https://dash.cloudflare.com/" },
     },
     "Cloudinary (cloud name)": {
         about: "The Cloudinary account's name, built into the website.",
