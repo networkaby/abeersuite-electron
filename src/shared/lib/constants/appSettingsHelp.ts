@@ -23,8 +23,9 @@ export type ProviderHelp = {
 /** A key that cannot be set on App Settings — the card shows only its name and whether it is set. */
 export type EnvOnlyKey = { key: string; label: string };
 
-/** A service whose keys live only in .env / Vercel. */
-export type EnvOnlyProvider = { provider: string; section: string; why: string; keys: EnvOnlyKey[] };
+/** A service whose keys live only in .env / Vercel. With `attachTo`, its keys show as
+ *  read-only rows inside that editable card instead of a card of their own. */
+export type EnvOnlyProvider = { provider: string; section: string; why: string; keys: EnvOnlyKey[]; attachTo?: string };
 
 export const ENV_ONLY_PROVIDERS: EnvOnlyProvider[] = [
     {
@@ -89,7 +90,8 @@ export const ENV_ONLY_PROVIDERS: EnvOnlyProvider[] = [
     {
         provider: "Cloudinary (cloud name)",
         section: "Files & media",
-        why: "Built into the website (NEXT_PUBLIC_). The API key and secret are on the Cloudinary card above.",
+        attachTo: "Cloudinary (photos)",
+        why: "Built into the website when it is deployed.",
         keys: [{ key: "NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME", label: "Cloud name" }],
     },
     {
@@ -186,7 +188,7 @@ export const PROVIDER_HELP: Record<string, ProviderHelp> = {
         terms: [
             { key: "CLOUDINARY_API_KEY", theirs: "API Key" },
             { key: "CLOUDINARY_API_SECRET", theirs: "API Secret" },
-            { key: "NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME", theirs: "Cloud name — .env only (built into the website), see its own card" },
+            { key: "NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME", theirs: "Cloud name — .env only (built into the website)" },
         ],
         steps: [
             "cloudinary.com → sign in → Settings (gear) → API Keys.",

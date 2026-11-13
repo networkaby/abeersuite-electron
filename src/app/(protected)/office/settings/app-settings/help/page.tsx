@@ -11,7 +11,8 @@ const anchor = (provider: string) => provider.toLowerCase().replace(/[^a-z0-9]+/
 /** Every service, in the page's section order: editable cards first, then .env-only ones. */
 const SECTIONS = APP_SETTING_SECTIONS.map((section) => {
     const editable = [...new Set(APP_SETTING_DEFS.filter((d) => d.section === section).map((d) => d.provider))];
-    const envOnly = ENV_ONLY_PROVIDERS.filter((p) => p.section === section).map((p) => p.provider);
+    // A service shown inside another card (attachTo) is covered by that card's help.
+    const envOnly = ENV_ONLY_PROVIDERS.filter((p) => p.section === section && !p.attachTo).map((p) => p.provider);
     return { section, providers: [...editable, ...envOnly].filter((p) => PROVIDER_HELP[p]) };
 }).filter((s) => s.providers.length);
 

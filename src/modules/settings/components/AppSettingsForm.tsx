@@ -241,6 +241,21 @@ export function AppSettingsForm() {
         );
 
     /** A service whose keys live only in the server's .env — names and set / missing, no boxes. */
+    /** Read-only rows for .env-only keys: name, .env key, set / not set. */
+    const envRows = (p: EnvOnlyProvider) => (
+        <div className="divide-y rounded-lg border bg-card text-sm">
+            {p.keys.map((k) => (
+                <div key={k.key} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 font-medium"><Lock size={12} className="text-muted-foreground" /> {k.label}</div>
+                        <code className="break-all text-[11px] text-muted-foreground">{k.key}</code>
+                    </div>
+                    {envOnly[k.key] ? <SourceTag tone="env"><Server size={10} /> set in .env</SourceTag> : <SourceTag tone="empty">Not set</SourceTag>}
+                </div>
+            ))}
+        </div>
+    );
+
     const envOnlyCard = (p: EnvOnlyProvider) => {
         const gaps = p.keys.filter((k) => !envOnly[k.key]).length;
         return (
@@ -257,17 +272,7 @@ export function AppSettingsForm() {
                     </div>
                 </div>
                 <p className="text-xs text-muted-foreground">{p.why}</p>
-                <div className="divide-y rounded-lg border bg-card text-sm">
-                    {p.keys.map((k) => (
-                        <div key={k.key} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
-                            <div className="min-w-0">
-                                <div className="font-medium">{k.label}</div>
-                                <code className="break-all text-[11px] text-muted-foreground">{k.key}</code>
-                            </div>
-                            {envOnly[k.key] ? <SourceTag tone="env"><Server size={10} /> set in .env</SourceTag> : <SourceTag tone="empty">Not set</SourceTag>}
-                        </div>
-                    ))}
-                </div>
+                {envRows(p)}
             </div>
         );
     };
@@ -422,7 +427,7 @@ export function AppSettingsForm() {
 
             {APP_SETTING_SECTIONS.map((section) => {
                 const providers = [...new Set(APP_SETTING_DEFS.filter((d) => d.section === section).map((d) => d.provider))];
-                const envCards = ENV_ONLY_PROVIDERS.filter((p) => p.section === section);
+                const envCards = ENV_ONLY_PROVIDERS.filter((p) => p.section === section && !p.attachTo);
                 if (!providers.length && !envCards.length) return null;
                 return (
                     <section key={section} className="space-y-4">
@@ -434,12 +439,15 @@ export function AppSettingsForm() {
                             {providers.map((provider) => {
                                 const defs = APP_SETTING_DEFS.filter((d) => d.provider === provider);
                                 const isWa = provider === WA_PROVIDER;
+                                // .env-only keys of the same service, shown inside this card.
+                                const attached = ENV_ONLY_PROVIDERS.filter((p) => p.attachTo === provider);
+                                const attachedGaps = attached.flatMap((p) => p.keys.filter((k) => !envOnly[k.key]).map((k) => `${k.label} (.env)`));
                                 return (
                                     <div key={provider} className={cn("min-w-0 space-y-5 rounded-2xl border bg-card p-5 shadow-sm", isWa && "xl:col-span-2")}>
                                         <div className="flex flex-wrap items-center justify-between gap-2">
                                             <h3 className="text-base font-semibold">{provider}</h3>
                                             <div className="flex items-center gap-3">
-                                                {readyBadge(missing(defs))}
+                                                {readyBadge([...missing(defs), ...attachedGaps])}
                                             </div>
                                         </div>
                                         {isWa ? (
@@ -450,6 +458,12 @@ export function AppSettingsForm() {
                                         ) : (
                                             <div className="grid gap-5 md:grid-cols-2">{defs.map(renderField)}</div>
                                         )}
+                                        {attached.map((p) => (
+                                            <div key={p.provider} className="space-y-2">
+                                                <p className="text-xs text-muted-foreground">Set in .env only — {p.why.charAt(0).toLowerCase() + p.why.slice(1)}</p>
+                                                {envRows(p)}
+                                            </div>
+                                        ))}
                                     </div>
                                 );
                             })}
