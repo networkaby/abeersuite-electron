@@ -103,13 +103,13 @@ export async function POST(req: Request) {
         // send budget does NOT also lock this identifier out of password login
         // (both would otherwise share one counter).
         const throttleKey = `otp-send:${identity}`;
-        if (isLoginBlocked(throttleKey)) {
+        if (await isLoginBlocked(throttleKey)) {
             return NextResponse.json(
                 { error: "Too many attempts. Please wait a few minutes and try again." },
                 { status: 429 }
             );
         }
-        recordLoginFailure(throttleKey);
+        await recordLoginFailure(throttleKey);
 
         const channel = asEmail ? "email" : "mobile";
         // Mobile has two pipes: WhatsApp leads, SMS (once a provider is set up)

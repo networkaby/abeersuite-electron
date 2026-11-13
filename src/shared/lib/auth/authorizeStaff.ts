@@ -352,7 +352,7 @@ export async function authorizeStaffCredentials(
 ): Promise<StaffAuthUser | null> {
     // Brute-force throttle — checked before any credential work so a blocked
     // identifier costs nothing (no bcrypt, no DB).
-    if (isLoginBlocked(email)) return null;
+    if (await isLoginBlocked(email)) return null;
 
     // Env super-admin takes priority — credentials are verified with no DB.
     // The DB is touched only afterwards, to swap the sentinel id for a real
@@ -360,7 +360,7 @@ export async function authorizeStaffCredentials(
     // close) work; it degrades to "0" if that is not possible.
     const superAdmin = checkSuperAdminEnv(email, password);
     if (superAdmin) {
-        clearLoginFailures(email);
+        await clearLoginFailures(email);
         // A real person's own email (owner, 2026-10-14: *"Akramul Jakir is one
         // person; with the super-admin password he gets super-admin permission, no
         // other difference"*): his own session — name, photo, seats, branches, idle
@@ -401,23 +401,23 @@ export async function authorizeStaffCredentials(
     const user = await findStaffUser(prisma, email);
 
     if (!user) {
-        recordLoginFailure(email);
+        await recordLoginFailure(email);
         return null;
     }
 
     // Marked as left by HR — the same "Invalid email or password" as a wrong
     // password, so the screen says nothing about whether the account exists.
     if (staffHasLeft(user.staffProfile)) {
-        recordLoginFailure(email);
+        await recordLoginFailure(email);
         return null;
     }
 
     const isValid = await bcrypt.compare(password, user.password);
     if (!isValid) {
-        recordLoginFailure(email);
+        await recordLoginFailure(email);
         return null;
     }
-    clearLoginFailures(email);
+    await clearLoginFailures(email);
 
     const staff = await buildStaffAuthUser(prisma, user);
     // Off a counter — the office website, or a desktop PC with no counter — only
@@ -467,7 +467,7 @@ export async function authorizeStaffPin(
 
     // Its own budget: a fumbled PIN must not eat the password tries still needed.
     const throttleKey = `pin:${email}`;
-    if (isLoginBlocked(throttleKey, UNLOCK_MAX_FAILURES)) return null;
+    if (await isLoginBlocked(throttleKey, UNLOCK_MAX_FAILURES)) return null;
 
     const user = await findStaffUser(prisma, email);
     if (!user || staffHasLeft(user.staffProfile)) return null;
@@ -480,15 +480,15 @@ export async function authorizeStaffPin(
     if (!row || pinClocksExpired(row)) return null;
 
     if (!await bcrypt.compare(pin, row.pinHash)) {
-        recordLoginFailure(throttleKey);
+        await recordLoginFailure(throttleKey);
         // Out of tries: the password is due, the same rule as the lock's.
-        if (isLoginBlocked(throttleKey, UNLOCK_MAX_FAILURES)) {
+        if (await isLoginBlocked(throttleKey, UNLOCK_MAX_FAILURES)) {
             await stampCounterPin(prisma, user.id, "expire");
-            clearLoginFailures(throttleKey);
+            await clearLoginFailures(throttleKey);
         }
         return null;
     }
-    clearLoginFailures(throttleKey);
+    await clearLoginFailures(throttleKey);
 
     const staff = await buildStaffAuthUser(prisma, user);
     await stampAttendanceIn(prisma, user.id, counterId);

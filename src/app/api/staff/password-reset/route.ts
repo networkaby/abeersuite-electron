@@ -63,10 +63,10 @@ export async function POST(req: Request) {
 
 async function send(email: string) {
     const key = `staff-reset-send:${email}`;
-    if (isLoginBlocked(key)) {
+    if (await isLoginBlocked(key)) {
         return NextResponse.json({ error: TOO_MANY }, { status: 429 });
     }
-    recordLoginFailure(key);
+    await recordLoginFailure(key);
     if (!(await isEmailConfigured())) {
         return NextResponse.json({ error: "Email is not set up on this server. Ask the office to reset it." }, { status: 503 });
     }
@@ -116,7 +116,7 @@ async function reset(email: string, code: string, password: string | undefined) 
     });
     if (done.count === 0) return NextResponse.json({ error: "That code is not right." }, { status: 400 });
 
-    clearLoginFailures(email);
+    await clearLoginFailures(email);
     const res = NextResponse.json({ ok: true });
     res.cookies.delete(COOKIE);
     return res;

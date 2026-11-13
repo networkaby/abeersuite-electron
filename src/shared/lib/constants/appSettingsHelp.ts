@@ -218,11 +218,13 @@ export const PROVIDER_HELP: Record<string, ProviderHelp> = {
         terms: [
             { key: "RAZORPAY_KEY_ID", theirs: "Key Id (rzp_test_… or rzp_live_…)" },
             { key: "RAZORPAY_KEY_SECRET", theirs: "Key Secret" },
+            { key: "RAZORPAY_WEBHOOK_SECRET", theirs: "Webhook Secret" },
         ],
         steps: [
             "dashboard.razorpay.com → switch Test / Live mode at the top (the keys differ).",
             "Account & Settings → API Keys → Generate Key (or Regenerate). The Key Secret is shown only once — copy it then.",
             "Match the gateway's TEST / LIVE choice on Settings → Payment Gateways.",
+            "Webhook (optional): Account & Settings → Webhooks → Add → URL <site>/api/shop/razorpay/webhook, type any long secret, tick payment.captured. Paste the same secret here.",
         ],
         link: { label: "Razorpay — API keys", url: "https://dashboard.razorpay.com/app/website-app-settings/api-keys" },
     },

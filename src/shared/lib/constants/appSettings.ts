@@ -107,6 +107,8 @@ export const APP_SETTING_DEFS = [
       hint: "Razorpay dashboard → Account & Settings → API keys. rzp_test_… for test, rzp_live_… for live." },
     { key: "RAZORPAY_KEY_SECRET", label: "Key secret", section: "Payments", provider: "Razorpay", secret: true,
       hint: "The secret shown once with that key ID." },
+    { key: "RAZORPAY_WEBHOOK_SECRET", label: "Webhook secret", section: "Payments", provider: "Razorpay", secret: true,
+      hint: "Razorpay → Webhooks → the secret you typed for this site's webhook. With it blank, webhook calls are refused." },
     { key: "CASHFREE_APP_ID", label: "App ID", section: "Payments", provider: "Cashfree",
       hint: "Cashfree → Developers → API keys." },
     { key: "CASHFREE_SECRET_KEY", label: "Secret key", section: "Payments", provider: "Cashfree", secret: true,

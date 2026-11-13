@@ -120,3 +120,18 @@ model SavedFilter {
   @@index([surface, ownerUserId])
   @@index([surface, isShared])
 }
+
+/// One failed sign-in / OTP / PIN guess (security review 2026-11). Shared by every
+/// server copy, so the "too many tries" limit holds across Vercel instances and
+/// restarts — the old in-memory count reset with each new instance. Rows older than
+/// the 15-minute window are pruned as new failures arrive. Cloud only: counters keep
+/// their count in memory (one long-lived process), and never push this table
+/// (sync/neverPush.ts).
+model LoginFailure {
+  id        String   @id @default(cuid())
+  key       String
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
+  @@index([createdAt])
+}

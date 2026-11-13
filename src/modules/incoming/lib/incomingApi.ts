@@ -14,8 +14,9 @@ import { INCOMING_APIS, type IncomingId } from "@/modules/incoming/lib/incomingC
  *   - the one saved on the page, when the caller is switched on;
  *   - the old env var too (CRON_SECRET, …), so a caller set up before this page
  *     keeps working — Vercel's own nightly backup cron can only send CRON_SECRET;
- *   - neither set → the caller's old rule: open for the legacy callers (as
- *     before), always shut for the Google Business API caller, which never had an env var.
+ *   - neither set → shut, for every caller. (Until 2026-11 the older callers were
+ *     open with no key — anyone who knew the address could post fake parcel
+ *     updates or call records. Security review closed that.)
  * Switched off on the page → shut, env var included.
  */
 
@@ -92,7 +93,8 @@ export async function requireIncomingKey(req: Request, id: IncomingId): Promise<
     if (row && !row.enabled) return false;
     const env = envSecret(id);
     const saved = row?.secret ?? null;
-    if (!saved && !env) return !INCOMING_APIS[id].closedWhenUnset;
+    // No key anywhere = door locked. An unset key never means "open to everyone".
+    if (!saved && !env) return false;
     const got = sentKey(req);
     if (!got) return false;
     if ((saved && same(got, saved)) || (env && same(got, env))) {

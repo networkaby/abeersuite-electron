@@ -32,7 +32,7 @@ export async function authorizePortalCredentials(
     if (!raw || !password) return null;
 
     // Brute-force throttle — checked before any credential work.
-    if (isLoginBlocked(raw)) return null;
+    if (await isLoginBlocked(raw)) return null;
 
     let cred = null;
     if (isLikelyEmail(raw)) {
@@ -63,16 +63,16 @@ export async function authorizePortalCredentials(
     }
 
     if (!cred) {
-        recordLoginFailure(raw);
+        await recordLoginFailure(raw);
         return null;
     }
 
     const ok = await bcrypt.compare(password, cred.passwordHash);
     if (!ok) {
-        recordLoginFailure(raw);
+        await recordLoginFailure(raw);
         return null;
     }
-    clearLoginFailures(raw);
+    await clearLoginFailures(raw);
 
     const p = cred.person;
     const personalAccount = await prisma.account.findUnique({

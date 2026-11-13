@@ -42,10 +42,10 @@ export async function POST(req: Request) {
     // Someone standing at the till could otherwise walk a list of addresses through
     // this to learn who signs in here. Same window every other login path uses.
     const throttleKey = `pinstatus:${email}`;
-    if (isLoginBlocked(throttleKey, 20)) {
+    if (await isLoginBlocked(throttleKey, 20)) {
         return NextResponse.json({ state: "none" satisfies CounterPinState });
     }
-    recordLoginFailure(throttleKey);
+    await recordLoginFailure(throttleKey);
 
     try {
         const row = await prisma.userCounterPin.findFirst({

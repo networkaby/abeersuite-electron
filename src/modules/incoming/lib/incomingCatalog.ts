@@ -13,8 +13,6 @@ export type IncomingDef = {
     howSent: string;
     /** The env var it used before this page; still accepted. */
     envVar: string | null;
-    /** With no secret anywhere: true = refuse every call (new callers), false = let it in as before. */
-    closedWhenUnset: boolean;
     /** We make the key ("Make new key"), or it comes from the other side (Meta's app secret) and is pasted. */
     canGenerate: boolean;
     /** The doors this caller knocks on. */
@@ -27,7 +25,6 @@ export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
         about: "Reads Google reviews and writes the shop's reply, makes social posts (text per channel, photos, time). Replies and posts follow the settings below; 1–2 star reviews are always saved as Draft for staff to check.",
         howSent: "Header  x-api-key: <key>",
         envVar: null,
-        closedWhenUnset: true,
         canGenerate: true,
         paths: [
             "GET /api/agent/reviews",
@@ -47,7 +44,6 @@ export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
         about: "Claude (Cowork / chat, the /product-copy skill) reads products waiting for shop copy and sends Verified copy. The server re-reads Claude's pages and checks every fact; the copy goes into the product's draft for staff — it never changes the live product or publishes.",
         howSent: "Header  x-api-key: <key>",
         envVar: null,
-        closedWhenUnset: true,
         canGenerate: true,
         paths: [
             "GET /api/agent/products",
@@ -64,7 +60,6 @@ export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
         about: "Claude (the /price-watch skill, by hand or on a schedule) reads our shop price, MRP and stock — and the last purchase cost only when asked — then compares them with Amazon.in, Flipkart and the maker and writes the report itself. Read only: it never changes a price.",
         howSent: "Header  x-api-key: <key>",
         envVar: null,
-        closedWhenUnset: true,
         canGenerate: true,
         paths: ["GET /api/agent/prices"],
     },
@@ -73,7 +68,6 @@ export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
         about: "Wakes the app for due reminders, email reminders, posts, Google reviews and the backup check. Vercel's own nightly backup still sends the CRON_SECRET env var, which keeps working.",
         howSent: "Header  Authorization: Bearer <key>",
         envVar: "CRON_SECRET",
-        closedWhenUnset: false,
         canGenerate: true,
         paths: ["GET /api/cron/communications", "GET /api/cron/due-reminders", "GET /api/cron/email-reminders", "GET /api/cron/backup-due", "GET /api/cron/backup"],
     },
@@ -82,7 +76,6 @@ export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
         about: "The PBX pushes every call record to CRM → Call Log.",
         howSent: "Header  x-api-key: <key>",
         envVar: "CALLS_API_KEY",
-        closedWhenUnset: false,
         canGenerate: true,
         paths: ["POST /api/calls"],
     },
@@ -91,7 +84,6 @@ export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
         about: "Shiprocket tells us when a parcel moves. In Shiprocket: Settings → Webhooks, token type x-api-key.",
         howSent: "Header  x-api-key: <key>",
         envVar: "SHIPROCKET_WEBHOOK_TOKEN",
-        closedWhenUnset: false,
         canGenerate: true,
         paths: ["POST /api/shop/delivery-updates"],
     },
@@ -100,7 +92,6 @@ export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
         about: "Shipway tells us when a parcel moves. Its webhook form takes only a URL, so add ?token=<key> to the URL in Shipway → Track → Tracking Webhooks.",
         howSent: "URL  …/api/shop/shipway-updates?token=<key>",
         envVar: "SHIPWAY_WEBHOOK_TOKEN",
-        closedWhenUnset: false,
         canGenerate: true,
         paths: ["POST /api/shop/shipway-updates"],
     },
@@ -109,7 +100,6 @@ export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
         about: "Any word you choose; type the same into Meta's webhook form. Meta checks it once when the webhook is set up.",
         howSent: "Meta sends it as hub.verify_token",
         envVar: "META_WA_VERIFY_TOKEN",
-        closedWhenUnset: true,
         canGenerate: true,
         paths: ["GET /api/whatsapp/webhook"],
     },
@@ -118,7 +108,6 @@ export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
         about: "Meta app → Settings → Basic → App secret. Meta signs every message with it; WhatsApp Connect uses it too. Comes from Meta — paste it, never make one.",
         howSent: "Meta signs each call (X-Hub-Signature-256)",
         envVar: "META_WA_APP_SECRET",
-        closedWhenUnset: false,
         canGenerate: false,
         paths: ["POST /api/whatsapp/webhook"],
     },

@@ -32,12 +32,11 @@ export async function POST(req: Request) {
     // Settings → Incoming API (switched off there = refuse), else SHIPWAY_WEBHOOK_TOKEN.
     const { value: expected, enabled } = await incomingSecret("SHIPWAY");
     if (!enabled) return NextResponse.json({ ok: false, error: "switched off" }, { status: 403 });
-    if (expected) {
-        const got = new URL(req.url).searchParams.get("token")?.trim() ?? "";
-        const a = Buffer.from(got);
-        const b = Buffer.from(expected);
-        if (a.length !== b.length || !timingSafeEqual(a, b)) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-    }
+    // No token saved = refuse: an unset key never opens the door.
+    const got = new URL(req.url).searchParams.get("token")?.trim() ?? "";
+    const a = Buffer.from(got);
+    const b = Buffer.from(expected ?? "");
+    if (!expected || a.length !== b.length || !timingSafeEqual(a, b)) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
 
     try {
         const body = (await req.json().catch(() => ({}))) as WebhookBody;

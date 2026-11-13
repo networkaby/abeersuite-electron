@@ -123,8 +123,7 @@ export function IncomingApiPanel() {
                             <dd>
                                 {SOURCE_TEXT[r.source]}
                                 {r.hint ? <span className="font-mono"> · ends …{r.hint}</span> : null}
-                                {r.source === "none" && def.closedWhenUnset ? <span className="text-red-600"> — every call is refused until one is set</span> : null}
-                                {r.source === "none" && !def.closedWhenUnset ? <span className="text-amber-600"> — open to anyone who knows the address</span> : null}
+                                {r.source === "none" ? <span className="text-red-600"> — every call is refused until one is set</span> : null}
                             </dd>
                             <dt className="text-muted-foreground">Last used</dt>
                             <dd>{when(r.lastUsedAt)}{r.updatedByName ? <span className="text-muted-foreground"> · last changed by {r.updatedByName}</span> : null}</dd>

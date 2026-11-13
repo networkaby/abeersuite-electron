@@ -1,13 +1,15 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
+import { createHmac, timingSafeEqual } from "crypto";
+import { appSetting } from "@/shared/lib/settings/appSettings.server";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 
 /**
  * Razorpay webhook — PARKED.
  *
  * TODO(payment-gateway): online payment is not live in the COD MVP. When a
- * gateway is wired back in, this handler must (1) verify the webhook signature,
- * then (2) advance the order on the sales-orders pipeline via
+ * gateway is wired back in, this handler must (1) verify the webhook signature
+ * (done — RAZORPAY_WEBHOOK_SECRET, below), then (2) advance the order on the sales-orders pipeline via
  * `transitionOrderPipelineStatus`. It must NOT post to the GL — invoicing stays
  * manual (the old crude `postSaleJournal` auto-JE was removed in the COD rebuild
  * to avoid double-booking).
@@ -18,6 +20,14 @@ import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 export async function POST(req: Request) {
     try {
         const body = await req.text();
+        // Only Razorpay may write here: it signs the raw body with the webhook
+        // secret (X-Razorpay-Signature = HMAC-SHA256 hex). No secret saved → refuse.
+        const secret = await appSetting("RAZORPAY_WEBHOOK_SECRET");
+        const sent = req.headers.get("x-razorpay-signature") ?? "";
+        const want = secret ? createHmac("sha256", secret).update(body, "utf8").digest("hex") : "";
+        if (!secret || sent.length !== want.length || !timingSafeEqual(Buffer.from(sent), Buffer.from(want))) {
+            return NextResponse.json({ ok: false, error: "bad signature" }, { status: 401 });
+        }
         let parsed: { payload?: { payment?: { entity?: { order_id?: string; id?: string } } } };
         try {
             parsed = JSON.parse(body) as typeof parsed;

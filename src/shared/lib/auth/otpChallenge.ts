@@ -145,7 +145,7 @@ export async function checkOtpCode(
     const pending = parsePendingOtp(rawCookie);
     if (!pending) return { ok: false, reason: "tampered" };
     const guessKey = `${scope}:${pending.channel}:${pending.identity}`;
-    if (loginTriesLeft(guessKey, OTP_MAX_ATTEMPTS) <= 0) return { ok: false, reason: "blocked" };
+    if (await loginTriesLeft(guessKey, OTP_MAX_ATTEMPTS) <= 0) return { ok: false, reason: "blocked" };
     if (Date.now() > pending.expiry) return { ok: false, reason: "expired" };
     if (pending.attempts >= OTP_MAX_ATTEMPTS) return { ok: false, reason: "exhausted" };
     const matched =
@@ -153,14 +153,14 @@ export async function checkOtpCode(
             ? await verifyOtpSms(pending.identity, code)
             : safeEqual(pending.codeHash, sign(`${pending.channel}:${pending.identity}:${code}`));
     if (!matched) {
-        recordLoginFailure(guessKey);
+        await recordLoginFailure(guessKey);
         const triesLeft = Math.min(
             OTP_MAX_ATTEMPTS - (pending.attempts + 1),
-            loginTriesLeft(guessKey, OTP_MAX_ATTEMPTS)
+            await loginTriesLeft(guessKey, OTP_MAX_ATTEMPTS)
         );
         return { ok: false, reason: "mismatch", pending, triesLeft };
     }
-    clearLoginFailures(guessKey);
+    await clearLoginFailures(guessKey);
     return { ok: true, channel: pending.channel, identity: pending.identity };
 }
 
