@@ -9,7 +9,17 @@
  * Client-safe — the form imports it.
  */
 
-export const APP_SETTING_SECTIONS = ["Messaging", "Social & Google", "Files & media", "Couriers", "Payments", "Email & SMS"] as const;
+export const APP_SETTING_SECTIONS = [
+    "Messaging",
+    "Social & Google",
+    "Files & media",
+    "Couriers",
+    "Payments",
+    "Email & SMS",
+    "Push notifications",
+    "Backup",
+    "Server & security",
+] as const;
 export type AppSettingSection = (typeof APP_SETTING_SECTIONS)[number];
 
 export type AppSettingDef = {

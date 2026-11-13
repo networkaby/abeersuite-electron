@@ -9,6 +9,7 @@ import { APP_SETTING_DEFS, SECRET_APP_SETTING_KEYS, maskSecret, normalizeAppSett
 import { APP_SETTINGS_TAG, envAppSetting, openSavedSecret } from "@/shared/lib/settings/appSettings.server";
 import { hasScrambleSecret, lockSecret } from "@/shared/lib/security/secretBox";
 import { listWaPhoneNumbers, registerWaPhoneNumber, setWaTwoStepPin } from "@/shared/lib/whatsapp/metaTemplates";
+import { ENV_ONLY_KEYS } from "@/shared/lib/constants/appSettingsHelp";
 
 // Settings → App Settings. Stored on OrgDefaults.appSettingsJson; a blank key falls
 // back to .env. Secrets may be saved here too (owner, 2026-11-12 — for testing
@@ -43,9 +44,12 @@ export async function GET(req: Request) {
         }
         const od = await prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { appSettingsJson: true } });
         const env = Object.fromEntries(APP_SETTING_DEFS.map((d) => [d.key, envAppSetting(d.key) ?? ""]));
+        // .env-only keys: set or not, never the value.
+        const envOnly = Object.fromEntries(ENV_ONLY_KEYS.map((k) => [k, Boolean(process.env[k]?.trim())]));
         return NextResponse.json({
             values: masked(normalizeAppSettings(od?.appSettingsJson), true),
             env: masked(env, false),
+            envOnly,
         });
     } catch (e) {
         return handleApiError(e, "Failed to load app settings");

@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { AlertTriangle, Info, KeyRound, Loader2, RefreshCw, Save, Server } from "lucide-react";
+import { AlertTriangle, CircleHelp, Info, KeyRound, Loader2, Lock, RefreshCw, Save, Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,8 +13,26 @@ import { getWithRetry } from "@/shared/lib/http/getWithRetry";
 import { parseDigitsInput } from "@/shared/lib/format";
 import { cn } from "@/shared/lib/format/utils";
 import { APP_SETTING_DEFS, APP_SETTING_SECTIONS, SECRET_APP_SETTING_KEYS, type AppSettingKey, type AppSettingValues } from "@/shared/lib/constants/appSettings";
+import { ENV_ONLY_PROVIDERS, PROVIDER_HELP, type EnvOnlyProvider } from "@/shared/lib/constants/appSettingsHelp";
 
-type Loaded = { values: AppSettingValues; env: Record<string, string> };
+type Loaded = { values: AppSettingValues; env: Record<string, string>; envOnly: Record<string, boolean> };
+
+/** The (?) on a card header — help for that provider in a new tab. */
+function HelpLink({ provider }: { provider: string }) {
+    if (!PROVIDER_HELP[provider]) return null;
+    return (
+        <a
+            href={`/office/settings/app-settings/help?p=${encodeURIComponent(provider)}`}
+            target="_blank"
+            rel="noreferrer"
+            title={`Where to get these from ${provider}`}
+            className="text-muted-foreground hover:text-primary"
+        >
+            <CircleHelp size={18} />
+            <span className="sr-only">Help for {provider}</span>
+        </a>
+    );
+}
 type WaNumber = { id: string; display: string; name: string; status: string; nameStatus: string; quality: string; wabaId: string };
 type Def = (typeof APP_SETTING_DEFS)[number];
 
@@ -54,6 +72,7 @@ export function AppSettingsForm() {
     const [values, setValues] = useState<AppSettingValues>({});
     const [savedValues, setSavedValues] = useState<AppSettingValues>({});
     const [env, setEnv] = useState<Record<string, string>>({});
+    const [envOnly, setEnvOnly] = useState<Record<string, boolean>>({});
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [showEnvNames, setShowEnvNames] = useState(false);
@@ -68,6 +87,7 @@ export function AppSettingsForm() {
                 setValues(d.values);
                 setSavedValues(d.values);
                 setEnv(d.env);
+                setEnvOnly(d.envOnly ?? {});
                 setN2Different(Boolean(d.values[BILLS_WABA] || d.env[BILLS_WABA]));
             })
             .catch((e) => toast.error(extractApiError(e, "Could not load app settings")))
@@ -162,12 +182,12 @@ export function AppSettingsForm() {
         if (isSecretDef(d)) {
             const edit = secretEdits[d.key];
             if (edit !== undefined) return edit ? <SourceTag tone="unsaved">New — not saved</SourceTag> : <SourceTag tone="clear">Clears on Save</SourceTag>;
-            if (values[d.key]) return <SourceTag tone="saved">Saved here {values[d.key]}</SourceTag>;
+            if (values[d.key]) return <SourceTag tone="saved">Saved here {values[d.key]}{envV ? " · also in .env" : ""}</SourceTag>;
             return envV ? <SourceTag tone="env"><Server size={10} /> from .env {envV}</SourceTag> : <SourceTag tone="empty">Not set</SourceTag>;
         }
         const v = values[d.key] ?? "";
         if (v !== (savedValues[d.key] ?? "")) return <SourceTag tone="unsaved">{v ? "Changed — not saved" : envV ? "Back to .env on Save" : "Clears on Save"}</SourceTag>;
-        if (v) return <SourceTag tone="saved">Saved here</SourceTag>;
+        if (v) return <SourceTag tone="saved">{envV ? "Saved here · also in .env" : "Saved here"}</SourceTag>;
         return envV ? <SourceTag tone="env"><Server size={10} /> from .env · {envV}</SourceTag> : <SourceTag tone="empty">Not set</SourceTag>;
     };
 
@@ -235,6 +255,39 @@ export function AppSettingsForm() {
         ) : (
             <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300">Missing: {gaps.join(", ")}</span>
         );
+
+    /** A service whose keys live only in the server's .env — names and set / missing, no boxes. */
+    const envOnlyCard = (p: EnvOnlyProvider) => {
+        const gaps = p.keys.filter((k) => !envOnly[k.key]).length;
+        return (
+            <div key={p.provider} className="min-w-0 space-y-4 rounded-2xl border border-dashed bg-muted/20 p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="flex items-center gap-2 text-base font-semibold"><Lock size={15} className="text-muted-foreground" /> {p.provider}</h3>
+                    <div className="flex items-center gap-3">
+                        <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">.env only</span>
+                        {gaps === 0 ? (
+                            <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">All set</span>
+                        ) : (
+                            <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300">{gaps} missing</span>
+                        )}
+                        <HelpLink provider={p.provider} />
+                    </div>
+                </div>
+                <p className="text-xs text-muted-foreground">{p.why}</p>
+                <div className="divide-y rounded-lg border bg-card text-sm">
+                    {p.keys.map((k) => (
+                        <div key={k.key} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                            <div className="min-w-0">
+                                <div className="font-medium">{k.label}</div>
+                                <code className="break-all text-[11px] text-muted-foreground">{k.key}</code>
+                            </div>
+                            {envOnly[k.key] ? <SourceTag tone="env"><Server size={10} /> set in .env</SourceTag> : <SourceTag tone="empty">Not set</SourceTag>}
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    };
 
     const n2AccountChoice = (
         <div className="space-y-2">
@@ -377,6 +430,7 @@ export function AppSettingsForm() {
                     <SourceTag tone="unsaved">Not saved yet</SourceTag>
                     <SourceTag tone="empty">Not set</SourceTag>
                 </div>
+                <span className="text-xs text-muted-foreground">Tip: once a value works, you may move it to .env / Vercel and clear it here — your choice.</span>
                 <label className="flex cursor-pointer items-center gap-2 text-sm">
                     <Switch checked={showEnvNames} onCheckedChange={setShowEnvNames} />
                     Show .env names
@@ -385,6 +439,8 @@ export function AppSettingsForm() {
 
             {APP_SETTING_SECTIONS.map((section) => {
                 const providers = [...new Set(APP_SETTING_DEFS.filter((d) => d.section === section).map((d) => d.provider))];
+                const envCards = ENV_ONLY_PROVIDERS.filter((p) => p.section === section);
+                if (!providers.length && !envCards.length) return null;
                 return (
                     <section key={section} className="space-y-4">
                         <h2 className="flex items-center gap-3 text-lg font-semibold">
@@ -399,7 +455,10 @@ export function AppSettingsForm() {
                                     <div key={provider} className={cn("min-w-0 space-y-5 rounded-2xl border bg-card p-5 shadow-sm", isWa && "xl:col-span-2")}>
                                         <div className="flex flex-wrap items-center justify-between gap-2">
                                             <h3 className="text-base font-semibold">{provider}</h3>
-                                            {readyBadge(missing(defs))}
+                                            <div className="flex items-center gap-3">
+                                                {readyBadge(missing(defs))}
+                                                <HelpLink provider={provider} />
+                                            </div>
                                         </div>
                                         {isWa ? (
                                             <>
@@ -412,6 +471,7 @@ export function AppSettingsForm() {
                                     </div>
                                 );
                             })}
+                            {envCards.map((p) => envOnlyCard(p))}
                         </div>
                     </section>
                 );
