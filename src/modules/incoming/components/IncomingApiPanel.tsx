@@ -25,6 +25,7 @@ type Row = {
     enabled: boolean;
     source: "page" | "env" | "none";
     hint: string | null;
+    envSet: boolean;
     settings: Record<string, unknown>;
     lastUsedAt: string | null;
     updatedByName: string | null;
@@ -33,11 +34,16 @@ type Status = { canLock: boolean; rows: Row[] };
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "never");
 
-const SOURCE_TEXT: Record<Row["source"], string> = {
-    page: "Secret saved on this page",
-    env: "Secret from the Vercel env var",
-    none: "No secret set",
-};
+/** Where the secret comes from, as the same coloured tag App Settings uses. */
+function SourceTag({ r }: { r: Row }) {
+    const [text, tone] =
+        r.source === "page"
+            ? [r.envSet ? "Saved here · also in .env" : "Saved here", "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:ring-emerald-900"]
+            : r.source === "env"
+              ? ["from .env", "bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-950/60 dark:text-sky-300 dark:ring-sky-900"]
+              : ["Not set", "bg-muted text-muted-foreground ring-border"];
+    return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${tone}`}>{text}</span>;
+}
 
 /**
  * Settings → Incoming API: one card per outside caller (incomingCatalog.ts).
@@ -95,6 +101,10 @@ export function IncomingApiPanel() {
                 </p>
             )}
 
+            <p className="text-xs text-muted-foreground">
+                Tip: once a key works, you may also put it in .env / Vercel under the &quot;.env key&quot; name shown on its card — your choice. A key saved here wins; both keep working.
+            </p>
+
             {status.rows.map((r) => {
                 const def = INCOMING_APIS[r.id];
                 return (
@@ -119,11 +129,33 @@ export function IncomingApiPanel() {
                             <dd className="break-all whitespace-pre-line font-mono text-xs">{def.paths.map((p) => p.replace(" /", ` ${origin}/`)).join("\n")}</dd>
                             <dt className="text-muted-foreground">How it is sent</dt>
                             <dd className="font-mono text-xs">{def.howSent}</dd>
+                            <dt className="text-muted-foreground">.env key</dt>
+                            <dd className="flex flex-wrap items-center gap-2">
+                                {def.envVar ? (
+                                    <>
+                                        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{def.envVar}</code>
+                                        <button
+                                            type="button"
+                                            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                                            onClick={() =>
+                                                void navigator.clipboard.writeText(def.envVar!).then(
+                                                    () => toast.success(`Copied ${def.envVar}`),
+                                                    () => toast.error("Copy refused — select the name instead"),
+                                                )
+                                            }
+                                        >
+                                            <Copy className="size-3" /> Copy name
+                                        </button>
+                                    </>
+                                ) : (
+                                    <span className="text-muted-foreground">page only</span>
+                                )}
+                            </dd>
                             <dt className="text-muted-foreground">Secret</dt>
-                            <dd>
-                                {SOURCE_TEXT[r.source]}
-                                {r.hint ? <span className="font-mono"> · ends …{r.hint}</span> : null}
-                                {r.source === "none" ? <span className="text-red-600"> — every call is refused until one is set</span> : null}
+                            <dd className="flex flex-wrap items-center gap-2">
+                                <SourceTag r={r} />
+                                {r.hint ? <span className="font-mono text-xs">ends …{r.hint}</span> : null}
+                                {r.source === "none" ? <span className="text-red-600">every call is refused until one is set</span> : null}
                             </dd>
                             <dt className="text-muted-foreground">Last used</dt>
                             <dd>{when(r.lastUsedAt)}{r.updatedByName ? <span className="text-muted-foreground"> · last changed by {r.updatedByName}</span> : null}</dd>
@@ -182,7 +214,7 @@ export function IncomingApiPanel() {
                                     variant="ghost"
                                     disabled={busy === r.id}
                                     onClick={() => {
-                                        if (!window.confirm(def.envVar ? `Remove the page secret? ${def.envVar} from Vercel counts again, if set.` : "Remove the key? Every call is refused until a new one is made.")) return;
+                                        if (!window.confirm(def.envVar ? `Remove the page secret? ${def.envVar} in .env / Vercel keeps working, if set.` : "Remove the key? Every call is refused until a new one is made.")) return;
                                         void save(r.id, { secret: "" }, "Page secret removed");
                                     }}
                                 >

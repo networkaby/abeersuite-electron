@@ -112,6 +112,8 @@ export type IncomingStatus = {
     /** Where the working secret comes from now. */
     source: "page" | "env" | "none";
     hint: string | null;
+    /** The .env / Vercel key has a value here (never the value itself). */
+    envSet: boolean;
     settings: Record<string, unknown>;
     lastUsedAt: string | null;
     updatedByName: string | null;
@@ -129,6 +131,7 @@ export async function incomingStatus(): Promise<{ canLock: boolean; rows: Incomi
             enabled: r?.enabled ?? true,
             source: r?.secretEnc ? "page" : env ? "env" : "none",
             hint: r?.secretHint ?? (env ? env.slice(-4) : null),
+            envSet: Boolean(env),
             settings: (r?.settings ?? {}) as Record<string, unknown>,
             lastUsedAt: r?.lastUsedAt?.toISOString() ?? null,
             updatedByName: r?.updatedByName ?? null,

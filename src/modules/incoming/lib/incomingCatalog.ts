@@ -11,7 +11,7 @@ export type IncomingDef = {
     about: string;
     /** Where the other program must put it. */
     howSent: string;
-    /** The env var it used before this page; still accepted. */
+    /** The .env / Vercel name for this secret — used when the page has none (the page wins). */
     envVar: string | null;
     /** We make the key ("Make new key"), or it comes from the other side (Meta's app secret) and is pasted. */
     canGenerate: boolean;
@@ -24,7 +24,7 @@ export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
         label: "Google Business API",
         about: "Reads Google reviews and writes the shop's reply, makes social posts (text per channel, photos, time). Replies and posts follow the settings below; 1–2 star reviews are always saved as Draft for staff to check.",
         howSent: "Header  x-api-key: <key>",
-        envVar: null,
+        envVar: "COWORK_API_KEY",
         canGenerate: true,
         paths: [
             "GET /api/agent/reviews",
@@ -43,7 +43,7 @@ export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
         label: "Claude — Product copy",
         about: "Claude (Cowork / chat, the /product-copy skill) reads products waiting for shop copy and sends Verified copy. The server re-reads Claude's pages and checks every fact; the copy goes into the product's draft for staff — it never changes the live product or publishes.",
         howSent: "Header  x-api-key: <key>",
-        envVar: null,
+        envVar: "PRODUCT_COPY_API_KEY",
         canGenerate: true,
         paths: [
             "GET /api/agent/products",
@@ -59,7 +59,7 @@ export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
         label: "Claude — Price watch",
         about: "Claude (the /price-watch skill, by hand or on a schedule) reads our shop price, MRP and stock — and the last purchase cost only when asked — then compares them with Amazon.in, Flipkart and the maker and writes the report itself. Read only: it never changes a price.",
         howSent: "Header  x-api-key: <key>",
-        envVar: null,
+        envVar: "PRICE_WATCH_API_KEY",
         canGenerate: true,
         paths: ["GET /api/agent/prices"],
     },
