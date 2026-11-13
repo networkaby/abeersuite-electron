@@ -3,6 +3,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { appSetting } from "@/shared/lib/settings/appSettings.server";
 import { META_APP_ID_MISSING, metaAppId } from "@/shared/lib/whatsapp/metaTemplates";
 import { incomingSecret } from "@/modules/incoming/lib/incomingApi";
+import { META_GRAPH } from "@/shared/lib/constants/meta";
 
 /**
  * POST /api/settings/whatsapp-connect — finish Meta's Embedded Signup for a
@@ -17,7 +18,7 @@ import { incomingSecret } from "@/modules/incoming/lib/incomingApi";
  *   META_APP_ID               Settings → App Settings or .env (metaAppId)
  *   META_WA_APP_SECRET        same app's secret, already used by the webhook
  */
-const GRAPH = "https://graph.facebook.com/v23.0";
+const GRAPH = META_GRAPH;
 
 async function graph(path: string, token: string, body?: Record<string, unknown>) {
     const res = await fetch(`${GRAPH}/${path}`, {

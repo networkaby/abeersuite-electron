@@ -3,6 +3,7 @@ import "server-only";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { lockSecret, unlockSecret, hasSharedSecret } from "@/shared/lib/ai/secretBox";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
+import { META_GRAPH, META_OAUTH_DIALOG } from "@/shared/lib/constants/meta";
 import { metaAppId } from "@/shared/lib/whatsapp/metaTemplates";
 import { mediaLink } from "@/modules/message/lib/customerMessages";
 import { facebookAutoBlock, facebookReelBlock, facebookStoryBlock, postCaption } from "@/modules/campaigns/lib/post";
@@ -21,8 +22,8 @@ import { facebookAutoBlock, facebookReelBlock, facebookStoryBlock, postCaption }
  * admins / developers can connect — enough for the shop's page, no app review.
  */
 
-export const GRAPH = "https://graph.facebook.com/v21.0";
-const AUTH_URL = "https://www.facebook.com/v21.0/dialog/oauth";
+export const GRAPH = META_GRAPH;
+const AUTH_URL = META_OAUTH_DIALOG;
 // business_management: the shop page is owned by the business portfolio, and
 // /me/accounts leaves out portfolio-assigned pages without it.
 const SCOPES = ["pages_show_list", "pages_read_engagement", "pages_manage_posts", "instagram_basic", "instagram_content_publish", "business_management"];

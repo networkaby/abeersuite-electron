@@ -8,6 +8,7 @@ import { extractApiError } from "@/shared/lib/api";
 import { Button } from "@/components/ui/button";
 import { useIsDesktopApp } from "@/shared/lib/bridge";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
+import { META_GRAPH_VERSION } from "@/shared/lib/constants/meta";
 
 /**
  * Connect a second number that stays on the WhatsApp Business app (Meta
@@ -29,7 +30,7 @@ function loadSdk(appId: string): Promise<FbSdk> {
     if (window.FB) return Promise.resolve(window.FB);
     return new Promise((resolve, reject) => {
         window.fbAsyncInit = () => {
-            window.FB!.init({ appId, autoLogAppEvents: true, xfbml: false, version: "v23.0" });
+            window.FB!.init({ appId, autoLogAppEvents: true, xfbml: false, version: META_GRAPH_VERSION });
             resolve(window.FB!);
         };
         const s = document.createElement("script");

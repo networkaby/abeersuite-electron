@@ -1,6 +1,7 @@
 import "server-only";
 import QRCode from "qrcode";
 import { appSetting } from "@/shared/lib/settings/appSettings.server";
+import { META_GRAPH } from "@/shared/lib/constants/meta";
 import {
     WA_APP_LINK,
     WA_BILL_LINK_BASE,
@@ -28,7 +29,7 @@ import {
  * utility rate for it. Language is English only (owner, 2026-10-06).
  */
 
-const GRAPH = "https://graph.facebook.com/v21.0";
+const GRAPH = META_GRAPH;
 const LANG = "en";
 
 /** Settings → App Settings, else .env. */

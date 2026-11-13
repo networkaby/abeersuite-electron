@@ -1,5 +1,6 @@
 import "server-only";
 import { appSetting } from "@/shared/lib/settings/appSettings.server";
+import { META_GRAPH } from "@/shared/lib/constants/meta";
 
 /**
  * WhatsApp OTP delivery — the cheapest pipe for a mobile code.
@@ -28,8 +29,6 @@ import { appSetting } from "@/shared/lib/settings/appSettings.server";
  * here.
  */
 
-/** Meta Cloud API version we target. */
-const GRAPH_VERSION = "v21.0";
 
 const phoneNumberId = () => appSetting("META_WA_PHONE_NUMBER_ID");
 const templateName = () => appSetting("WA_OTP_TEMPLATE");
@@ -101,7 +100,7 @@ export async function sendOtpWhatsApp(mobile: string, code: string): Promise<voi
         });
     }
 
-    const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${numberId}/messages`, {
+    const res = await fetch(`${META_GRAPH}/${numberId}/messages`, {
         method: "POST",
         headers: { Authorization: `Bearer ${metaToken}`, "Content-Type": "application/json" },
         body: JSON.stringify({
