@@ -16,7 +16,7 @@ export const APP_SETTING_SECTIONS = [
     "Couriers",
     "Payments",
     "Email & SMS",
-    "Push notifications",
+    "Sign-in & push",
     "Backup",
     "Server & security",
 ] as const;

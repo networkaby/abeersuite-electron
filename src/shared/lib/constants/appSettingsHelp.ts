@@ -21,7 +21,7 @@ export type ProviderHelp = {
 };
 
 /** A key that cannot be set on App Settings — the card shows only its name and whether it is set. */
-export type EnvOnlyKey = { key: string; label: string };
+export type EnvOnlyKey = { key: string; label: string; /** Sub-heading inside the card; keys sharing one are shown together. */ group?: string };
 
 /** A service whose keys live only in .env / Vercel. With `attachTo`, its keys show as
  *  read-only rows inside that editable card instead of a card of their own. */
@@ -51,7 +51,7 @@ export const ENV_ONLY_PROVIDERS: EnvOnlyProvider[] = [
     {
         provider: "Supabase (live updates)",
         section: "Server & security",
-        why: "Built into the website when it is deployed (NEXT_PUBLIC_), so a value saved later could not reach it.",
+        why: "Only sends \"something changed\" messages (Broadcast) — never reads the database, so it may be a different Supabase project. Built into the website (NEXT_PUBLIC_), so .env only.",
         keys: [
             { key: "NEXT_PUBLIC_SUPABASE_URL", label: "Project URL" },
             { key: "NEXT_PUBLIC_SUPABASE_ANON_KEY", label: "anon public key" },
@@ -88,21 +88,21 @@ export const ENV_ONLY_PROVIDERS: EnvOnlyProvider[] = [
         keys: [{ key: "NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME", label: "Cloud name" }],
     },
     {
-        provider: "Firebase (shop app push)",
-        section: "Push notifications",
-        why: "The web keys are built into the website; the service account must match them.",
+        provider: "Firebase (Google sign-in & shop app push)",
+        section: "Sign-in & push",
+        why: "All five must come from the SAME Firebase project: a Google sign-in is checked against the service account's project. The web keys are built into the website, so everything stays in .env.",
         keys: [
-            { key: "NEXT_PUBLIC_FIREBASE_API_KEY", label: "Web API key" },
-            { key: "NEXT_PUBLIC_FIREBASE_APP_ID", label: "App ID" },
-            { key: "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN", label: "Auth domain" },
-            { key: "NEXT_PUBLIC_FIREBASE_PROJECT_ID", label: "Project ID" },
-            { key: "FIREBASE_SERVICE_ACCOUNT_JSON", label: "Service account (JSON)" },
+            { key: "NEXT_PUBLIC_FIREBASE_API_KEY", label: "Web API key", group: "Google sign-in (\"Continue with Google\")" },
+            { key: "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN", label: "Auth domain", group: "Google sign-in (\"Continue with Google\")" },
+            { key: "NEXT_PUBLIC_FIREBASE_PROJECT_ID", label: "Project ID", group: "Google sign-in (\"Continue with Google\")" },
+            { key: "NEXT_PUBLIC_FIREBASE_APP_ID", label: "App ID", group: "Google sign-in (\"Continue with Google\")" },
+            { key: "FIREBASE_SERVICE_ACCOUNT_JSON", label: "Service account (JSON)", group: "Shop app push — also checks every Google sign-in" },
         ],
     },
     {
-        provider: "Web push (browser notifications)",
-        section: "Push notifications",
-        why: "A key pair: the public half is built into the website, so the private half must change with it.",
+        provider: "Web push (browsers)",
+        section: "Sign-in & push",
+        why: "Not Firebase and no account — a key pair we make ourselves. The public half is built into the website, so the private half must stay beside it in .env.",
         keys: [
             { key: "NEXT_PUBLIC_VAPID_PUBLIC_KEY", label: "Public key" },
             { key: "VAPID_PRIVATE_KEY", label: "Private key" },
@@ -350,22 +350,26 @@ export const PROVIDER_HELP: Record<string, ProviderHelp> = {
         steps: ["cloudinary.com → Dashboard / Settings → API Keys: Cloud name at the top."],
         link: { label: "Cloudinary console", url: "https://console.cloudinary.com/" },
     },
-    "Firebase (shop app push)": {
-        about: "Push notifications to the shop app.",
+    "Firebase (Google sign-in & shop app push)": {
+        about: "One Firebase project, two jobs: the web keys run \"Continue with Google\"; the service account sends push to the shop app and checks each Google sign-in. Mixing two projects makes every Google sign-in fail.",
         terms: [
-            { key: "NEXT_PUBLIC_FIREBASE_*", theirs: "Web app config (apiKey, appId, authDomain, projectId)" },
-            { key: "FIREBASE_SERVICE_ACCOUNT_JSON", theirs: "Service account private key (JSON file)" },
+            { key: "NEXT_PUBLIC_FIREBASE_API_KEY / _AUTH_DOMAIN / _PROJECT_ID / _APP_ID", theirs: "Web app config: apiKey, authDomain, projectId, appId" },
+            { key: "FIREBASE_SERVICE_ACCOUNT_JSON", theirs: "Service account private key (JSON file) — same project" },
         ],
         steps: [
-            "console.firebase.google.com → project → Project settings → General → Your apps → the Web app's config.",
-            "Project settings → Service accounts → Generate new private key; paste the whole JSON as one line.",
+            "console.firebase.google.com → the shop's project → Project settings → General → Your apps → the Web app → SDK setup and configuration → Config.",
+            "Same project → Project settings → Service accounts → Generate new private key. Paste the whole JSON as one line.",
+            "The shop app's google-services.json must come from this same project, or push never arrives.",
         ],
         link: { label: "Firebase console", url: "https://console.firebase.google.com/" },
     },
-    "Web push (browser notifications)": {
-        about: "Notifications in the browser and installed web app.",
-        terms: [{ key: "NEXT_PUBLIC_VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY", theirs: "VAPID key pair" }, { key: "VAPID_SUBJECT", theirs: "mailto:you@yourdomain" }],
-        steps: ["Made by us, not a provider: npx web-push generate-vapid-keys.", "Changing the pair signs every browser out of notifications."],
+    "Web push (browsers)": {
+        about: "Notifications in browsers and the installed web app, for staff and customers. Not Firebase — a key pair we make.",
+        terms: [
+            { key: "NEXT_PUBLIC_VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY", theirs: "VAPID key pair (public / private)" },
+            { key: "VAPID_SUBJECT", theirs: "mailto:you@yourdomain" },
+        ],
+        steps: ["Run npx web-push generate-vapid-keys once and keep the pair.", "Changing the pair signs every browser out of notifications."],
         link: { label: "web-push", url: "https://www.npmjs.com/package/web-push" },
     },
     "Dropbox (backup copy)": {

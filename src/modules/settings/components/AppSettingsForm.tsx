@@ -242,19 +242,30 @@ export function AppSettingsForm() {
 
     /** A service whose keys live only in the server's .env — names and set / missing, no boxes. */
     /** Read-only rows for .env-only keys: name, .env key, set / not set. */
-    const envRows = (p: EnvOnlyProvider) => (
-        <div className="divide-y rounded-lg border bg-card text-sm">
-            {p.keys.map((k) => (
-                <div key={k.key} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
-                    <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 font-medium"><Lock size={12} className="text-muted-foreground" /> {k.label}</div>
-                        <code className="break-all text-[11px] text-muted-foreground">{k.key}</code>
+    const envRows = (p: EnvOnlyProvider) => {
+        // Keys sharing a `group` sit together under that purpose heading, in first-seen order.
+        const groups = [...new Set(p.keys.map((k) => k.group ?? ""))];
+        return (
+            <div className="space-y-3">
+                {groups.map((g) => (
+                    <div key={g || "all"} className="space-y-1.5">
+                        {g && <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{g}</div>}
+                        <div className="divide-y rounded-lg border bg-card text-sm">
+                            {p.keys.filter((k) => (k.group ?? "") === g).map((k) => (
+                                <div key={k.key} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-1.5 font-medium"><Lock size={12} className="text-muted-foreground" /> {k.label}</div>
+                                        <code className="break-all text-[11px] text-muted-foreground">{k.key}</code>
+                                    </div>
+                                    {envOnly[k.key] ? <SourceTag tone="env"><Server size={10} /> set in .env</SourceTag> : <SourceTag tone="empty">Not set</SourceTag>}
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                    {envOnly[k.key] ? <SourceTag tone="env"><Server size={10} /> set in .env</SourceTag> : <SourceTag tone="empty">Not set</SourceTag>}
-                </div>
-            ))}
-        </div>
-    );
+                ))}
+            </div>
+        );
+    };
 
     const envOnlyCard = (p: EnvOnlyProvider) => {
         const gaps = p.keys.filter((k) => !envOnly[k.key]).length;
