@@ -4,7 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { invalidateAiSetup, keyUsages, loadAiSetup } from "@/shared/lib/ai/aiKeys";
-import { hasSharedSecret } from "@/shared/lib/ai/secretBox";
+import { hasScrambleSecret } from "@/shared/lib/security/secretBox";
 import { aiRunsOnOffice } from "@/shared/lib/counter/relayPolicy";
 import { aiKeyBodySchema, aiKeyRowData, savedAiKeyView, aiKeyView } from "@/modules/settings/lib/aiKeysServer";
 
@@ -26,7 +26,7 @@ export async function GET() {
             copyFlow,
             photoCheck,
             // A relaying counter without the AI keys sends saves, tests and AI jobs to the office.
-            here: { sharedSecret: aiRunsOnOffice() || hasSharedSecret(), runsOnOffice: aiRunsOnOffice() },
+            here: { scrambleSecret: aiRunsOnOffice() || hasScrambleSecret(), runsOnOffice: aiRunsOnOffice() },
         });
     } catch (e) {
         return handleApiError(e, "Failed to load AI setup");

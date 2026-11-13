@@ -4,7 +4,7 @@
 // setting like draft/post toggle also there, all incoming api". One row per
 // caller (Google Business API, cron-job.org, phone system call log, Shiprocket, Meta
 // WhatsApp), managed on Settings → Incoming API. The secret is locked with the
-// shared AI_KEY_SECRET (secretBox), never stored plain. A caller that had an env
+// SCRAMBLE_KEY_SECRET (secretBox), never stored plain. A caller that had an env
 // var before (CRON_SECRET, CALLS_API_KEY, …) still accepts it as well, so
 // nothing breaks the day this ships; see incomingApi.ts.
 

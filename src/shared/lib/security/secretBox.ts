@@ -2,26 +2,35 @@ import "server-only";
 import crypto from "crypto";
 
 /**
- * AES-256-GCM lock for AI keys. Two locks, two secrets:
- *   - shared: AI_KEY_SECRET — the same on Vercel and every office till, so a key
- *     pasted on the page (AiKey.secretEnc) opens wherever the app runs.
+ * AES-256-GCM lock for every secret we save in the database. Two locks:
+ *   - scramble: SCRAMBLE_KEY_SECRET — the same on Vercel and every office till, so a
+ *     secret pasted on a page opens wherever the app runs. Locks AI keys, App Settings
+ *     secrets, Incoming API secrets and the saved Facebook / Google access.
+ *     (Was AI_KEY_SECRET until 2026-11-13 — same value, renamed by the owner.)
  *   - machine: AUTH_SECRET — one per PC on a till (electron/main.ts
  *     ensureAuthSecret), so a key saved in this PC's file opens nowhere else.
  * Format: "v1:<iv>:<tag>:<cipher>", base64 parts.
  */
 
-export type SecretLock = "shared" | "machine";
+export type SecretLock = "scramble" | "machine";
+
+/** The env var behind the scramble lock — every message names it from here. */
+export const SCRAMBLE_SECRET_ENV = "SCRAMBLE_KEY_SECRET";
 
 const secretFor = (lock: SecretLock) =>
-    (lock === "shared" ? process.env.AI_KEY_SECRET : process.env.AUTH_SECRET)?.trim() || "";
+    (lock === "scramble" ? process.env.SCRAMBLE_KEY_SECRET : process.env.AUTH_SECRET)?.trim() || "";
 
-/** The shared lock is set here — without it a pasted (db) key can be neither saved nor read. */
-export const hasSharedSecret = () => secretFor("shared").length >= 16;
+/** The scramble lock is set here — without it a pasted secret can be neither saved nor read. */
+export const hasScrambleSecret = () => secretFor("scramble").length >= 16;
+
+/** Never change: the lock's old name ("shared") is part of the key, so every saved
+ *  secret stays readable after the rename. */
+const DERIVE_NAME: Record<SecretLock, string> = { scramble: "shared", machine: "machine" };
 
 const keyOf = (lock: SecretLock) => {
     const secret = secretFor(lock);
-    if (secret.length < 16) throw new Error(lock === "shared" ? "AI_KEY_SECRET is not set" : "AUTH_SECRET is not set");
-    return crypto.createHash("sha256").update(`abeer-ai:${lock}:${secret}`).digest();
+    if (secret.length < 16) throw new Error(lock === "scramble" ? `${SCRAMBLE_SECRET_ENV} is not set` : "AUTH_SECRET is not set");
+    return crypto.createHash("sha256").update(`abeer-ai:${DERIVE_NAME[lock]}:${secret}`).digest();
 };
 
 export function lockSecret(plain: string, lock: SecretLock): string {

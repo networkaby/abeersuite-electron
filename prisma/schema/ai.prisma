@@ -5,8 +5,8 @@
 // counters (a till runs AI calls itself), so the migration carries the till gate.
 
 /// One AI key. Where the actual key lives (`source`):
-///   db  — pasted on the page; `secretEnc` holds it locked (AES-GCM, AI_KEY_SECRET).
-///         Usable wherever AI_KEY_SECRET is set: the website and office tills.
+///   db  — pasted on the page; `secretEnc` holds it locked (AES-GCM, SCRAMBLE_KEY_SECRET).
+///         Usable wherever SCRAMBLE_KEY_SECRET is set: the website and office tills.
 ///   env — `envName` names a .env variable; usable where that .env carries it.
 /// (A third kind, "ini" — this PC only, was retired 2026-10-22; its rows were deleted.)
 /// `keyHint` = last 4 characters (db) or the variable name (env), for the list.

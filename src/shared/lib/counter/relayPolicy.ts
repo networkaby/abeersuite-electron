@@ -58,9 +58,9 @@ const NEVER_RELAY: readonly RegExp[] = [
  * without them relays, and the office answers. Never list a route that saves a row: that
  * write belongs to the office.
  */
-/** The office hands `AI_KEY_SECRET` out together with every AI `.env` key it holds
+/** The office hands `SCRAMBLE_KEY_SECRET` out together with every AI `.env` key it holds
  *  (officeConfigKeys.ts), so holding it means this counter has the office's whole AI set. */
-const AI_LOCAL_KEY = "AI_KEY_SECRET";
+const AI_LOCAL_KEY = "SCRAMBLE_KEY_SECRET";
 const LOCAL_WHEN_KEYED: readonly { path: RegExp; keys: readonly string[] }[] = [
     // AI product copy: reads one product and the AI Setup from the replica, calls the AI.
     { path: /^\/api\/ecommerce\/products\/ai-copy$/, keys: [AI_LOCAL_KEY] },

@@ -91,7 +91,7 @@ export function IncomingApiPanel() {
         <div className="flex w-full flex-col gap-4">
             {!status.canLock && (
                 <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
-                    AI_KEY_SECRET is not set on this server, so secrets cannot be saved here. Env vars still work.
+                    SCRAMBLE_KEY_SECRET is not set on this server, so secrets cannot be saved here. Env vars still work.
                 </p>
             )}
 

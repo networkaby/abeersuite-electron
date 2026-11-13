@@ -337,7 +337,7 @@ cost on the server:
 | API (draft only; GET returns the default flow and Photo AI) | `src/app/api/ecommerce/products/ai-copy/route.ts` |
 | Key chain, usage, provider call | `src/shared/lib/ai/aiKeys.ts` |
 | Web search keys | `src/shared/lib/ai/aiWeb.ts` |
-| Key encryption | `src/shared/lib/ai/secretBox.ts` |
+| Key encryption | `src/shared/lib/security/secretBox.ts` |
 | Limits, flows, steps, providers | `src/shared/lib/constants/ai.ts` |
 | Direct flow, shared schema, JSON parse, description assembly | `src/modules/ecommerce/lib/aiProductCopy.ts` |
 | Verified Steps 1, 3, 4, 5 and prompts | `src/modules/ecommerce/lib/aiVerifiedCopy.ts` |

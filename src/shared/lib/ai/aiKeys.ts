@@ -8,7 +8,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { prisma, prismaLive } from "@/shared/lib/prisma/prismaClient";
 import { businessTodayIso } from "@/shared/lib/format/formatDate";
 import { aiProviderInfo, AI_COPY_FLOWS, AI_DEFAULT_COPY_FLOW, AI_SETUP_CACHE_MS, AI_USAGE_RETRY_MS, type AiCopyFlow, type AiKeySource, type AiProvider, type AiStep } from "@/shared/lib/constants/ai";
-import { hasSharedSecret, unlockSecret } from "@/shared/lib/ai/secretBox";
+import { hasScrambleSecret, unlockSecret } from "@/shared/lib/security/secretBox";
 
 /**
  * AI Setup at run time: the keys and chains saved on Settings → AI Setup, which
@@ -88,7 +88,7 @@ const providerReady = (p: AiProvider) => aiProviderInfo(p)?.ready ?? false;
 /** The actual key on this server, or null. */
 export function keyValue(k: AiKeyConfig): string | null {
     if (k.source === "env") return (k.envName && process.env[k.envName]?.trim()) || null;
-    return k.secretEnc && hasSharedSecret() ? unlockSecret(k.secretEnc, "shared") : null;
+    return k.secretEnc && hasScrambleSecret() ? unlockSecret(k.secretEnc, "scramble") : null;
 }
 
 /** Why this key cannot be used on any server (its settings alone) — null = it may be. */
@@ -106,8 +106,8 @@ export function whyNotUsable(k: AiKeyConfig): string | null {
     if (anywhere) return anywhere;
     if (k.source === "env") return k.envName && process.env[k.envName]?.trim() ? null : `${k.envName ?? "Variable"} is not set here`;
     if (!k.secretEnc) return "No key saved";
-    if (!hasSharedSecret()) return "AI_KEY_SECRET is not set here";
-    if (!keyValue(k)) return "Saved with another AI_KEY_SECRET";
+    if (!hasScrambleSecret()) return "SCRAMBLE_KEY_SECRET is not set here";
+    if (!keyValue(k)) return "Saved with another SCRAMBLE_KEY_SECRET";
     return null;
 }
 

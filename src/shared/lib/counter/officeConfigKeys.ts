@@ -81,7 +81,7 @@ const WHATSAPP_KEYS = [
 
 /** Opens the keys pasted on Settings → AI Setup. The `.env` keys the AI Setup rows name
  *  are added at answer time from `ai_keys.envName`, so a new one needs no code change. */
-const AI_KEYS = ["AI_KEY_SECRET"];
+const AI_KEYS = ["SCRAMBLE_KEY_SECRET"];
 
 /** Fixed keys handed out besides the required ones. Optional: a key Vercel lacks is
  *  simply not sent, and that one feature stays off on the counter, as before. */

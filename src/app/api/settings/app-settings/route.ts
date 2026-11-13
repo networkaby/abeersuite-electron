@@ -7,13 +7,13 @@ import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { APP_SETTING_DEFS, SECRET_APP_SETTING_KEYS, maskSecret, normalizeAppSettings, type AppSettingKey, type AppSettingValues } from "@/shared/lib/constants/appSettings";
 import { APP_SETTINGS_TAG, envAppSetting, openSavedSecret } from "@/shared/lib/settings/appSettings.server";
-import { hasSharedSecret, lockSecret } from "@/shared/lib/ai/secretBox";
+import { hasScrambleSecret, lockSecret } from "@/shared/lib/security/secretBox";
 import { listWaPhoneNumbers, registerWaPhoneNumber, setWaTwoStepPin } from "@/shared/lib/whatsapp/metaTemplates";
 
 // Settings → App Settings. Stored on OrgDefaults.appSettingsJson; a blank key falls
 // back to .env. Secrets may be saved here too (owner, 2026-11-12 — for testing
 // without a deploy; later moved to Vercel and cleared): stored locked with
-// AI_KEY_SECRET, never sent back to the browser (GET gives only the last 4
+// SCRAMBLE_KEY_SECRET, never sent back to the browser (GET gives only the last 4
 // characters), and PUT keeps a saved secret unless the body names that key ("" clears).
 // Changing a secret needs settings:app:secrets on top of settings:app:manage.
 
@@ -77,8 +77,8 @@ export async function PUT(req: Request) {
         if (touchesSecret) {
             const { response: denied } = await requirePermission(PERMISSIONS.SETTINGS_APP_SECRETS);
             if (denied) return denied;
-            if ([...SECRET_APP_SETTING_KEYS].some((k) => incoming[k]) && !hasSharedSecret()) {
-                return NextResponse.json({ error: "AI_KEY_SECRET is not set on this server — secrets cannot be saved locked." }, { status: 422 });
+            if ([...SECRET_APP_SETTING_KEYS].some((k) => incoming[k]) && !hasScrambleSecret()) {
+                return NextResponse.json({ error: "SCRAMBLE_KEY_SECRET is not set on this server — secrets cannot be saved locked." }, { status: 422 });
             }
         }
         const od = await prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { appSettingsJson: true } });
@@ -88,7 +88,7 @@ export async function PUT(req: Request) {
         const merged: Record<string, string | undefined> = { ...incoming };
         for (const k of SECRET_APP_SETTING_KEYS) {
             const v = incoming[k];
-            merged[k] = v === undefined ? saved[k as AppSettingKey] : v.trim() ? lockSecret(v.trim(), "shared") : undefined;
+            merged[k] = v === undefined ? saved[k as AppSettingKey] : v.trim() ? lockSecret(v.trim(), "scramble") : undefined;
         }
         const values: AppSettingValues = normalizeAppSettings(merged);
         await prisma.orgDefaults.upsert({

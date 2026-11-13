@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
-import { lockSecret, unlockSecret, hasSharedSecret } from "@/shared/lib/ai/secretBox";
+import { lockSecret, unlockSecret, hasScrambleSecret } from "@/shared/lib/security/secretBox";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { mediaLink } from "@/modules/message/lib/customerMessages";
 import { googleAutoBlock } from "@/modules/campaigns/lib/post";
@@ -12,7 +12,7 @@ import { googleAutoBlock } from "@/modules/campaigns/lib/post";
  *
  * One OAuth client (GOOGLE_BUSINESS_CLIENT_ID / _SECRET, Cloud project with the
  * Business Profile API approved). Connect signs in the listing's owner and keeps
- * a refresh token (GoogleBusinessLink, locked with AI_KEY_SECRET); every call
+ * a refresh token (GoogleBusinessLink, locked with SCRAMBLE_KEY_SECRET); every call
  * swaps it for a short access token. Connecting always happens on the office
  * site — Google sends the browser back to the redirect URL registered there.
  */
@@ -41,7 +41,7 @@ export const googleRedirectUrl = () =>
 export function googleSetupProblem(): string | null {
     const { clientId, clientSecret } = env();
     if (!clientId || !clientSecret) return "GOOGLE_BUSINESS_CLIENT_ID and GOOGLE_BUSINESS_CLIENT_SECRET are not set on this server.";
-    if (!hasSharedSecret()) return "AI_KEY_SECRET is not set on this server — it locks the saved Google access.";
+    if (!hasScrambleSecret()) return "SCRAMBLE_KEY_SECRET is not set on this server — it locks the saved Google access.";
     return null;
 }
 
@@ -93,7 +93,7 @@ export async function saveGoogleConnection(code: string, user: { id: number; nam
     const old = await prisma.googleBusinessLink.findUnique({ where: { id: GOOGLE_LINK_ID }, select: { googleEmail: true } });
     const keepPlace = old?.googleEmail && old.googleEmail === googleEmail;
     const data = {
-        refreshTokenEnc: lockSecret(t.refresh_token, "shared"),
+        refreshTokenEnc: lockSecret(t.refresh_token, "scramble"),
         googleEmail,
         connectedById: user.id,
         connectedByName: user.name,
@@ -108,7 +108,7 @@ export async function saveGoogleConnection(code: string, user: { id: number; nam
 /** Forget the connection, and tell Google to drop the access too (best effort). */
 export async function disconnectGoogle(): Promise<void> {
     const row = await prisma.googleBusinessLink.findUnique({ where: { id: GOOGLE_LINK_ID }, select: { refreshTokenEnc: true } });
-    const token = row && unlockSecret(row.refreshTokenEnc, "shared");
+    const token = row && unlockSecret(row.refreshTokenEnc, "scramble");
     if (token) await fetch(`${REVOKE_URL}?token=${encodeURIComponent(token)}`, { method: "POST" }).catch(() => undefined);
     await prisma.googleBusinessLink.deleteMany({ where: { id: GOOGLE_LINK_ID } });
     cachedToken = null;
@@ -125,8 +125,8 @@ async function accessToken(): Promise<string> {
     if (problem) throw new GoogleError(problem);
     const row = await prisma.googleBusinessLink.findUnique({ where: { id: GOOGLE_LINK_ID }, select: { refreshTokenEnc: true } });
     if (!row) throw new GoogleError("Google Business Profile is not connected — Campaigns → Channels → Connect.");
-    const refresh = unlockSecret(row.refreshTokenEnc, "shared");
-    if (!refresh) throw new GoogleError("The saved Google access cannot be opened (AI_KEY_SECRET changed?) — connect again.");
+    const refresh = unlockSecret(row.refreshTokenEnc, "scramble");
+    if (!refresh) throw new GoogleError("The saved Google access cannot be opened (SCRAMBLE_KEY_SECRET changed?) — connect again.");
     const t = await tokenCall({ refresh_token: refresh, grant_type: "refresh_token" });
     if (!t.access_token) {
         const why =

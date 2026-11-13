@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
-import { hasSharedSecret } from "@/shared/lib/ai/secretBox";
+import { hasScrambleSecret } from "@/shared/lib/security/secretBox";
 import { staffName } from "@/modules/campaigns/lib/postServer";
 import { incomingStatus, newKey, saveIncoming } from "@/modules/incoming/lib/incomingApi";
 import { INCOMING_APIS, type IncomingId } from "@/modules/incoming/lib/incomingCatalog";
@@ -40,7 +40,7 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
     if (data.generate && !def.canGenerate) return NextResponse.json({ error: "This secret comes from the other side — paste it." }, { status: 400 });
     if (data.settings && id !== "COWORK") return NextResponse.json({ error: "Only the Google Business API has settings." }, { status: 400 });
     const secret = data.generate ? newKey() : data.secret;
-    if (secret && !hasSharedSecret()) return NextResponse.json({ error: "AI_KEY_SECRET is not set on this server — it locks saved secrets." }, { status: 503 });
+    if (secret && !hasScrambleSecret()) return NextResponse.json({ error: "SCRAMBLE_KEY_SECRET is not set on this server — it locks saved secrets." }, { status: 503 });
     if (secret !== undefined && secret !== "" && secret.length < 8) return NextResponse.json({ error: "A secret needs at least 8 characters." }, { status: 400 });
     try {
         await saveIncoming(id, { enabled: data.enabled, secret, settings: data.settings }, await staffName(user.id));

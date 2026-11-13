@@ -2,7 +2,7 @@ import "server-only";
 import crypto from "crypto";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
-import { hasSharedSecret, lockSecret, unlockSecret } from "@/shared/lib/ai/secretBox";
+import { hasScrambleSecret, lockSecret, unlockSecret } from "@/shared/lib/security/secretBox";
 import { INCOMING_APIS, type IncomingId } from "@/modules/incoming/lib/incomingCatalog";
 
 /**
@@ -35,7 +35,7 @@ async function rows(): Promise<Map<string, Row>> {
     for (const r of list) {
         map.set(r.id, {
             enabled: r.enabled,
-            secret: r.secretEnc && hasSharedSecret() ? unlockSecret(r.secretEnc, "shared") : null,
+            secret: r.secretEnc && hasScrambleSecret() ? unlockSecret(r.secretEnc, "scramble") : null,
             settings: (r.settings ?? {}) as Record<string, unknown>,
             lastUsedAt: r.lastUsedAt,
         });
@@ -132,7 +132,7 @@ export async function incomingStatus(): Promise<{ canLock: boolean; rows: Incomi
             updatedByName: r?.updatedByName ?? null,
         } satisfies IncomingStatus;
     });
-    return { canLock: hasSharedSecret(), rows: out };
+    return { canLock: hasScrambleSecret(), rows: out };
 }
 
 /** A new random key, as staff copy it into the other program. */
@@ -152,7 +152,7 @@ export async function saveIncoming(
             ? {}
             : p.secret === ""
               ? { secretEnc: null, secretHint: null }
-              : { secretEnc: lockSecret(p.secret, "shared"), secretHint: p.secret.slice(-4) };
+              : { secretEnc: lockSecret(p.secret, "scramble"), secretHint: p.secret.slice(-4) };
     const data = {
         ...(p.enabled === undefined ? {} : { enabled: p.enabled }),
         ...secretData,

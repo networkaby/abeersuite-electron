@@ -1,7 +1,7 @@
 import { appSetting } from "@/shared/lib/settings/appSettings.server";
 import "server-only";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { lockSecret, unlockSecret, hasSharedSecret } from "@/shared/lib/ai/secretBox";
+import { lockSecret, unlockSecret, hasScrambleSecret } from "@/shared/lib/security/secretBox";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { META_GRAPH, META_OAUTH_DIALOG } from "@/shared/lib/constants/meta";
 import { metaAppId } from "@/shared/lib/whatsapp/metaTemplates";
@@ -18,7 +18,7 @@ import { facebookAutoBlock, facebookReelBlock, facebookStoryBlock, postCaption }
  * Connect signs in a page admin, swaps the code for a long-lived user token
  * (~60 days) and keeps it to list the pages; picking one stores that page's own
  * token, which does not expire while the admin keeps the access. Both are
- * locked with AI_KEY_SECRET. While the app is in development mode only its own
+ * locked with SCRAMBLE_KEY_SECRET. While the app is in development mode only its own
  * admins / developers can connect — enough for the shop's page, no app review.
  */
 
@@ -44,7 +44,7 @@ export const facebookRedirectUrl = () =>
 export async function facebookSetupProblem(): Promise<string | null> {
     const { appId, appSecret } = await env();
     if (!appId || !appSecret) return "META_APP_ID and META_APP_SECRET are not set on this server.";
-    if (!hasSharedSecret()) return "AI_KEY_SECRET is not set on this server — it locks the saved Facebook access.";
+    if (!hasScrambleSecret()) return "SCRAMBLE_KEY_SECRET is not set on this server — it locks the saved Facebook access.";
     return null;
 }
 
@@ -108,7 +108,7 @@ export async function saveFacebookConnection(code: string, user: { id: number; n
         const old = await prisma.facebookPageLink.findUnique({ where: { id: FACEBOOK_LINK_ID }, select: { fbUserName: true } });
         const keepPage = old?.fbUserName && old.fbUserName === (me.name ?? null);
         const data = {
-            userTokenEnc: lockSecret(token, "shared"),
+            userTokenEnc: lockSecret(token, "scramble"),
             fbUserName: me.name ?? null,
             connectedById: user.id,
             connectedByName: user.name,
@@ -126,7 +126,7 @@ export async function saveFacebookConnection(code: string, user: { id: number; n
 /** Forget the connection, and tell Facebook to drop the app's access too (best effort). */
 export async function disconnectFacebook(): Promise<void> {
     const row = await prisma.facebookPageLink.findUnique({ where: { id: FACEBOOK_LINK_ID }, select: { userTokenEnc: true } });
-    const token = row && unlockSecret(row.userTokenEnc, "shared");
+    const token = row && unlockSecret(row.userTokenEnc, "scramble");
     if (token) await graph("/me/permissions", { method: "POST", params: { method: "delete", access_token: token } }).catch(() => undefined);
     await prisma.facebookPageLink.deleteMany({ where: { id: FACEBOOK_LINK_ID } });
 }
@@ -139,8 +139,8 @@ async function userToken(): Promise<string> {
     if (problem) throw new FacebookError(problem);
     const row = await prisma.facebookPageLink.findUnique({ where: { id: FACEBOOK_LINK_ID }, select: { userTokenEnc: true } });
     if (!row) throw new FacebookError("Facebook is not connected — Campaigns → Channels → Connect.");
-    const token = unlockSecret(row.userTokenEnc, "shared");
-    if (!token) throw new FacebookError("The saved Facebook access cannot be opened (AI_KEY_SECRET changed?) — connect again.");
+    const token = unlockSecret(row.userTokenEnc, "scramble");
+    if (!token) throw new FacebookError("The saved Facebook access cannot be opened (SCRAMBLE_KEY_SECRET changed?) — connect again.");
     return token;
 }
 
@@ -185,7 +185,7 @@ export async function pickFacebookPage(pageId: string): Promise<string | null> {
         data: {
             pageId: page.id,
             pageName: page.name,
-            pageTokenEnc: lockSecret(page.access_token, "shared"),
+            pageTokenEnc: lockSecret(page.access_token, "scramble"),
             igUserId: ig?.id ?? null,
             igUsername: ig?.username ?? null,
             lastError: null,
@@ -218,8 +218,8 @@ export async function pageAccess(): Promise<{ pageId: string; token: string; igU
     if (problem) throw new FacebookError(problem);
     const row = await prisma.facebookPageLink.findUnique({ where: { id: FACEBOOK_LINK_ID }, select: { pageId: true, pageTokenEnc: true, igUserId: true } });
     if (!row?.pageId || !row.pageTokenEnc) throw new FacebookError("Pick the shop's page on Campaigns → Channels first.");
-    const token = unlockSecret(row.pageTokenEnc, "shared");
-    if (!token) throw new FacebookError("The saved Facebook access cannot be opened (AI_KEY_SECRET changed?) — connect again.");
+    const token = unlockSecret(row.pageTokenEnc, "scramble");
+    if (!token) throw new FacebookError("The saved Facebook access cannot be opened (SCRAMBLE_KEY_SECRET changed?) — connect again.");
     return { pageId: row.pageId, token, igUserId: row.igUserId };
 }
 

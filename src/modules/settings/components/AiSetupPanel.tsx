@@ -79,7 +79,7 @@ type AiKeyRow = {
 
 /** chains[useKey][step] = ordered key ids. */
 type Chains = Record<string, Partial<Record<AiStep, number[]>>>;
-type Setup = { keys: AiKeyRow[]; chains: Chains; copyFlow: AiCopyFlow; photoCheck: boolean; here: { sharedSecret: boolean; runsOnOffice: boolean } };
+type Setup = { keys: AiKeyRow[]; chains: Chains; copyFlow: AiCopyFlow; photoCheck: boolean; here: { scrambleSecret: boolean; runsOnOffice: boolean } };
 
 /** The dialog's fields — numbers as typed text (NumericInput). */
 type Form = {
@@ -188,7 +188,7 @@ export function AiSetupPanel() {
     }, [data]);
 
     const byId = useMemo(() => new Map(keys.map((k) => [k.id, k])), [keys]);
-    const here = data?.here ?? { sharedSecret: false, runsOnOffice: false };
+    const here = data?.here ?? { scrambleSecret: false, runsOnOffice: false };
 
     const toggleActive = async (k: AiKeyRow, active: boolean) => {
         setKeys((prev) => prev.map((x) => (x.id === k.id ? { ...x, active } : x)));
@@ -580,7 +580,7 @@ function KeyDialog({ initial, copyOf, here, onClose, onSaved, write }: {
 
     const sameSource = initial?.source === form.source;
     const hasSaved = sameSource && form.source === "db";
-    const sourceOff = (s: AiKeySource) => (s === "db" && !here.sharedSecret ? "AI_KEY_SECRET is not set here" : null);
+    const sourceOff = (s: AiKeySource) => (s === "db" && !here.scrambleSecret ? "SCRAMBLE_KEY_SECRET is not set here" : null);
 
     const web = isWebProvider(form.provider);
     const submit = async () => {

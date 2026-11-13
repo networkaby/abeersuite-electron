@@ -102,7 +102,7 @@ model PostShare {
 
 /// The shop's Google Business Profile connection — one row (id 1), made by
 /// Campaigns → Channels → Connect. The refresh token is locked with the shared
-/// AI_KEY_SECRET (secretBox), never stored plain.
+/// SCRAMBLE_KEY_SECRET (secretBox), never stored plain.
 model GoogleBusinessLink {
   id              Int      @id @default(1)
   refreshTokenEnc String
@@ -122,7 +122,7 @@ model GoogleBusinessLink {
 
 /// The shop's Facebook Page (and its linked Instagram) connection — one row (id 1), made by Campaigns →
 /// Channels → Connect with the shop's Meta app (META_APP_ID / _SECRET). Both
-/// tokens are locked with the shared AI_KEY_SECRET (secretBox), never plain:
+/// tokens are locked with SCRAMBLE_KEY_SECRET (secretBox), never plain:
 /// the long-lived user token lists the pages to pick from; the picked page's
 /// own token (no expiry) is what posts.
 model FacebookPageLink {

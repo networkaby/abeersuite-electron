@@ -3,7 +3,7 @@ import { z } from "zod";
 import { AI_KEY_SOURCES, AI_PROVIDERS, isWebProvider } from "@/shared/lib/constants/ai";
 import { invalidateAiSetup, keyUsages, loadAiSetup, whyNotUsable, whyNotUsableAnywhere, type AiKeyConfig, type KeyUsage } from "@/shared/lib/ai/aiKeys";
 import { aiRunsOnOffice } from "@/shared/lib/counter/relayPolicy";
-import { hasSharedSecret, lockSecret } from "@/shared/lib/ai/secretBox";
+import { hasScrambleSecret, lockSecret } from "@/shared/lib/security/secretBox";
 
 // Settings → AI Setup API helpers (routes under /api/settings/ai-keys). A key
 // value never leaves the server: the list carries only the last 4 / the name.
@@ -73,6 +73,6 @@ export function aiKeyRowData(data: AiKeyBody, prev?: { source: string; secretEnc
         if (prev?.source === "db" && prev.secretEnc) return { row: { ...base, envName: null } };
         return { error: "Paste the key." };
     }
-    if (!hasSharedSecret()) return { error: "AI_KEY_SECRET is not set on this server — keys cannot be saved here." };
-    return { row: { ...base, envName: null, secretEnc: lockSecret(secret, "shared"), keyHint: secret.slice(-4) } };
+    if (!hasScrambleSecret()) return { error: "SCRAMBLE_KEY_SECRET is not set on this server — keys cannot be saved here." };
+    return { row: { ...base, envName: null, secretEnc: lockSecret(secret, "scramble"), keyHint: secret.slice(-4) } };
 }
