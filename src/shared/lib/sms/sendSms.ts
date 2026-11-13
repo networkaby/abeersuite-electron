@@ -1,4 +1,5 @@
 import { appSetting } from "@/shared/lib/settings/appSettings.server";
+import type { AppSettingKey } from "@/shared/lib/constants/appSettings";
 import "server-only";
 
 /**
@@ -31,13 +32,14 @@ export class SmsNotConfiguredError extends Error {
     }
 }
 
-/** An env value, or undefined while it is blank or still the `your-…` placeholder. */
-function envKey(name: string): string | undefined {
-    const v = process.env[name]?.trim();
+/** A provider's key (Settings → App Settings, else .env), or undefined while it is
+ *  blank or still the `your-…` placeholder. */
+async function envKey(name: AppSettingKey): Promise<string | undefined> {
+    const v = (await appSetting(name))?.trim();
     return v && !v.startsWith("your-") ? v : undefined;
 }
 
-const KEY_ENV: Record<SmsProvider, string> = {
+const KEY_ENV: Record<SmsProvider, AppSettingKey> = {
     hanuotp: "HANU_OTP_API_KEY",
     minimoth: "MINIMOTH_API_KEY",
 };
@@ -56,15 +58,16 @@ export const SMS_PARTNER_LABEL: Record<SmsProvider, string> = {
 const ORDER: SmsProvider[] = ["minimoth", "hanuotp"];
 
 /** Providers with a real key, in order. */
-function activeProviders(): { provider: SmsProvider; key: string }[] {
-    return ORDER.flatMap((provider) => {
-        const key = envKey(KEY_ENV[provider]);
+async function activeProviders(): Promise<{ provider: SmsProvider; key: string }[]> {
+    const keys = await Promise.all(ORDER.map((provider) => envKey(KEY_ENV[provider])));
+    return ORDER.flatMap((provider, i) => {
+        const key = keys[i];
         return key ? [{ provider, key }] : [];
     });
 }
 
-export function isSmsConfigured(): boolean {
-    return activeProviders().length > 0;
+export async function isSmsConfigured(): Promise<boolean> {
+    return (await activeProviders()).length > 0;
 }
 
 /**
@@ -79,7 +82,7 @@ export async function sendOtpSms(
     code: string,
     smsTry = 0
 ): Promise<{ provider: SmsProvider; held: "local" | "remote" }> {
-    const active = activeProviders();
+    const active = await activeProviders();
     if (active.length === 0) throw new SmsNotConfiguredError("no SMS provider key set");
     const start = Math.abs(Math.trunc(smsTry)) % active.length;
     let lastError: unknown;
@@ -136,7 +139,7 @@ async function sendVia(
  * tokens are ignored — we only want the yes/no and keep our own sign-in.
  */
 export async function verifyOtpSms(mobile: string, code: string): Promise<boolean> {
-    const key = envKey(KEY_ENV.minimoth);
+    const key = await envKey(KEY_ENV.minimoth);
     if (!key) throw new SmsNotConfiguredError("MINIMOTH_API_KEY missing");
     const res = await fetch(`${MINIMOTH_URL}/verify`, {
         method: "POST",

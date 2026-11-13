@@ -5,6 +5,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { handleApiError } from "@/shared/lib/api";
 import { requirePortalCustomer } from "@/shared/lib/auth/portalAuthGuard";
 import { markOrderPaid } from "@/modules/order/lib/markOrderPaid";
+import { appSetting } from "@/shared/lib/settings/appSettings.server";
 
 const paramsSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -30,7 +31,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         if (!parsed.success) return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
         const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = parsed.data;
 
-        const keySecret = process.env.RAZORPAY_KEY_SECRET;
+        const keySecret = await appSetting("RAZORPAY_KEY_SECRET");
         if (!keySecret) return NextResponse.json({ error: "Razorpay is not configured." }, { status: 400 });
 
         const order = await prisma.ticketOrder.findUnique({

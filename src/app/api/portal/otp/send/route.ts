@@ -66,7 +66,7 @@ async function sendMobileOtp(
             return { via: "whatsapp", remote: false };
         } catch (e) {
             console.error("WhatsApp OTP failed:", e);
-            if (!isSmsConfigured()) throw new MobileOtpUndeliveredError();
+            if (!(await isSmsConfigured())) throw new MobileOtpUndeliveredError();
         }
     }
     try {
@@ -118,8 +118,8 @@ export async function POST(req: Request) {
         const configured = asEmail
             ? await isEmailConfigured()
             : smsOnly
-              ? isSmsConfigured()
-              : (await isWhatsAppConfigured()) || isSmsConfigured();
+              ? await isSmsConfigured()
+              : (await isWhatsAppConfigured()) || (await isSmsConfigured());
         if (!configured) {
             return NextResponse.json(
                 {
@@ -153,7 +153,7 @@ export async function POST(req: Request) {
             ok: true,
             channel,
             via,
-            smsAvailable: !asEmail && isSmsConfigured(),
+            smsAvailable: !asEmail && (await isSmsConfigured()),
             partner,
         });
         res.cookies.set(OTP_COOKIE, packPendingOtp(channel, identity, code, remote), otpCookieOptions);

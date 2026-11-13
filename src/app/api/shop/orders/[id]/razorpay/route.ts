@@ -4,6 +4,7 @@ import { z } from "zod";
 import { handleApiError } from "@/shared/lib/api";
 import { requirePortalCustomer } from "@/shared/lib/auth/portalAuthGuard";
 import { getPayableGateway } from "@/shared/lib/payments/activeOnlineGateway";
+import { appSetting } from "@/shared/lib/settings/appSettings.server";
 
 const paramsSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -24,8 +25,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         if (!(await getPayableGateway("razorpay"))) {
             return NextResponse.json({ error: "Razorpay is not enabled for online checkout." }, { status: 400 });
         }
-        const keyId = process.env.RAZORPAY_KEY_ID;
-        const keySecret = process.env.RAZORPAY_KEY_SECRET;
+        // Settings → App Settings first, else .env.
+        const keyId = await appSetting("RAZORPAY_KEY_ID");
+        const keySecret = await appSetting("RAZORPAY_KEY_SECRET");
         if (!keyId || !keySecret) {
             return NextResponse.json(
                 { error: "Razorpay keys are not set (RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET)." },
