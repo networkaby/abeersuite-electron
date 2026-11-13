@@ -78,9 +78,12 @@ function writeConfig(syncUrl: string): string | null {
     }
 
     const file = configFilePath();
+    // registryPath points the worker at a repo checkout's sync-tables.json — dev only.
+    // An installed app always uses the registry bundled with it: a leftover override
+    // here made a 1.17.5 counter read main's unreleased table list and fail every cycle.
     let registryPath: string | undefined;
     try {
-        if (fs.existsSync(file)) {
+        if (!app.isPackaged && fs.existsSync(file)) {
             const prev = JSON.parse(fs.readFileSync(file, "utf8"));
             if (prev?.registryPath && typeof prev.registryPath === "string") {
                 registryPath = prev.registryPath;
