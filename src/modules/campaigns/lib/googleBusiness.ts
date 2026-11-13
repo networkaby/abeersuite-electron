@@ -3,6 +3,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { lockSecret, unlockSecret, hasScrambleSecret } from "@/shared/lib/security/secretBox";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
+import { appSetting } from "@/shared/lib/settings/appSettings.server";
 import { mediaLink } from "@/modules/message/lib/customerMessages";
 import { googleAutoBlock } from "@/modules/campaigns/lib/post";
 
@@ -28,27 +29,28 @@ const SCOPES = ["https://www.googleapis.com/auth/business.manage", "openid", "em
 
 export const GOOGLE_LINK_ID = 1;
 
-const env = () => ({
-    clientId: process.env.GOOGLE_BUSINESS_CLIENT_ID?.trim() || "",
-    clientSecret: process.env.GOOGLE_BUSINESS_CLIENT_SECRET?.trim() || "",
+/** Settings → App Settings, else .env. */
+const env = async () => ({
+    clientId: (await appSetting("GOOGLE_BUSINESS_CLIENT_ID"))?.trim() || "",
+    clientSecret: (await appSetting("GOOGLE_BUSINESS_CLIENT_SECRET"))?.trim() || "",
 });
 
 /** Where Google sends the browser back; must match the OAuth client's redirect URL. */
-export const googleRedirectUrl = () =>
-    process.env.GOOGLE_BUSINESS_REDIRECT_URL?.trim() || `${COMPANY_DETAILS.sites.office}/api/campaigns/google/callback`;
+export const googleRedirectUrl = async () =>
+    (await appSetting("GOOGLE_BUSINESS_REDIRECT_URL"))?.trim() || `${COMPANY_DETAILS.sites.office}/api/campaigns/google/callback`;
 
 /** Why this server cannot connect Google, or null when it can. */
-export function googleSetupProblem(): string | null {
-    const { clientId, clientSecret } = env();
+export async function googleSetupProblem(): Promise<string | null> {
+    const { clientId, clientSecret } = await env();
     if (!clientId || !clientSecret) return "GOOGLE_BUSINESS_CLIENT_ID and GOOGLE_BUSINESS_CLIENT_SECRET are not set on this server.";
     if (!hasScrambleSecret()) return "SCRAMBLE_KEY_SECRET is not set on this server — it locks the saved Google access.";
     return null;
 }
 
-export function googleAuthUrl(state: string): string {
+export async function googleAuthUrl(state: string): Promise<string> {
     const q = new URLSearchParams({
-        client_id: env().clientId,
-        redirect_uri: googleRedirectUrl(),
+        client_id: (await env()).clientId,
+        redirect_uri: await googleRedirectUrl(),
         response_type: "code",
         scope: SCOPES.join(" "),
         // offline + consent: Google hands a refresh token every time, not just the first.
@@ -63,7 +65,7 @@ export function googleAuthUrl(state: string): string {
 type TokenReply = { access_token?: string; refresh_token?: string; expires_in?: number; id_token?: string; error?: string; error_description?: string };
 
 async function tokenCall(body: Record<string, string>): Promise<TokenReply> {
-    const { clientId, clientSecret } = env();
+    const { clientId, clientSecret } = await env();
     const res = await fetch(TOKEN_URL, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -87,7 +89,7 @@ function emailOf(idToken?: string): string | null {
  * sign-in keeps the picked location only when it is the same Google account.
  */
 export async function saveGoogleConnection(code: string, user: { id: number; name: string | null }): Promise<string | null> {
-    const t = await tokenCall({ code, grant_type: "authorization_code", redirect_uri: googleRedirectUrl() });
+    const t = await tokenCall({ code, grant_type: "authorization_code", redirect_uri: await googleRedirectUrl() });
     if (!t.refresh_token) return t.error_description || t.error || "Google sent no lasting access — try Connect again.";
     const googleEmail = emailOf(t.id_token);
     const old = await prisma.googleBusinessLink.findUnique({ where: { id: GOOGLE_LINK_ID }, select: { googleEmail: true } });
@@ -121,7 +123,7 @@ let cachedToken: { token: string; until: number } | null = null;
 
 async function accessToken(): Promise<string> {
     if (cachedToken && cachedToken.until > Date.now()) return cachedToken.token;
-    const problem = googleSetupProblem();
+    const problem = await googleSetupProblem();
     if (problem) throw new GoogleError(problem);
     const row = await prisma.googleBusinessLink.findUnique({ where: { id: GOOGLE_LINK_ID }, select: { refreshTokenEnc: true } });
     if (!row) throw new GoogleError("Google Business Profile is not connected — Campaigns → Channels → Connect.");
@@ -200,12 +202,13 @@ export async function googleStatus() {
         where: { id: GOOGLE_LINK_ID },
         select: { googleEmail: true, locationName: true, locationTitle: true, connectedByName: true, lastError: true, updatedAt: true },
     });
-    return { setupProblem: googleSetupProblem(), connected: !!row, ...row, ready: !!row?.locationName && !googleSetupProblem() };
+    const setupProblem = await googleSetupProblem();
+    return { setupProblem, connected: !!row, ...row, ready: !!row?.locationName && !setupProblem };
 }
 
 /** Is Google posting fully set up (connected and a listing picked)? */
 export async function googleReady(): Promise<boolean> {
-    if (googleSetupProblem()) return false;
+    if (await googleSetupProblem()) return false;
     const row = await prisma.googleBusinessLink.findUnique({ where: { id: GOOGLE_LINK_ID }, select: { locationName: true } });
     return !!row?.locationName;
 }

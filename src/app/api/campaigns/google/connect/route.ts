@@ -14,11 +14,11 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
     const { response } = await requireGoogleConnect();
     if (response) return response;
-    const problem = googleSetupProblem();
+    const problem = await googleSetupProblem();
     if (problem) return NextResponse.redirect(new URL(`/office/campaigns/channels?google=${encodeURIComponent(problem)}`, req.url));
 
     const state = crypto.randomBytes(24).toString("base64url");
-    const res = NextResponse.redirect(googleAuthUrl(state));
+    const res = NextResponse.redirect(await googleAuthUrl(state));
     res.cookies.set(GOOGLE_STATE_COOKIE, state, { httpOnly: true, secure: true, sameSite: "lax", path: "/api/campaigns/google", maxAge: 600 });
     return res;
 }

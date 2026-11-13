@@ -37,8 +37,8 @@ const env = async () => ({
 });
 
 /** Where Facebook sends the browser back; must be a Valid OAuth Redirect URI on the app. */
-export const facebookRedirectUrl = () =>
-    process.env.FACEBOOK_REDIRECT_URL?.trim() || `${COMPANY_DETAILS.sites.office}/api/campaigns/facebook/callback`;
+export const facebookRedirectUrl = async () =>
+    (await appSetting("FACEBOOK_REDIRECT_URL"))?.trim() || `${COMPANY_DETAILS.sites.office}/api/campaigns/facebook/callback`;
 
 /** Why this server cannot connect Facebook, or null when it can. */
 export async function facebookSetupProblem(): Promise<string | null> {
@@ -51,7 +51,7 @@ export async function facebookSetupProblem(): Promise<string | null> {
 export async function facebookAuthUrl(state: string): Promise<string> {
     const q = new URLSearchParams({
         client_id: (await env()).appId,
-        redirect_uri: facebookRedirectUrl(),
+        redirect_uri: await facebookRedirectUrl(),
         response_type: "code",
         scope: SCOPES.join(","),
         // Ask again for any permission an earlier Connect was refused.
@@ -97,7 +97,7 @@ export async function saveFacebookConnection(code: string, user: { id: number; n
     const { appId, appSecret } = await env();
     try {
         const short = await graph<{ access_token?: string }>("/oauth/access_token", {
-            params: { client_id: appId, client_secret: appSecret, redirect_uri: facebookRedirectUrl(), code },
+            params: { client_id: appId, client_secret: appSecret, redirect_uri: await facebookRedirectUrl(), code },
         });
         if (!short.access_token) return "Facebook sent no access — try Connect again.";
         const long = await graph<{ access_token?: string }>("/oauth/access_token", {

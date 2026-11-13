@@ -3,13 +3,16 @@ import { NextResponse } from "next/server";
 import { shipwayStatusToStage } from "@/modules/delivery/lib/shipwayStatus";
 import { mirrorStageToOrder } from "@/modules/delivery/lib/mirrorOrderStage";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
+import { timingSafeEqual } from "crypto";
+import { incomingSecret } from "@/modules/incoming/lib/incomingApi";
 
 // POST /api/shop/shipway-updates — Shipway tracking webhook.
 //
 // Configure in Shipway → Track → Tracking Webhooks → add this URL. Shipway's
 // webhook form takes only a URL (no auth-header field), so the shared secret
-// rides the query string: add ?token=<SHIPWAY_WEBHOOK_TOKEN> to the URL you
-// register. Calls with a wrong/missing token are rejected when the env is set.
+// rides the query string: add ?token=<key> to the URL you register. The key is
+// set on Settings → Incoming API → Shipway (else SHIPWAY_WEBHOOK_TOKEN); calls with
+// a wrong/missing token are rejected once one is set.
 //
 // Payload (apidocs.shipway.com → Webhooks): { awbno, scans_current_status,
 // scans_current_status_time, carrier, pickupdate, … }. We map the scan text
@@ -26,10 +29,14 @@ type WebhookBody = {
 };
 
 export async function POST(req: Request) {
-    const expected = process.env.SHIPWAY_WEBHOOK_TOKEN?.trim();
+    // Settings → Incoming API (switched off there = refuse), else SHIPWAY_WEBHOOK_TOKEN.
+    const { value: expected, enabled } = await incomingSecret("SHIPWAY");
+    if (!enabled) return NextResponse.json({ ok: false, error: "switched off" }, { status: 403 });
     if (expected) {
-        const got = new URL(req.url).searchParams.get("token")?.trim();
-        if (got !== expected) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+        const got = new URL(req.url).searchParams.get("token")?.trim() ?? "";
+        const a = Buffer.from(got);
+        const b = Buffer.from(expected);
+        if (a.length !== b.length || !timingSafeEqual(a, b)) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 
     try {

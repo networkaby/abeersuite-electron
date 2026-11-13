@@ -9,7 +9,7 @@
  * Client-safe — the form imports it.
  */
 
-export const APP_SETTING_SECTIONS = ["Messaging", "Couriers", "Payments", "Email & SMS"] as const;
+export const APP_SETTING_SECTIONS = ["Messaging", "Social & Google", "Couriers", "Payments", "Email & SMS"] as const;
 export type AppSettingSection = (typeof APP_SETTING_SECTIONS)[number];
 
 export type AppSettingDef = {
@@ -53,6 +53,14 @@ export const APP_SETTING_DEFS = [
       hint: "The Meta app (loginapi)." },
     { key: "META_APP_SECRET", label: "App secret", section: "Messaging", provider: "Meta app (Facebook / Instagram connect)", secret: true,
       hint: "Meta app → App settings → Basic → App secret. Used for Facebook / Instagram connect." },
+    { key: "FACEBOOK_REDIRECT_URL", label: "Facebook redirect URL", section: "Messaging", provider: "Meta app (Facebook / Instagram connect)", optional: true,
+      hint: "Where Facebook sends staff back after Connect. Blank = office site /api/campaigns/facebook/callback. Must match Facebook Login's Valid OAuth Redirect URIs." },
+    { key: "GOOGLE_BUSINESS_CLIENT_ID", label: "OAuth client ID", section: "Social & Google", provider: "Google Business Profile",
+      hint: "Google Cloud → APIs & Services → Credentials → the OAuth client (Web application)." },
+    { key: "GOOGLE_BUSINESS_CLIENT_SECRET", label: "OAuth client secret", section: "Social & Google", provider: "Google Business Profile", secret: true,
+      hint: "The secret shown with that client ID." },
+    { key: "GOOGLE_BUSINESS_REDIRECT_URL", label: "Redirect URL", section: "Social & Google", provider: "Google Business Profile", optional: true,
+      hint: "Where Google sends staff back after Connect. Blank = office site /api/campaigns/google/callback. Must be in the OAuth client's Authorized redirect URIs." },
     { key: "META_WA_ACCESS_TOKEN", label: "Access token", group: "conn", section: "Messaging", provider: "WhatsApp (Meta Cloud API)", secret: true,
       hint: "System-user token with whatsapp_business_messaging + management." },
     { key: "SHIPROCKET_EMAIL", label: "API user email", section: "Couriers", provider: "Shiprocket",

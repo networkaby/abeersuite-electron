@@ -3,7 +3,7 @@
  * Plain data, shared by the server check (incomingApi.ts) and the page.
  */
 
-export type IncomingId = "COWORK" | "PRODUCT_COPY" | "PRICE_WATCH" | "CRON" | "CALLS" | "SHIPROCKET" | "META_WA_VERIFY" | "META_WA_APP";
+export type IncomingId = "COWORK" | "PRODUCT_COPY" | "PRICE_WATCH" | "CRON" | "CALLS" | "SHIPROCKET" | "SHIPWAY" | "META_WA_VERIFY" | "META_WA_APP";
 
 export type IncomingDef = {
     label: string;
@@ -94,6 +94,15 @@ export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
         closedWhenUnset: false,
         canGenerate: true,
         paths: ["POST /api/shop/delivery-updates"],
+    },
+    SHIPWAY: {
+        label: "Shipway (delivery updates)",
+        about: "Shipway tells us when a parcel moves. Its webhook form takes only a URL, so add ?token=<key> to the URL in Shipway → Track → Tracking Webhooks.",
+        howSent: "URL  …/api/shop/shipway-updates?token=<key>",
+        envVar: "SHIPWAY_WEBHOOK_TOKEN",
+        closedWhenUnset: false,
+        canGenerate: true,
+        paths: ["POST /api/shop/shipway-updates"],
     },
     META_WA_VERIFY: {
         label: "WhatsApp webhook — verify token",
