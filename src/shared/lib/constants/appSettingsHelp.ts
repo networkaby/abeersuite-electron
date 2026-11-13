@@ -186,6 +186,7 @@ export const PROVIDER_HELP: Record<string, ProviderHelp> = {
         terms: [
             { key: "CLOUDINARY_API_KEY", theirs: "API Key" },
             { key: "CLOUDINARY_API_SECRET", theirs: "API Secret" },
+            { key: "NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME", theirs: "Cloud name — .env only (built into the website), see its own card" },
         ],
         steps: [
             "cloudinary.com → sign in → Settings (gear) → API Keys.",
@@ -271,17 +272,25 @@ export const PROVIDER_HELP: Record<string, ProviderHelp> = {
     },
     "MiniMoth (SMS)": {
         about: "SMS login codes when WhatsApp fails. MiniMoth makes and checks its own code.",
-        terms: [{ key: "MINIMOTH_API_KEY", theirs: "API key (sent as X-Api-Key)" }],
-        steps: ["minimoth.dev → sign in → Dashboard → API keys → create a key.", "Keep a balance there — about Rs 0.35 per code, refunded when undelivered."],
-        link: { label: "MiniMoth", url: "https://minimoth.dev/" },
+        terms: [{ key: "MINIMOTH_API_KEY", theirs: "Project API key — starts mm_live_… (sent as X-Api-Key)" }],
+        steps: [
+            "app.minimoth.dev → sign in → Projects → open (or create) the project → copy its API key (mm_live_…).",
+            "Keep a balance there — about Rs 0.35 per code, refunded when undelivered.",
+            "Nothing else to set: MiniMoth makes, sends and checks its own code (it tries its own WhatsApp first, then SMS).",
+        ],
+        link: { label: "MiniMoth app", url: "https://app.minimoth.dev/" },
     },
     "HanuOTP (SMS)": {
         about: "SMS login codes when WhatsApp fails; takes turns with MiniMoth.",
         terms: [
             { key: "HANU_OTP_API_KEY", theirs: "API key" },
-            { key: "HANU_OTP_TEMPLATE_ID", theirs: "Template ID (blank = their default)" },
+            { key: "HANU_OTP_TEMPLATE_ID", theirs: "Template ID — \"default\" = HanuOTP's own wording (blank means default too)" },
         ],
-        steps: ["hanuotp.in → sign in → API → copy the API key.", "Keep a balance — about Rs 0.30 per code."],
+        steps: [
+            "hanuotp.in → sign in → OTP Service → API Documentation → Generate API Key. Use the \"OTP Without DLT\" service.",
+            "Template: leave blank / default. A custom template needs plan OTP 2 or higher.",
+            "Keep a balance — about Rs 0.30 per code.",
+        ],
         link: { label: "HanuOTP", url: "https://hanuotp.in/" },
     },
     "Database (Supabase Postgres)": {
