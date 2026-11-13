@@ -1,17 +1,25 @@
-# v1.17.4
+# v1.17.5
 
-A small update for the office side of the app. Install it when convenient — billing and sync are unchanged, and there is no database change.
+An important update for every counter — please install it as soon as it appears. It brings a new App Settings page and a small database change, so the counter must be updated before the office website goes live with it; until a counter is updated its sync pauses.
 
-## Product names
+## App Settings (new page)
 
-- A product's name now updates by itself whenever its brand, group, warranty, model number or custom part is changed — from any screen, including the online shop product page and the AI tools. Before, only the Inventory list did this.
-- New **Rebuild all names** button in Settings → Naming convention, for after imports or big clean-ups. It shows how many names changed. Products without a custom part keep the name you typed.
+- Settings → **App Settings** now holds the shop's service keys and ids in one place — WhatsApp numbers, Meta, Razorpay, Pine Labs, couriers, OTP, email, Cloudinary, Google Business, Facebook, Dropbox / GitHub backup and more.
+- One card per provider, grouped by purpose, each with a **Ready / Missing** badge, so you can see at a glance what is set up.
+- Secret keys can be saved too. They are stored locked and never shown back on screen. Anything left blank still uses the server's own setting.
+- Each card shows whether its value comes from App Settings or from the server, and a **Help** button opens step-by-step instructions for that provider.
 
-## Online shop products
+## WhatsApp
 
-- AI notes no longer disappear when a product is saved as ready or published. They stay, with their date, until the next AI review replaces them.
-- All AI notes — the Attention reason, review notes and the latest AI run's notes — now show together in one **AI notes** box at the top of the AI section.
+- A **Pending** WhatsApp number can now be registered from the app, and a Connected number's 2-step PIN can be changed — the PIN is typed by staff and not stored.
+- Bill messages can be sent from a number that sits in another WhatsApp business account.
+- Fixed: WhatsApp messages failed to send after keys moved to App Settings.
+- On the counter, **Connect number** now opens the office website, because Meta sign-in needs it.
 
-## Inventory
+## Online shop
 
-- In the Products list, the frozen Name column now has a clear edge, so columns scrolled under it are easy to read.
+- **Pine Labs** is added as a payment option for the shop's checkout. It stays in test mode until a trial payment is checked.
+
+## Pricing
+
+- A new product given a sell price now sells on its computed price; the saved price is used only until a cost is entered.
