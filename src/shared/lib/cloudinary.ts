@@ -1,4 +1,5 @@
 import { createHash } from "crypto";
+import { appSetting } from "@/shared/lib/settings/appSettings.server";
 
 // Shared Cloudinary upload-signature builder, used by both the staff
 // (/api/upload-signature) and portal (/api/portal/upload-signature)
@@ -35,9 +36,10 @@ export interface CloudinarySignature {
  * .heic shows nowhere a raw link is used — Chromium/the desktop app, WhatsApp, a
  * print. Everything else keeps its own format, so a PNG logo keeps its transparency.
  */
-export function cloudinarySignature(rawFolder?: string | null, storeAsJpg = false): CloudinarySignature | null {
-    const apiKey = process.env.CLOUDINARY_API_KEY;
-    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+export async function cloudinarySignature(rawFolder?: string | null, storeAsJpg = false): Promise<CloudinarySignature | null> {
+    // Settings → App Settings, else .env. The cloud name is NEXT_PUBLIC (built into the site).
+    const apiKey = await appSetting("CLOUDINARY_API_KEY");
+    const apiSecret = await appSetting("CLOUDINARY_API_SECRET");
     const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
     if (!apiKey || !apiSecret || !cloudName) return null;
 

@@ -12,7 +12,7 @@ export const maxDuration = 120;
 export async function GET() {
     const { response } = await requireModuleAccess("e-commerce");
     if (response) return response;
-    if (!cleanupConfigured()) {
+    if (!(await cleanupConfigured())) {
         return NextResponse.json({ error: "Cloudinary keys are not on this machine — open the library from the office website." }, { status: 503 });
     }
     try {

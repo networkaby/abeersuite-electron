@@ -1,4 +1,5 @@
 import "server-only";
+import { appSetting } from "@/shared/lib/settings/appSettings.server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { PHOTO_CLEANUP_MIN_AGE_DAYS } from "@/shared/lib/constants/inventory";
 
@@ -41,10 +42,11 @@ export type CleanupPlan = {
     youngUnused: number;
 };
 
-function cloud() {
+/** Settings → App Settings, else .env. The cloud name is NEXT_PUBLIC (built into the site). */
+async function cloud() {
     const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-    const key = process.env.CLOUDINARY_API_KEY;
-    const secret = process.env.CLOUDINARY_API_SECRET;
+    const key = await appSetting("CLOUDINARY_API_KEY");
+    const secret = await appSetting("CLOUDINARY_API_SECRET");
     if (!cloudName || !key || !secret) return null;
     return {
         base: `https://api.cloudinary.com/v1_1/${cloudName}/resources/image/upload`,
@@ -52,12 +54,12 @@ function cloud() {
     };
 }
 
-export function cleanupConfigured(): boolean {
-    return cloud() !== null;
+export async function cleanupConfigured(): Promise<boolean> {
+    return (await cloud()) !== null;
 }
 
 async function listCloudFiles(): Promise<CloudFile[]> {
-    const c = cloud();
+    const c = await cloud();
     if (!c) throw new Error("Cloudinary is not set up on this server.");
     const files: CloudFile[] = [];
     let cursor: string | undefined;
@@ -172,7 +174,7 @@ export async function planCleanup(): Promise<CleanupPlan> {
 
 /** Delete `publicIds` from Cloudinary, 100 per request. Returns how many went. */
 export async function deleteCloudFiles(publicIds: string[]): Promise<number> {
-    const c = cloud();
+    const c = await cloud();
     if (!c) throw new Error("Cloudinary is not set up on this server.");
     let deleted = 0;
     for (let i = 0; i < publicIds.length; i += 100) {

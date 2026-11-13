@@ -31,7 +31,7 @@ const notHere = () =>
 export async function GET() {
     const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_PHOTO_CLEANUP);
     if (response) return response;
-    if (!cleanupConfigured()) return notHere();
+    if (!(await cleanupConfigured())) return notHere();
     try {
         return NextResponse.json(summary(await planCleanup()));
     } catch (e) {
@@ -42,7 +42,7 @@ export async function GET() {
 export async function POST() {
     const { user, response } = await requirePermission(PERMISSIONS.ECOMMERCE_PHOTO_CLEANUP);
     if (response) return response;
-    if (!cleanupConfigured()) return notHere();
+    if (!(await cleanupConfigured())) return notHere();
     try {
         const plan = await planCleanup();
         const ids = plan.garbage.map((f) => f.publicId);

@@ -9,7 +9,7 @@
  * Client-safe — the form imports it.
  */
 
-export const APP_SETTING_SECTIONS = ["Messaging", "Social & Google", "Couriers", "Payments", "Email & SMS"] as const;
+export const APP_SETTING_SECTIONS = ["Messaging", "Social & Google", "Files & media", "Couriers", "Payments", "Email & SMS"] as const;
 export type AppSettingSection = (typeof APP_SETTING_SECTIONS)[number];
 
 export type AppSettingDef = {
@@ -63,6 +63,10 @@ export const APP_SETTING_DEFS = [
       hint: "Where Google sends staff back after Connect. Blank = office site /api/campaigns/google/callback. Must be in the OAuth client's Authorized redirect URIs." },
     { key: "META_WA_ACCESS_TOKEN", label: "Access token", group: "conn", section: "Messaging", provider: "WhatsApp (Meta Cloud API)", secret: true,
       hint: "System-user token with whatsapp_business_messaging + management." },
+    { key: "CLOUDINARY_API_KEY", label: "API key", section: "Files & media", provider: "Cloudinary (photos)",
+      hint: "Cloudinary console → Settings → API Keys. Signs photo uploads and runs photo clean-up. The cloud name stays in .env (NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME) — keep both from the same account." },
+    { key: "CLOUDINARY_API_SECRET", label: "API secret", section: "Files & media", provider: "Cloudinary (photos)", secret: true,
+      hint: "The secret shown with that API key." },
     { key: "SHIPROCKET_EMAIL", label: "API user email", section: "Couriers", provider: "Shiprocket",
       hint: "Shiprocket → Settings → API → API user." },
     { key: "SHIPROCKET_PASSWORD", label: "API user password", section: "Couriers", provider: "Shiprocket", secret: true,
