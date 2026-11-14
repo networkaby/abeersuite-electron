@@ -13,6 +13,8 @@ import {
     isBillSendConfigured,
     sendMediaMessage,
     sendTextMessage,
+    sendInteractiveMenu,
+    type WaMenuOption,
     setWaUserBlocked,
     waMediaTypeFor,
 } from "@/shared/lib/whatsapp/metaTemplates";
@@ -353,12 +355,16 @@ export async function findCustomerActiveTickets(
 
 const NUM_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣"];
 
-/** Build the WhatsApp interactive numbered auto-reply menu for a customer with active tickets. */
-export function buildTicketAutoReplyMenu(
+const SOMETHING_ELSE = "Something else";
+const YES_ABOUT_THAT = "Yes, about that";
+
+/** The ticket menu: a greeting + question, and its options. Each option's id
+ *  is "menu:<n>" — the n a typed reply would use, so taps and typing agree. */
+export function buildTicketMenu(
     customerName: string | null,
     tickets: ActiveTicketSummary[],
     customGreetingHeader?: string
-): string {
+): { body: string; options: WaMenuOption[] } {
     // Friendly, like a shopkeeper who remembers — no ids, statuses or
     // "ticket/deal" words; a formal menu reads as a sales pitch or a scam.
     const defaultGreeting = customerName
@@ -369,32 +375,57 @@ export function buildTicketAutoReplyMenu(
     const greeting = custom && !/active job/i.test(custom) ? custom : defaultGreeting;
 
     if (tickets.length === 1) {
-        return `${greeting}
-
-Is this about the *${tickets[0].title}*, or something else?
-
-1️⃣ Yes, about that
-2️⃣ Something else`;
+        return {
+            body: `${greeting}\n\nIs this about the *${tickets[0].title}*, or something else?`,
+            options: [
+                { id: "menu:1", title: YES_ABOUT_THAT, description: tickets[0].title },
+                { id: "menu:2", title: SOMETHING_ELSE },
+            ],
+        };
     }
-
-    const options = tickets.map((t, idx) => `${NUM_EMOJIS[idx] || `${idx + 1}️⃣`} ${t.title}`);
-    options.push(`${NUM_EMOJIS[tickets.length] || `${tickets.length + 1}️⃣`} Something else`);
-
-    return `${greeting}
-
-Is this about one of these?
-
-${options.join("\n")}`;
+    return {
+        body: `${greeting}\n\nIs this about one of these?`,
+        options: [
+            ...tickets.map((t, i) => ({ id: `menu:${i + 1}`, title: t.title })),
+            { id: `menu:${tickets.length + 1}`, title: SOMETHING_ELSE },
+        ],
+    };
 }
 
+/** The same menu as typed text — the fallback when a tap menu cannot be sent. */
+export function buildTicketAutoReplyMenu(
+    customerName: string | null,
+    tickets: ActiveTicketSummary[],
+    customGreetingHeader?: string
+): string {
+    const { body, options } = buildTicketMenu(customerName, tickets, customGreetingHeader);
+    const lines = options.map((o, i) => `${NUM_EMOJIS[i] ?? `${i + 1}.`} ${o.title}`);
+    return `${body}\n\n${lines.join("\n")}`;
+}
+
+const normWords = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+const YES_WORDS = new Set(["yes", "ya", "yaa", "yeah", "yep", "y", "ha", "haa", "haan", "han", "ji", "haan ji", "ok", "okay", "yes about that", "yes sir", "yes please"]);
+const NEW_WORDS = new Set(["no", "nahi", "nahin", "nope", "n", "something else", "else", "other", "another", "new", "different"]);
+
 /** Which menu option a reply picks: a ticket id, "NEW", or null (not a pick).
- *  "2", "2.", "2) my screen" all pick option 2. */
-function parseMenuChoice(text: string, menuTicketIds: number[]): number | "NEW" | null {
+ *  A tapped option ("menu:2"), a typed number ("2", "2.", "2) my screen"),
+ *  "yes" / "haan" when only one job was offered, "no" / "something else",
+ *  or the exact job name. "yes" with several jobs is not a guess — null. */
+function parseMenuChoice(text: string, menuTicketIds: number[], titles: Map<number, string> = new Map()): number | "NEW" | null {
+    const byNumber = (n: number) =>
+        n >= 1 && n <= menuTicketIds.length ? menuTicketIds[n - 1] : n === menuTicketIds.length + 1 ? "NEW" : null;
+    const tap = text.match(/^menu:(\d{1,2})$/);
+    if (tap) return byNumber(parseInt(tap[1], 10));
     const m = text.trim().match(/^(\d{1,2})(?:[.\-)]|\s|$)/);
-    if (!m) return null;
-    const n = parseInt(m[1], 10);
-    if (n >= 1 && n <= menuTicketIds.length) return menuTicketIds[n - 1];
-    if (n === menuTicketIds.length + 1) return "NEW";
+    if (m) return byNumber(parseInt(m[1], 10));
+    const w = normWords(text);
+    if (!w) return null;
+    if (YES_WORDS.has(w)) return menuTicketIds.length === 1 ? menuTicketIds[0] : null;
+    if (NEW_WORDS.has(w)) return "NEW";
+    for (const id of menuTicketIds) {
+        const t = titles.get(id);
+        if (t && normWords(t) === w) return id;
+    }
     return null;
 }
 
@@ -405,11 +436,21 @@ async function sendAutoText(args: {
     conversationId: number;
     ticketId: number | null;
     businessNumberId: string | null;
+    /** Send as a tap menu (text is then the typed fallback / stored copy). */
+    menu?: { body: string; options: WaMenuOption[] };
 }): Promise<void> {
     if (!(await isBillSendConfigured()) || !args.text) return;
     const fromNumberId = args.businessNumberId || (await conversationNumberId()) || null;
     try {
-        const extId = await sendTextMessage(args.phone, args.text, fromNumberId);
+        let extId: string | null = null;
+        if (args.menu && args.menu.options.length <= 10) {
+            try {
+                extId = await sendInteractiveMenu(args.phone, args.menu.body, args.menu.options, fromNumberId);
+            } catch (e) {
+                console.error("[messages] tap menu refused, sending typed menu", e);
+            }
+        }
+        if (!extId) extId = await sendTextMessage(args.phone, args.text, fromNumberId);
         const at = new Date();
         await prisma.message.create({
             data: {
@@ -449,6 +490,7 @@ async function sendTicketMenu(args: {
     await sendAutoText({
         phone: args.phone,
         text: buildTicketAutoReplyMenu(args.customerName, args.active, greetingHeader),
+        menu: buildTicketMenu(args.customerName, args.active, greetingHeader),
         conversationId: args.conversationId,
         ticketId: null,
         businessNumberId: args.businessNumberId,
@@ -526,6 +568,8 @@ export async function menuAfterTemplateApplies(phone: string): Promise<boolean> 
 async function routeInbound(args: {
     phone: string;
     text: string;
+    /** The id of a tapped menu option ("menu:2"), when the message is a tap. */
+    menuPick?: string | null;
     at: Date;
     owner: CustomerOwner | null;
     senderName: string | null;
@@ -558,9 +602,18 @@ async function routeInbound(args: {
     }
 
     if (conv.topic === "ASKING") {
-        const pick = parseMenuChoice(text, conv.menuTicketIds);
+        let active: ActiveTicketSummary[] | null = null;
+        let pick = parseMenuChoice(args.menuPick || text, conv.menuTicketIds);
+        if (pick == null && !args.menuPick && !/^\d/.test(text.trim()) && normWords(text)) {
+            // Maybe they typed the job's name — only then look the titles up.
+            active = await findCustomerActiveTickets(phone, owner);
+            pick = parseMenuChoice(text, conv.menuTicketIds, new Map(active.map((t) => [t.id, t.title])));
+        }
         if (pick == null) return { conv, afterStore: null };
-        const withText = text.trim().replace(/^\d{1,2}[.\-)]?\s*/, "").length > 0;
+        // A tap, a bare number or a yes/no word is only a pick; "2 my screen
+        // is broken" also carries a question for staff.
+        const typed = text.trim().replace(/^\d{1,2}[.\-)]?\s*/, "");
+        const withText = !args.menuPick && /^\d/.test(text.trim()) && typed.length > 0;
         const base = { phone, conversationId: conv.id, businessNumberId: args.businessNumberId };
         if (pick === "NEW") {
             await prisma.messageConversation.update({ where: { id: conv.id }, data: { topic: "NEW" } });
@@ -569,7 +622,7 @@ async function routeInbound(args: {
         }
         await attachConversationToTicket(conv.id, pick, owner);
         conv = { ...conv, topic: "TICKET", ticketId: pick };
-        const t = (await findCustomerActiveTickets(phone, owner)).find((x) => x.id === pick) ?? null;
+        const t = (active ?? (await findCustomerActiveTickets(phone, owner))).find((x) => x.id === pick) ?? null;
         return { conv, bareMenuPick: !withText, afterStore: () => sendAutoText({ ...base, text: ackForTicket(t, withText), ticketId: pick }) };
     }
     return { conv, afterStore: null };
@@ -624,7 +677,7 @@ type WaInbound = {
     context?: { id?: string };
     text?: { body?: string };
     button?: { text?: string };
-    interactive?: { button_reply?: { title?: string }; list_reply?: { title?: string } };
+    interactive?: { button_reply?: { id?: string; title?: string }; list_reply?: { id?: string; title?: string } };
     image?: { id?: string; caption?: string };
     video?: { id?: string; caption?: string };
     audio?: { id?: string; voice?: boolean };
@@ -810,7 +863,7 @@ export async function ingestInbound(
         const at = metaTime(m.timestamp);
         const senderName = names.get(m.from) ?? null;
         const route = phone && !spam
-            ? await routeInbound({ phone, text, at, owner, senderName, businessNumberId: value.metadata?.phone_number_id ?? null })
+            ? await routeInbound({ phone, text, menuPick: m.interactive?.button_reply?.id ?? m.interactive?.list_reply?.id ?? null, at, owner, senderName, businessNumberId: value.metadata?.phone_number_id ?? null })
             : null;
         const conv = route?.conv ?? null;
         const ticketId = conv?.topic === "TICKET" ? conv.ticketId : null;
