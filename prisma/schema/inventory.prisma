@@ -412,12 +412,17 @@ model InvProduct {
   /// "Until next purchase" on the Fixed Price (owner 2026-11-14): when set, the
   /// Fixed Price is temporary — market moved but no stock bought yet. Holds the
   /// highest InvStockLedger id when it was saved; the first posted PURCHASE / GRN
-  /// stock row above it ends it in recomputePricesForProducts — selling goes back
-  /// to Computed (Strategy when no own margin) and the barcode is re-saved auto.
+  /// stock row above it ends it in recomputePricesForProducts — the selling
+  /// choice and Fixed Price saved below come back, and the barcode is re-saved
+  /// auto. "Use as lowest" instead = a permanent change, nothing kept.
   /// null = the Fixed Price (if any) is permanent.
   tempPriceAfterLedgerId   Int?
   /// When the temporary Fixed Price was saved — shown on the clock icon only.
   tempPriceSetAt           DateTime?
+  /// The selling choice before the temporary price — restored when it ends.
+  tempRestoreSource        EffectiveSalePriceSource?
+  /// The Fixed Price before the temporary one (paise; null = none) — restored too.
+  tempRestoreSalePaise     Int?
   /// The SAVED barcode (tag) price, paise. Written only when the barcode is
   /// saved: a hand edit, "Update barcode" on Update prices (auto from the Sale
   /// Price via the bands), a new product with a Sale Price, or an MRP cut below

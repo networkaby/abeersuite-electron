@@ -82,6 +82,8 @@ export const salePriceSaveSchema = z.object({
                 barcodeManualPaise:       z.number().int().min(1).optional(),
                 /** Fixed Price "until next purchase". Absent = leave as is; only honoured while SAVED sells. */
                 tempUntilPurchase:        z.boolean().optional(),
+                /** Clock switched off on a saved temporary price: restore the original choice + Fixed Price now. */
+                tempCancel:               z.boolean().optional(),
             }),
         )
         .min(1)

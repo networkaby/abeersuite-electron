@@ -3084,6 +3084,8 @@ CREATE TABLE IF NOT EXISTS "InvProduct" (
     "savedSalePricePaise" INTEGER,
     "tempPriceAfterLedgerId" INTEGER,
     "tempPriceSetAt" TIMESTAMP(3),
+    "tempRestoreSource" "EffectiveSalePriceSource",
+    "tempRestoreSalePaise" INTEGER,
     "barcodeManualPaise" INTEGER,
     "barcodeIsManual" BOOLEAN NOT NULL DEFAULT false,
     "barcodeGapBasePaise" INTEGER,
@@ -3192,6 +3194,10 @@ ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "tempPriceAfterLedgerId" INTEG
 ALTER TABLE "InvProduct" ALTER COLUMN "tempPriceAfterLedgerId" DROP NOT NULL;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "tempPriceSetAt" TIMESTAMP(3);
 ALTER TABLE "InvProduct" ALTER COLUMN "tempPriceSetAt" DROP NOT NULL;
+ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "tempRestoreSource" "EffectiveSalePriceSource";
+ALTER TABLE "InvProduct" ALTER COLUMN "tempRestoreSource" DROP NOT NULL;
+ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "tempRestoreSalePaise" INTEGER;
+ALTER TABLE "InvProduct" ALTER COLUMN "tempRestoreSalePaise" DROP NOT NULL;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "barcodeManualPaise" INTEGER;
 ALTER TABLE "InvProduct" ALTER COLUMN "barcodeManualPaise" DROP NOT NULL;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "barcodeIsManual" BOOLEAN NOT NULL DEFAULT false;

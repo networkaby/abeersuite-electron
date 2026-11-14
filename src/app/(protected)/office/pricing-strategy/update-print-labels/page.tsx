@@ -167,6 +167,7 @@ type Row = {
     temp: boolean;          // Fixed Price is "until next purchase" (InvProduct.tempPriceAfterLedgerId set)
     baseTemp: boolean;      // last-saved temp flag, for dirty detection
     tempSetAt: string;      // ISO time the temp Fixed Price was saved; "" = not temporary
+    tempCancel: boolean;    // clock switched off on a SAVED temp price → server restores the original
 };
 
 // ── Map the engine's PricingItem → a table Row ────────────────────────────────
@@ -233,6 +234,7 @@ function itemToRow(it: PricingItem): Row {
         temp: it.tempPriceSetAt != null,
         baseTemp: it.tempPriceSetAt != null,
         tempSetAt: it.tempPriceSetAt ?? "",
+        tempCancel: false,
     };
 }
 
@@ -440,10 +442,10 @@ const marginDirty = (r: Row) => !sameAmount(r.margin, r.baseMargin, 10_000);
 const mrpDirty = (r: Row) => !sameAmount(r.mrp, r.baseMrp);
 const barcodeDirty = (r: Row) => !sameAmount(r.barcodeManual, r.baseBarcode);
 // Puts a row's editable boxes back to the last saved values (no DB call).
-const resetRow = (r: Row): Row => ({ ...r, salePrice: r.baseline, saleSource: r.baseSource, margin: r.baseMargin, mrp: r.baseMrp, barcodeManual: r.baseBarcode, barcodeIsManual: r.baseBarcodeIsManual, temp: r.baseTemp });
+const resetRow = (r: Row): Row => ({ ...r, salePrice: r.baseline, saleSource: r.baseSource, margin: r.baseMargin, mrp: r.baseMrp, barcodeManual: r.baseBarcode, barcodeIsManual: r.baseBarcodeIsManual, temp: r.baseTemp, tempCancel: false });
 // Computed (margin), Sale Price, MRP, Barcode and the selling choice all wait for Save prices.
 const rowDirty = (r: Row): boolean =>
-    !sameAmount(r.salePrice, r.baseline) || r.saleSource !== r.baseSource || marginDirty(r) || mrpDirty(r) || barcodeDirty(r) || r.temp !== r.baseTemp;
+    !sameAmount(r.salePrice, r.baseline) || r.saleSource !== r.baseSource || marginDirty(r) || mrpDirty(r) || barcodeDirty(r) || r.temp !== r.baseTemp || r.tempCancel;
 
 const stockQty = (r: Row): number => numOrNull(r.stock) ?? 0;
 
@@ -637,7 +639,7 @@ const ProductRow = memo(function ProductRow({
             {show("computed") ? (
                 <TableCell className={`p-1 text-right align-top ${COL_TINT.computed}`}>
                     <div className={voiceClass(r.saleSource === "MY", false)}>
-                        {r.saleSource === "MY" ? SELLING_TAG : myPrice != null ? <UseAsLowest onClick={() => onUpdate(r.id, { saleSource: "MY" })} /> : null}
+                        {r.saleSource === "MY" ? SELLING_TAG : myPrice != null ? <UseAsLowest onClick={() => onUpdate(r.id, { saleSource: "MY", temp: false, tempCancel: false })} /> : null}
                         {/* Type the price; Margin % is derived from it and saved. */}
                         <Input
                             type="text"
@@ -664,7 +666,7 @@ const ProductRow = memo(function ProductRow({
             {show("strategy") ? (
                 <TableCell className={`p-1 text-right align-top ${COL_TINT.strategy}`}>
                     <div className={voiceClass(r.saleSource === "STRATEGY", false)}>
-                        {r.saleSource === "STRATEGY" ? SELLING_TAG : strategyPrice != null ? <UseAsLowest onClick={() => onUpdate(r.id, { saleSource: "STRATEGY" })} /> : null}
+                        {r.saleSource === "STRATEGY" ? SELLING_TAG : strategyPrice != null ? <UseAsLowest onClick={() => onUpdate(r.id, { saleSource: "STRATEGY", temp: false, tempCancel: false })} /> : null}
                         <span className="block text-sm font-mono font-semibold">{rupee(strategyPrice)}</span>
                         <ProfitSub p={stratProfit} />
                     </div>
@@ -676,7 +678,7 @@ const ProductRow = memo(function ProductRow({
                     <div className={voiceClass(r.saleSource === "SAVED", false)}>
                         {r.saleSource === "SAVED" ? SELLING_TAG : savedPrice != null ? (
                             // The input itself never flips the voice (typing must not); this link does.
-                            <UseAsLowest onClick={() => onUpdate(r.id, { saleSource: "SAVED" })} />
+                            <UseAsLowest onClick={() => onUpdate(r.id, { saleSource: "SAVED", temp: false, tempCancel: false })} />
                         ) : null}
                         <div className="relative inline-block">
                             <Input
@@ -689,10 +691,14 @@ const ProductRow = memo(function ProductRow({
                             {/* "Until next purchase" — sits inside the box, takes no height. */}
                             <button
                                 type="button"
-                                onClick={() => onUpdate(r.id, { temp: !r.temp, ...(!r.temp ? { saleSource: "SAVED" as SaleSource } : {}) })}
+                                onClick={() => onUpdate(r.id, r.temp
+                                    // Off: a saved temp asks the server to restore the original; an unsaved one just undoes.
+                                    ? (r.baseTemp ? { temp: false, tempCancel: true } : { temp: false, saleSource: r.baseSource })
+                                    // On: Fixed Price sells for now; the original is kept on the server.
+                                    : { temp: true, tempCancel: false, saleSource: "SAVED" })}
                                 title={r.temp
-                                    ? `Until next purchase${r.tempSetAt ? ` · set ${new Date(r.tempSetAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : ""} — the next purchase ends this price and selling goes back to Computed. Click to make it permanent.`
-                                    : "Make this Fixed Price temporary — the next purchase ends it and selling goes back to Computed."}
+                                    ? `Until next purchase${r.tempSetAt ? ` · set ${new Date(r.tempSetAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : ""} — the next purchase puts the original price back. Click to put it back now; "Use as lowest" makes it permanent.`
+                                    : "Use this Fixed Price until the next purchase — the original price comes back by itself. (\"Use as lowest\" = permanent.)"}
                                 aria-pressed={r.temp}
                                 className={`absolute left-1 top-1/2 -translate-y-1/2 rounded p-0.5 ${r.temp ? "text-amber-600" : "text-muted-foreground/40 hover:text-muted-foreground"}`}
                             >
@@ -1095,6 +1101,7 @@ export default function GeneratePage() {
                     ...(marginDirty(r) ? { marginPercent: numOrNull(r.margin) } : {}),
                     ...(barcodeDirty(r) ? { barcodeManualPaise: Math.round(numOrNull(r.barcodeManual)! * 100) } : {}),
                     ...(r.saleSource === "SAVED" ? { tempUntilPurchase: r.temp } : {}),
+                    ...(r.tempCancel ? { tempCancel: true } : {}),
                     ...(mrpDirty(r) ? { mrpPaise: ((m) => (m != null ? Math.round(m * 100) : null))(numOrNull(r.mrp)) } : {}),
                 };
             });
@@ -1107,13 +1114,14 @@ export default function GeneratePage() {
                     if (!rowDirty(r)) return r;
                     return { ...r, baseline: r.salePrice, baseSource: r.saleSource, baseMargin: r.margin, baseMrp: r.mrp, baseBarcode: r.barcodeManual, baseBarcodeIsManual: r.barcodeIsManual,
                         temp: r.saleSource === "SAVED" && r.temp, baseTemp: r.saleSource === "SAVED" && r.temp,
-                        tempSetAt: r.saleSource === "SAVED" && r.temp ? (r.baseTemp ? r.tempSetAt : new Date().toISOString()) : "" };
+                        tempSetAt: r.saleSource === "SAVED" && r.temp ? (r.baseTemp ? r.tempSetAt : new Date().toISOString()) : "", tempCancel: false };
                 }),
             );
             // Margin / MRP moved the Strategy price and maybe capped the barcode — take the server's.
             const bcIds = payload.filter((p) => "barcodeManualPaise" in p).map((p) => p.id);
             if (bcIds.length) queueMarkTouched(bcIds); // new barcode → reprint its label
-            if (payload.some((p) => "marginPercent" in p || "mrpPaise" in p || "barcodeManualPaise" in p)) void loadData();
+            // A cancelled temporary price comes back from the server with its original choice + Fixed Price.
+            if (payload.some((p) => "marginPercent" in p || "mrpPaise" in p || "barcodeManualPaise" in p || "tempCancel" in p)) void loadData();
             toast.success(`${payload.length} product${payload.length === 1 ? "" : "s"} saved.`);
         } catch (e) {
             const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string } | undefined)?.error : null;

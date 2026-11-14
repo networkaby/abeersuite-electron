@@ -169,14 +169,14 @@ export async function recomputePricesForProducts(
 
 /**
  * Fixed Price "until next purchase": end it for every product that has had a
- * posted PURCHASE / GRN stock row since it was saved. Selling goes back to
- * Computed (Strategy when the product has no own margin — Computed would
- * otherwise derive a margin from the temporary price). Returns the ended ids.
+ * posted PURCHASE / GRN stock row since it was saved. The original selling
+ * choice and Fixed Price come back (Strategy / Computed / an older Fixed Price).
+ * Returns the ended ids.
  */
 async function endTempPricesAfterPurchase(ids: number[]): Promise<number[]> {
     const temp = await prisma.invProduct.findMany({
         where:  { id: { in: ids }, tempPriceAfterLedgerId: { not: null } },
-        select: { id: true, tempPriceAfterLedgerId: true, marginPercent: true },
+        select: { id: true, tempPriceAfterLedgerId: true, tempRestoreSource: true, tempRestoreSalePaise: true },
     });
     if (temp.length === 0) return [];
     const minMark = Math.min(...temp.map((t) => t.tempPriceAfterLedgerId!));
@@ -195,9 +195,12 @@ async function endTempPricesAfterPurchase(ids: number[]): Promise<number[]> {
     await prisma.$transaction(ended.map((t) => prisma.invProduct.update({
         where: { id: t.id },
         data:  {
-            effectiveSalePriceSource: t.marginPercent != null ? "COMPUTED" : "STRATEGY",
+            effectiveSalePriceSource: t.tempRestoreSource ?? "STRATEGY",
+            savedSalePricePaise:      t.tempRestoreSalePaise,
             tempPriceAfterLedgerId:   null,
             tempPriceSetAt:           null,
+            tempRestoreSource:        null,
+            tempRestoreSalePaise:     null,
         },
     })));
     return ended.map((t) => t.id);

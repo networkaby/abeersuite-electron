@@ -30,7 +30,7 @@ export async function PUT(req: Request) {
         const ids = data.items.map((i) => i.id);
         const products = await prisma.invProduct.findMany({
             where:  { id: { in: ids } },
-            select: { id: true, mrpPaise: true, savedSalePricePaise: true, effectiveSalePriceSource: true },
+            select: { id: true, mrpPaise: true, savedSalePricePaise: true, effectiveSalePriceSource: true, tempPriceAfterLedgerId: true, tempRestoreSource: true, tempRestoreSalePaise: true },
         });
         const byId = new Map(products.map((p) => [p.id, p]));
         // "Until next purchase" remembers the newest stock row now; a purchase
@@ -49,6 +49,12 @@ export async function PUT(req: Request) {
         const barcodeEdits: [number, number][] = [];
         const ops = affected.map((it) => {
             const before = byId.get(it.id)!;
+            const wasTemp = before.tempPriceAfterLedgerId != null;
+            // Clock switched off on a saved temporary price → put the original back now.
+            if (wasTemp && it.tempCancel) {
+                it.effectiveSalePriceSource = before.tempRestoreSource ?? "COMPUTED";
+                it.savedSalePricePaise = before.tempRestoreSalePaise;
+            }
             const hasSaved = it.savedSalePricePaise != null;
             let price = it.savedSalePricePaise;
             if (it.barcodeManualPaise !== undefined) barcodeEdits.push([it.id, it.barcodeManualPaise]);
@@ -68,11 +74,15 @@ export async function PUT(req: Request) {
                     savedSalePricePaise:      hasSaved ? price : null,
                     ...(it.marginPercent !== undefined ? { marginPercent: it.marginPercent != null ? it.marginPercent.toString() : null } : {}),
                     ...(it.mrpPaise !== undefined ? { mrpPaise: it.mrpPaise } : {}),
-                    // Temporary only while the Fixed Price sells; any other source clears it.
-                    ...(it.effectiveSalePriceSource !== "SAVED" || it.tempUntilPurchase === false
-                        ? { tempPriceAfterLedgerId: null, tempPriceSetAt: null }
-                        : it.tempUntilPurchase === true
-                            ? { tempPriceAfterLedgerId: ledgerMark, tempPriceSetAt: now }
+                    // Temporary only while the Fixed Price sells; "Use as lowest" on any
+                    // voice (or the clock off) makes it permanent / ends it. Turning it
+                    // on keeps the ORIGINAL choice + Fixed Price to restore later — a
+                    // re-save of an already-temporary price keeps the first original.
+                    ...(it.effectiveSalePriceSource !== "SAVED" || it.tempUntilPurchase === false || it.tempCancel
+                        ? { tempPriceAfterLedgerId: null, tempPriceSetAt: null, tempRestoreSource: null, tempRestoreSalePaise: null }
+                        : it.tempUntilPurchase === true && !wasTemp
+                            ? { tempPriceAfterLedgerId: ledgerMark, tempPriceSetAt: now,
+                                tempRestoreSource: before.effectiveSalePriceSource, tempRestoreSalePaise: before.savedSalePricePaise }
                             : {}),
                 },
             });

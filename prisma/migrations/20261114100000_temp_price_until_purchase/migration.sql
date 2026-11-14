@@ -2,3 +2,5 @@
 -- the next posted purchase ends. Nullable, nothing to carry over.
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "tempPriceAfterLedgerId" INTEGER;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "tempPriceSetAt" TIMESTAMP(3);
+ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "tempRestoreSource" "EffectiveSalePriceSource";
+ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "tempRestoreSalePaise" INTEGER;
