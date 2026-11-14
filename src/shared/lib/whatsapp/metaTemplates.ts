@@ -240,6 +240,57 @@ export async function sendTextMessage(mobile10: string, text: string, fromNumber
     return id;
 }
 
+export type WaMenuOption = { id: string; title: string; description?: string };
+
+/** Cut to `max` characters (emoji-safe), ending with … when shortened. */
+function clip(s: string, max: number): string {
+    const chars = Array.from(s.trim());
+    return chars.length <= max ? chars.join("") : `${chars.slice(0, max - 1).join("")}…`;
+}
+
+/**
+ * Send a tap-to-pick menu (inside the 24-hour window, like a free-text reply).
+ * Up to 3 options go as reply buttons, up to 10 as a list; more throws — the
+ * caller sends a typed menu instead. Meta's limits: button title 20, list row
+ * title 24, row description 72, body 1024 characters. Returns Meta's message id.
+ */
+export async function sendInteractiveMenu(
+    mobile10: string,
+    body: string,
+    options: WaMenuOption[],
+    fromNumberId?: string | null
+): Promise<string> {
+    if (options.length < 1 || options.length > 10) throw new Error("A WhatsApp menu takes 1 to 10 options");
+    const interactive =
+        options.length <= 3
+            ? {
+                type: "button",
+                body: { text: clip(body, 1024) },
+                action: { buttons: options.map((o) => ({ type: "reply", reply: { id: o.id, title: clip(o.title, 20) } })) },
+            }
+            : {
+                type: "list",
+                body: { text: clip(body, 1024) },
+                action: {
+                    button: "Choose",
+                    sections: [{
+                        title: "Choose one",
+                        rows: options.map((o) => {
+                            const desc = o.description ?? (Array.from(o.title).length > 24 ? o.title : undefined);
+                            return { id: o.id, title: clip(o.title, 24), ...(desc ? { description: clip(desc, 72) } : {}) };
+                        }),
+                    }],
+                },
+            };
+    const r = await graph<{ messages?: { id?: string }[] }>(`${fromNumberId || (await conversationNumberId())}/messages`, {
+        method: "POST",
+        body: { messaging_product: "whatsapp", recipient_type: "individual", to: `+91${mobile10}`, type: "interactive", interactive },
+    });
+    const id = r.messages?.[0]?.id;
+    if (!id) throw new Error("Meta accepted the call but returned no message id");
+    return id;
+}
+
 /**
  * Block / unblock a number on one of our WhatsApp numbers. Blocked, they cannot
  * message that number and we cannot message them. Meta allows a block only
