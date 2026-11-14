@@ -183,7 +183,10 @@ export function CustomerHistoryPanel({ dealId }: { dealId: number }) {
                                         <li key={p.key} className={cn("px-3 py-2 text-xs", p.match && "bg-blue-50/70 dark:bg-blue-950/30")}>
                                             <div className="flex items-start justify-between gap-2">
                                                 <span className="font-medium text-foreground leading-snug">{p.item}</span>
-                                                <span className="font-semibold tabular-nums whitespace-nowrap">{formatRupeesFromPaise(p.ratePaise)}</span>
+                                                <span className="text-right whitespace-nowrap">
+                                                    <span className="font-semibold tabular-nums">{formatRupeesFromPaise(p.paidPaise)}</span>
+                                                    {p.qty > 1 && <span className="block text-[10px] text-muted-foreground tabular-nums">{formatRupeesFromPaise(Math.round(p.paidPaise / p.qty))} each</span>}
+                                                </span>
                                             </div>
                                             <div className="mt-0.5 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
                                                 <span>
