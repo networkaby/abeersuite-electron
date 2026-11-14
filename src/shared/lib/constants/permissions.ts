@@ -179,6 +179,8 @@ export const PERMISSIONS = {
     ECOMMERCE_PHOTO_CLEANUP: "ecommerce:photos:cleanup",
     // E-Commerce → Products → Edit: change the product's inventory Group / Brand.
     ECOMMERCE_PRODUCT_MASTERS: "ecommerce:product:masters",
+    // E-Commerce → Products → Deep edit without products:edit (no tax / opening / sale price / SKU).
+    ECOMMERCE_PRODUCT_DEEP_EDIT: "ecommerce:product:deep-edit",
     ECOMMERCE_PRODUCT_ATTENTION: "ecommerce:product:attention",
 
     // POS — shift / till / handover lifecycle

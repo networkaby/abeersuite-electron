@@ -182,6 +182,7 @@ export function InvProductFormFields({
     onCreateMaster,
     variantsSlot,
     siblingAttrKeys = [],
+    limited = false,
 }: {
     form: InvProductFormState;
     setForm: React.Dispatch<React.SetStateAction<InvProductFormState>>;
@@ -206,6 +207,9 @@ export function InvProductFormFields({
     variantsSlot?: React.ReactNode;
     /** Attribute keys the other variants have filled — an empty one here is flagged. */
     siblingAttrKeys?: string[];
+    /** E-Commerce deep edit (ecommerce:product:deep-edit): no Tax & opening tab,
+     *  SKU and Sale price locked — the PATCH route refuses those fields too. */
+    limited?: boolean;
     /** When provided, renders a "+ New" button next to each master picker that
      *  opens the InventoryMasterDropdownQuickDialog. Caller resolves with the new row id (or null
      *  if cancelled) — the form auto-selects it. */
@@ -314,13 +318,13 @@ export function InvProductFormFields({
     const tabPanel = "mt-4 min-h-[380px]";
 
     return (
-        <Tabs defaultValue={defaultTab} className="w-full">
+        <Tabs defaultValue={limited && defaultTab === "tax" ? "basics" : defaultTab} className="w-full">
             {/* Horizontal scroll on narrow viewports so all tab labels stay
                 fully readable; on desktop they fit comfortably side-by-side. */}
             <TabsList className="flex w-full justify-start overflow-x-auto whitespace-nowrap">
                 <TabsTrigger value="basics">Basics</TabsTrigger>
                 <TabsTrigger value="pricing">Pricing &amp; stock</TabsTrigger>
-                <TabsTrigger value="tax">Tax &amp; opening</TabsTrigger>
+                {limited ? null : <TabsTrigger value="tax">Tax &amp; opening</TabsTrigger>}
                 {variantsSlot ? <TabsTrigger value="variants">Variants</TabsTrigger> : null}
             </TabsList>
 
@@ -336,11 +340,11 @@ export function InvProductFormFields({
                                 <Input
                                     value={form.sku}
                                     onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))}
-                                    disabled={skuDisabled}
+                                    disabled={skuDisabled || limited}
                                     className="font-mono"
                                     placeholder="6-digit code"
                                 />
-                                {!skuDisabled && (
+                                {!skuDisabled && !limited && (
                                     <Button
                                         type="button"
                                         variant="outline"
@@ -585,9 +589,12 @@ export function InvProductFormFields({
                             type="text" inputMode="decimal"
                             value={form.priceRupees}
                             onChange={(e) => setForm((f) => ({ ...f, priceRupees: e.target.value }))}
+                            disabled={limited}
                             placeholder="0.00"
                         />
-                        <p className="text-[11px] text-muted-foreground">Default sale rate (shop / retail).</p>
+                        <p className="text-[11px] text-muted-foreground">
+                            {limited ? "Locked — needs Inventory “Edit products”." : "Default sale rate (shop / retail)."}
+                        </p>
                     </div>
                     <div className="space-y-2">
                         <Label>MRP (₹)</Label>

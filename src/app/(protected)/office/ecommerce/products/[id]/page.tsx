@@ -12,6 +12,9 @@ import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";
 import { toast } from "sonner";
 import { SlidersHorizontal, X } from "lucide-react";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { useSession } from "next-auth/react";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 export default function EcommerceProductEditPage() {
     const params = useParams();
@@ -21,6 +24,13 @@ export default function EcommerceProductEditPage() {
     // Deep edit = the full Inventory product master dialog (brand, warranty
     // term, category, tax…) — fields this shop-facing form doesn't expose.
     const [deepEditOpen, setDeepEditOpen] = useState(false);
+    // Full edit = Inventory products:edit. Without it, ecommerce:product:deep-edit
+    // opens a limited dialog (no tax / opening, SKU + sale price locked).
+    // Neither → no button (the save would only be refused).
+    const { data: session } = useSession();
+    const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    const canFullEdit = hasPermissionWithScope(perms, PERMISSIONS.PRODUCTS_EDIT);
+    const canDeepEdit = canFullEdit || hasPermissionWithScope(perms, PERMISSIONS.ECOMMERCE_PRODUCT_DEEP_EDIT);
     // Name rebuilt by a Group / Brand pick, not saved yet (ProductForm onNameChange).
     const [liveName, setLiveName] = useState<string | null>(null);
 
@@ -77,10 +87,12 @@ export default function EcommerceProductEditPage() {
                             <BarcodeSvg value={barcode} height={34} fontSize={11} margin={2} />
                         </div>
                     ) : null}
-                    <Button type="button" variant="outline" size="sm" onClick={() => setDeepEditOpen(true)}>
-                        <SlidersHorizontal className="size-4" />
-                        Deep edit
-                    </Button>
+                    {canDeepEdit ? (
+                        <Button type="button" variant="outline" size="sm" onClick={() => setDeepEditOpen(true)}>
+                            <SlidersHorizontal className="size-4" />
+                            Deep edit
+                        </Button>
+                    ) : null}
                     <Button type="button" variant="outline" size="sm" onClick={() => void close()}>
                         <X className="size-4" />
                         Close
@@ -91,6 +103,7 @@ export default function EcommerceProductEditPage() {
                 open={deepEditOpen}
                 onOpenChange={setDeepEditOpen}
                 editId={id}
+                limited={!canFullEdit}
                 onSaved={() => {
                     setDeepEditOpen(false);
                     setLiveName(null);

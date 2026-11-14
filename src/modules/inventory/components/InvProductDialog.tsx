@@ -32,6 +32,7 @@ import {
 } from "@/modules/inventory/components/InvProductFormFields";
 import { InventoryMasterDropdownQuickDialog, type MasterKind } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
 import { generateSku } from "@/modules/inventory/lib/sku";
+import { deepEditPayload } from "@/modules/inventory/lib/productDeepEdit";
 import ProductVariantsSection from "@/modules/inventory/components/ProductVariantsSection";
 import type { VariantMember } from "@/modules/inventory/lib/variants";
 import {
@@ -162,9 +163,11 @@ interface Props {
     onCreatedProduct?: (product: InvProductCreatedRow) => void;
     /** Initial tab — e.g. "tax" when opened from the Tax Classification report. */
     defaultTab?: InvProductFormTab;
+    /** E-Commerce deep edit without products:edit — see productDeepEdit.ts. */
+    limited?: boolean;
 }
 
-export function InvProductDialog({ open, onOpenChange, editId, defaultValues, onSaved, onCreatedProduct, defaultTab }: Props) {
+export function InvProductDialog({ open, onOpenChange, editId, defaultValues, onSaved, onCreatedProduct, defaultTab, limited = false }: Props) {
     const [form, setForm] = useState<InvProductFormState>(emptyInvProductForm);
     const [units, setUnits] = useState<Opt[]>([]);
     const [categories, setCategories] = useState<Opt[]>([]);
@@ -178,6 +181,8 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
     const activeBranchId = useActiveBranchStore((st) => st.activeBranchId);
     const [effectiveTax, setEffectiveTax] = useState<EffectiveTax | null | undefined>(undefined);
     const [saving, setSaving] = useState(false);
+    // The product as loaded — limited saves send only what changed from it.
+    const loadedPayload = useRef<ReturnType<typeof formToPayload> | null>(null);
     const [refsLoaded, setRefsLoaded] = useState(false);
     // Attribute keys the OTHER variants have filled, and which product the form
     // was last loaded for — rows are offered only once the form holds that product.
@@ -294,7 +299,9 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
         axios
             .get<InvProductRow>(`/api/inventory/products/${editId}`)
             .then((r) => {
-                setForm(rowToForm(r.data));
+                const loaded = rowToForm(r.data);
+                setForm(loaded);
+                loadedPayload.current = formToPayload(loaded);
                 setLoadedFor(editId);
                 // Load cascade preview for edit mode.
                 return axios.get<EffectiveTax>(`/api/inventory/products/${editId}/resolved-tax`);
@@ -327,45 +334,13 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
             return;
         }
 
-        const filledAttrs = form.attrs.filter((a) => a.key.trim() && a.value.trim());
-        const payload = {
-            sku: form.sku.trim(),
-            name: form.name.trim(),
-            namePart: optionalStr(form.namePart),
-            shopSubheading: optionalStr(form.shopSubheading),
-            slug: optionalStr(form.slug),
-            unitId: unitId!,
-            categoryId: optionalId(form.categoryId),
-            collectionIds: form.collectionIds,
-            groupId: optionalId(form.groupId),
-            brandId: optionalId(form.brandId),
-            warrantyTermId: optionalId(form.warrantyTermId),
-            modelNo: optionalStr(form.modelNo),
-            // Full replace-set of scannable codes; drop blank rows.
-            codes: form.codes
-                .map((c) => ({ kind: c.kind, value: c.value.trim() }))
-                .filter((c) => c.value !== ""),
-            notes: optionalStr(form.notes),
-            requireSaleNote: form.requireSaleNote,
-            isActive: form.isActive,
-            // costPaise removed in PR 3; no longer sent.
-            // The "Sale price" field is the human SAVED sale price (barcode source,
-            // shown on Update & Print Labels). It writes savedSalePricePaise — NOT
-            // the engine-materialized effectiveSalePricePaise.
-            savedSalePricePaise: parseRupeesToPaise(form.priceRupees),
-            mrpPaise:   parseRupeesToPaise(form.mrpRupees),
-            openingStock:     form.openingQty.trim()  === "" ? null : Number(form.openingQty),
-            openingRate:      form.openingRate.trim() === "" ? null : Number(form.openingRate),
-            openingBranchId:  form.openingBranchId || null,
-            // A row left empty (e.g. offered from a sibling variant) is not saved as "".
-            attrsJson: filledAttrs.length > 0
-                ? Object.fromEntries(filledAttrs.map((a) => [a.key.trim(), a.value.trim()]))
-                : null,
-            // GST fields — null clears back to "inherit"; empty string treated as null.
-            gstRateId:  form.gstRateId.trim() !== "" ? parseInt(form.gstRateId, 10) : null,
-            hsnCode:    optionalStr(form.hsnCode),
-            taxability: form.taxability.trim() !== "" ? form.taxability : null,
-        };
+        const full = formToPayload(form);
+        // Deep edit from E-Commerce: only the allowed fields the user changed.
+        const payload = limited && editId != null ? deepEditPayload(full, loadedPayload.current) : full;
+        if (limited && editId != null && Object.keys(payload).length === 0) {
+            onOpenChange(false);
+            return;
+        }
 
         setSaving(true);
         try {
@@ -384,7 +359,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
         } finally {
             setSaving(false);
         }
-    }, [editId, form, onOpenChange, onSaved, onCreatedProduct]);
+    }, [editId, form, limited, onOpenChange, onSaved, onCreatedProduct]);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -411,6 +386,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
                         defaultTab={defaultTab}
                         onCreateMaster={createMaster}
                         siblingAttrKeys={siblingAttrKeys}
+                        limited={limited}
                         // Saves on its own (not with Save) — needs a saved product.
                         variantsSlot={
                             editId != null ? (
@@ -455,4 +431,47 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
             />
         </Dialog>
     );
+}
+
+/** The PATCH / POST body for a form state. */
+function formToPayload(form: InvProductFormState) {
+    const filledAttrs = form.attrs.filter((a) => a.key.trim() && a.value.trim());
+    return {
+        sku: form.sku.trim(),
+        name: form.name.trim(),
+        namePart: optionalStr(form.namePart),
+        shopSubheading: optionalStr(form.shopSubheading),
+        slug: optionalStr(form.slug),
+        unitId: optionalId(form.unitId)!,
+        categoryId: optionalId(form.categoryId),
+        collectionIds: form.collectionIds,
+        groupId: optionalId(form.groupId),
+        brandId: optionalId(form.brandId),
+        warrantyTermId: optionalId(form.warrantyTermId),
+        modelNo: optionalStr(form.modelNo),
+        // Full replace-set of scannable codes; drop blank rows.
+        codes: form.codes
+            .map((c) => ({ kind: c.kind, value: c.value.trim() }))
+            .filter((c) => c.value !== ""),
+        notes: optionalStr(form.notes),
+        requireSaleNote: form.requireSaleNote,
+        isActive: form.isActive,
+        // costPaise removed in PR 3; no longer sent.
+        // The "Sale price" field is the human SAVED sale price (barcode source,
+        // shown on Update & Print Labels). It writes savedSalePricePaise — NOT
+        // the engine-materialized effectiveSalePricePaise.
+        savedSalePricePaise: parseRupeesToPaise(form.priceRupees),
+        mrpPaise:   parseRupeesToPaise(form.mrpRupees),
+        openingStock:     form.openingQty.trim()  === "" ? null : Number(form.openingQty),
+        openingRate:      form.openingRate.trim() === "" ? null : Number(form.openingRate),
+        openingBranchId:  form.openingBranchId || null,
+        // A row left empty (e.g. offered from a sibling variant) is not saved as "".
+        attrsJson: filledAttrs.length > 0
+            ? Object.fromEntries(filledAttrs.map((a) => [a.key.trim(), a.value.trim()]))
+            : null,
+        // GST fields — null clears back to "inherit"; empty string treated as null.
+        gstRateId:  form.gstRateId.trim() !== "" ? parseInt(form.gstRateId, 10) : null,
+        hsnCode:    optionalStr(form.hsnCode),
+        taxability: form.taxability.trim() !== "" ? form.taxability : null,
+    };
 }

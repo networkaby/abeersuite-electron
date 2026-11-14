@@ -3,7 +3,8 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { shopSlugClash } from "@/shared/lib/shop/shopSlug";
 import { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
-import { requireAuth, requireAnyPermission, requirePermission } from "@/shared/lib/auth/permissions";
+import { hasPermission, requireAuth, requireAnyPermission, requirePermission } from "@/shared/lib/auth/permissions";
+import { DEEP_EDIT_MASTER_FIELDS, isDeepEditBody } from "@/modules/inventory/lib/productDeepEdit";
 import { invProductUpdateSchema, TAX_CLASSIFICATION_FIELDS } from "@/shared/lib/schemas/inventorySchemas";
 import { normalizeProductCodes } from "@/shared/lib/inventory";
 import { findSkuCodeCollision, skuCodeCollisionMessage } from "@/shared/lib/inventory/codeCollision";
@@ -67,10 +68,25 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const taxFieldSet: readonly string[] = TAX_CLASSIFICATION_FIELDS;
     const isTaxOnly = bodyKeys.length > 0 && bodyKeys.every((k) => taxFieldSet.includes(k));
 
-    const { response } = isTaxOnly
+    // E-Commerce "Deep edit" (ecommerce:product:deep-edit): only the fields in
+    // DEEP_EDIT_FIELDS — never SKU, sale price, opening or GST. Group / brand /
+    // collections still need ecommerce:product:masters, as on the shop form.
+    const isDeepEdit = isDeepEditBody(bodyKeys);
+
+    const { response, user } = isTaxOnly
         ? await requireAnyPermission(PERMISSIONS.COMPLIANCE_TAX_EDIT, PERMISSIONS.PRODUCTS_EDIT)
-        : await requirePermission(PERMISSIONS.PRODUCTS_EDIT);
+        : isDeepEdit
+          ? await requireAnyPermission(PERMISSIONS.PRODUCTS_EDIT, PERMISSIONS.ECOMMERCE_PRODUCT_DEEP_EDIT)
+          : await requirePermission(PERMISSIONS.PRODUCTS_EDIT);
     if (response) return response;
+    if (
+        isDeepEdit &&
+        !hasPermission(user, PERMISSIONS.PRODUCTS_EDIT) &&
+        DEEP_EDIT_MASTER_FIELDS.some((k) => k in peekedBody) &&
+        !hasPermission(user, PERMISSIONS.ECOMMERCE_PRODUCT_MASTERS)
+    ) {
+        return NextResponse.json({ error: "Changing group / brand / collections needs the product masters permission" }, { status: 403 });
+    }
     try {
         const { id, error: idError } = await parseIdParam(params);
         if (idError) return idError;
