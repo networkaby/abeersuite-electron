@@ -168,6 +168,8 @@ type Row = {
     baseTemp: boolean;      // last-saved temp flag, for dirty detection
     tempSetAt: string;      // ISO time the temp Fixed Price was saved; "" = not temporary
     tempCancel: boolean;    // clock switched off on a SAVED temp price → server restores the original
+    restoreSource: SaleSource | null; // saved temp: the choice that comes back after the next purchase
+    restorePrice: string;   // saved temp: the Fixed Price ₹ that comes back; "" = none
 };
 
 // ── Map the engine's PricingItem → a table Row ────────────────────────────────
@@ -235,6 +237,8 @@ function itemToRow(it: PricingItem): Row {
         baseTemp: it.tempPriceSetAt != null,
         tempSetAt: it.tempPriceSetAt ?? "",
         tempCancel: false,
+        restoreSource: it.tempRestoreSource ? voiceFromDb(it.tempRestoreSource) : null,
+        restorePrice: it.tempRestoreSalePaise != null ? (it.tempRestoreSalePaise / 100).toFixed(2) : "",
     };
 }
 
@@ -498,6 +502,23 @@ const SELLING_TAG = (
 
 // The only way to change which column is the lowest price: clicking or typing
 // in a box never does (same rule for Computed, Strategy and Sale Price).
+// The temporary Fixed Price's ORIGIN — what comes back after the next purchase.
+// A saved temp remembers it on the server; an unsaved one is the last-saved row.
+const VOICE_NAME: Record<SaleSource, string> = { MY: "Computed", STRATEGY: "Strategy", SAVED: "Fixed Price" };
+function tempOrigin(r: Row): { source: SaleSource; fixed: string } | null {
+    if (!r.temp) return null;
+    return r.baseTemp
+        ? { source: r.restoreSource ?? "STRATEGY", fixed: r.restorePrice }
+        : { source: r.baseSource, fixed: r.baseline };
+}
+
+// Sits on the same line as "use as lowest" in the origin box — no extra height.
+const ReturnsHere = ({ onClick }: { onClick: () => void }) => (
+    <button type="button" onClick={onClick} title="This price comes back by itself after the next purchase. Click to use it as the lowest now (permanent)." className="mb-0.5 flex w-full items-center justify-end gap-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-600 hover:text-emerald-600">
+        <Clock className="size-2.5" /> after purchase
+    </button>
+);
+
 const UseAsLowest = ({ onClick }: { onClick: () => void }) => (
     <button type="button" onClick={onClick} className="mb-0.5 block w-full text-right text-[10px] font-medium uppercase tracking-wide text-muted-foreground hover:text-emerald-600">
         use as lowest
@@ -639,7 +660,7 @@ const ProductRow = memo(function ProductRow({
             {show("computed") ? (
                 <TableCell className={`p-1 text-right align-top ${COL_TINT.computed}`}>
                     <div className={voiceClass(r.saleSource === "MY", false)}>
-                        {r.saleSource === "MY" ? SELLING_TAG : myPrice != null ? <UseAsLowest onClick={() => onUpdate(r.id, { saleSource: "MY", temp: false, tempCancel: false })} /> : null}
+                        {r.saleSource === "MY" ? SELLING_TAG : tempOrigin(r)?.source === "MY" ? <ReturnsHere onClick={() => onUpdate(r.id, { saleSource: "MY", temp: false, tempCancel: false })} /> : myPrice != null ? <UseAsLowest onClick={() => onUpdate(r.id, { saleSource: "MY", temp: false, tempCancel: false })} /> : null}
                         {/* Type the price; Margin % is derived from it and saved. */}
                         <Input
                             type="text"
@@ -666,7 +687,7 @@ const ProductRow = memo(function ProductRow({
             {show("strategy") ? (
                 <TableCell className={`p-1 text-right align-top ${COL_TINT.strategy}`}>
                     <div className={voiceClass(r.saleSource === "STRATEGY", false)}>
-                        {r.saleSource === "STRATEGY" ? SELLING_TAG : strategyPrice != null ? <UseAsLowest onClick={() => onUpdate(r.id, { saleSource: "STRATEGY", temp: false, tempCancel: false })} /> : null}
+                        {r.saleSource === "STRATEGY" ? SELLING_TAG : tempOrigin(r)?.source === "STRATEGY" ? <ReturnsHere onClick={() => onUpdate(r.id, { saleSource: "STRATEGY", temp: false, tempCancel: false })} /> : strategyPrice != null ? <UseAsLowest onClick={() => onUpdate(r.id, { saleSource: "STRATEGY", temp: false, tempCancel: false })} /> : null}
                         <span className="block text-sm font-mono font-semibold">{rupee(strategyPrice)}</span>
                         <ProfitSub p={stratProfit} />
                     </div>
@@ -697,7 +718,9 @@ const ProductRow = memo(function ProductRow({
                                     // On: Fixed Price sells for now; the original is kept on the server.
                                     : { temp: true, tempCancel: false, saleSource: "SAVED" })}
                                 title={r.temp
-                                    ? `Until next purchase${r.tempSetAt ? ` · set ${new Date(r.tempSetAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : ""} — the next purchase puts the original price back. Click to put it back now; "Use as lowest" makes it permanent.`
+                                    ? ((o) => `Until next purchase${r.tempSetAt ? ` · set ${new Date(r.tempSetAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : ""}
+After purchase: back to ${o ? VOICE_NAME[o.source] : "the original"}${o?.fixed ? ` (Fixed Price ₹${o.fixed})` : ""}.
+Click to put it back now; "Use as lowest" makes it permanent.`)(tempOrigin(r))
                                     : "Use this Fixed Price until the next purchase — the original price comes back by itself. (\"Use as lowest\" = permanent.)"}
                                 aria-pressed={r.temp}
                                 className={`absolute left-1 top-1/2 -translate-y-1/2 rounded p-0.5 ${r.temp ? "text-amber-600" : "text-muted-foreground/40 hover:text-muted-foreground"}`}

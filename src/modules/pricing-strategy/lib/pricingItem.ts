@@ -80,4 +80,8 @@ export interface PricingItem {
     salePriceFrozenAt:    string | null;
     /** ISO time the Fixed Price was saved as "until next purchase"; null = not temporary. */
     tempPriceSetAt:       string | null;
+    /** While temporary: the selling choice that comes back after the next purchase. */
+    tempRestoreSource:    string | null;
+    /** While temporary: the Fixed Price (paise) that comes back; null = none. */
+    tempRestoreSalePaise: number | null;
 }
