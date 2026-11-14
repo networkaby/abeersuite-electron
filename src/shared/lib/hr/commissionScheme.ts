@@ -1,3 +1,5 @@
+import { CUSTOMER_SALE_VOUCHER_TYPES } from "@/shared/lib/constants/accounting";
+
 // Targets & Commission — the shape of a scheme and the ONE arithmetic that turns
 // a month's sales into money.
 //
@@ -63,7 +65,7 @@ export interface CommissionSchemeTerms {
 }
 
 /** The sale voucher kinds a person's commission counts, and the one that takes back. */
-export const COMMISSION_SALE_TYPES = ["SALE", "POS", "ONLINE_INVOICE"] as const;
+export const COMMISSION_SALE_TYPES = CUSTOMER_SALE_VOUCHER_TYPES;
 export const COMMISSION_RETURN_TYPES = ["SALE_RETURN"] as const;
 
 export function isCommissionKind(v: unknown): v is CommissionKind {

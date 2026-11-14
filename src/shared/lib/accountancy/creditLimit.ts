@@ -1,3 +1,4 @@
+import { CUSTOMER_SALE_VOUCHER_TYPES } from "@/shared/lib/constants/accounting";
 import type { Prisma } from "@/generated/prisma/client";
 
 // ── Auto credit-limit resolver ───────────────────────────────────────────────
@@ -21,7 +22,7 @@ export interface CreditLimitConfigLite {
     roundToStep:  number;
 }
 
-const SALE_TYPES = ["SALE", "POS"] as const;
+const SALE_TYPES = CUSTOMER_SALE_VOUCHER_TYPES;
 
 // Pure — the auto limit for a given windowed sales total. Returns 0 when auto is
 // off or there is no sales history to size it from.

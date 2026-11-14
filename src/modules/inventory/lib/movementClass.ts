@@ -1,3 +1,4 @@
+import { CUSTOMER_SALE_VOUCHER_TYPES } from "@/shared/lib/constants/accounting";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { valueStockBatch } from "@/modules/inventory/lib/valuation";
@@ -84,7 +85,7 @@ interface ProductInput {
 
 const DAY_MS = 86_400_000;
 /** Sale-side voucher kinds (mirror of BI marginEngine's SALE_TYPES). */
-const SALE_TYPES = ["SALE", "POS", "ONLINE_INVOICE"] as const;
+const SALE_TYPES = CUSTOMER_SALE_VOUCHER_TYPES;
 
 interface BandOverride {
     slowAfterDays: number | null;

@@ -1,3 +1,4 @@
+import { CUSTOMER_SALE_VOUCHER_TYPES } from "@/shared/lib/constants/accounting";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { Prisma } from "@/generated/prisma/client";
 import { isMissedCall } from "@/shared/lib/calls";
@@ -58,7 +59,7 @@ export interface CustomerTimeline {
 }
 
 /** Itemised customer sales — carry product lines ("you bought a laptop"). */
-const SALE_TYPES = ["SALE", "POS", "ONLINE_INVOICE"] as const;
+const SALE_TYPES = CUSTOMER_SALE_VOUCHER_TYPES;
 
 /** Resolve the customer's ledger Account id (both Person & Company have exactly one). */
 export async function resolveAccountId(ref: CustomerRef): Promise<number | null> {

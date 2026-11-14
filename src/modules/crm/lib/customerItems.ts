@@ -1,3 +1,4 @@
+import { CUSTOMER_SALE_VOUCHER_TYPES } from "@/shared/lib/constants/accounting";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { resolveAccountId, type CustomerRef } from "./customerTimeline";
 
@@ -10,7 +11,7 @@ import { resolveAccountId, type CustomerRef } from "./customerTimeline";
  * from its most recent purchase + the product's warranty-term duration.
  */
 
-const SALE_TYPES = ["SALE", "POS", "ONLINE_INVOICE"] as const;
+const SALE_TYPES = CUSTOMER_SALE_VOUCHER_TYPES;
 const DAY = 86_400_000;
 
 export interface PurchasedItem {

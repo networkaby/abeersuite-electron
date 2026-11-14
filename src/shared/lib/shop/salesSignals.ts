@@ -1,3 +1,4 @@
+import { CUSTOMER_SALE_VOUCHER_TYPES } from "@/shared/lib/constants/accounting";
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
@@ -8,7 +9,7 @@ const LOOKBACK_DAYS = 365;
 const BILL_SAMPLE = 400;
 /** A pairing seen on fewer bills than this is chance, not a habit. */
 const MIN_SHARED_BILLS = 2;
-const SALE_TYPES = ["POS", "SALE", "ONLINE_INVOICE"];
+const SALE_TYPES: string[] = [...CUSTOMER_SALE_VOUCHER_TYPES];
 /** Best sellers rank sales over this many days. */
 const BEST_SELLER_DAYS = 30;
 /** Buy again looks this far back in the customer's own bills. */

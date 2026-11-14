@@ -1,3 +1,4 @@
+import { CUSTOMER_SALE_VOUCHER_TYPES } from "@/shared/lib/constants/accounting";
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { Prisma } from "@/generated/prisma/client";
@@ -23,7 +24,7 @@ import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/frag
 // Migrated from prisma.invoice to prisma.invVoucher (SALE + POS only) on
 // 2026-05-24 as part of the Invoice → InvVoucher consolidation (Layer 3d).
 
-const SALE_TYPES = ["SALE", "POS"] as const;
+const SALE_TYPES = CUSTOMER_SALE_VOUCHER_TYPES;
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requireAuth();

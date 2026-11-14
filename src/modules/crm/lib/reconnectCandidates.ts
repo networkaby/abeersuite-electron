@@ -1,3 +1,4 @@
+import { CUSTOMER_SALE_VOUCHER_TYPES } from "@/shared/lib/constants/accounting";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { ContactLifecycle, Prisma } from "@/generated/prisma/client";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
@@ -26,7 +27,7 @@ import type { ReconnectFilterInput } from "@/shared/lib/schemas/reconnectSchema"
  */
 
 /** Itemised customer sales — the revenue / purchase / warranty basis. */
-const SALE_TYPES = ["SALE", "POS", "ONLINE_INVOICE"] as const;
+const SALE_TYPES = CUSTOMER_SALE_VOUCHER_TYPES;
 /** Safety ceiling on the universe (internal tool; businesses are far under this). */
 const MAX_UNIVERSE = 5000;
 const DAY = 86_400_000;

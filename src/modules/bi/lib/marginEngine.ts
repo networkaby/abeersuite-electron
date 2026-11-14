@@ -5,6 +5,7 @@
 // Profit can't drift apart). This file only does the sale-line side: which
 // lines count as revenue, and how qty/revenue/COGS/profit are shaped per line.
 
+import { CUSTOMER_SALE_VOUCHER_TYPES } from "@/shared/lib/constants/accounting";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { round2 as r2 } from "@/shared/lib/format/moneyInr";
@@ -49,7 +50,7 @@ export async function loadBiUnitCostMap(
     return out;
 }
 
-export const SALE_TYPES = ["SALE", "POS", "ONLINE_INVOICE"] as const;
+export const SALE_TYPES = CUSTOMER_SALE_VOUCHER_TYPES;
 export const SALE_RETURN_TYPE = "SALE_RETURN";
 
 export interface MarginLine {

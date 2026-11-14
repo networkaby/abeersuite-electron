@@ -86,3 +86,12 @@ export function paymentInstrumentText(method?: string | null, reference?: string
     if (label && ref) return `${label} (${ref})`;
     return label || ref;
 }
+
+/**
+ * Voucher types that are a sale to a customer — counter (POS), office SALE and
+ * the online shop (ONLINE_INVOICE). Use this for "what the customer bought /
+ * spent" (history, spend tiers, credit limit, BI, commission). A screen that
+ * means only counter + office bills (returns, bill-wise outstandings) says so
+ * with its own list.
+ */
+export const CUSTOMER_SALE_VOUCHER_TYPES = ["SALE", "POS", "ONLINE_INVOICE"] as const;

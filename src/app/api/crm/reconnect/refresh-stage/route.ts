@@ -1,3 +1,4 @@
+import { CUSTOMER_SALE_VOUCHER_TYPES } from "@/shared/lib/constants/accounting";
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
@@ -5,7 +6,7 @@ import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { resolveAccountId } from "@/modules/crm/lib/customerTimeline";
 import { refreshStageSchema } from "@/shared/lib/schemas/reconnectSchema";
 
-const SALE_TYPES = ["SALE", "POS", "ONLINE_INVOICE"] as const;
+const SALE_TYPES = CUSTOMER_SALE_VOUCHER_TYPES;
 
 // POST /api/crm/reconnect/refresh-stage
 // Rechecks a customer's real record — any posted sale or repair — and bumps a

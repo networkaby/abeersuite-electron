@@ -1,3 +1,4 @@
+import { CUSTOMER_SALE_VOUCHER_TYPES } from "@/shared/lib/constants/accounting";
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { resolveTierTitles, type TierPeriodInput, type TierResult } from "./resolveTierTitles";
 
@@ -13,7 +14,7 @@ import { resolveTierTitles, type TierPeriodInput, type TierResult } from "./reso
  *  One customer, every channel: counter (POS), office SALE, and the online
  *  shop (ONLINE_INVOICE) all feed the same brackets — buying online raises
  *  the same level as buying at the counter. */
-export const TIER_SPEND_VOUCHER_TYPES = ["SALE", "POS", "ONLINE_INVOICE"] as const;
+export const TIER_SPEND_VOUCHER_TYPES = CUSTOMER_SALE_VOUCHER_TYPES;
 
 export type TierSpendContext = {
     /** Periods with bracket spend attached — the resolver's raw material
