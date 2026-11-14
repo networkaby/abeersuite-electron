@@ -34,6 +34,7 @@ import { partyProfileHref } from "@/shared/lib/parties";
 import { cn } from "@/shared/lib/format/utils";
 import { groupTicketChat } from "@/modules/message/lib/ticketChatRuns";
 import { AutoMessageIcon, TicketChatRunBody } from "@/modules/message/components/TicketChatRun";
+import { CustomerHistoryPanel } from "./CustomerHistoryPanel";
 
 const ACTIVITY_KINDS: { kind: Exclude<DealActivityKind, "SYSTEM">; label: string; icon: typeof StickyNote }[] = [
     { kind: "NOTE", label: "Note", icon: StickyNote },
@@ -283,9 +284,9 @@ export default function DealDetailDialog({
                     </div>
                 ) : deal ? (
                     <div className="flex-1 overflow-y-auto bg-muted/20 p-4 sm:p-6">
-                        <div className="mx-auto max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                        <div className="mx-auto max-w-[1600px] grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                             {/* Left Column: Customer info, Notes & Activity Timeline (7-8 cols) */}
-                            <div className="lg:col-span-7 xl:col-span-8 space-y-6">
+                            <div className="lg:col-span-7 xl:col-span-5 space-y-6">
                                 {/* Customer & Contact Card */}
                                 <div className="rounded-xl border bg-card p-5 shadow-sm space-y-4">
                                     <div className="flex items-start justify-between gap-4">
@@ -577,7 +578,7 @@ export default function DealDetailDialog({
                             </div>
 
                             {/* Right Column: Actions, Stage & Ownership (4-5 cols) */}
-                            <div className="lg:col-span-5 xl:col-span-4 space-y-6">
+                            <div className="lg:col-span-5 xl:col-span-3 space-y-6">
                                 {/* Stage & Value Card */}
                                 <div className="rounded-xl border bg-card p-5 shadow-sm space-y-4">
                                     <h3 className="font-semibold text-sm text-foreground">Pipeline Stage & Value</h3>
@@ -807,6 +808,11 @@ export default function DealDetailDialog({
                                         </div>
                                     </div>
                                 )}
+                            </div>
+
+                            {/* Third Column — lead quality, communication, customer history */}
+                            <div className="lg:col-span-12 xl:col-span-4">
+                                <CustomerHistoryPanel dealId={deal.id} />
                             </div>
                         </div>
                     </div>
