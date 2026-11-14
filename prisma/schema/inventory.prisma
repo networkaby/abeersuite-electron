@@ -409,6 +409,15 @@ model InvProduct {
   /// column, barcodeManualPaise — a Sale Price change does not move it.)
   /// Written by Edit Product, Item Import, and the Update & Print Labels "Sale Price" column.
   savedSalePricePaise      Int?
+  /// "Until next purchase" on the Fixed Price (owner 2026-11-14): when set, the
+  /// Fixed Price is temporary — market moved but no stock bought yet. Holds the
+  /// highest InvStockLedger id when it was saved; the first posted PURCHASE / GRN
+  /// stock row above it ends it in recomputePricesForProducts — selling goes back
+  /// to Computed (Strategy when no own margin) and the barcode is re-saved auto.
+  /// null = the Fixed Price (if any) is permanent.
+  tempPriceAfterLedgerId   Int?
+  /// When the temporary Fixed Price was saved — shown on the clock icon only.
+  tempPriceSetAt           DateTime?
   /// The SAVED barcode (tag) price, paise. Written only when the barcode is
   /// saved: a hand edit, "Update barcode" on Update prices (auto from the Sale
   /// Price via the bands), a new product with a Sale Price, or an MRP cut below

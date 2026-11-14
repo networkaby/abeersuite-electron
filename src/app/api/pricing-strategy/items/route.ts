@@ -65,6 +65,7 @@ export async function GET(req: Request) {
                     barcodeIsManual:    true,
                     barcodeGapBasePaise: true,
                     salePriceFrozenAt:   true,
+                    tempPriceSetAt:      true,
                     category: { select: { name: true } },
                     group:    { select: { name: true } },
                     brand:    { select: { name: true } },
@@ -168,6 +169,7 @@ export async function GET(req: Request) {
                 ),
                 effectiveSalePriceSource: p.effectiveSalePriceSource,
                 salePriceFrozenAt:     p.salePriceFrozenAt ? p.salePriceFrozenAt.toISOString() : null,
+                tempPriceSetAt:        p.tempPriceSetAt ? p.tempPriceSetAt.toISOString() : null,
             };
         });
 

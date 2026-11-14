@@ -33,6 +33,13 @@ export async function PUT(req: Request) {
             select: { id: true, mrpPaise: true, savedSalePricePaise: true, effectiveSalePriceSource: true },
         });
         const byId = new Map(products.map((p) => [p.id, p]));
+        // "Until next purchase" remembers the newest stock row now; a purchase
+        // row above it ends the temporary price (recomputePrices.ts).
+        const wantsTemp = data.items.some((i) => i.tempUntilPurchase === true);
+        const ledgerMark = wantsTemp
+            ? (await prisma.invStockLedger.aggregate({ _max: { id: true } }))._max.id ?? 0
+            : 0;
+        const now = new Date();
 
         const affected = data.items.filter((it) => byId.has(it.id)); // skip ids that don't exist
         // Rows whose SELLING price was changed by hand: the source was switched,
@@ -61,6 +68,12 @@ export async function PUT(req: Request) {
                     savedSalePricePaise:      hasSaved ? price : null,
                     ...(it.marginPercent !== undefined ? { marginPercent: it.marginPercent != null ? it.marginPercent.toString() : null } : {}),
                     ...(it.mrpPaise !== undefined ? { mrpPaise: it.mrpPaise } : {}),
+                    // Temporary only while the Fixed Price sells; any other source clears it.
+                    ...(it.effectiveSalePriceSource !== "SAVED" || it.tempUntilPurchase === false
+                        ? { tempPriceAfterLedgerId: null, tempPriceSetAt: null }
+                        : it.tempUntilPurchase === true
+                            ? { tempPriceAfterLedgerId: ledgerMark, tempPriceSetAt: now }
+                            : {}),
                 },
             });
         });

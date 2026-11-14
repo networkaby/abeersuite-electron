@@ -17,6 +17,7 @@ import { resolveCostBatch } from "@/modules/pricing-strategy/lib/resolveCost";
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
 import { loadStrategyPoints, additiveMarginPct, additivePriceWithSurcharge, marginForPrice } from "@/modules/pricing-strategy/lib/additiveMargin";
 import { getCurrentAdditionalCostByProduct } from "@/modules/pricing-strategy/lib/costPool";
+import { saveAutoBarcodes } from "@/modules/pricing-strategy/lib/barcodeStore";
 
 export interface RecomputeResult {
     /** Products whose `effectiveSalePricePaise` was rewritten. */
@@ -39,6 +40,7 @@ export async function recomputePricesForProducts(
     if (productIds.length === 0) return result;
 
     const uniqueIds = [...new Set(productIds)];
+    const expiredTemp = await endTempPricesAfterPurchase(uniqueIds);
 
     const [products, points, orgDefaults] = await Promise.all([
         prisma.invProduct.findMany({
@@ -154,7 +156,51 @@ export async function recomputePricesForProducts(
     // Supabase pooler a large batch overruns the default 5s tx ceiling (P2028).
     }, { timeout: 60_000, maxWait: 15_000 });
 
+    // A temporary Fixed Price just ended → the public price goes back to auto
+    // from the new lowest price, like any freshly priced product.
+    if (expiredTemp.length) {
+        await saveAutoBarcodes(expiredTemp).catch((err: unknown) => {
+            Sentry.captureException(err, { tags: { source: "price-recompute", via: "temp-price-end" } });
+        });
+    }
+
     return result;
+}
+
+/**
+ * Fixed Price "until next purchase": end it for every product that has had a
+ * posted PURCHASE / GRN stock row since it was saved. Selling goes back to
+ * Computed (Strategy when the product has no own margin — Computed would
+ * otherwise derive a margin from the temporary price). Returns the ended ids.
+ */
+async function endTempPricesAfterPurchase(ids: number[]): Promise<number[]> {
+    const temp = await prisma.invProduct.findMany({
+        where:  { id: { in: ids }, tempPriceAfterLedgerId: { not: null } },
+        select: { id: true, tempPriceAfterLedgerId: true, marginPercent: true },
+    });
+    if (temp.length === 0) return [];
+    const minMark = Math.min(...temp.map((t) => t.tempPriceAfterLedgerId!));
+    const rows = await prisma.invStockLedger.findMany({
+        where: {
+            productId:        { in: temp.map((t) => t.id) },
+            id:               { gt: minMark },
+            inQty:            { gt: 0 },
+            reversalOfId:     null,
+            universalVoucher: { type: { in: ["PURCHASE", "GRN"] }, status: "POSTED" },
+        },
+        select: { productId: true, id: true },
+    });
+    const ended = temp.filter((t) => rows.some((r) => r.productId === t.id && r.id > t.tempPriceAfterLedgerId!));
+    if (ended.length === 0) return [];
+    await prisma.$transaction(ended.map((t) => prisma.invProduct.update({
+        where: { id: t.id },
+        data:  {
+            effectiveSalePriceSource: t.marginPercent != null ? "COMPUTED" : "STRATEGY",
+            tempPriceAfterLedgerId:   null,
+            tempPriceSetAt:           null,
+        },
+    })));
+    return ended.map((t) => t.id);
 }
 
 /**

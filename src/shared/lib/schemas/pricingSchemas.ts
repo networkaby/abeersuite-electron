@@ -80,6 +80,8 @@ export const salePriceSaveSchema = z.object({
                 mrpPaise:                 z.number().int().min(0).nullable().optional(),
                 /** Typed barcode ₹·100, saved as manual. Absent = leave the barcode alone. */
                 barcodeManualPaise:       z.number().int().min(1).optional(),
+                /** Fixed Price "until next purchase". Absent = leave as is; only honoured while SAVED sells. */
+                tempUntilPurchase:        z.boolean().optional(),
             }),
         )
         .min(1)
