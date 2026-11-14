@@ -52,9 +52,6 @@ import {
 } from "lucide-react";
 import { productPreviewPath, productShopUrl } from "@/shared/lib/shop/productPublic";
 import { AttentionDialog } from "@/modules/ecommerce/components/AttentionDialog";
-import { useSession } from "next-auth/react";
-import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { formatDate } from "@/shared/lib/format/formatDate";
 
@@ -170,12 +167,8 @@ export default function EcommerceProductsPage() {
     const restoredScrollTop = useRef(0);
 
     const [rechecking, setRechecking] = useState(false);
-    // Flag attention: who may park a Draft, and the open reason box (ids, or null).
-    const { data: session } = useSession();
-    const canFlag = hasPermissionWithScope(
-        (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [],
-        PERMISSIONS.ECOMMERCE_PRODUCT_ATTENTION,
-    );
+    // Flag attention: the open reason box (ids, or null). Anyone on this page may
+    // flag — the same people who can save the product (owner, 2026-11-14).
     const [flagIds, setFlagIds] = useState<number[] | null>(null);
     const load = () => {
         fetchAdminProducts()
@@ -493,7 +486,7 @@ export default function EcommerceProductsPage() {
                     <Button size="sm" variant="outline" disabled={bulkBusy} onClick={() => void runBulk("unpublish")}>
                         Unpublish
                     </Button>
-                    {canFlag && tab === "draft" ? (
+                    {tab === "draft" ? (
                         <Button size="sm" variant="outline" disabled={bulkBusy} onClick={() => setFlagIds([...selected])}>
                             <AlertTriangle className="size-4" /> Flag attention
                         </Button>
@@ -616,12 +609,10 @@ export default function EcommerceProductsPage() {
                                                         <Button size="sm" variant="outline" asChild>
                                                             <Link href={`/office/ecommerce/products/${p.id}`}>Open draft</Link>
                                                         </Button>
-                                                        {canFlag ? (
-                                                            <Button size="sm" variant="ghost" className="text-orange-700" title="Work blocked — park it in Attention with the reason" onClick={() => setFlagIds([p.id])}>
-                                                                <AlertTriangle className="size-3.5" />
-                                                                Flag
-                                                            </Button>
-                                                        ) : null}
+                                                        <Button size="sm" variant="ghost" className="text-orange-700" title="Work blocked — park it in Attention with the reason" onClick={() => setFlagIds([p.id])}>
+                                                            <AlertTriangle className="size-3.5" />
+                                                            Flag
+                                                        </Button>
                                                     </>
                                                 ) : status.kind === "unpublished" ? (
                                                     <Button

@@ -28,8 +28,9 @@ function summary(plan: CleanupPlan) {
 const notHere = () =>
     NextResponse.json({ error: "Cloudinary keys are not on this machine — run the cleanup from the office website." }, { status: 503 });
 
+// Settings → E-Commerce is a settings:manage page; the cleanup is part of it (owner, 2026-11-14).
 export async function GET() {
-    const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_PHOTO_CLEANUP);
+    const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
     if (response) return response;
     if (!(await cleanupConfigured())) return notHere();
     try {
@@ -40,7 +41,7 @@ export async function GET() {
 }
 
 export async function POST() {
-    const { user, response } = await requirePermission(PERMISSIONS.ECOMMERCE_PHOTO_CLEANUP);
+    const { user, response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
     if (response) return response;
     if (!(await cleanupConfigured())) return notHere();
     try {

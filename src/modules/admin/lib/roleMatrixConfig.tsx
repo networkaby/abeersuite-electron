@@ -639,6 +639,13 @@ export const SIDEBAR_LINK_EXTRA_TOGGLE: Record<string, ExtraToggle | ExtraToggle
     },
     // Customize Home — editing the page is the page tick's own work. The locked
     // permanent fallback sections are the one guard.
+    // E-Commerce → Products — saving the shop copy is the page tick's own work.
+    // Deep edit saves the inventory master without Inventory access (no tax /
+    // opening, SKU + sale price locked) and picks Group / Brand / Collections.
+    [sidebarChildPermissionId("e-commerce", "products")]: {
+        id: "ecommerce:product:deep-edit",
+        label: "Can deep edit",
+    },
     [sidebarChildPermissionId("e-commerce", "customize-home")]: {
         id: "ecommerce:fallback:unlock",
         label: "Can unlock fallback",

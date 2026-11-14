@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, requireModuleAccess, requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAnyPermission, requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { invProductToAdmin, withShopDraft } from "@/modules/ecommerce/lib/productAdmin";
 import { shopProductInclude as productInclude, shopProductPatchSchema, updateShopProduct } from "@/modules/ecommerce/lib/updateShopProduct";
@@ -36,9 +36,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     const { data, error } = await validateRequest(req, shopProductPatchSchema);
     if (error) return error;
     // Group / brand / collections are inventory masters (group drives inherited GST/HSN) —
-    // a separate tick from editing the shop copy.
+    // a separate tick from editing the shop copy: Deep edit (or Inventory products:edit).
     if (data.groupId !== undefined || data.brandId !== undefined || data.collectionIds !== undefined) {
-        const gate = await requirePermission(PERMISSIONS.ECOMMERCE_PRODUCT_MASTERS);
+        const gate = await requireAnyPermission(PERMISSIONS.PRODUCTS_EDIT, PERMISSIONS.ECOMMERCE_PRODUCT_DEEP_EDIT);
         if (gate.response) return gate.response;
     }
     // Save / Save as draft / Save as ready / Discard draft — one write path,

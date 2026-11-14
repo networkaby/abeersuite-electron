@@ -1,8 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireModuleAccess, requirePermission } from "@/shared/lib/auth/permissions";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { parkInAttention } from "@/modules/ecommerce/lib/shopAttention";
 
@@ -19,12 +18,10 @@ const schema = z.object({
 export async function POST(req: Request) {
     const mod = await requireModuleAccess("e-commerce");
     if (mod.response) return mod.response;
-    const gate = await requirePermission(PERMISSIONS.ECOMMERCE_PRODUCT_ATTENTION);
-    if (gate.response) return gate.response;
     const { data, error } = await validateRequest(req, schema);
     if (error) return error;
     try {
-        const by = (await prisma.user.findUnique({ where: { id: gate.user.id }, select: { name: true } }))?.name ?? "Staff";
+        const by = (await prisma.user.findUnique({ where: { id: mod.user.id }, select: { name: true } }))?.name ?? "Staff";
         return NextResponse.json(await parkInAttention(data.ids, data.reason, by, ["DRAFT"]));
     } catch (e) {
         return handleApiError(e, "Could not park in Attention");

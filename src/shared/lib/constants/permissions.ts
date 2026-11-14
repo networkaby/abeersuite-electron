@@ -175,13 +175,9 @@ export const PERMISSIONS = {
     // Permanent fallback sections (priority -1) stay locked; this key shows the
     // Unlock button that opens them all for editing at once.
     ECOMMERCE_FALLBACK_UNLOCK: "ecommerce:fallback:unlock",
-    // Settings → E-Commerce → Photo cleanup: deletes Cloudinary files for good.
-    ECOMMERCE_PHOTO_CLEANUP: "ecommerce:photos:cleanup",
-    // E-Commerce → Products → Edit: change the product's inventory Group / Brand.
-    ECOMMERCE_PRODUCT_MASTERS: "ecommerce:product:masters",
-    // E-Commerce → Products → Deep edit without products:edit (no tax / opening / sale price / SKU).
+    // E-Commerce → Products → Deep edit without products:edit (no tax / opening / sale
+    // price / SKU), and the product's Group / Brand / Collections on the shop form.
     ECOMMERCE_PRODUCT_DEEP_EDIT: "ecommerce:product:deep-edit",
-    ECOMMERCE_PRODUCT_ATTENTION: "ecommerce:product:attention",
 
     // POS — shift / till / handover lifecycle
     POS_SHIFT_OPEN: "pos:shift:open",

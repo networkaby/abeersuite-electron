@@ -26,9 +26,6 @@ export const DEEP_EDIT_FIELDS = [
     "attrsJson",
 ] as const;
 
-/** Of these, a change still needs ecommerce:product:masters (same rule as the shop form). */
-export const DEEP_EDIT_MASTER_FIELDS = ["groupId", "brandId", "collectionIds"] as const;
-
 const allowed: ReadonlySet<string> = new Set(DEEP_EDIT_FIELDS);
 
 /** True when every key of a PATCH body is one the deep-edit permission may change. */

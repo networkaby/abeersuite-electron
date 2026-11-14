@@ -78,23 +78,20 @@ export default function ProductForm({
     const subheadingTouched = useRef(!!initial?.subheading);
     // Group + brand are the inventory masters themselves (no shop-only copy):
     // the storefront shows the group as the product's Category. Changing them
-    // here needs ECOMMERCE_PRODUCT_MASTERS, checked again by the PATCH route.
+    // here needs Deep edit (or Inventory products:edit), checked again by the PATCH route.
     const [groupId, setGroupId] = useState<number | null>(initial?.groupId ?? null);
     const [brandId, setBrandId] = useState<number | null>(initial?.brandId ?? null);
     // Collections — shop / marketing only, main first (productCollections.ts).
     const [collectionIds, setCollectionIds] = useState<number[]>(initial?.collectionIds ?? []);
     const { data: session } = useSession();
-    const canEditMasters = hasPermissionWithScope(
-        (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [],
-        PERMISSIONS.ECOMMERCE_PRODUCT_MASTERS,
-    );
+    const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    const canEditMasters =
+        hasPermissionWithScope(perms, PERMISSIONS.PRODUCTS_EDIT) ||
+        hasPermissionWithScope(perms, PERMISSIONS.ECOMMERCE_PRODUCT_DEEP_EDIT);
     // Attention stage (owner, 2026-11-11): a Draft parked until something is
     // checked by hand. The reason shows above the save buttons (also after Save
-    // as draft, until Save as ready); Flag attention parks it from here.
-    const canFlag = hasPermissionWithScope(
-        (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [],
-        PERMISSIONS.ECOMMERCE_PRODUCT_ATTENTION,
-    );
+    // as draft, until Save as ready); Flag attention parks it from here — anyone
+    // who can save the product may flag it (owner, 2026-11-14).
     const attention = initial?.shopAttention ?? null;
     const [flagOpen, setFlagOpen] = useState(false);
     /** Reload the saved row after it was parked (Flag attention, or an AI clash) — stage and buttons read Attention. */
@@ -943,7 +940,7 @@ export default function ProductForm({
                     </Button>
                 </div>
 
-                {initial?.id && canFlag ? (
+                {initial?.id ? (
                     <AttentionDialog
                         ids={flagOpen ? [initial.id] : null}
                         onClose={() => setFlagOpen(false)}
@@ -1014,7 +1011,7 @@ export default function ProductForm({
                             Unpublish
                         </Button>
                     )}
-                    {initial?.id && canFlag && shopStatus === "DRAFT" && !drafting ? (
+                    {initial?.id && shopStatus === "DRAFT" && !drafting ? (
                         <Button type="button" variant="ghost" className="text-orange-700" onClick={() => setFlagOpen(true)} disabled={busy}
                             title="Work blocked until something is checked by hand — park it in Attention with the reason">
                             Flag attention

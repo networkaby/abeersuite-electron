@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { shopProductPatchSchema, updateShopProduct } from "@/modules/ecommerce/lib/updateShopProduct";
@@ -13,7 +13,7 @@ import { shopProductPatchSchema, updateShopProduct } from "@/modules/ecommerce/l
 // Run once on each database after the deploy; delete this route afterwards.
 
 export async function POST() {
-    const { response } = await requirePermission(PERMISSIONS.ECOMMERCE_PRODUCT_MASTERS);
+    const { response } = await requireAnyPermission(PERMISSIONS.PRODUCTS_EDIT, PERMISSIONS.ECOMMERCE_PRODUCT_DEEP_EDIT);
     if (response) return response;
     try {
         const rows = await prisma.invProduct.findMany({
