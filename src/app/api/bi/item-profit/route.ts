@@ -28,19 +28,20 @@ export const GET = withApiError("Failed to build the item profit report", async 
     const byItem = new Map<number, {
         productId: number; sku: string; name: string;
         category: string | null; brand: string | null;
-        qty: number; revenue: number; cogs: number; profit: number;
+        qty: number; revenue: number; cogs: number; extraCost: number; profit: number;
         unitCost: number; costFallback?: string;
     }>();
     for (const l of lines) {
         const row = byItem.get(l.productId) ?? {
             productId: l.productId, sku: l.sku, name: l.productName,
             category: l.categoryName, brand: l.brandName,
-            qty: 0, revenue: 0, cogs: 0, profit: 0,
+            qty: 0, revenue: 0, cogs: 0, extraCost: 0, profit: 0,
             unitCost: l.unitCost, costFallback: l.costFallback,
         };
         row.qty += l.qtyOut;
         row.revenue += l.revenue;
         row.cogs += l.cogs;
+        row.extraCost += l.extraCost;
         row.profit += l.profit;
         byItem.set(l.productId, row);
     }
@@ -53,14 +54,15 @@ export const GET = withApiError("Failed to build the item profit report", async 
             avgRate: r.qty !== 0 ? r2(r.revenue / r.qty) : 0,
             unitCost: r2(r.unitCost),
             cogs: r2(r.cogs),
+            extraCost: r2(r.extraCost),
             profit: r2(r.profit),
             marginPct: marginPct(r.revenue, r.profit),
         }))
         .sort((a, b) => b.profit - a.profit);
 
     const totals = rows.reduce(
-        (t, r) => ({ qty: t.qty + r.qty, revenue: t.revenue + r.revenue, cogs: t.cogs + r.cogs, profit: t.profit + r.profit }),
-        { qty: 0, revenue: 0, cogs: 0, profit: 0 },
+        (t, r) => ({ qty: t.qty + r.qty, revenue: t.revenue + r.revenue, cogs: t.cogs + r.cogs, extraCost: t.extraCost + r.extraCost, profit: t.profit + r.profit }),
+        { qty: 0, revenue: 0, cogs: 0, extraCost: 0, profit: 0 },
     );
 
     return NextResponse.json({
@@ -68,6 +70,6 @@ export const GET = withApiError("Failed to build the item profit report", async 
         costMethod,
         branches,
         rows,
-        totals: { ...totals, qty: r2(totals.qty), revenue: r2(totals.revenue), cogs: r2(totals.cogs), profit: r2(totals.profit), marginPct: marginPct(totals.revenue, totals.profit) },
+        totals: { ...totals, qty: r2(totals.qty), revenue: r2(totals.revenue), cogs: r2(totals.cogs), extraCost: r2(totals.extraCost), profit: r2(totals.profit), marginPct: marginPct(totals.revenue, totals.profit) },
     });
 });

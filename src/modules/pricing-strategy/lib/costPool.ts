@@ -208,11 +208,18 @@ export async function getEntryRemainingPaise(glLineId: number): Promise<number |
  */
 export async function getCurrentAdditionalCostByProduct(
     productIds: number[],
+    /** Only allocations dated ≤ asOf (BI reports for a past period). Omit = now. */
+    asOf?: Date,
 ): Promise<Map<number, number>> {
     const out = new Map<number, number>();
     if (productIds.length === 0) return out;
     const rows = await prisma.additionalCostAllocation.findMany({
-        where: { kind: "ALLOCATION", productId: { in: productIds }, perUnitPaise: { not: null } },
+        where: {
+            kind: "ALLOCATION",
+            productId: { in: productIds },
+            perUnitPaise: { not: null },
+            ...(asOf ? { date: { lte: asOf } } : {}),
+        },
         select: { productId: true, perUnitPaise: true, sourceUniversalVoucherId: true, date: true },
         orderBy: [{ productId: "asc" }, { date: "desc" }, { createdAt: "desc" }, { id: "desc" }],
     });

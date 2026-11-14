@@ -14,6 +14,40 @@ import {
     type CostFallback,
     type CostMethod,
 } from "@/modules/inventory/lib/costBasis";
+import { getCurrentAdditionalCostByProduct } from "@/modules/pricing-strategy/lib/costPool";
+
+export interface BiUnitCost {
+    /** Purchase rate + extra cost — what every BI report costs a unit at. */
+    unitCost: number;
+    /** Purchase-rate part (derived cost basis). */
+    baseCost: number;
+    /** Allocated additional cost per unit (courier / shipping, GST-exclusive ₹). */
+    extraCost: number;
+    fallback?: CostFallback;
+}
+
+/**
+ * BI cost per unit = derived purchase cost + the Pricing Strategy additional
+ * cost allocated to the product (same derive rule as pricing: all legs of the
+ * latest inward ≤ asOf). Owner 2026-11-14: every BI report includes it.
+ */
+export async function loadBiUnitCostMap(
+    productIds: number[],
+    asOf: Date,
+    method: CostMethod,
+): Promise<Map<number, BiUnitCost>> {
+    const [base, extra] = await Promise.all([
+        loadUnitCostMap(productIds, asOf, method),
+        getCurrentAdditionalCostByProduct(productIds, asOf),
+    ]);
+    const out = new Map<number, BiUnitCost>();
+    for (const id of productIds) {
+        const b = base.get(id) ?? { unitCost: 0, fallback: "no-cost-basis" as const };
+        const extraCost = (extra.get(id) ?? 0) / 100;
+        out.set(id, { unitCost: b.unitCost + extraCost, baseCost: b.unitCost, extraCost, fallback: b.fallback });
+    }
+    return out;
+}
 
 export const SALE_TYPES = ["SALE", "POS", "ONLINE_INVOICE"] as const;
 export const SALE_RETURN_TYPE = "SALE_RETURN";
@@ -46,8 +80,10 @@ export interface MarginLine {
     discountAmt: number;
     /** Pre-tax, BEFORE line discount: revenue + discountAmt. */
     grossValue: number;
-    /** ₹ per unit from the derived cost basis (0 when no basis exists). */
+    /** ₹ per unit = derived purchase cost + allocated additional cost. */
     unitCost: number;
+    /** The additional-cost part of `cogs` (₹, qtyOut × per-unit extra). */
+    extraCost: number;
     cogs: number;
     profit: number;
     costFallback?: CostFallback;
@@ -108,7 +144,7 @@ export async function loadMarginLines(q: MarginQuery): Promise<MarginResult> {
     });
 
     const productIds = [...new Set(rawLines.map((l) => l.productId))];
-    const costMap = await loadUnitCostMap(productIds, q.to, costMethod);
+    const costMap = await loadBiUnitCostMap(productIds, q.to, costMethod);
 
     const lines: MarginLine[] = rawLines.map((l) => {
         const sign = l.universalVoucher.type === SALE_RETURN_TYPE ? -1 : 1;
@@ -116,7 +152,7 @@ export async function loadMarginLines(q: MarginQuery): Promise<MarginResult> {
         const taxAmount = toNumber(l.taxAmount) * sign;
         const revenue = (toNumber(l.amount) - toNumber(l.taxAmount)) * sign;
         const discountAmt = toNumber(l.discountAmt) * sign;
-        const cost = costMap.get(l.productId) ?? { unitCost: 0, fallback: "no-cost-basis" as const };
+        const cost = costMap.get(l.productId)!; // every productId is in the map
         const cogs = qtyOut * cost.unitCost;
         return {
             productId: l.productId,
@@ -138,6 +174,7 @@ export async function loadMarginLines(q: MarginQuery): Promise<MarginResult> {
             discountAmt,
             grossValue: revenue + discountAmt,
             unitCost: cost.unitCost,
+            extraCost: qtyOut * cost.extraCost,
             cogs,
             profit: revenue - cogs,
             costFallback: cost.fallback,

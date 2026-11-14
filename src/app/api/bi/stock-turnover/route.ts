@@ -3,8 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import { toNumber } from "@/modules/accountancy/lib/balance";
-import { loadMarginLines, r2 } from "@/modules/bi/lib/marginEngine";
-import { loadUnitCostMap } from "@/modules/inventory/lib/costBasis";
+import { loadBiUnitCostMap, loadMarginLines, r2 } from "@/modules/bi/lib/marginEngine";
 import { loadLiveStockMap } from "@/modules/inventory/lib/liveStock";
 import { withApiError } from "@/shared/lib/api";
 
@@ -61,7 +60,7 @@ export const GET = withApiError("Failed to build the stock turnover report", asy
     const liveStock = await loadLiveStockMap(products, branchId);
     const effectiveStock = (p: typeof products[number]): number => liveStock.get(p.id) ?? 0;
 
-    const costMap = await loadUnitCostMap(products.map((p) => p.id), to, costMethod);
+    const costMap = await loadBiUnitCostMap(products.map((p) => p.id), to, costMethod);
 
     const rows = [];
     for (const p of products) {

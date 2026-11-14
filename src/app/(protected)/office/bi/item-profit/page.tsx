@@ -14,13 +14,13 @@ interface ItemRow {
     productId: number; sku: string; name: string;
     category: string | null; brand: string | null;
     qty: number; revenue: number; avgRate: number; unitCost: number;
-    cogs: number; profit: number; marginPct: number; costFallback?: string;
+    cogs: number; extraCost: number; profit: number; marginPct: number; costFallback?: string;
 }
 interface Report {
     costMethod: string;
     branches: BranchOption[];
     rows: ItemRow[];
-    totals: { qty: number; revenue: number; cogs: number; profit: number; marginPct: number };
+    totals: { qty: number; revenue: number; cogs: number; extraCost: number; profit: number; marginPct: number };
 }
 
 type GroupBy = "item" | "category" | "brand";
@@ -43,9 +43,9 @@ export default function ItemProfitPage() {
             const key = (groupBy === "category" ? r.category : r.brand) ?? "(none)";
             const g = grouped.get(key) ?? {
                 productId: 0, sku: "", name: key, category: null, brand: null,
-                qty: 0, revenue: 0, avgRate: 0, unitCost: 0, cogs: 0, profit: 0, marginPct: 0,
+                qty: 0, revenue: 0, avgRate: 0, unitCost: 0, cogs: 0, extraCost: 0, profit: 0, marginPct: 0,
             };
-            g.qty += r.qty; g.revenue += r.revenue; g.cogs += r.cogs; g.profit += r.profit;
+            g.qty += r.qty; g.revenue += r.revenue; g.cogs += r.cogs; g.extraCost += r.extraCost; g.profit += r.profit;
             grouped.set(key, g);
         }
         return [...grouped.values()]
@@ -110,14 +110,15 @@ export default function ItemProfitPage() {
                                     <th className="px-3 py-2 text-right font-medium">Revenue</th>
                                     <th className="px-3 py-2 text-right font-medium">Avg Rate</th>
                                     {groupBy === "item" && <th className="px-3 py-2 text-right font-medium">Unit Cost</th>}
-                                    <th className="px-3 py-2 text-right font-medium">COGS</th>
+                                    <th className="px-3 py-2 text-right font-medium" title="Courier / shipping allocated in Pricing Strategy — included in COGS">Extra Cost</th>
+                                    <th className="px-3 py-2 text-right font-medium" title="Purchase cost + extra cost">COGS</th>
                                     <th className="px-3 py-2 text-right font-medium">Profit</th>
                                     <th className="px-3 py-2 text-right font-medium">Margin %</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {rows.length === 0 ? (
-                                    <tr><td colSpan={9} className="py-12 text-center text-muted-foreground text-sm">No sales in this period.</td></tr>
+                                    <tr><td colSpan={10} className="py-12 text-center text-muted-foreground text-sm">No sales in this period.</td></tr>
                                 ) : rows.map((r) => (
                                     <tr key={groupBy === "item" ? r.productId : r.name} className={`border-b last:border-0 hover:bg-muted/40 ${r.profit < 0 ? "bg-red-500/5" : ""}`}>
                                         <td className="px-3 py-2.5 font-medium text-foreground">
@@ -133,6 +134,7 @@ export default function ItemProfitPage() {
                                         <td className="px-3 py-2.5 text-right font-mono">{fmt(r.revenue)}</td>
                                         <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{fmt(r.avgRate)}</td>
                                         {groupBy === "item" && <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{fmt(r.unitCost)}</td>}
+                                        <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{fmt(r.extraCost)}</td>
                                         <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{fmt(r.cogs)}</td>
                                         <td className={`px-3 py-2.5 text-right font-mono font-semibold ${r.profit < 0 ? "text-red-600" : ""}`}>{fmt(r.profit)}</td>
                                         <td className={`px-3 py-2.5 text-right font-mono ${r.marginPct < 0 ? "text-red-600" : ""}`}>{r.marginPct.toFixed(1)}%</td>
@@ -147,6 +149,7 @@ export default function ItemProfitPage() {
                                         <td className="px-3 py-2.5 text-right font-mono">{fmt(data.totals.revenue)}</td>
                                         <td />
                                         {groupBy === "item" && <td />}
+                                        <td className="px-3 py-2.5 text-right font-mono">{fmt(data.totals.extraCost)}</td>
                                         <td className="px-3 py-2.5 text-right font-mono">{fmt(data.totals.cogs)}</td>
                                         <td className={`px-3 py-2.5 text-right font-mono ${data.totals.profit < 0 ? "text-red-600" : ""}`}>{fmt(data.totals.profit)}</td>
                                         <td className="px-3 py-2.5 text-right font-mono">{data.totals.marginPct.toFixed(1)}%</td>
