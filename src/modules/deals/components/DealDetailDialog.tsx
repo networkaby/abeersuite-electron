@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { GatedLink } from "@/shared/components/GatedLink";
 import axios from "axios";
 import { toast } from "sonner";
@@ -35,6 +35,9 @@ import { cn } from "@/shared/lib/format/utils";
 import { groupTicketChat } from "@/modules/message/lib/ticketChatRuns";
 import { AutoMessageIcon, TicketChatRunBody } from "@/modules/message/components/TicketChatRun";
 import { CustomerHistoryPanel } from "./CustomerHistoryPanel";
+import { DealWhatsAppComposer } from "./DealWhatsAppComposer";
+import { useSession } from "next-auth/react";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 const ACTIVITY_KINDS: { kind: Exclude<DealActivityKind, "SYSTEM">; label: string; icon: typeof StickyNote }[] = [
     { kind: "NOTE", label: "Note", icon: StickyNote },
@@ -75,6 +78,11 @@ export default function DealDetailDialog({
     const [deal, setDeal] = useState<DealDetailDto | null>(null);
     const [loading, setLoading] = useState(false);
     const [composerKind, setComposerKind] = useState<Exclude<DealActivityKind, "SYSTEM">>("NOTE");
+    // The WhatsApp tab sends a message rather than logging an activity.
+    const [waOpen, setWaOpen] = useState(false);
+    const composerRef = useRef<HTMLDivElement>(null);
+    const sessionPerms = (useSession().data?.user as { permissions?: string[] } | undefined)?.permissions;
+    const canWhatsApp = !!sessionPerms && (sessionPerms.includes(PERMISSIONS.MESSAGES_REPLY) || sessionPerms.includes(PERMISSIONS.ADMIN_BYPASS));
     const [body, setBody] = useState("");
     const [dueAt, setDueAt] = useState("");
     const [posting, setPosting] = useState(false);
@@ -102,6 +110,7 @@ export default function DealDetailDialog({
         setBody("");
         setDueAt("");
         setComposerKind("NOTE");
+        setWaOpen(false);
         setCopiedPhone(false);
     }
     useEffect(() => {
@@ -340,7 +349,21 @@ export default function DealDetailDialog({
                                                             >
                                                                 {copiedPhone ? <Check className="size-3 text-emerald-600" /> : <Copy className="size-3" />}
                                                             </button>
-                                                            {cleanDigits && (
+                                                            {cleanDigits && canWhatsApp && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setWaOpen(true);
+                                                                        composerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                                                                    }}
+                                                                    className="ml-1 text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline inline-flex items-center gap-0.5 cursor-pointer"
+                                                                    title="Send WhatsApp from AbeerSuite (kept on this deal)"
+                                                                >
+                                                                    <MessageCircle className="size-3" /> WhatsApp
+                                                                </button>
+                                                            )}
+                                                            {/* No reply permission: the old personal-WhatsApp link. */}
+                                                            {cleanDigits && !canWhatsApp && (
                                                                 <a
                                                                     href={`https://wa.me/${waPhone}`}
                                                                     target="_blank"
@@ -400,17 +423,17 @@ export default function DealDetailDialog({
                                     </div>
 
                                     {/* Composer */}
-                                    <div className="rounded-xl border bg-muted/30 p-3.5 space-y-3">
+                                    <div ref={composerRef} className="rounded-xl border bg-muted/30 p-3.5 space-y-3">
                                         {/* Activity Type Tabs */}
                                         <div className="flex flex-wrap gap-1.5">
                                             {ACTIVITY_KINDS.map(({ kind, label, icon: Icon }) => (
                                                 <button
                                                     key={kind}
                                                     type="button"
-                                                    onClick={() => setComposerKind(kind)}
+                                                    onClick={() => { setComposerKind(kind); setWaOpen(false); }}
                                                     className={cn(
                                                         "flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition-all cursor-pointer",
-                                                        composerKind === kind
+                                                        !waOpen && composerKind === kind
                                                             ? "bg-primary text-primary-foreground shadow-xs font-semibold"
                                                             : "text-muted-foreground hover:bg-muted hover:text-foreground",
                                                     )}
@@ -419,7 +442,26 @@ export default function DealDetailDialog({
                                                     <span>{label}</span>
                                                 </button>
                                             ))}
+                                            {canWhatsApp && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setWaOpen(true)}
+                                                    className={cn(
+                                                        "flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition-all cursor-pointer",
+                                                        waOpen
+                                                            ? "bg-green-600 text-white shadow-xs font-semibold"
+                                                            : "text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-950/40",
+                                                    )}
+                                                >
+                                                    <MessageCircle className="size-3.5" />
+                                                    <span>WhatsApp</span>
+                                                </button>
+                                            )}
                                         </div>
+
+                                        {waOpen ? (
+                                            <DealWhatsAppComposer dealId={deal.id} onSent={() => { void load(); onChanged(); }} />
+                                        ) : (<>
 
                                         {/* Composer Textarea */}
                                         <Textarea
@@ -457,6 +499,7 @@ export default function DealDetailDialog({
                                                 <span>{posting ? "Logging…" : `Log ${composerKind.toLowerCase()}`}</span>
                                             </Button>
                                         </div>
+                                        </>)}
                                     </div>
 
                                     {/* Timeline Feed */}

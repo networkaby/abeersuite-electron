@@ -1039,7 +1039,8 @@ export function checkOutgoingMedia(type: string, size: number): string | null {
 }
 
 /** Send a staff reply on WhatsApp and store it on the customer's thread. */
-export async function sendReply(args: { phone: string; text: string; userId: number; media?: OutgoingMedia | null }) {
+/** `ticketId` — sent from a ticket screen (a deal): the line lands on that ticket even when the chat is not on it. */
+export async function sendReply(args: { phone: string; text: string; userId: number; media?: OutgoingMedia | null; ticketId?: number }) {
     if (!(await isBillSendConfigured())) throw new ReplyRefusedError("WhatsApp sending is not set up on this server.");
     const { open, fromNumberId } = await replyWindowOpen(args.phone);
     if (!open) {
@@ -1066,7 +1067,7 @@ export async function sendReply(args: { phone: string; text: string; userId: num
         : await sendTextMessage(args.phone, args.text, from);
     const at = new Date();
     const conv = await conversationForStaff(args.phone, at);
-    const ticketId = conv.topic === "TICKET" ? conv.ticketId : null;
+    const ticketId = args.ticketId ?? (conv.topic === "TICKET" ? conv.ticketId : null);
     const row = await prisma.message.create({
         data: {
             channel: "WHATSAPP",
