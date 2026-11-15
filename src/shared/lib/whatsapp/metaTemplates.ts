@@ -2,7 +2,7 @@ import "server-only";
 import QRCode from "qrcode";
 import { appSetting } from "@/shared/lib/settings/appSettings.server";
 import { META_GRAPH } from "@/shared/lib/constants/meta";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { billsWaNumber, mainWaToken, waTokenForNumber, waTokenForWaba } from "./waNumbers";
 import {
     WA_APP_LINK,
     WA_BILL_LINK_BASE,
@@ -33,58 +33,19 @@ import {
 const GRAPH = META_GRAPH;
 const LANG = "en";
 
-/** Settings → App Settings, else .env. */
-const token = () => appSetting("META_WA_ACCESS_TOKEN");
+/** Bills, reminders and new chats go out from the number switched to "Use for
+ *  bills" (WhatsAppNumber, waNumbers.ts); templates live in its account. */
+export async function conversationNumberId(): Promise<string | undefined> {
+    return (await billsWaNumber())?.phoneNumberId;
+}
+export const billWabaId = async () => (await billsWaNumber())?.wabaId;
 
 export async function isTemplateApiConfigured(): Promise<boolean> {
-    return Boolean((await token()) && (await billWabaId()));
+    const n = await billsWaNumber();
+    return Boolean(n && (await waTokenForNumber(n.phoneNumberId)));
 }
 export async function isBillSendConfigured(): Promise<boolean> {
-    return Boolean((await token()) && (await conversationNumberId()));
-}
-
-/** The OTP number's WABA — Settings → App Settings, else .env. */
-const wabaId = () => appSetting("META_WA_BUSINESS_ACCOUNT_ID");
-
-/**
- * The WABA the bills number sits in, where bill templates must live (a template
- * can only be sent from a number in its own WABA). Differs from wabaId() when the
- * bills number was onboarded into another business (coexistence, 2026-11-13).
- */
-export const billWabaId = async () => (await appSetting("WA_CONVERSATION_BUSINESS_ACCOUNT_ID")) || (await wabaId());
-
-export type WaAccount = { wabaId: string; label: string; role: "otp" | "bills" | null };
-
-/**
- * Every WhatsApp account we work with, each on its own: the OTP and bills
- * accounts from App Settings (always, row or not) plus every saved
- * WhatsAppAccount (Connect number adds one). Bills account first.
- */
-export async function listWaAccounts(): Promise<WaAccount[]> {
-    const [otp, bills, rows] = await Promise.all([
-        wabaId(),
-        billWabaId(),
-        prisma.whatsAppAccount.findMany({ orderBy: { createdAt: "asc" } }),
-    ]);
-    const label = new Map(rows.map((r) => [r.wabaId, r.label]));
-    const out: WaAccount[] = [];
-    const add = (id: string | undefined, role: WaAccount["role"], fallback: string) => {
-        if (!id || out.some((a) => a.wabaId === id)) return;
-        out.push({ wabaId: id, label: label.get(id) || fallback, role });
-    };
-    add(bills, "bills", "Bills account");
-    add(otp, "otp", "OTP account");
-    for (const r of rows) add(r.wabaId, null, r.label);
-    return out;
-}
-
-/**
- * The number bills, reminders and new replies go out from: WA_CONVERSATION_NUMBER_ID,
- * else the OTP number META_WA_PHONE_NUMBER_ID. Both are Settings → App Settings
- * values (DB first, then .env).
- */
-export async function conversationNumberId(): Promise<string | undefined> {
-    return (await appSetting("WA_CONVERSATION_NUMBER_ID")) || (await appSetting("META_WA_PHONE_NUMBER_ID"));
+    return isTemplateApiConfigured();
 }
 
 type GraphError = { error?: { message?: string; error_user_msg?: string } };
@@ -94,11 +55,14 @@ export class MetaApiError extends Error {
     override name = "MetaApiError";
 }
 
-/** One Graph call; throws with Meta's own wording on failure. */
-async function graph<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
+/** One Graph call; throws with Meta's own wording on failure. `token` = the
+ *  number's / account's token (waNumbers.ts); default the main token. */
+async function graph<T>(path: string, init?: { method?: string; body?: unknown; token?: string }): Promise<T> {
+    const tok = init?.token ?? (await mainWaToken());
+    if (!tok) throw new MetaApiError("No WhatsApp token — App Settings → WhatsApp → Access token, or the number's own token.");
     const res = await fetch(`${GRAPH}/${path}`, {
         method: init?.method ?? "GET",
-        headers: { Authorization: `Bearer ${await token()}`, "Content-Type": "application/json" },
+        headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
         body: init?.body ? JSON.stringify(init.body) : undefined,
         cache: "no-store",
     });
@@ -114,6 +78,14 @@ async function graph<T>(path: string, init?: { method?: string; body?: unknown }
         throw new MetaApiError(e?.error_user_msg || e?.message || `Meta answered ${res.status}: ${text.slice(0, 200)}`);
     }
     return json;
+}
+
+/** Send one message as a number — the given one, else the bills number — with
+ *  that number's own token (or the main one). */
+async function sendFrom<T>(fromNumberId: string | null | undefined, body: unknown): Promise<T> {
+    const from = fromNumberId || (await conversationNumberId());
+    if (!from) throw new MetaApiError("No WhatsApp number is switched to \"Use for bills\" — App Settings → WhatsApp numbers.");
+    return graph<T>(`${from}/messages`, { method: "POST", body, token: await waTokenForNumber(from) });
 }
 
 /** The shop's Meta app (loginapi) — Settings → App Settings, else .env; read when
@@ -134,7 +106,7 @@ async function uploadHeaderSample(bytes: Uint8Array, mime: string): Promise<stri
     );
     const res = await fetch(`${GRAPH}/${session.id}`, {
         method: "POST",
-        headers: { Authorization: `OAuth ${await token()}`, file_offset: "0" },
+        headers: { Authorization: `OAuth ${await mainWaToken()}`, file_offset: "0" },
         body: Buffer.from(bytes),
         cache: "no-store",
     });
@@ -191,7 +163,7 @@ async function components(kind: WaAnyKind, draft: WaTemplateDraft) {
 export async function submitTemplate(kind: WaAnyKind, name: string, draft: WaTemplateDraft, waba: string): Promise<{ id: string; status: string }> {
     const r = await graph<{ id: string; status: string }>(
         `${waba}/message_templates`,
-        { method: "POST", body: { name, language: LANG, category: "UTILITY", components: await components(kind, draft) } },
+        { method: "POST", body: { name, language: LANG, category: "UTILITY", components: await components(kind, draft) }, token: await waTokenForWaba(waba) },
     );
     return { id: r.id, status: r.status };
 }
@@ -202,6 +174,7 @@ export type MetaTemplateStatus = { status: string; rejectReason: string | null }
 export async function fetchTemplateStatus(name: string, waba: string): Promise<MetaTemplateStatus> {
     const r = await graph<{ data: { name: string; status: string; rejected_reason?: string }[] }>(
         `${waba}/message_templates?name=${encodeURIComponent(name)}&fields=name,status,rejected_reason`,
+        { token: await waTokenForWaba(waba) },
     );
     const row = r.data.find((t) => t.name === name);
     if (!row) return null;
@@ -237,15 +210,12 @@ export async function sendBillTemplate(args: {
     if (args.approved.viewButton?.trim()) {
         comps.push({ type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: args.linkCode }] });
     }
-    const r = await graph<{ messages?: { id?: string }[] }>(`${args.fromNumberId || (await conversationNumberId())}/messages`, {
-        method: "POST",
-        body: {
-            messaging_product: "whatsapp",
-            recipient_type: "individual",
-            to: `+91${args.mobile10}`,
-            type: "template",
-            template: { name: args.name, language: { code: LANG }, components: comps },
-        },
+    const r = await sendFrom<{ messages?: { id?: string }[] }>(args.fromNumberId, {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: `+91${args.mobile10}`,
+        type: "template",
+        template: { name: args.name, language: { code: LANG }, components: comps },
     });
     const id = r.messages?.[0]?.id;
     if (!id) throw new Error("Meta accepted the call but returned no message id");
@@ -258,15 +228,12 @@ export async function sendBillTemplate(args: {
  * (customerMessages.ts `replyWindowOpen`). Returns Meta's message id.
  */
 export async function sendTextMessage(mobile10: string, text: string, fromNumberId?: string | null): Promise<string> {
-    const r = await graph<{ messages?: { id?: string }[] }>(`${fromNumberId || (await conversationNumberId())}/messages`, {
-        method: "POST",
-        body: {
-            messaging_product: "whatsapp",
-            recipient_type: "individual",
-            to: `+91${mobile10}`,
-            type: "text",
-            text: { body: text, preview_url: false },
-        },
+    const r = await sendFrom<{ messages?: { id?: string }[] }>(fromNumberId, {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: `+91${mobile10}`,
+        type: "text",
+        text: { body: text, preview_url: false },
     });
     const id = r.messages?.[0]?.id;
     if (!id) throw new Error("Meta accepted the call but returned no message id");
@@ -315,10 +282,7 @@ export async function sendInteractiveMenu(
                     }],
                 },
             };
-    const r = await graph<{ messages?: { id?: string }[] }>(`${fromNumberId || (await conversationNumberId())}/messages`, {
-        method: "POST",
-        body: { messaging_product: "whatsapp", recipient_type: "individual", to: `+91${mobile10}`, type: "interactive", interactive },
-    });
+    const r = await sendFrom<{ messages?: { id?: string }[] }>(fromNumberId, { messaging_product: "whatsapp", recipient_type: "individual", to: `+91${mobile10}`, type: "interactive", interactive });
     const id = r.messages?.[0]?.id;
     if (!id) throw new Error("Meta accepted the call but returned no message id");
     return id;
@@ -333,6 +297,7 @@ export async function setWaUserBlocked(mobile10: string, blocked: boolean, numbe
     await graph(`${numberId}/block_users`, {
         method: blocked ? "POST" : "DELETE",
         body: { messaging_product: "whatsapp", block_users: [{ user: `+91${mobile10}` }] },
+        token: await waTokenForNumber(numberId),
     });
 }
 
@@ -363,62 +328,28 @@ export async function sendMediaMessage(args: {
     const media: Record<string, string> = { link: args.link };
     if (args.caption && type !== "audio") media.caption = args.caption;
     if (type === "document" && args.fileName) media.filename = args.fileName;
-    const r = await graph<{ messages?: { id?: string }[] }>(`${args.fromNumberId || (await conversationNumberId())}/messages`, {
-        method: "POST",
-        body: { messaging_product: "whatsapp", recipient_type: "individual", to: `+91${args.mobile10}`, type, [type]: media },
-    });
+    const r = await sendFrom<{ messages?: { id?: string }[] }>(args.fromNumberId, { messaging_product: "whatsapp", recipient_type: "individual", to: `+91${args.mobile10}`, type, [type]: media });
     const id = r.messages?.[0]?.id;
     if (!id) throw new Error("Meta accepted the call but returned no message id");
     return id;
 }
 
-/** A customer's attachment: Meta's media id → its bytes and type. */
-export async function downloadWaMedia(mediaId: string): Promise<{ bytes: ArrayBuffer; mime: string; size: number }> {
-    const info = await graph<{ url?: string; mime_type?: string; file_size?: number }>(mediaId);
+/** A customer's attachment: Meta's media id → its bytes and type. `numberId` =
+ *  the number it was sent to, whose token can read it. */
+export async function downloadWaMedia(mediaId: string, numberId?: string | null): Promise<{ bytes: ArrayBuffer; mime: string; size: number }> {
+    const token = await waTokenForNumber(numberId);
+    const info = await graph<{ url?: string; mime_type?: string; file_size?: number }>(mediaId, { token });
     if (!info.url) throw new Error("Meta gave no media URL");
-    const res = await fetch(info.url, { headers: { Authorization: `Bearer ${await token()}` }, cache: "no-store" });
+    const res = await fetch(info.url, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
     if (!res.ok) throw new Error(`Meta media download failed (${res.status})`);
     const bytes = await res.arrayBuffer();
     return { bytes, mime: info.mime_type?.split(";")[0].trim() || "application/octet-stream", size: bytes.byteLength };
 }
 
-/** `wabaId` = the WhatsApp account the number sits in; "Use for bills" saves it too.
- *  `error` = Meta refused to list this account (e.g. the token has no access). */
-export type WaPhoneNumber = { id: string; display: string; name: string; status: string; nameStatus: string; quality: string; wabaId: string; accountLabel: string };
-export type WaAccountListing = WaAccount & { numbers: WaPhoneNumber[]; error: string | null };
-
-/** Every number in every account (listWaAccounts), for the App Settings picker.
- *  One account failing (no access yet) does not hide the others. */
-export async function listWaPhoneNumbers(): Promise<WaAccountListing[]> {
-    const accounts = await listWaAccounts();
-    if (!(await token()) || !accounts.length) throw new Error("Set the WhatsApp Business Account ID (and META_WA_ACCESS_TOKEN in Vercel) first.");
-    type Row = { id: string; display_phone_number?: string; verified_name?: string; status?: string; name_status?: string; quality_rating?: string };
-    return Promise.all(
-        accounts.map(async (a): Promise<WaAccountListing> => {
-            try {
-                const r = await graph<{ data: Row[] }>(`${a.wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,status,name_status,quality_rating`);
-                const numbers = r.data.map((n) => ({
-                    id: n.id,
-                    display: n.display_phone_number ?? "",
-                    name: n.verified_name ?? "",
-                    status: n.status ?? "",
-                    nameStatus: n.name_status ?? "",
-                    quality: n.quality_rating ?? "",
-                    wabaId: a.wabaId,
-                    accountLabel: a.label,
-                }));
-                return { ...a, numbers, error: null };
-            } catch (e) {
-                return { ...a, numbers: [], error: e instanceof Error ? e.message : String(e) };
-            }
-        }),
-    );
-}
-
 /** Set or change a Connected number's 2-step PIN (no old PIN needed — the token's
  *  admin rights are enough). Used later by Register if the number is ever re-added. */
 export async function setWaTwoStepPin(phoneNumberId: string, pin: string): Promise<void> {
-    await graph<{ success?: boolean }>(phoneNumberId, { method: "POST", body: { pin } });
+    await graph<{ success?: boolean }>(phoneNumberId, { method: "POST", body: { pin }, token: await waTokenForNumber(phoneNumberId) });
 }
 
 /** Register a cloud number with its 2-step PIN — the step that takes it from
@@ -428,5 +359,6 @@ export async function registerWaPhoneNumber(phoneNumberId: string, pin: string):
     await graph<{ success?: boolean }>(`${phoneNumberId}/register`, {
         method: "POST",
         body: { messaging_product: "whatsapp", pin },
+        token: await waTokenForNumber(phoneNumberId),
     });
 }

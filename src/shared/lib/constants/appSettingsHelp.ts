@@ -115,24 +115,23 @@ export const ENV_ONLY_KEYS: string[] = ENV_ONLY_PROVIDERS.flatMap((p) => p.keys.
 
 export const PROVIDER_HELP: Record<string, ProviderHelp> = {
     "WhatsApp (Meta Cloud API)": {
-        about: "Sends login codes, bills and replies on WhatsApp through Meta's Cloud API.",
+        about: "Sends login codes, bills and replies on WhatsApp through Meta's Cloud API. Every number is its own record under \"WhatsApp numbers\" — add, test, switch on for OTP or bills, or remove one without touching the others.",
         terms: [
-            { key: "META_WA_PHONE_NUMBER_ID", theirs: "Phone number ID (not the phone number itself)" },
-            { key: "META_WA_BUSINESS_ACCOUNT_ID", theirs: "WhatsApp Business Account ID (WABA ID)" },
-            { key: "WA_CONVERSATION_NUMBER_ID", theirs: "Phone number ID of the second number" },
-            { key: "WA_CONVERSATION_BUSINESS_ACCOUNT_ID", theirs: "WhatsApp Business Account ID of the second number's business" },
-            { key: "META_WA_SIGNUP_CONFIG_ID", theirs: "Configuration ID (Facebook Login for Business → Configurations)" },
-            { key: "META_WA_ACCESS_TOKEN", theirs: "System user access token" },
+            { key: "META_WA_ACCESS_TOKEN", theirs: "System user access token — the main token every number uses unless it has its own" },
+            { key: "META_WA_SIGNUP_CONFIG_ID", theirs: "Configuration ID (Facebook Login for Business → Configurations) — only for the Coexistence popup" },
         ],
         steps: [
-            "Open business.facebook.com → WhatsApp Manager → Phone numbers. Click a number: its Phone number ID and the WhatsApp Business Account ID are shown there.",
-            "Or easier: fill the token first, Save, then press \"Show numbers from Meta\" on the WhatsApp card and pick Number 1 / Number 2 — both ids fill themselves.",
-            "Token: Business settings → Users → System users → AbeerSuite system user → Generate new token → pick the loginapi app, expiry Never, permissions whatsapp_business_messaging and whatsapp_business_management.",
-            "Same place → Assign assets → WhatsApp accounts → give the system user full control of every WhatsApp account it sends from (also a second business's, if Number 2 lives there).",
-            "Configuration ID: developers.facebook.com → loginapi app → Facebook Login for Business → Configurations → the WhatsApp Embedded Signup configuration.",
+            "Token first: business.facebook.com → Business settings → Users → System users → AbeerSoft API Bot → Generate token → app loginapi, expiry Never, permissions whatsapp_business_messaging and whatsapp_business_management. Paste it in Access token and Save.",
+            "Same page → Assign assets → WhatsApp accounts → tick EVERY WhatsApp account we send from (another business's too, e.g. one made by Coexistence) → Full control. A number in an account the bot cannot see fails its Test with \"missing permissions\".",
+            "Add a Cloud only number (the number lives only on the API): WhatsApp numbers → Add number → Cloud only. Copy its Phone number ID and WhatsApp account ID from WhatsApp Manager → Phone numbers → click the number. The phone number itself is not the Phone number ID.",
+            "Add a Coexistence number (it stays in the WhatsApp Business app on its phone): Add number → Coexistence → Meta's popup → pick the business → scan the QR on that phone (WhatsApp Business → Settings → Business platform). The ids fill themselves. Needs the Connect-number setup ID below.",
+            "Connect-number setup ID: developers.facebook.com → loginapi app → Facebook Login for Business → Configurations → the WhatsApp Embedded Signup configuration (\"AbeerSuite coexistence\") → its Configuration ID. Not a number or account id; set once, rarely changes.",
+            "Press Test on each number: it checks the token can reach it and fills its status. A Pending number needs Register with its 6-digit PIN.",
+            "Switch \"Use for OTP\" on one number and \"Use for bills & new chats\" on one number. Replies always go from the number the customer wrote to.",
+            "Bill templates are approved per WhatsApp account: on WhatsApp Templates pick the account under \"Approval for\" and Send for approval there before moving bills to a number in a new account.",
         ],
         link: { label: "Meta Business Settings", url: "https://business.facebook.com/latest/settings" },
-        note: "A token is shown only once. Keep it in Vercel once it works.",
+        note: "A token is shown only once — keep it in Vercel once it works. The old Number 1 / Number 2 boxes are gone; their saved values were turned into WhatsApp numbers records.",
     },
     "WhatsApp login code (OTP template)": {
         about: "The approved Authentication template the login code is sent with.",

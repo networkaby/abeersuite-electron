@@ -8,9 +8,8 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { APP_SETTING_DEFS, SECRET_APP_SETTING_KEYS, maskSecret, normalizeAppSettings, type AppSettingKey, type AppSettingValues } from "@/shared/lib/constants/appSettings";
 import { APP_SETTINGS_TAG, envAppSetting, openSavedSecret } from "@/shared/lib/settings/appSettings.server";
 import { hasScrambleSecret, lockSecret } from "@/shared/lib/security/secretBox";
-import { listWaPhoneNumbers, registerWaPhoneNumber, setWaTwoStepPin } from "@/shared/lib/whatsapp/metaTemplates";
+import { registerWaPhoneNumber, setWaTwoStepPin } from "@/shared/lib/whatsapp/metaTemplates";
 import { ENV_ONLY_KEYS } from "@/shared/lib/constants/appSettingsHelp";
-import { clearWaTemplateCache } from "@/shared/lib/whatsapp/waTemplateStore";
 
 // Settings → App Settings. Stored on OrgDefaults.appSettingsJson; a blank key falls
 // back to .env. Secrets may be saved here too (owner, 2026-11-12 — for testing
@@ -31,23 +30,11 @@ const masked = (v: Record<string, string | undefined>, locked: boolean) =>
     );
 
 /** Saved values, plus what .env holds for each key so the form can say where a value comes from.
- *  `?numbers=1` lists every WhatsApp account's phone numbers from Meta (live, not
- *  cached); `accounts` says per account whether Meta let us read it. */
-export async function GET(req: Request) {
+ *  WhatsApp numbers have their own API (/api/settings/whatsapp-numbers). */
+export async function GET() {
     const { response } = await requirePermission(PERMISSIONS.SETTINGS_APP_MANAGE);
     if (response) return response;
     try {
-        if (new URL(req.url).searchParams.get("numbers")) {
-            try {
-                const accounts = await listWaPhoneNumbers();
-                return NextResponse.json({
-                    numbers: accounts.flatMap((a) => a.numbers),
-                    accounts: accounts.map(({ numbers, ...a }) => ({ ...a, count: numbers.length })),
-                });
-            } catch (e) {
-                return NextResponse.json({ error: (e as Error).message }, { status: 502 });
-            }
-        }
         const od = await prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { appSettingsJson: true } });
         const env = Object.fromEntries(APP_SETTING_DEFS.map((d) => [d.key, envAppSetting(d.key) ?? ""]));
         // .env-only keys: set or not, never the value.
@@ -107,7 +94,6 @@ export async function PUT(req: Request) {
             update: { appSettingsJson: values },
         });
         revalidateTag(APP_SETTINGS_TAG, { expire: 0 });
-        clearWaTemplateCache(); // the bills account may have changed
         return NextResponse.json({ values: masked(values, true) });
     } catch (e) {
         return handleApiError(e, "Failed to save app settings");

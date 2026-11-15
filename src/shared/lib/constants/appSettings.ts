@@ -29,7 +29,8 @@ export type AppSettingDef = {
     section: AppSettingSection;
     /** Card inside the section — whose key it is. */
     provider: string;
-    /** WhatsApp card only: ① Number 1 (OTP), ② Number 2 (bills), or the shared connection. */
+    /** WhatsApp card only: "conn" = shown. "n1" / "n2" = the old Number 1 (OTP) / Number 2
+     *  (bills) slots — read once to fill WhatsApp numbers (waNumbers.ts), no longer shown. */
     group?: "n1" | "n2" | "conn";
     /** Not needed for the provider to work (the card's Ready check skips it). */
     optional?: boolean;
@@ -44,13 +45,13 @@ export type AppSettingDef = {
 
 export const APP_SETTING_DEFS = [
     { key: "META_WA_PHONE_NUMBER_ID", label: "Phone number ID", group: "n1", section: "Messaging", provider: "WhatsApp (Meta Cloud API)", numeric: true,
-      hint: "Login codes go from this number. WhatsApp Manager → Phone numbers → click the number." },
+      hint: "LEGACY — now App Settings → WhatsApp numbers (Use for OTP)." },
     { key: "META_WA_BUSINESS_ACCOUNT_ID", label: "WhatsApp account ID", group: "n1", section: "Messaging", provider: "WhatsApp (Meta Cloud API)", numeric: true,
-      hint: "The WhatsApp Business account Number 1 sits in. Also Number 2's when Number 2 is in the same account." },
+      hint: "LEGACY — now App Settings → WhatsApp numbers." },
     { key: "WA_CONVERSATION_NUMBER_ID", label: "Phone number ID", group: "n2", section: "Messaging", provider: "WhatsApp (Meta Cloud API)", optional: true, numeric: true,
-      hint: "Bills, reminders and new staff replies go from this number. Blank = Number 1. Pick only a Connected number, or every bill fails." },
+      hint: "LEGACY — now App Settings → WhatsApp numbers (Use for bills)." },
     { key: "WA_CONVERSATION_BUSINESS_ACCOUNT_ID", label: "WhatsApp account ID", group: "n2", section: "Messaging", provider: "WhatsApp (Meta Cloud API)", optional: true, numeric: true,
-      hint: "Only when Number 2 sits in another business's WhatsApp account. Bill templates are sent for approval there. Blank = Number 1's account." },
+      hint: "LEGACY — now App Settings → WhatsApp numbers." },
     { key: "WA_OTP_TEMPLATE", label: "Template name", section: "Messaging", provider: "WhatsApp login code (OTP template)",
       hint: "Name of the approved AUTHENTICATION template." },
     { key: "WA_OTP_LANG", label: "Language", section: "Messaging", provider: "WhatsApp login code (OTP template)", optional: true,
@@ -72,7 +73,7 @@ export const APP_SETTING_DEFS = [
     { key: "GOOGLE_BUSINESS_REDIRECT_URL", label: "Redirect URL", section: "Social & Google", provider: "Google Business Profile", optional: true,
       hint: "Where Google sends staff back after Connect. Blank = office site /api/campaigns/google/callback. Must be in the OAuth client's Authorized redirect URIs." },
     { key: "META_WA_ACCESS_TOKEN", label: "Access token", group: "conn", section: "Messaging", provider: "WhatsApp (Meta Cloud API)", secret: true,
-      hint: "System-user token with whatsapp_business_messaging + management." },
+      hint: "The main token: System users → AbeerSoft API Bot → Generate token (whatsapp_business_messaging + management). Every number uses it unless it has its own." },
     { key: "CLOUDINARY_API_KEY", label: "API key", section: "Files & media", provider: "Cloudinary (photos)",
       hint: "Cloudinary console → Settings → API Keys. Signs photo uploads and runs photo clean-up. The cloud name stays in .env (NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME) — keep both from the same account." },
     { key: "CLOUDINARY_API_SECRET", label: "API secret", section: "Files & media", provider: "Cloudinary (photos)", secret: true,

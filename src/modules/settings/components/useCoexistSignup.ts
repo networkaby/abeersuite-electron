@@ -3,18 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2, Smartphone } from "lucide-react";
 import { extractApiError } from "@/shared/lib/api";
-import { Button } from "@/components/ui/button";
 import { useIsDesktopApp } from "@/shared/lib/bridge";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { META_GRAPH_VERSION } from "@/shared/lib/constants/meta";
 
 /**
- * Connect a second number that stays on the WhatsApp Business app (Meta
- * "coexistence"). Opens Meta's Embedded Signup popup; staff pick the
- * business, then scan the QR shown there from the WhatsApp Business app on
- * that phone. The server finishes the hook-up (/api/settings/whatsapp-connect).
+ * Meta's coexistence wizard (Embedded Signup): a number that stays on the
+ * WhatsApp Business app. Staff pick any business, then scan the QR shown there
+ * from that phone. The server finishes the hook-up and saves the number as a
+ * COEXIST record (/api/settings/whatsapp-connect). Used by App Settings →
+ * WhatsApp numbers → Add number → Coexistence.
  */
 
 type FbLoginResponse = { authResponse?: { code?: string } | null };
@@ -42,12 +41,14 @@ function loadSdk(appId: string): Promise<FbSdk> {
     });
 }
 
-type Done = { phoneNumberId: string; display?: string; name?: string; steps: string[] };
+export type CoexistDone = { phoneNumberId: string; display?: string; name?: string; steps: string[] };
 
-export function WhatsAppConnectCard() {
+/** `start()` opens the wizard; `onDone` runs once the number is saved. */
+export function useCoexistSignup(onDone: (d: CoexistDone) => void) {
     const [busy, setBusy] = useState(false);
-    const [done, setDone] = useState<Done | null>(null);
     const ids = useRef<{ phoneNumberId?: string; wabaId?: string }>({});
+    const done = useRef(onDone);
+    useEffect(() => { done.current = onDone; }, [onDone]);
 
     // Meta posts the new number's ids from the popup before the login callback.
     useEffect(() => {
@@ -71,7 +72,7 @@ export function WhatsAppConnectCard() {
 
     async function start() {
         if (isCounter) {
-            window.open(`${COMPANY_DETAILS.sites.office}/office/settings/whatsapp-templates`, "_blank");
+            window.open(`${COMPANY_DETAILS.sites.office}/office/settings/app-settings`, "_blank");
             return;
         }
         setBusy(true);
@@ -79,6 +80,7 @@ export function WhatsAppConnectCard() {
             // The server says why when META_APP_ID is missing (503) — shown by the catch.
             const { data: config } = await axios.get<{ appId: string; configId: string }>("/api/settings/whatsapp-connect");
             const FB = await loadSdk(config.appId);
+            ids.current = {};
             FB.login(
                 (r) => {
                     const code = r.authResponse?.code;
@@ -89,8 +91,8 @@ export function WhatsAppConnectCard() {
                         return;
                     }
                     axios
-                        .post("/api/settings/whatsapp-connect", { code, phoneNumberId, wabaId })
-                        .then(({ data }) => { setDone(data); toast.success("WhatsApp number connected"); })
+                        .post<CoexistDone>("/api/settings/whatsapp-connect", { code, phoneNumberId, wabaId })
+                        .then(({ data }) => { toast.success("WhatsApp number connected"); done.current(data); })
                         .catch((err) => toast.error(extractApiError(err)))
                         .finally(() => setBusy(false));
                 },
@@ -107,23 +109,5 @@ export function WhatsAppConnectCard() {
         }
     }
 
-    return (
-        <div className="rounded-lg border p-4 space-y-2">
-            <div className="flex items-center gap-2 font-medium"><Smartphone className="h-4 w-4" /> Connect a WhatsApp Business app number</div>
-            <p className="text-sm text-muted-foreground">
-                Adds a number that keeps working in the WhatsApp Business app on its phone. Click, choose the business, then scan the QR
-                from that phone: WhatsApp Business → Settings → Business platform.
-            </p>
-            <Button onClick={start} disabled={busy} size="sm">
-                {busy && <Loader2 className="mr-1 h-4 w-4 animate-spin" />} Connect number
-            </Button>
-            {isCounter && <p className="text-xs text-muted-foreground">Opens the office website — Meta sign-in works only there.</p>}
-            {done && (
-                <div className="text-sm rounded bg-emerald-50 dark:bg-emerald-950 p-2">
-                    Connected {done.display} ({done.name}). Phone number ID <b className="select-all">{done.phoneNumberId}</b>
-                    <div className="text-xs text-muted-foreground">{done.steps.join(" · ")}</div>
-                </div>
-            )}
-        </div>
-    );
+    return { start, busy, isCounter };
 }

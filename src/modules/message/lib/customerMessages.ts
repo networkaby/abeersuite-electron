@@ -31,7 +31,7 @@ import { isAutoSend, getWaTemplateDraft } from "@/shared/lib/whatsapp/waTemplate
 import { fillBody } from "@/shared/lib/whatsapp/billTemplates";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { isSupplierAccount, notifyDealCreated, notifyHelpCreated } from "@/shared/lib/whatsapp/notifyBill";
-import { appSetting } from "@/shared/lib/settings/appSettings.server";
+import { otpWaNumber } from "@/shared/lib/whatsapp/waNumbers";
 
 /**
  * Customer messages — the logic behind the Meta webhook and the Messages screen.
@@ -727,11 +727,11 @@ const NO_MEDIA: MediaFields = { mediaKey: null, mediaType: null, fileName: null,
  * own download link expires, so this is done once, as the message arrives.
  * Never throws: a failed copy still stores the message, just without the file.
  */
-async function keepInboundMedia(m: WaInbound): Promise<MediaFields> {
+async function keepInboundMedia(m: WaInbound, numberId: string | null): Promise<MediaFields> {
     const mediaId = m.image?.id ?? m.video?.id ?? m.audio?.id ?? m.sticker?.id ?? m.document?.id;
     if (!mediaId || !isR2Configured()) return NO_MEDIA;
     try {
-        const file = await downloadWaMedia(mediaId);
+        const file = await downloadWaMedia(mediaId, numberId);
         if (file.size > WA_KEEP_INBOUND_MAX_BYTES) return { ...NO_MEDIA, mediaType: file.mime, mediaSize: file.size };
         const key = `in/${new Date().toISOString().slice(0, 7)}/${m.id.replace(/[^A-Za-z0-9_-]/g, "")}${extFor(file.mime, m.document?.filename)}`;
         await putR2(messagesBucket(), key, file.bytes, file.mime);
@@ -870,7 +870,7 @@ export async function ingestInbound(
 
         // A spam number's files are not kept. Its fresh message reopens Meta's
         // 24-hour block window, so a block that failed earlier is tried again.
-        const media = spam ? NO_MEDIA : await keepInboundMedia(m);
+        const media = spam ? NO_MEDIA : await keepInboundMedia(m, value.metadata?.phone_number_id ?? null);
         if (spam && phone && value.metadata?.phone_number_id) {
             await setWaUserBlocked(phone, true, value.metadata.phone_number_id)
                 .catch((e) => console.error("[messages] spam re-block failed", phone, e));
@@ -1047,7 +1047,7 @@ export async function sendReply(args: { phone: string; text: string; userId: num
         throw new ReplyRefusedError("More than 24 hours since the customer last wrote. WhatsApp only allows an approved template now.");
     }
     // Old rows carry no number = the main one, the only one back then.
-    const from = fromNumberId ?? (await appSetting("META_WA_PHONE_NUMBER_ID")) ?? null;
+    const from = fromNumberId ?? (await otpWaNumber())?.phoneNumberId ?? null;
     const media = args.media ?? null;
     if (media) {
         if (!isR2Configured()) throw new ReplyRefusedError("File storage (R2) is not set up on this server.");

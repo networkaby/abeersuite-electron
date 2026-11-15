@@ -30,7 +30,8 @@ import { AddTemplateButton, CustomTemplateHeader } from "./CustomTemplateControl
 
 const API = "/api/settings/whatsapp-templates";
 import type { WaTemplateView } from "@/shared/lib/whatsapp/waTemplateStore";
-import type { WaAccount } from "@/shared/lib/whatsapp/metaTemplates";
+import type { WaNumberView } from "@/shared/lib/whatsapp/waNumbers";
+import { WaAccountOptions } from "./WhatsAppNumbersPanel";
 import { useValueChange } from "@/shared/hooks/useValueChange";
 
 const STATUS_LABEL: Record<string, { text: string; className: string }> = {
@@ -42,19 +43,17 @@ const STATUS_LABEL: Record<string, { text: string; className: string }> = {
 
 type Props = {
     initialTemplates: WaTemplateView[];
-    /** Every WhatsApp account; approval is per account, bills use the "bills" one. */
-    accounts: WaAccount[];
+    /** Every WhatsApp number; numbers sharing an account share one approval. */
+    numbers: WaNumberView[];
     templateApiReady: boolean;
     sendReady: boolean;
 };
 
-export function WhatsAppTemplatesPanel({ initialTemplates, accounts, templateApiReady, sendReady }: Props) {
+export function WhatsAppTemplatesPanel({ initialTemplates, numbers, templateApiReady, sendReady }: Props) {
     const [templates, setTemplates] = useState(initialTemplates);
     // Which account's approvals are shown / sent for approval. The wording is shared.
-    const [waba, setWaba] = useState(initialTemplates[0]?.wabaId ?? accounts[0]?.wabaId ?? "");
+    const [waba, setWaba] = useState(initialTemplates[0]?.wabaId ?? numbers[0]?.wabaId ?? "");
     const q = waba ? `?waba=${waba}` : "";
-    const billsAccount = accounts.find((a) => a.role === "bills");
-    const shownAccount = accounts.find((a) => a.wabaId === waba);
     const [switching, setSwitching] = useState(false);
     async function showAccount(id: string) {
         if (id === waba) return;
@@ -193,29 +192,12 @@ export function WhatsAppTemplatesPanel({ initialTemplates, accounts, templateApi
 
     return (
         <div className="space-y-3">
-        {accounts.length > 1 && (
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
-                <span className="text-muted-foreground">Approval at account:</span>
-                {accounts.map((a) => (
-                    <Button
-                        key={a.wabaId}
-                        size="sm"
-                        variant={a.wabaId === waba ? "default" : "outline"}
-                        disabled={switching || busy !== null || dirty}
-                        title={dirty ? "Save or undo the wording first" : `Account ${a.wabaId}`}
-                        onClick={() => void showAccount(a.wabaId)}
-                    >
-                        {a.label}{a.role === "bills" ? " · bills" : a.role === "otp" ? " · OTP" : ""}
-                    </Button>
-                ))}
-                {switching && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
-                <span className="basis-full text-xs text-muted-foreground">
-                    The wording is shared; Meta approves it separately at each account. Bills send from{" "}
-                    <b>{billsAccount?.label ?? "the bills account"}</b>
-                    {shownAccount && shownAccount.role !== "bills" ? " — approvals here are only used once this account becomes the bills account (App Settings)." : "."}
-                </span>
+        <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+                <WaAccountOptions numbers={numbers} selected={waba} onSelect={(id) => void showAccount(id)} disabled={switching || busy !== null || dirty} />
             </div>
-        )}
+            {switching && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
+        </div>
         <div className="grid gap-4 lg:grid-cols-[200px_1fr_320px]">
             {/* Kinds — built-in first, then staff's own under their heading */}
             <div className="space-y-1">
@@ -260,7 +242,7 @@ export function WhatsAppTemplatesPanel({ initialTemplates, accounts, templateApi
             <div className="min-w-0 space-y-4 rounded-lg border p-4">
                 {!templateApiReady && current.kind !== "TICKET_AUTO_REPLY" && (
                     <p className="rounded-md bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200">
-                        Sending for approval is not set up on this server — <code>META_WA_BUSINESS_ACCOUNT_ID</code> is missing.
+                        Sending for approval is not set up — switch a number to “Use for bills” in App Settings → WhatsApp numbers (and check its token).
                     </p>
                 )}
                 {custom && (

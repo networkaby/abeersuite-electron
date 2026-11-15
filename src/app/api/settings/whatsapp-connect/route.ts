@@ -5,6 +5,10 @@ import { META_APP_ID_MISSING, metaAppId } from "@/shared/lib/whatsapp/metaTempla
 import { incomingSecret } from "@/modules/incoming/lib/incomingApi";
 import { META_GRAPH } from "@/shared/lib/constants/meta";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { hasScrambleSecret } from "@/shared/lib/security/secretBox";
+import { lockWaToken } from "@/shared/lib/whatsapp/waNumbers";
+import { afterWaNumbersChange } from "@/shared/lib/whatsapp/waNumbersApi";
 
 /**
  * POST /api/settings/whatsapp-connect — finish Meta's Embedded Signup for a
@@ -34,7 +38,7 @@ async function graph(path: string, token: string, body?: Record<string, unknown>
 
 /** GET — the public ids the browser's Facebook popup needs. */
 export async function GET() {
-    const { response } = await requirePermission("settings:manage");
+    const { response } = await requirePermission(PERMISSIONS.SETTINGS_APP_MANAGE);
     if (response) return response;
 
     const appId = await metaAppId();
@@ -45,7 +49,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-    const { response } = await requirePermission("settings:manage");
+    const { response } = await requirePermission(PERMISSIONS.SETTINGS_APP_MANAGE);
     if (response) return response;
 
     const appId = await metaAppId();
@@ -79,11 +83,28 @@ export async function POST(req: Request) {
         }
 
         const info = await graph(`${phoneNumberId}?fields=display_phone_number,verified_name`, token);
-        // Remember the account, so its numbers and template approvals show up
-        // on their own (App Settings list, WhatsApp Templates account picker).
-        const label = [info.verified_name, info.display_phone_number].filter(Boolean).join(" · ") || `Account ${wabaId}`;
-        await prisma.whatsAppAccount.upsert({ where: { wabaId }, create: { wabaId, label: String(label) }, update: {} });
-        steps.push("account saved");
+        // Its own record (App Settings → WhatsApp numbers), with the token Meta
+        // just gave for this business — kept locked; the main token is the
+        // fallback when it cannot be opened. Re-connecting a number updates it.
+        const name = String(info.verified_name ?? "") || "WhatsApp Business app";
+        const phone = String(info.display_phone_number ?? "").replace(/\D/g, "");
+        const sameAccount = await prisma.whatsAppNumber.findFirst({ where: { wabaId }, select: { accountLabel: true } });
+        const fields = {
+            type: "COEXIST",
+            phone,
+            wabaId,
+            accountLabel: sameAccount?.accountLabel ?? name,
+            token: hasScrambleSecret() ? lockWaToken(token) : null,
+            status: "CONNECTED",
+            checkedAt: new Date(),
+        };
+        await prisma.whatsAppNumber.upsert({
+            where: { phoneNumberId },
+            create: { ...fields, phoneNumberId, label: name },
+            update: fields,
+        });
+        afterWaNumbersChange();
+        steps.push("number saved");
         console.info("[whatsapp-connect] onboarded", { phoneNumberId, wabaId, steps });
         return NextResponse.json({ ok: true, phoneNumberId, wabaId, display: info.display_phone_number, name: info.verified_name, steps });
     } catch (e) {

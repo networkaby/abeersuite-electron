@@ -1,6 +1,7 @@
 import "server-only";
 import { appSetting } from "@/shared/lib/settings/appSettings.server";
 import { META_GRAPH } from "@/shared/lib/constants/meta";
+import { otpWaNumber, waTokenForNumber } from "./waNumbers";
 
 /**
  * WhatsApp OTP delivery — the cheapest pipe for a mobile code.
@@ -16,9 +17,9 @@ import { META_GRAPH } from "@/shared/lib/constants/meta";
  * removed 2026-10-06.
  *
  * ── Setup (see docs/portal-passwordless-setup.md) ───────────────────────────
- *   META_WA_ACCESS_TOKEN        permanent system-user token (Vercel only)
- *   The four below may also be set on Settings → App Settings, which wins.
- *   META_WA_PHONE_NUMBER_ID     from the Meta app dashboard
+ *   The number: the WhatsApp number switched to "Use for OTP" (App Settings →
+ *   WhatsApp numbers, waNumbers.ts), with its own token or the main one.
+ *   The three below may also be set on Settings → App Settings, which wins.
  *   WA_OTP_TEMPLATE             approved AUTHENTICATION template *name*
  *   WA_OTP_LANG                 template language, default "en"
  *   WA_OTP_BUTTON               "copy_code" / "one_tap" if the template has a
@@ -30,7 +31,7 @@ import { META_GRAPH } from "@/shared/lib/constants/meta";
  */
 
 
-const phoneNumberId = () => appSetting("META_WA_PHONE_NUMBER_ID");
+const phoneNumberId = async () => (await otpWaNumber())?.phoneNumberId;
 const templateName = () => appSetting("WA_OTP_TEMPLATE");
 const templateLang = async () => (await appSetting("WA_OTP_LANG")) || "en";
 /**
@@ -63,7 +64,8 @@ export class WhatsAppNotConfiguredError extends Error {
 }
 
 export async function isWhatsAppConfigured(): Promise<boolean> {
-    return Boolean((await appSetting("META_WA_ACCESS_TOKEN")) && (await phoneNumberId()) && (await templateName()));
+    const id = await phoneNumberId();
+    return Boolean(id && (await waTokenForNumber(id)) && (await templateName()));
 }
 
 /**
@@ -74,11 +76,11 @@ export async function isWhatsAppConfigured(): Promise<boolean> {
 export async function sendOtpWhatsApp(mobile: string, code: string): Promise<void> {
     const numberId = await phoneNumberId();
     const template = await templateName();
-    const metaToken = await appSetting("META_WA_ACCESS_TOKEN");
+    const metaToken = await waTokenForNumber(numberId);
 
-    if (!numberId) throw new WhatsAppNotConfiguredError();
+    if (!numberId) throw new WhatsAppNotConfiguredError("no number is switched to Use for OTP");
     if (!template) throw new WhatsAppNotConfiguredError("WA_OTP_TEMPLATE missing");
-    if (!metaToken) throw new WhatsAppNotConfiguredError("META_WA_ACCESS_TOKEN missing");
+    if (!metaToken) throw new WhatsAppNotConfiguredError("no token for the OTP number");
     if (!/^[0-9]{10}$/.test(mobile)) {
         throw new Error(`WhatsApp needs a bare 10-digit number, got "${mobile}"`);
     }

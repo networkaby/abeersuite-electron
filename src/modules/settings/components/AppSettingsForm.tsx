@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { AlertTriangle, CircleHelp, Info, KeyRound, Loader2, Lock, RefreshCw, Save, Server } from "lucide-react";
+import { CircleHelp, Info, Loader2, Lock, Save, Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,25 +14,18 @@ import { parseDigitsInput } from "@/shared/lib/format";
 import { cn } from "@/shared/lib/format/utils";
 import { APP_SETTING_DEFS, APP_SETTING_SECTIONS, SECRET_APP_SETTING_KEYS, type AppSettingKey, type AppSettingValues } from "@/shared/lib/constants/appSettings";
 import { ENV_ONLY_PROVIDERS, type EnvOnlyProvider } from "@/shared/lib/constants/appSettingsHelp";
+import { WhatsAppNumbersPanel } from "./WhatsAppNumbersPanel";
 
 type Loaded = { values: AppSettingValues; env: Record<string, string>; envOnly: Record<string, boolean> };
 
-type WaNumber = { id: string; display: string; name: string; status: string; nameStatus: string; quality: string; wabaId: string; accountLabel: string };
-/** One WhatsApp account as listed: `error` = Meta would not let us read it (no access yet). */
-type WaAccountRow = { wabaId: string; label: string; role: "otp" | "bills" | null; error: string | null; count: number };
 type Def = (typeof APP_SETTING_DEFS)[number];
 
 const WA_PROVIDER = "WhatsApp (Meta Cloud API)";
-const BILLS_WABA: AppSettingKey = "WA_CONVERSATION_BUSINESS_ACCOUNT_ID";
 
-/** The three blocks of the WhatsApp card, in screen order. */
-const WA_GROUPS = [
-    { id: "n1", step: "1", title: "Number 1 — Login codes (OTP)", blurb: "Sign-in codes go from this number." },
-    { id: "n2", step: "2", title: "Number 2 — Bills & replies", blurb: "Bills, reminders and staff replies. Blank = Number 1." },
-    { id: "conn", step: "", title: "Connection", blurb: "Shared by both numbers." },
-] as const;
-
+/** The old Number 1 / Number 2 boxes (group n1 / n2) are read once to fill
+ *  WhatsApp numbers (waNumbers.ts) and no longer shown. */
 const groupOf = (d: Def) => ("group" in d ? d.group : undefined);
+const isLegacyWa = (d: Def) => groupOf(d) === "n1" || groupOf(d) === "n2";
 
 /** Small coloured tag under a box — where its value comes from. */
 function SourceTag({ tone, children }: { tone: "saved" | "env" | "unsaved" | "empty" | "clear"; children: ReactNode }) {
@@ -46,14 +39,6 @@ function SourceTag({ tone, children }: { tone: "saved" | "env" | "unsaved" | "em
     return <span className={cn("inline-flex max-w-full items-center gap-1 truncate rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset", tones[tone])}>{children}</span>;
 }
 
-function StepBadge({ step }: { step: string }) {
-    return step ? (
-        <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{step}</span>
-    ) : (
-        <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"><KeyRound size={14} /></span>
-    );
-}
-
 export function AppSettingsForm() {
     const [values, setValues] = useState<AppSettingValues>({});
     const [savedValues, setSavedValues] = useState<AppSettingValues>({});
@@ -62,13 +47,6 @@ export function AppSettingsForm() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [showEnvNames, setShowEnvNames] = useState(false);
-    const [numbers, setNumbers] = useState<WaNumber[] | null>(null);
-    const [numbersBusy, setNumbersBusy] = useState(false);
-    const [accounts, setAccounts] = useState<WaAccountRow[]>([]);
-    const [newAcc, setNewAcc] = useState({ wabaId: "", label: "" });
-    // Number 2 in another business's WhatsApp account? Starts from what is saved.
-    const [n2Different, setN2Different] = useState(false);
-
     useEffect(() => {
         getWithRetry<Loaded>("/api/settings/app-settings")
             .then((d) => {
@@ -76,7 +54,6 @@ export function AppSettingsForm() {
                 setSavedValues(d.values);
                 setEnv(d.env);
                 setEnvOnly(d.envOnly ?? {});
-                setN2Different(Boolean(d.values[BILLS_WABA] || d.env[BILLS_WABA]));
             })
             .catch((e) => toast.error(extractApiError(e, "Could not load app settings")))
             .finally(() => setLoading(false));
@@ -86,85 +63,6 @@ export function AppSettingsForm() {
     // Secrets come back masked; only the ones typed (or cleared) here are sent.
     const [secretEdits, setSecretEdits] = useState<Partial<Record<AppSettingKey, string>>>({});
     const setSecret = (k: AppSettingKey, v: string) => setSecretEdits((c) => ({ ...c, [k]: v }));
-
-    const mainWaba = values.META_WA_BUSINESS_ACCOUNT_ID || env.META_WA_BUSINESS_ACCOUNT_ID || "";
-
-    const chooseN2Account = (different: boolean) => {
-        setN2Different(different);
-        if (!different) set(BILLS_WABA, "");
-    };
-
-    /** "Use as ① / ②": the number and the WhatsApp account it sits in go together —
-     *  a bill template only sends from a number in its own account. */
-    const pickNumber = (slot: "n1" | "n2", n: WaNumber) => {
-        if (slot === "n2") {
-            const other = n.wabaId !== mainWaba;
-            setValues((c) => ({ ...c, WA_CONVERSATION_NUMBER_ID: n.id, [BILLS_WABA]: other ? n.wabaId : "" }));
-            setN2Different(other);
-            return;
-        }
-        // Number 1 moves account: pin Number 2's account first if it was following the old one.
-        const keepN2 = Boolean(!values[BILLS_WABA] && mainWaba && mainWaba !== n.wabaId && values.WA_CONVERSATION_NUMBER_ID);
-        if (keepN2) setN2Different(true);
-        setValues((c) => ({ ...c, META_WA_PHONE_NUMBER_ID: n.id, META_WA_BUSINESS_ACCOUNT_ID: n.wabaId, ...(keepN2 ? { [BILLS_WABA]: mainWaba } : {}) }));
-    };
-
-    const loadNumbers = async () => {
-        setNumbersBusy(true);
-        try {
-            const { data } = await axios.get<{ numbers: WaNumber[]; accounts?: WaAccountRow[] }>("/api/settings/app-settings?numbers=1");
-            setNumbers(data.numbers);
-            setAccounts(data.accounts ?? []);
-        } catch (e) {
-            toast.error(extractApiError(e, "Could not read numbers from Meta"));
-        } finally {
-            setNumbersBusy(false);
-        }
-    };
-
-    /** Add (or rename) a WhatsApp account by its ID — for one connected outside
-     *  this app; "Connect number" adds its own. Removing forgets an added one. */
-    const saveAccount = async () => {
-        setNumbersBusy(true);
-        try {
-            await axios.post("/api/settings/whatsapp-accounts", newAcc);
-            setNewAcc({ wabaId: "", label: "" });
-            await loadNumbers();
-        } catch (e) {
-            toast.error(extractApiError(e, "Could not add the account"));
-        } finally {
-            setNumbersBusy(false);
-        }
-    };
-    const removeAccount = async (wabaId: string) => {
-        setNumbersBusy(true);
-        try {
-            await axios.delete(`/api/settings/whatsapp-accounts?waba=${wabaId}`);
-            await loadNumbers();
-        } catch (e) {
-            toast.error(extractApiError(e, "Could not remove the account"));
-        } finally {
-            setNumbersBusy(false);
-        }
-    };
-
-    // PIN box for one number: register a Pending one, or change a Connected one's PIN.
-    const [regFor, setRegFor] = useState<string | null>(null);
-    const [pin, setPin] = useState("");
-    const register = async (id: string, action: "register" | "pin") => {
-        setNumbersBusy(true);
-        try {
-            await axios.post("/api/settings/app-settings", { phoneNumberId: id, pin, action });
-            toast.success(action === "pin" ? "PIN changed — save it in .env / Vercel as META_WA_2FA_PIN_<last 5 digits>" : "Registered — refreshing the list");
-            setRegFor(null);
-            setPin("");
-            await loadNumbers();
-        } catch (e) {
-            toast.error(extractApiError(e, action === "pin" ? "PIN change failed" : "Register failed"));
-        } finally {
-            setNumbersBusy(false);
-        }
-    };
 
     const save = async () => {
         setSaving(true);
@@ -255,14 +153,8 @@ export function AppSettingsForm() {
     const has = (k: AppSettingKey) => Boolean(secretEdits[k] ?? values[k] ?? env[k]);
     /** A card is Ready when every required key has a value; Number 2 in another
      *  business also needs that account's id, or its bills cannot send. */
-    const missing = (defs: readonly Def[]) => {
-        const gaps = defs.filter((d) => !("optional" in d && d.optional) && !has(d.key)).map((d) => {
-            const g = WA_GROUPS.find((x) => x.id === groupOf(d));
-            return g?.step ? `Number ${g.step} ${d.label}` : d.label;
-        });
-        if (defs.some((d) => d.key === BILLS_WABA) && n2Different && !has(BILLS_WABA)) gaps.push("Number 2 WhatsApp account ID");
-        return gaps;
-    };
+    const missing = (defs: readonly Def[]) =>
+        defs.filter((d) => !isLegacyWa(d) && !("optional" in d && d.optional) && !has(d.key)).map((d) => d.label);
 
     const readyBadge = (gaps: string[]) =>
         gaps.length === 0 ? (
@@ -319,174 +211,6 @@ export function AppSettingsForm() {
         );
     };
 
-    const n2AccountChoice = (
-        <div className="space-y-2">
-            <div className="text-sm font-medium">Number 2 sits in</div>
-            <div className="grid grid-cols-2 gap-2">
-                {[
-                    { v: false, title: "Same account", sub: "as Number 1" },
-                    { v: true, title: "Another business", sub: "its own WhatsApp account" },
-                ].map((o) => (
-                    <button
-                        key={String(o.v)}
-                        type="button"
-                        onClick={() => chooseN2Account(o.v)}
-                        className={cn(
-                            "rounded-lg border px-3 py-2 text-left transition-colors",
-                            n2Different === o.v ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:bg-muted/60",
-                        )}
-                    >
-                        <div className="text-sm font-medium">{o.title}</div>
-                        <div className="text-xs text-muted-foreground">{o.sub}</div>
-                    </button>
-                ))}
-            </div>
-            <p className="text-xs text-muted-foreground">
-                {n2Different
-                    ? "Bill templates are sent for approval to Number 2's account. In Meta, give the AbeerSuite system user full control of that account."
-                    : "Bill templates live in Number 1's account, next to the OTP template."}
-            </p>
-        </div>
-    );
-
-    const waBlocks = (defs: readonly Def[]) => (
-        <div className="grid gap-4 lg:grid-cols-3">
-            {WA_GROUPS.map((g) => {
-                const fields = defs.filter((d) => groupOf(d) === g.id && !(d.key === BILLS_WABA && !n2Different));
-                return (
-                    <div key={g.id} className="flex min-w-0 flex-col gap-4 rounded-xl border bg-muted/30 p-4">
-                        <div className="flex items-start gap-3">
-                            <StepBadge step={g.step} />
-                            <div className="min-w-0">
-                                <div className="font-semibold leading-tight">{g.title}</div>
-                                <div className="text-xs text-muted-foreground">{g.blurb}</div>
-                            </div>
-                        </div>
-                        {fields.filter((d) => d.key !== BILLS_WABA).map(renderField)}
-                        {g.id === "n2" && n2AccountChoice}
-                        {g.id === "n2" && n2Different && fields.filter((d) => d.key === BILLS_WABA).map(renderField)}
-                        {g.id === "n2" && n2Different && !has(BILLS_WABA) && (
-                            <p className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300"><AlertTriangle size={13} /> Enter Number 2&apos;s account ID, or bills will fail.</p>
-                        )}
-                    </div>
-                );
-            })}
-        </div>
-    );
-
-    const numbersBlock = (
-        <div className="space-y-3 rounded-xl border p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                    <div className="font-semibold">Numbers at Meta</div>
-                    <div className="text-xs text-muted-foreground">Read live from every WhatsApp account. Pick one for each slot — its account fills in too.</div>
-                </div>
-                <Button size="sm" variant="outline" onClick={loadNumbers} disabled={numbersBusy}>
-                    {numbersBusy ? <Loader2 size={14} className="mr-1 animate-spin" /> : <RefreshCw size={14} className="mr-1" />}
-                    {numbers ? "Refresh" : "Show numbers from Meta"}
-                </Button>
-            </div>
-            {numbers && (
-                <div className="space-y-1 rounded-lg border p-2 text-xs">
-                    {accounts.map((a) => (
-                        <div key={a.wabaId} className="flex flex-wrap items-center gap-2">
-                            <span className="font-medium">{a.label}</span>
-                            <span className="font-mono text-muted-foreground">{a.wabaId}</span>
-                            {a.role && <SourceTag tone="saved">{a.role === "bills" ? "bills" : "OTP"}</SourceTag>}
-                            {a.error
-                                ? <span className="flex items-center gap-1 text-amber-700 dark:text-amber-300"><AlertTriangle size={12} /> {a.error}</span>
-                                : <span className="text-muted-foreground">{a.count} number{a.count === 1 ? "" : "s"}</span>}
-                            {!a.role && (
-                                <Button size="sm" variant="ghost" className="h-6 px-2" disabled={numbersBusy} onClick={() => void removeAccount(a.wabaId)}>
-                                    Remove
-                                </Button>
-                            )}
-                        </div>
-                    ))}
-                    <div className="flex flex-wrap items-center gap-2 pt-1">
-                        <Input
-                            inputMode="numeric"
-                            placeholder="Add account ID"
-                            value={newAcc.wabaId}
-                            onChange={(e) => setNewAcc((c) => ({ ...c, wabaId: parseDigitsInput(e.target.value) }))}
-                            className="h-8 w-48 font-mono"
-                        />
-                        <Input
-                            placeholder="Name, e.g. Network Service Abhayapuri"
-                            value={newAcc.label}
-                            onChange={(e) => setNewAcc((c) => ({ ...c, label: e.target.value }))}
-                            className="h-8 w-72"
-                        />
-                        <Button size="sm" variant="outline" disabled={numbersBusy || !newAcc.wabaId || !newAcc.label.trim()} onClick={() => void saveAccount()}>
-                            Add account
-                        </Button>
-                    </div>
-                </div>
-            )}
-            {numbers && (
-                <div className="divide-y rounded-lg border text-sm">
-                    {numbers.length === 0 && <div className="p-3 text-muted-foreground">No numbers in these accounts.</div>}
-                    {numbers.map((n) => {
-                        const connected = n.status === "CONNECTED";
-                        const isN1 = values.META_WA_PHONE_NUMBER_ID === n.id;
-                        const isN2 = values.WA_CONVERSATION_NUMBER_ID === n.id;
-                        return (
-                            <div key={n.id} className="flex flex-wrap items-center gap-3 p-3">
-                                <div className="min-w-0 flex-1">
-                                    <div className="flex flex-wrap items-center gap-2 font-medium">
-                                        {n.display} <span className="text-muted-foreground">· {n.name}</span>
-                                        <SourceTag tone={connected ? "saved" : "unsaved"}>{n.status || "?"}</SourceTag>
-                                    </div>
-                                    <div className="mt-0.5 font-mono text-xs text-muted-foreground">
-                                        id {n.id} · account {n.accountLabel} ({n.wabaId}) · name {n.nameStatus || "?"}{n.quality ? ` · quality ${n.quality}` : ""}
-                                    </div>
-                                </div>
-                                {regFor !== n.id && (
-                                    <Button size="sm" variant="ghost" onClick={() => { setRegFor(n.id); setPin(""); }}>
-                                        {connected ? "Change PIN" : "Register"}
-                                    </Button>
-                                )}
-                                {(["n1", "n2"] as const).map((slot) => {
-                                    const active = slot === "n1" ? isN1 : isN2;
-                                    return (
-                                        <Button
-                                            key={slot}
-                                            size="sm"
-                                            variant={active ? "default" : "outline"}
-                                            disabled={!connected}
-                                            title={connected ? undefined : "Only a Connected number can send"}
-                                            onClick={() => pickNumber(slot, n)}
-                                        >
-                                            {active ? "✓ " : ""}Number {slot === "n1" ? "1 (OTP)" : "2 (bills)"}
-                                        </Button>
-                                    );
-                                })}
-                                {regFor === n.id && (
-                                    <div className="flex basis-full flex-wrap items-center gap-2">
-                                        <Input
-                                            type="password"
-                                            inputMode="numeric"
-                                            autoComplete="off"
-                                            placeholder="6-digit 2-step PIN"
-                                            value={pin}
-                                            onChange={(e) => setPin(parseDigitsInput(e.target.value).slice(0, 6))}
-                                            className="w-44 font-mono"
-                                        />
-                                        <Button size="sm" disabled={pin.length !== 6 || numbersBusy} onClick={() => register(n.id, connected ? "pin" : "register")}>
-                                            {connected ? "Set PIN at Meta" : "Register with Meta"}
-                                        </Button>
-                                        <Button size="sm" variant="ghost" onClick={() => setRegFor(null)}>Cancel</Button>
-                                        <span className="text-xs text-muted-foreground">Keep this PIN safe — Meta asks for it again.</span>
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
-        </div>
-    );
-
     return (
         <div className="w-full space-y-10 pb-24">
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card px-4 py-3">
@@ -531,8 +255,8 @@ export function AppSettingsForm() {
                                         </div>
                                         {isWa ? (
                                             <>
-                                                {waBlocks(defs)}
-                                                {numbersBlock}
+                                                <div className="grid gap-5 md:grid-cols-2">{defs.filter((d) => !isLegacyWa(d)).map(renderField)}</div>
+                                                <WhatsAppNumbersPanel />
                                             </>
                                         ) : (
                                             <div className="grid gap-5 md:grid-cols-2">{defs.map(renderField)}</div>

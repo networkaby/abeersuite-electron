@@ -3947,18 +3947,40 @@ ALTER TABLE "WhatsAppTemplate" ALTER COLUMN "approvedAt" DROP NOT NULL;
 ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
-CREATE TABLE IF NOT EXISTS "WhatsAppAccount" (
-    "wabaId" TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS "WhatsAppNumber" (
+    "id" SERIAL NOT NULL,
     "label" TEXT NOT NULL,
+    "type" TEXT NOT NULL DEFAULT 'CLOUD',
+    "phone" TEXT NOT NULL,
+    "phoneNumberId" TEXT NOT NULL,
+    "wabaId" TEXT NOT NULL,
+    "accountLabel" TEXT NOT NULL,
+    "token" TEXT,
+    "useForOtp" BOOLEAN NOT NULL DEFAULT false,
+    "useForBills" BOOLEAN NOT NULL DEFAULT false,
+    "status" TEXT NOT NULL DEFAULT 'Not tested',
+    "checkedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "WhatsAppAccount_pkey" PRIMARY KEY ("wabaId")
+    CONSTRAINT "WhatsAppNumber_pkey" PRIMARY KEY ("id")
 );
-ALTER TABLE "WhatsAppAccount" ADD COLUMN IF NOT EXISTS "wabaId" TEXT NOT NULL;
-ALTER TABLE "WhatsAppAccount" ADD COLUMN IF NOT EXISTS "label" TEXT NOT NULL;
-ALTER TABLE "WhatsAppAccount" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
-ALTER TABLE "WhatsAppAccount" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "WhatsAppNumber" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "WhatsAppNumber" ADD COLUMN IF NOT EXISTS "label" TEXT NOT NULL;
+ALTER TABLE "WhatsAppNumber" ADD COLUMN IF NOT EXISTS "type" TEXT NOT NULL DEFAULT 'CLOUD';
+ALTER TABLE "WhatsAppNumber" ADD COLUMN IF NOT EXISTS "phone" TEXT NOT NULL;
+ALTER TABLE "WhatsAppNumber" ADD COLUMN IF NOT EXISTS "phoneNumberId" TEXT NOT NULL;
+ALTER TABLE "WhatsAppNumber" ADD COLUMN IF NOT EXISTS "wabaId" TEXT NOT NULL;
+ALTER TABLE "WhatsAppNumber" ADD COLUMN IF NOT EXISTS "accountLabel" TEXT NOT NULL;
+ALTER TABLE "WhatsAppNumber" ADD COLUMN IF NOT EXISTS "token" TEXT;
+ALTER TABLE "WhatsAppNumber" ALTER COLUMN "token" DROP NOT NULL;
+ALTER TABLE "WhatsAppNumber" ADD COLUMN IF NOT EXISTS "useForOtp" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "WhatsAppNumber" ADD COLUMN IF NOT EXISTS "useForBills" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "WhatsAppNumber" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'Not tested';
+ALTER TABLE "WhatsAppNumber" ADD COLUMN IF NOT EXISTS "checkedAt" TIMESTAMP(3);
+ALTER TABLE "WhatsAppNumber" ALTER COLUMN "checkedAt" DROP NOT NULL;
+ALTER TABLE "WhatsAppNumber" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "WhatsAppNumber" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "WhatsAppTemplateApproval" (
@@ -6576,6 +6598,9 @@ CREATE INDEX IF NOT EXISTS "MessageConversation_updatedAt_idx" ON "MessageConver
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "MessageClaim_updatedAt_idx" ON "MessageClaim"("updatedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "WhatsAppNumber_phoneNumberId_key" ON "WhatsAppNumber"("phoneNumberId");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "BillNotification_personId_createdAt_idx" ON "BillNotification"("personId", "createdAt");
@@ -9763,10 +9788,10 @@ DO $$ BEGIN
     END IF;
 END $$;
 DO $$ BEGIN
-    IF to_regclass('public."WhatsAppAccount"') IS NOT NULL THEN
-        DROP TRIGGER IF EXISTS "_outbox_capture" ON "WhatsAppAccount";
-        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "WhatsAppAccount"
-            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('wabaId');
+    IF to_regclass('public."WhatsAppNumber"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "WhatsAppNumber";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "WhatsAppNumber"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;
 DO $$ BEGIN

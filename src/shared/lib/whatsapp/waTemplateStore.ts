@@ -15,6 +15,7 @@ import {
     type WaTemplateKind,
 } from "./billTemplates";
 import { billWabaId, fetchTemplateStatus, isTemplateApiConfigured, submitTemplate } from "./metaTemplates";
+import { listWaNumbers } from "./waNumbers";
 
 /**
  * WhatsAppTemplate rows: read, edit, send to Meta, follow the approval.
@@ -112,11 +113,11 @@ function adoptLegacyApprovals(): Promise<void> {
     return adopted;
 }
 
-/** The account a call is about: the one asked for, else the bills account. */
+/** The account a call is about: the one asked for, else the bills number's,
+ *  else the first number's. "" when there are no numbers at all — reads then
+ *  show drafts only, and Send for approval says to add a number first. */
 async function resolveWaba(waba?: string | null): Promise<string> {
-    const id = waba || (await billWabaId());
-    if (!id) throw new WaTemplateError("No WhatsApp account is set — App Settings → WhatsApp.");
-    return id;
+    return waba || (await billWabaId()) || (await listWaNumbers())[0]?.wabaId || "";
 }
 
 export async function listWaTemplates(waba?: string | null): Promise<WaTemplateView[]> {
@@ -253,13 +254,14 @@ export async function renameCustomWaTemplate(kind: WaAnyKind, name: string, waba
 /** Send the saved draft to Meta, at one account, under a fresh versioned name. */
 export async function submitWaTemplate(kind: WaAnyKind, waba?: string | null): Promise<WaTemplateView> {
     if (!(await isTemplateApiConfigured())) {
-        throw new WaTemplateError("WhatsApp template sending is not set up — META_WA_BUSINESS_ACCOUNT_ID or META_WA_ACCESS_TOKEN is missing.");
+        throw new WaTemplateError("WhatsApp is not set up — switch a number to “Use for bills” in App Settings → WhatsApp numbers, and check its token.");
     }
     const cur = await getOne(kind, waba);
     if (isCustomKind(kind) && cur.name == null) throw new WaTemplateError("This template has been deleted.");
     const errs = checkBody(cur.draft, kind);
     if (errs.length) throw new WaTemplateError(errs.join(" "));
     const wabaId = cur.wabaId;
+    if (!wabaId) throw new WaTemplateError("No WhatsApp number yet — add one in App Settings → WhatsApp numbers.");
 
     // A built-in never edited has no wording row yet.
     await prisma.whatsAppTemplate.upsert({

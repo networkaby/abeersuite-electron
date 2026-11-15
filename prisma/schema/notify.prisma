@@ -45,17 +45,34 @@ model WhatsAppTemplate {
   updatedAt    DateTime  @default(now()) @updatedAt
 }
 
-/// A WhatsApp Business Account (WABA) we send from — each stands on its own:
-/// its numbers are listed, registered and picked separately, and every
-/// template is approved per account (WhatsAppTemplateApproval). The OTP and
-/// bills accounts in App Settings are always included even without a row;
-/// "Connect number" adds one here for an account it brings in.
-model WhatsAppAccount {
-  wabaId    String   @id
-  /// Staff's name for it, e.g. "Network Service Abhayapuri".
-  label     String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+/// One WhatsApp number we send from — every number its own record, even when
+/// it shares an account or token with another (owner, 2026-11-15).
+///   CLOUD   on the Cloud API only; staff type its ids (and optionally a token).
+///   COEXIST stays on the WhatsApp Business app; Meta's wizard fills it in.
+/// Numbers with the same `wabaId` share template approvals
+/// (WhatsAppTemplateApproval). One number carries OTP, one carries bills and
+/// new chats; replies go from whichever number the customer wrote to.
+model WhatsAppNumber {
+  id            Int      @id @default(autoincrement())
+  label         String
+  /// CLOUD | COEXIST
+  type          String   @default("CLOUD")
+  /// Digits with country code, e.g. 918876996996.
+  phone         String
+  phoneNumberId String   @unique
+  wabaId        String
+  /// Name of the WhatsApp account it sits in — the Templates page option.
+  accountLabel  String
+  /// Its own token, locked with SCRAMBLE_KEY_SECRET; null = the main token
+  /// (META_WA_ACCESS_TOKEN). The wizard stores the token Meta hands back.
+  token         String?
+  useForOtp     Boolean  @default(false)
+  useForBills   Boolean  @default(false)
+  /// Meta's answer at the last Test: CONNECTED / PENDING / … or its error.
+  status        String   @default("Not tested")
+  checkedAt     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
 }
 
 /// One template's standing at one WhatsApp account. Meta approves a template
