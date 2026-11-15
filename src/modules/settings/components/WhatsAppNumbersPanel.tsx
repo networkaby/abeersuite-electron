@@ -42,8 +42,10 @@ export function groupWaAccounts(numbers: WaNumberView[]): WaAccountGroup[] {
 
 const fmtPhone = (p: string) => (p ? p.replace(/^(91)?(\d{5})(\d{5})$/, "+91 $2 $3") : "Phone not known yet — Test fills it");
 
-type Draft = { label: string; phone: string; phoneNumberId: string; wabaId: string; token: string };
-const EMPTY: Draft = { label: "", phone: "", phoneNumberId: "", wabaId: "", token: "" };
+/** `coexist` (adding only): the number is already on the WhatsApp Business app
+ *  and connected outside our Connect button — saved as Coexistence. */
+type Draft = { label: string; phone: string; phoneNumberId: string; wabaId: string; token: string; coexist: boolean };
+const EMPTY: Draft = { label: "", phone: "", phoneNumberId: "", wabaId: "", token: "", coexist: false };
 
 export function WhatsAppNumbersPanel() {
     const [numbers, setNumbers] = useState<WaNumberView[] | null>(null);
@@ -83,13 +85,17 @@ export function WhatsAppNumbersPanel() {
 
     const openCloud = (n?: WaNumberView) => {
         setEditing(n ?? null);
-        setDraft(n ? { label: n.label, phone: n.phone, phoneNumberId: n.phoneNumberId, wabaId: n.wabaId, token: "" } : EMPTY);
+        setDraft(n ? { label: n.label, phone: n.phone, phoneNumberId: n.phoneNumberId, wabaId: n.wabaId, token: "", coexist: false } : EMPTY);
         setDialog(n?.type === "COEXIST" ? "rename" : "cloud");
     };
 
     async function saveCloud() {
         // A blank token box keeps the saved one (or none); only a typed one is sent.
-        const body = { label: draft.label, phone: draft.phone, phoneNumberId: draft.phoneNumberId, wabaId: draft.wabaId, ...(draft.token ? { token: draft.token } : {}) };
+        const body = {
+            label: draft.label, phone: draft.phone, phoneNumberId: draft.phoneNumberId, wabaId: draft.wabaId,
+            ...(draft.token ? { token: draft.token } : {}),
+            ...(!editing && draft.coexist ? { type: "COEXIST" } : {}),
+        };
         const ok = await act("save", () => (editing ? axios.put(`${API}/${editing.id}`, body) : axios.post(API, body)), editing ? "Saved" : "Number added");
         if (ok) setDialog(null);
     }
@@ -333,6 +339,15 @@ export function WhatsAppNumbersPanel() {
                                 onChange={(e) => setDraft({ ...draft, token: e.target.value })}
                             />
                         </div>
+                        {!editing && (
+                            <label className="flex cursor-pointer items-start gap-2 text-sm">
+                                <Switch checked={draft.coexist} onCheckedChange={(v) => setDraft({ ...draft, coexist: v })} />
+                                <span>
+                                    Already on the WhatsApp Business app (coexistence)
+                                    <span className="block text-xs text-muted-foreground">For a number connected outside the Connect button. Saved as Coexistence: afterwards only its name can be changed.</span>
+                                </span>
+                            </label>
+                        )}
                     </div>
                     <DialogFooter>
                         <Button variant="ghost" onClick={() => setDialog(null)}>Cancel</Button>
