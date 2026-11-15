@@ -2,14 +2,14 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse, after } from "next/server";
 import { pushInboundToStaff, type InboundForPush } from "@/shared/lib/push/staffPush";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
-import { applyStatuses, ingestInbound, type WaChangeValue } from "@/modules/message/lib/customerMessages";
+import { applyStatuses, ingestEchoes, ingestInbound, type WaChangeValue } from "@/modules/message/lib/customerMessages";
 import { incomingSecret } from "@/modules/incoming/lib/incomingApi";
 
 /**
  * Meta WhatsApp webhook — customer replies and delivered / read ticks.
  *
  * Registered in the Meta app (WhatsApp → Configuration) as
- *   https://<office-domain>/api/whatsapp/webhook   subscribed to `messages`.
+ *   https://<office-domain>/api/whatsapp/webhook   subscribed to `messages` and `smb_message_echoes` (phone-app sends on a coexistence number).
  *
  *   META_WA_VERIFY_TOKEN   any string; typed into Meta's form, echoed back on GET
  *   META_WA_APP_SECRET     Meta app → Settings → Basic → App secret; signs each POST
@@ -59,7 +59,17 @@ export async function POST(req: Request) {
     const fresh: InboundForPush[] = [];
     for (const entry of body.entry ?? []) {
         for (const change of entry.changes ?? []) {
-            if (change.field !== "messages" || !change.value) continue;
+            if (!change.value) continue;
+            // What staff typed in the WhatsApp Business app (coexistence number).
+            if (change.field === "smb_message_echoes") {
+                try {
+                    if (await ingestEchoes(change.value)) changed = true;
+                } catch (e) {
+                    console.error("[whatsapp-webhook] echo failed", e);
+                }
+                continue;
+            }
+            if (change.field !== "messages") continue;
             try {
                 if (await ingestInbound(change.value, (m) => fresh.push(m))) changed = true;
                 if (change.value.statuses?.length) {

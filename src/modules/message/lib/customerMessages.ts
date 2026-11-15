@@ -697,6 +697,9 @@ export type WaChangeValue = {
     contacts?: { wa_id?: string; profile?: { name?: string } }[];
     messages?: WaInbound[];
     statuses?: WaStatus[];
+    /** `smb_message_echoes` (coexistence): what staff typed in the WhatsApp
+     *  Business app on the phone. `from` = our number, `to` = the customer. */
+    message_echoes?: (WaInbound & { to?: string })[];
 };
 
 function metaTime(ts: string | undefined): Date {
@@ -917,6 +920,56 @@ export async function ingestInbound(
             if (route?.afterStore) await route.afterStore();
         } catch (e) {
             // Lost a race with a concurrent retry of the same message — fine.
+            if ((e as { code?: string })?.code !== "P2002") throw e;
+        }
+    }
+    return stored;
+}
+
+/**
+ * Messages staff sent from the WhatsApp Business app on the phone (coexistence
+ * number, webhook field `smb_message_echoes`). Stored like a staff reply — our
+ * own outgoing line on the customer's thread — so the inbox shows both sides.
+ * No push, no alert, no auto-reply; Meta charges nothing for an echo.
+ * Duplicates (Meta retries) are skipped by the message id.
+ */
+export async function ingestEchoes(value: WaChangeValue): Promise<number> {
+    let stored = 0;
+    const numberId = value.metadata?.phone_number_id ?? null;
+    for (const m of value.message_echoes ?? []) {
+        if (!m.id || !m.to) continue;
+        if (await prisma.message.findUnique({ where: { externalId: m.id }, select: { id: true } })) continue;
+        const phone = phoneMatchKey(m.to);
+        if (!phone) continue;
+        const at = metaTime(m.timestamp);
+        const conv = await conversationForStaff(phone, at);
+        const ticketId = conv.topic === "TICKET" ? conv.ticketId : null;
+        const media = await keepInboundMedia(m, numberId);
+        try {
+            await prisma.message.create({
+                data: {
+                    channel: "WHATSAPP",
+                    direction: "OUT",
+                    phone,
+                    address: phone,
+                    senderName: "Phone app",
+                    businessNumberId: numberId,
+                    businessNumber: value.metadata?.display_phone_number ?? null,
+                    kind: m.type ?? "text",
+                    body: inboundBody(m),
+                    ...media,
+                    externalId: m.id,
+                    replyToExternalId: m.context?.id ?? null,
+                    ticketId,
+                    conversationId: conv.id,
+                    spam: await isSpamNumber(phone),
+                    status: "sent",
+                    occurredAt: at,
+                },
+            });
+            await touchConversation(conv.id, at);
+            stored++;
+        } catch (e) {
             if ((e as { code?: string })?.code !== "P2002") throw e;
         }
     }
