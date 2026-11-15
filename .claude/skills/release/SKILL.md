@@ -42,7 +42,28 @@ Get-NetTCPConnection -LocalPort 3000,786 -State Listen -ErrorAction SilentlyCont
   Select-Object -ExpandProperty OwningProcess -Unique |
   ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }
 Get-Process -Name AbeerSuite, electron -ErrorAction SilentlyContinue | Stop-Process -Force
+# Anything else still running out of dist-app (an old installer, a helper exe)
+Get-Process -ErrorAction SilentlyContinue |
+  Where-Object { $_.Path -like "$PWD\dist-app\*" } |
+  Stop-Process -Force -ErrorAction SilentlyContinue
+
+# Clear the unpack folders and any installer already built for THIS version
+$v = (Get-Content package.json -Raw | ConvertFrom-Json).version
+$stale = @('dist-app\win-unpacked.tmp', 'dist-app\win-unpacked') +
+  (Get-ChildItem dist-app -Filter "*$v*" -ErrorAction SilentlyContinue |
+    Where-Object { $_.Extension -in '.exe', '.blockmap' } | ForEach-Object FullName)
+$stale | ForEach-Object { Remove-Item $_ -Recurse -Force -ErrorAction SilentlyContinue }
+
+# Proof: every path must be gone, or something still holds it
+$left = $stale | Where-Object { Test-Path $_ }
+if ($left) { "STILL LOCKED: $left" } else { 'dist-app clear' }
 ```
+
+Run this **after step 2** (the version bump), so `$v` is the new version. If it prints
+`STILL LOCKED`, do not start the build — an Explorer window, a terminal `cd`'d into
+`dist-app`, or antivirus holds the folder. Close that handle (ask the owner if it is
+their window), re-run the block until it prints `dist-app clear`, then go on. A build
+started over a locked folder fails ~5 minutes later at the `win-unpacked.tmp` rename.
 
 If this closes a `pnpm electron:dev` window the owner had open, say so in the report — it starts again with the same command once the build is done.
 
