@@ -4,6 +4,7 @@ import { pushInboundToStaff, type InboundForPush } from "@/shared/lib/push/staff
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { applyStatuses, ingestEchoes, ingestInbound, type WaChangeValue } from "@/modules/message/lib/customerMessages";
 import { incomingSecret } from "@/modules/incoming/lib/incomingApi";
+import { listWaNumbers } from "@/shared/lib/whatsapp/waNumbers";
 
 /**
  * Meta WhatsApp webhook — customer replies and delivered / read ticks.
@@ -55,11 +56,18 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "bad json" }, { status: 400 });
     }
 
+    // Only numbers in our list (App Settings → WhatsApp numbers) count. Meta can
+    // keep sending for an account we can no longer let go of (a removed test
+    // number) — dropped here: no inbox line, no auto-reply, no reply from it.
+    // An empty list (setup not done) lets everything through.
+    const ours = new Set((await listWaNumbers()).map((n) => n.phoneNumberId));
+    const isOurs = (v: WaChangeValue) => !ours.size || ours.has(v.metadata?.phone_number_id ?? "");
+
     let changed = false;
     const fresh: InboundForPush[] = [];
     for (const entry of body.entry ?? []) {
         for (const change of entry.changes ?? []) {
-            if (!change.value) continue;
+            if (!change.value || !isOurs(change.value)) continue;
             // What staff typed in the WhatsApp Business app (coexistence number).
             if (change.field === "smb_message_echoes") {
                 try {
