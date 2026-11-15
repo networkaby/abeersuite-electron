@@ -34,7 +34,7 @@ export async function POST(req: Request) {
         await prisma.whatsAppNumber.create({
             data: {
                 label: data.label,
-                type: data.type ?? "CLOUD",
+                type: "CLOUD",
                 phone: data.phone,
                 phoneNumberId: data.phoneNumberId,
                 wabaId: data.wabaId,

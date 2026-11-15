@@ -17,8 +17,6 @@ export const cloudNumberSchema = z.object({
     wabaId: digits("WhatsApp account ID"),
     /** Undefined = keep / none; "" = clear (use the main token). */
     token: z.string().trim().max(1000).optional(),
-    /** Adding only: "COEXIST" = already on the Business app, connected elsewhere. */
-    type: z.enum(["CLOUD", "COEXIST"]).optional(),
 });
 
 /** Saving a token needs the secrets permission too, like App Settings. */
