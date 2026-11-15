@@ -5,6 +5,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { phoneMatchKey } from "@/shared/lib/format";
 import { ReplyRefusedError, sendReply } from "@/modules/message/lib/customerMessages";
+import { MetaApiError } from "@/shared/lib/whatsapp/metaTemplates";
 
 // POST /api/messages/reply — { phone, text, media? }: a staff reply on WhatsApp.
 // `media` is a file the browser/client already uploaded directly to R2 via /api/messages/upload-url (presigned PUT);
@@ -29,6 +30,11 @@ export async function POST(req: Request) {
         return NextResponse.json({ id: row.id }, { status: 201 });
     } catch (e) {
         if (e instanceof ReplyRefusedError) return NextResponse.json({ error: e.message }, { status: 409 });
+        // Meta's own reason (token, number not registered, …) — staff can act on it.
+        if (e instanceof MetaApiError) {
+            console.error("[messages/reply] Meta refused", e.message);
+            return NextResponse.json({ error: `WhatsApp: ${e.message}` }, { status: 502 });
+        }
         return handleApiError(e, "Failed to send the reply");
     }
 }

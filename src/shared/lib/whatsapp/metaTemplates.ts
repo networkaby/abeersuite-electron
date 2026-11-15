@@ -63,6 +63,11 @@ export async function conversationNumberId(): Promise<string | undefined> {
 
 type GraphError = { error?: { message?: string; error_user_msg?: string } };
 
+/** Meta refused a Graph call; `message` is Meta's own wording, safe to show staff. */
+export class MetaApiError extends Error {
+    override name = "MetaApiError";
+}
+
 /** One Graph call; throws with Meta's own wording on failure. */
 async function graph<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
     const res = await fetch(`${GRAPH}/${path}`, {
@@ -80,7 +85,7 @@ async function graph<T>(path: string, init?: { method?: string; body?: unknown }
     }
     if (!res.ok || !json || json.error) {
         const e = json?.error;
-        throw new Error(e?.error_user_msg || e?.message || `Meta answered ${res.status}: ${text.slice(0, 200)}`);
+        throw new MetaApiError(e?.error_user_msg || e?.message || `Meta answered ${res.status}: ${text.slice(0, 200)}`);
     }
     return json;
 }
