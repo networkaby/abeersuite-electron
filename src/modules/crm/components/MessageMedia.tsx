@@ -107,11 +107,14 @@ export function MessageMedia({ m }: { m: MediaInfo }) {
 }
 
 /** Meta stores "[unsupported]" for what the Business API cannot pass on —
- *  view-once photos, polls, edited/deleted messages, some stickers. */
-const UNSUPPORTED_NOTE = "Customer sent something WhatsApp doesn't pass on (view-once photo, poll, etc.) — ask them to resend.";
+ *  view-once photos, polls, edited/deleted messages, some stickers. Since
+ *  2026-11-16 Meta's own reason follows it: "[unsupported] <reason> (<code>)". */
+const UNSUPPORTED_NOTE = "WhatsApp didn't pass this message on (view-once photo, poll, edit, etc.) — see it on the phone, or ask them to resend.";
 
 /** The caption of a media message: the stored body minus its "[image] " tag. */
 export function captionOf(body: string, hasMedia: boolean): string {
-    if (body.trim() === "[unsupported]") return UNSUPPORTED_NOTE;
+    const b = body.trim();
+    if (b === "[unsupported]") return UNSUPPORTED_NOTE;
+    if (b.startsWith("[unsupported] ")) return `${UNSUPPORTED_NOTE} Meta says: ${b.slice("[unsupported] ".length)}`;
     return hasMedia ? body.replace(/^\[[a-z]+\]\s?/, "") : body;
 }

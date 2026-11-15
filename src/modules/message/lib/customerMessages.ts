@@ -684,7 +684,17 @@ type WaInbound = {
     sticker?: { id?: string };
     document?: { id?: string; caption?: string; filename?: string };
     location?: { name?: string; address?: string };
+    /** Only on type "unsupported": Meta's reason it would not pass the content on. */
+    errors?: { code?: number; title?: string; message?: string; error_data?: { details?: string } }[];
 };
+
+/** "[unsupported] <Meta's reason> (<code>)" — the reason is all Meta gives us;
+ *  the content itself can never be fetched again. */
+function unsupportedBody(m: WaInbound): string {
+    const e = m.errors?.[0];
+    const why = (e?.error_data?.details || e?.title || e?.message || "").trim();
+    return why ? `[unsupported] ${why}${e?.code ? ` (${e.code})` : ""}` : "[unsupported]";
+}
 type WaStatus = {
     id: string;
     status?: string;
@@ -718,6 +728,10 @@ function inboundBody(m: WaInbound): string {
         case "video": return m.video?.caption ? `[video] ${m.video.caption}` : "[video]";
         case "document": return `[document] ${m.document?.caption ?? m.document?.filename ?? ""}`.trim();
         case "location": return `[location] ${[m.location?.name, m.location?.address].filter(Boolean).join(", ")}`.trim();
+        case "unsupported":
+            // Log the whole payload once, to learn which kinds turn up.
+            console.warn("[messages] unsupported from Meta", JSON.stringify(m).slice(0, 2000));
+            return unsupportedBody(m);
         default: return `[${m.type ?? "message"}]`;
     }
 }
