@@ -30,6 +30,7 @@ import { AddTemplateButton, CustomTemplateHeader } from "./CustomTemplateControl
 
 const API = "/api/settings/whatsapp-templates";
 import type { WaTemplateView } from "@/shared/lib/whatsapp/waTemplateStore";
+import type { WaAccount } from "@/shared/lib/whatsapp/metaTemplates";
 import { useValueChange } from "@/shared/hooks/useValueChange";
 
 const STATUS_LABEL: Record<string, { text: string; className: string }> = {
@@ -41,12 +42,34 @@ const STATUS_LABEL: Record<string, { text: string; className: string }> = {
 
 type Props = {
     initialTemplates: WaTemplateView[];
+    /** Every WhatsApp account; approval is per account, bills use the "bills" one. */
+    accounts: WaAccount[];
     templateApiReady: boolean;
     sendReady: boolean;
 };
 
-export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sendReady }: Props) {
+export function WhatsAppTemplatesPanel({ initialTemplates, accounts, templateApiReady, sendReady }: Props) {
     const [templates, setTemplates] = useState(initialTemplates);
+    // Which account's approvals are shown / sent for approval. The wording is shared.
+    const [waba, setWaba] = useState(initialTemplates[0]?.wabaId ?? accounts[0]?.wabaId ?? "");
+    const q = waba ? `?waba=${waba}` : "";
+    const billsAccount = accounts.find((a) => a.role === "bills");
+    const shownAccount = accounts.find((a) => a.wabaId === waba);
+    const [switching, setSwitching] = useState(false);
+    async function showAccount(id: string) {
+        if (id === waba) return;
+        setSwitching(true);
+        try {
+            const { data } = await axios.get(`/api/settings/whatsapp-templates?waba=${id}`);
+            setTemplates(data.templates);
+            setWaba(id);
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not load that account"));
+        } finally {
+            setSwitching(false);
+        }
+    }
+    const reload = () => axios.get(`/api/settings/whatsapp-templates${q}`).then(({ data }) => setTemplates(data.templates)).catch(() => {});
     const [kind, setKind] = useState<WaAnyKind>(initialTemplates[0]?.kind ?? "SALE");
     const current = templates.find((t) => t.kind === kind)!;
 
@@ -100,7 +123,7 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
     async function save(): Promise<boolean> {
         setBusy("save");
         try {
-            const { data } = await axios.put(`/api/settings/whatsapp-templates/${kind}`, {
+            const { data } = await axios.put(`/api/settings/whatsapp-templates/${kind}${q}`, {
                 enabled,
                 autoSend,
                 body: draft.body,
@@ -122,7 +145,7 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
         if (dirty && !(await save())) return;
         setBusy("submit");
         try {
-            const { data } = await axios.post(`/api/settings/whatsapp-templates/${kind}/submit`);
+            const { data } = await axios.post(`/api/settings/whatsapp-templates/${kind}/submit${q}`);
             replace(data.template);
             toast.success(data.template.status === "APPROVED" ? "Approved by Meta" : "Sent to Meta — approval usually takes minutes, sometimes a day");
         } catch (e) {
@@ -135,7 +158,7 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
     async function refresh() {
         setBusy("refresh");
         try {
-            const { data } = await axios.get(`/api/settings/whatsapp-templates`);
+            const { data } = await axios.get(`/api/settings/whatsapp-templates${q}`);
             setTemplates(data.templates);
         } catch (e) {
             toast.error(extractApiError(e, "Could not check with Meta"));
@@ -146,16 +169,12 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
 
     // Another desk saving a template (or Meta's answer landing) shows here — but
     // never over wording that is being typed.
-    useRealtimeTopics(["settings"], () => {
-        axios.get(`/api/settings/whatsapp-templates`)
-            .then(({ data }) => setTemplates(data.templates))
-            .catch(() => {});
-    }, !dirty && busy === null);
+    useRealtimeTopics(["settings"], () => void reload(), !dirty && busy === null && !switching);
 
     async function sendTest() {
         setBusy("test");
         try {
-            await axios.post(`/api/settings/whatsapp-templates/${kind}/test`, { mobile: testMobile });
+            await axios.post(`/api/settings/whatsapp-templates/${kind}/test${q}`, { mobile: testMobile });
             toast.success(`Test sent to ${testMobile}`);
         } catch (e) {
             toast.error(extractApiError(e, "Test failed"));
@@ -173,6 +192,30 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
         current.approved.appButton === current.draft.appButton;
 
     return (
+        <div className="space-y-3">
+        {accounts.length > 1 && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
+                <span className="text-muted-foreground">Approval at account:</span>
+                {accounts.map((a) => (
+                    <Button
+                        key={a.wabaId}
+                        size="sm"
+                        variant={a.wabaId === waba ? "default" : "outline"}
+                        disabled={switching || busy !== null || dirty}
+                        title={dirty ? "Save or undo the wording first" : `Account ${a.wabaId}`}
+                        onClick={() => void showAccount(a.wabaId)}
+                    >
+                        {a.label}{a.role === "bills" ? " · bills" : a.role === "otp" ? " · OTP" : ""}
+                    </Button>
+                ))}
+                {switching && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
+                <span className="basis-full text-xs text-muted-foreground">
+                    The wording is shared; Meta approves it separately at each account. Bills send from{" "}
+                    <b>{billsAccount?.label ?? "the bills account"}</b>
+                    {shownAccount && shownAccount.role !== "bills" ? " — approvals here are only used once this account becomes the bills account (App Settings)." : "."}
+                </span>
+            </div>
+        )}
         <div className="grid gap-4 lg:grid-cols-[200px_1fr_320px]">
             {/* Kinds — built-in first, then staff's own under their heading */}
             <div className="space-y-1">
@@ -207,6 +250,7 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
                         onCreated={(t) => {
                             setTemplates((list) => [...list, t]);
                             setKind(t.kind);
+                            void reload(); // the new row's status for the account shown
                         }}
                     />
                 </div>
@@ -223,7 +267,7 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
                     <CustomTemplateHeader<WaTemplateView>
                         apiBase={API}
                         template={current}
-                        onRenamed={replace}
+                        onRenamed={() => void reload()}
                     />
                 )}
                 <p className="text-xs text-muted-foreground">
@@ -412,6 +456,7 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
                     </div>
                 )}
             </div>
+        </div>
         </div>
     );
 }

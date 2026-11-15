@@ -17,7 +17,9 @@ import { ENV_ONLY_PROVIDERS, type EnvOnlyProvider } from "@/shared/lib/constants
 
 type Loaded = { values: AppSettingValues; env: Record<string, string>; envOnly: Record<string, boolean> };
 
-type WaNumber = { id: string; display: string; name: string; status: string; nameStatus: string; quality: string; wabaId: string };
+type WaNumber = { id: string; display: string; name: string; status: string; nameStatus: string; quality: string; wabaId: string; accountLabel: string };
+/** One WhatsApp account as listed: `error` = Meta would not let us read it (no access yet). */
+type WaAccountRow = { wabaId: string; label: string; role: "otp" | "bills" | null; error: string | null; count: number };
 type Def = (typeof APP_SETTING_DEFS)[number];
 
 const WA_PROVIDER = "WhatsApp (Meta Cloud API)";
@@ -62,6 +64,8 @@ export function AppSettingsForm() {
     const [showEnvNames, setShowEnvNames] = useState(false);
     const [numbers, setNumbers] = useState<WaNumber[] | null>(null);
     const [numbersBusy, setNumbersBusy] = useState(false);
+    const [accounts, setAccounts] = useState<WaAccountRow[]>([]);
+    const [newAcc, setNewAcc] = useState({ wabaId: "", label: "" });
     // Number 2 in another business's WhatsApp account? Starts from what is saved.
     const [n2Different, setN2Different] = useState(false);
 
@@ -108,10 +112,37 @@ export function AppSettingsForm() {
     const loadNumbers = async () => {
         setNumbersBusy(true);
         try {
-            const { data } = await axios.get<{ numbers: WaNumber[] }>("/api/settings/app-settings?numbers=1");
+            const { data } = await axios.get<{ numbers: WaNumber[]; accounts?: WaAccountRow[] }>("/api/settings/app-settings?numbers=1");
             setNumbers(data.numbers);
+            setAccounts(data.accounts ?? []);
         } catch (e) {
             toast.error(extractApiError(e, "Could not read numbers from Meta"));
+        } finally {
+            setNumbersBusy(false);
+        }
+    };
+
+    /** Add (or rename) a WhatsApp account by its ID — for one connected outside
+     *  this app; "Connect number" adds its own. Removing forgets an added one. */
+    const saveAccount = async () => {
+        setNumbersBusy(true);
+        try {
+            await axios.post("/api/settings/whatsapp-accounts", newAcc);
+            setNewAcc({ wabaId: "", label: "" });
+            await loadNumbers();
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not add the account"));
+        } finally {
+            setNumbersBusy(false);
+        }
+    };
+    const removeAccount = async (wabaId: string) => {
+        setNumbersBusy(true);
+        try {
+            await axios.delete(`/api/settings/whatsapp-accounts?waba=${wabaId}`);
+            await loadNumbers();
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not remove the account"));
         } finally {
             setNumbersBusy(false);
         }
@@ -348,13 +379,50 @@ export function AppSettingsForm() {
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                     <div className="font-semibold">Numbers at Meta</div>
-                    <div className="text-xs text-muted-foreground">Read live from both accounts. Pick one for each slot — its account fills in too.</div>
+                    <div className="text-xs text-muted-foreground">Read live from every WhatsApp account. Pick one for each slot — its account fills in too.</div>
                 </div>
                 <Button size="sm" variant="outline" onClick={loadNumbers} disabled={numbersBusy}>
                     {numbersBusy ? <Loader2 size={14} className="mr-1 animate-spin" /> : <RefreshCw size={14} className="mr-1" />}
                     {numbers ? "Refresh" : "Show numbers from Meta"}
                 </Button>
             </div>
+            {numbers && (
+                <div className="space-y-1 rounded-lg border p-2 text-xs">
+                    {accounts.map((a) => (
+                        <div key={a.wabaId} className="flex flex-wrap items-center gap-2">
+                            <span className="font-medium">{a.label}</span>
+                            <span className="font-mono text-muted-foreground">{a.wabaId}</span>
+                            {a.role && <SourceTag tone="saved">{a.role === "bills" ? "bills" : "OTP"}</SourceTag>}
+                            {a.error
+                                ? <span className="flex items-center gap-1 text-amber-700 dark:text-amber-300"><AlertTriangle size={12} /> {a.error}</span>
+                                : <span className="text-muted-foreground">{a.count} number{a.count === 1 ? "" : "s"}</span>}
+                            {!a.role && (
+                                <Button size="sm" variant="ghost" className="h-6 px-2" disabled={numbersBusy} onClick={() => void removeAccount(a.wabaId)}>
+                                    Remove
+                                </Button>
+                            )}
+                        </div>
+                    ))}
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <Input
+                            inputMode="numeric"
+                            placeholder="Add account ID"
+                            value={newAcc.wabaId}
+                            onChange={(e) => setNewAcc((c) => ({ ...c, wabaId: parseDigitsInput(e.target.value) }))}
+                            className="h-8 w-48 font-mono"
+                        />
+                        <Input
+                            placeholder="Name, e.g. Network Service Abhayapuri"
+                            value={newAcc.label}
+                            onChange={(e) => setNewAcc((c) => ({ ...c, label: e.target.value }))}
+                            className="h-8 w-72"
+                        />
+                        <Button size="sm" variant="outline" disabled={numbersBusy || !newAcc.wabaId || !newAcc.label.trim()} onClick={() => void saveAccount()}>
+                            Add account
+                        </Button>
+                    </div>
+                </div>
+            )}
             {numbers && (
                 <div className="divide-y rounded-lg border text-sm">
                     {numbers.length === 0 && <div className="p-3 text-muted-foreground">No numbers in these accounts.</div>}
@@ -370,7 +438,7 @@ export function AppSettingsForm() {
                                         <SourceTag tone={connected ? "saved" : "unsaved"}>{n.status || "?"}</SourceTag>
                                     </div>
                                     <div className="mt-0.5 font-mono text-xs text-muted-foreground">
-                                        id {n.id} · account {n.wabaId}{n.wabaId !== mainWaba ? " (another business)" : ""} · name {n.nameStatus || "?"}{n.quality ? ` · quality ${n.quality}` : ""}
+                                        id {n.id} · account {n.accountLabel} ({n.wabaId}) · name {n.nameStatus || "?"}{n.quality ? ` · quality ${n.quality}` : ""}
                                     </div>
                                 </div>
                                 {regFor !== n.id && (

@@ -4,6 +4,7 @@ import { appSetting } from "@/shared/lib/settings/appSettings.server";
 import { META_APP_ID_MISSING, metaAppId } from "@/shared/lib/whatsapp/metaTemplates";
 import { incomingSecret } from "@/modules/incoming/lib/incomingApi";
 import { META_GRAPH } from "@/shared/lib/constants/meta";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 
 /**
  * POST /api/settings/whatsapp-connect — finish Meta's Embedded Signup for a
@@ -78,6 +79,11 @@ export async function POST(req: Request) {
         }
 
         const info = await graph(`${phoneNumberId}?fields=display_phone_number,verified_name`, token);
+        // Remember the account, so its numbers and template approvals show up
+        // on their own (App Settings list, WhatsApp Templates account picker).
+        const label = [info.verified_name, info.display_phone_number].filter(Boolean).join(" · ") || `Account ${wabaId}`;
+        await prisma.whatsAppAccount.upsert({ where: { wabaId }, create: { wabaId, label: String(label) }, update: {} });
+        steps.push("account saved");
         console.info("[whatsapp-connect] onboarded", { phoneNumberId, wabaId, steps });
         return NextResponse.json({ ok: true, phoneNumberId, wabaId, display: info.display_phone_number, name: info.verified_name, steps });
     } catch (e) {

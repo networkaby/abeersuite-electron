@@ -10,6 +10,7 @@ import { APP_SETTINGS_TAG, envAppSetting, openSavedSecret } from "@/shared/lib/s
 import { hasScrambleSecret, lockSecret } from "@/shared/lib/security/secretBox";
 import { listWaPhoneNumbers, registerWaPhoneNumber, setWaTwoStepPin } from "@/shared/lib/whatsapp/metaTemplates";
 import { ENV_ONLY_KEYS } from "@/shared/lib/constants/appSettingsHelp";
+import { clearWaTemplateCache } from "@/shared/lib/whatsapp/waTemplateStore";
 
 // Settings → App Settings. Stored on OrgDefaults.appSettingsJson; a blank key falls
 // back to .env. Secrets may be saved here too (owner, 2026-11-12 — for testing
@@ -30,14 +31,19 @@ const masked = (v: Record<string, string | undefined>, locked: boolean) =>
     );
 
 /** Saved values, plus what .env holds for each key so the form can say where a value comes from.
- *  `?numbers=1` also lists the WABA's phone numbers from Meta (live, not cached). */
+ *  `?numbers=1` lists every WhatsApp account's phone numbers from Meta (live, not
+ *  cached); `accounts` says per account whether Meta let us read it. */
 export async function GET(req: Request) {
     const { response } = await requirePermission(PERMISSIONS.SETTINGS_APP_MANAGE);
     if (response) return response;
     try {
         if (new URL(req.url).searchParams.get("numbers")) {
             try {
-                return NextResponse.json({ numbers: await listWaPhoneNumbers() });
+                const accounts = await listWaPhoneNumbers();
+                return NextResponse.json({
+                    numbers: accounts.flatMap((a) => a.numbers),
+                    accounts: accounts.map(({ numbers, ...a }) => ({ ...a, count: numbers.length })),
+                });
             } catch (e) {
                 return NextResponse.json({ error: (e as Error).message }, { status: 502 });
             }
@@ -101,6 +107,7 @@ export async function PUT(req: Request) {
             update: { appSettingsJson: values },
         });
         revalidateTag(APP_SETTINGS_TAG, { expire: 0 });
+        clearWaTemplateCache(); // the bills account may have changed
         return NextResponse.json({ values: masked(values, true) });
     } catch (e) {
         return handleApiError(e, "Failed to save app settings");

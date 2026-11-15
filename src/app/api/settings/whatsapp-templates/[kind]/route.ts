@@ -5,6 +5,7 @@ import { validateRequest } from "@/shared/lib/api";
 import { isWaKind } from "@/shared/lib/whatsapp/billTemplates";
 import { CUSTOM_NAME_MAX } from "@/shared/lib/whatsapp/billTemplates";
 import { WaTemplateError, renameCustomWaTemplate, saveWaTemplate } from "@/shared/lib/whatsapp/waTemplateStore";
+import { wabaParam } from "@/shared/lib/whatsapp/wabaParam";
 
 type RouteCtx = { params: Promise<{ kind: string }> };
 
@@ -34,7 +35,7 @@ export async function PUT(req: Request, { params }: RouteCtx) {
             enabled: data.enabled,
             autoSend: data.autoSend,
             draft: { body: data.body, viewButton: data.viewButton, appButton: data.appButton },
-        });
+        }, wabaParam(req));
         return NextResponse.json({ template });
     } catch (e) {
         if (e instanceof WaTemplateError) return NextResponse.json({ error: e.message }, { status: 409 });
@@ -54,7 +55,7 @@ export async function PATCH(req: Request, { params }: RouteCtx) {
     const { data, error } = await validateRequest(req, renameSchema);
     if (error) return error;
     try {
-        return NextResponse.json({ template: await renameCustomWaTemplate(kind, data.name) });
+        return NextResponse.json({ template: await renameCustomWaTemplate(kind, data.name, wabaParam(req)) });
     } catch (e) {
         if (e instanceof WaTemplateError) return NextResponse.json({ error: e.message }, { status: 409 });
         throw e;

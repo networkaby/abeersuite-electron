@@ -3947,6 +3947,63 @@ ALTER TABLE "WhatsAppTemplate" ALTER COLUMN "approvedAt" DROP NOT NULL;
 ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "WhatsAppAccount" (
+    "wabaId" TEXT NOT NULL,
+    "label" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "WhatsAppAccount_pkey" PRIMARY KEY ("wabaId")
+);
+ALTER TABLE "WhatsAppAccount" ADD COLUMN IF NOT EXISTS "wabaId" TEXT NOT NULL;
+ALTER TABLE "WhatsAppAccount" ADD COLUMN IF NOT EXISTS "label" TEXT NOT NULL;
+ALTER TABLE "WhatsAppAccount" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "WhatsAppAccount" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "WhatsAppTemplateApproval" (
+    "kind" TEXT NOT NULL,
+    "wabaId" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'DRAFT',
+    "metaName" TEXT,
+    "metaId" TEXT,
+    "rejectReason" TEXT,
+    "version" INTEGER NOT NULL DEFAULT 0,
+    "submittedAt" TIMESTAMP(3),
+    "approvedName" TEXT,
+    "approvedBody" TEXT,
+    "approvedView" TEXT,
+    "approvedApp" TEXT,
+    "approvedAt" TIMESTAMP(3),
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "WhatsAppTemplateApproval_pkey" PRIMARY KEY ("kind","wabaId")
+);
+ALTER TABLE "WhatsAppTemplateApproval" ADD COLUMN IF NOT EXISTS "kind" TEXT NOT NULL;
+ALTER TABLE "WhatsAppTemplateApproval" ADD COLUMN IF NOT EXISTS "wabaId" TEXT NOT NULL;
+ALTER TABLE "WhatsAppTemplateApproval" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'DRAFT';
+ALTER TABLE "WhatsAppTemplateApproval" ADD COLUMN IF NOT EXISTS "metaName" TEXT;
+ALTER TABLE "WhatsAppTemplateApproval" ALTER COLUMN "metaName" DROP NOT NULL;
+ALTER TABLE "WhatsAppTemplateApproval" ADD COLUMN IF NOT EXISTS "metaId" TEXT;
+ALTER TABLE "WhatsAppTemplateApproval" ALTER COLUMN "metaId" DROP NOT NULL;
+ALTER TABLE "WhatsAppTemplateApproval" ADD COLUMN IF NOT EXISTS "rejectReason" TEXT;
+ALTER TABLE "WhatsAppTemplateApproval" ALTER COLUMN "rejectReason" DROP NOT NULL;
+ALTER TABLE "WhatsAppTemplateApproval" ADD COLUMN IF NOT EXISTS "version" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "WhatsAppTemplateApproval" ADD COLUMN IF NOT EXISTS "submittedAt" TIMESTAMP(3);
+ALTER TABLE "WhatsAppTemplateApproval" ALTER COLUMN "submittedAt" DROP NOT NULL;
+ALTER TABLE "WhatsAppTemplateApproval" ADD COLUMN IF NOT EXISTS "approvedName" TEXT;
+ALTER TABLE "WhatsAppTemplateApproval" ALTER COLUMN "approvedName" DROP NOT NULL;
+ALTER TABLE "WhatsAppTemplateApproval" ADD COLUMN IF NOT EXISTS "approvedBody" TEXT;
+ALTER TABLE "WhatsAppTemplateApproval" ALTER COLUMN "approvedBody" DROP NOT NULL;
+ALTER TABLE "WhatsAppTemplateApproval" ADD COLUMN IF NOT EXISTS "approvedView" TEXT;
+ALTER TABLE "WhatsAppTemplateApproval" ALTER COLUMN "approvedView" DROP NOT NULL;
+ALTER TABLE "WhatsAppTemplateApproval" ADD COLUMN IF NOT EXISTS "approvedApp" TEXT;
+ALTER TABLE "WhatsAppTemplateApproval" ALTER COLUMN "approvedApp" DROP NOT NULL;
+ALTER TABLE "WhatsAppTemplateApproval" ADD COLUMN IF NOT EXISTS "approvedAt" TIMESTAMP(3);
+ALTER TABLE "WhatsAppTemplateApproval" ALTER COLUMN "approvedAt" DROP NOT NULL;
+ALTER TABLE "WhatsAppTemplateApproval" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "BillNotification" (
     "id" SERIAL NOT NULL,
     "kind" TEXT NOT NULL,
@@ -9706,10 +9763,24 @@ DO $$ BEGIN
     END IF;
 END $$;
 DO $$ BEGIN
+    IF to_regclass('public."WhatsAppAccount"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "WhatsAppAccount";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "WhatsAppAccount"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('wabaId');
+    END IF;
+END $$;
+DO $$ BEGIN
     IF to_regclass('public."WhatsAppTemplate"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "WhatsAppTemplate";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "WhatsAppTemplate"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('kind');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."WhatsAppTemplateApproval"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "WhatsAppTemplateApproval";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "WhatsAppTemplateApproval"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('kind', 'wabaId');
     END IF;
 END $$;
 DO $$ BEGIN

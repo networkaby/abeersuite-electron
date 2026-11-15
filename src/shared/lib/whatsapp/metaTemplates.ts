@@ -2,6 +2,7 @@ import "server-only";
 import QRCode from "qrcode";
 import { appSetting } from "@/shared/lib/settings/appSettings.server";
 import { META_GRAPH } from "@/shared/lib/constants/meta";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import {
     WA_APP_LINK,
     WA_BILL_LINK_BASE,
@@ -50,7 +51,32 @@ const wabaId = () => appSetting("META_WA_BUSINESS_ACCOUNT_ID");
  * can only be sent from a number in its own WABA). Differs from wabaId() when the
  * bills number was onboarded into another business (coexistence, 2026-11-13).
  */
-const billWabaId = async () => (await appSetting("WA_CONVERSATION_BUSINESS_ACCOUNT_ID")) || (await wabaId());
+export const billWabaId = async () => (await appSetting("WA_CONVERSATION_BUSINESS_ACCOUNT_ID")) || (await wabaId());
+
+export type WaAccount = { wabaId: string; label: string; role: "otp" | "bills" | null };
+
+/**
+ * Every WhatsApp account we work with, each on its own: the OTP and bills
+ * accounts from App Settings (always, row or not) plus every saved
+ * WhatsAppAccount (Connect number adds one). Bills account first.
+ */
+export async function listWaAccounts(): Promise<WaAccount[]> {
+    const [otp, bills, rows] = await Promise.all([
+        wabaId(),
+        billWabaId(),
+        prisma.whatsAppAccount.findMany({ orderBy: { createdAt: "asc" } }),
+    ]);
+    const label = new Map(rows.map((r) => [r.wabaId, r.label]));
+    const out: WaAccount[] = [];
+    const add = (id: string | undefined, role: WaAccount["role"], fallback: string) => {
+        if (!id || out.some((a) => a.wabaId === id)) return;
+        out.push({ wabaId: id, label: label.get(id) || fallback, role });
+    };
+    add(bills, "bills", "Bills account");
+    add(otp, "otp", "OTP account");
+    for (const r of rows) add(r.wabaId, null, r.label);
+    return out;
+}
 
 /**
  * The number bills, reminders and new replies go out from: WA_CONVERSATION_NUMBER_ID,
@@ -162,9 +188,9 @@ async function components(kind: WaAnyKind, draft: WaTemplateDraft) {
 
 /** Send a draft to Meta for approval. Meta answers PENDING (or sometimes
  *  APPROVED straight away for a clean utility template). */
-export async function submitTemplate(kind: WaAnyKind, name: string, draft: WaTemplateDraft): Promise<{ id: string; status: string }> {
+export async function submitTemplate(kind: WaAnyKind, name: string, draft: WaTemplateDraft, waba: string): Promise<{ id: string; status: string }> {
     const r = await graph<{ id: string; status: string }>(
-        `${await billWabaId()}/message_templates`,
+        `${waba}/message_templates`,
         { method: "POST", body: { name, language: LANG, category: "UTILITY", components: await components(kind, draft) } },
     );
     return { id: r.id, status: r.status };
@@ -173,9 +199,9 @@ export async function submitTemplate(kind: WaAnyKind, name: string, draft: WaTem
 export type MetaTemplateStatus = { status: string; rejectReason: string | null } | null;
 
 /** Current approval status of a submitted template; null when Meta has no such name. */
-export async function fetchTemplateStatus(name: string): Promise<MetaTemplateStatus> {
+export async function fetchTemplateStatus(name: string, waba: string): Promise<MetaTemplateStatus> {
     const r = await graph<{ data: { name: string; status: string; rejected_reason?: string }[] }>(
-        `${await billWabaId()}/message_templates?name=${encodeURIComponent(name)}&fields=name,status,rejected_reason`,
+        `${waba}/message_templates?name=${encodeURIComponent(name)}&fields=name,status,rejected_reason`,
     );
     const row = r.data.find((t) => t.name === name);
     if (!row) return null;
@@ -196,6 +222,8 @@ export async function sendBillTemplate(args: {
     linkCode: string;
     /** Public https link to the photo, for a template with a photo header. */
     headerImage?: string;
+    /** Send from this number (a test at another account); default the bills number. */
+    fromNumberId?: string | null;
 }): Promise<string> {
     const order = bodyFieldOrder(args.approved.body);
     const comps: unknown[] = [];
@@ -209,7 +237,7 @@ export async function sendBillTemplate(args: {
     if (args.approved.viewButton?.trim()) {
         comps.push({ type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: args.linkCode }] });
     }
-    const r = await graph<{ messages?: { id?: string }[] }>(`${await conversationNumberId()}/messages`, {
+    const r = await graph<{ messages?: { id?: string }[] }>(`${args.fromNumberId || (await conversationNumberId())}/messages`, {
         method: "POST",
         body: {
             messaging_product: "whatsapp",
@@ -354,30 +382,37 @@ export async function downloadWaMedia(mediaId: string): Promise<{ bytes: ArrayBu
     return { bytes, mime: info.mime_type?.split(";")[0].trim() || "application/octet-stream", size: bytes.byteLength };
 }
 
-/** `wabaId` = the WhatsApp account the number sits in; "Use for bills" saves it too. */
-export type WaPhoneNumber = { id: string; display: string; name: string; status: string; nameStatus: string; quality: string; wabaId: string };
+/** `wabaId` = the WhatsApp account the number sits in; "Use for bills" saves it too.
+ *  `error` = Meta refused to list this account (e.g. the token has no access). */
+export type WaPhoneNumber = { id: string; display: string; name: string; status: string; nameStatus: string; quality: string; wabaId: string; accountLabel: string };
+export type WaAccountListing = WaAccount & { numbers: WaPhoneNumber[]; error: string | null };
 
-/** Every number in the OTP and bills WABAs (one list when they are the same),
- *  for the App Settings picker. Throws Meta's wording. */
-export async function listWaPhoneNumbers(): Promise<WaPhoneNumber[]> {
-    const wabas = [...new Set([await wabaId(), await appSetting("WA_CONVERSATION_BUSINESS_ACCOUNT_ID")].filter((w): w is string => Boolean(w)))];
-    if (!(await token()) || !wabas.length) throw new Error("Set the WhatsApp Business Account ID (and META_WA_ACCESS_TOKEN in Vercel) first.");
+/** Every number in every account (listWaAccounts), for the App Settings picker.
+ *  One account failing (no access yet) does not hide the others. */
+export async function listWaPhoneNumbers(): Promise<WaAccountListing[]> {
+    const accounts = await listWaAccounts();
+    if (!(await token()) || !accounts.length) throw new Error("Set the WhatsApp Business Account ID (and META_WA_ACCESS_TOKEN in Vercel) first.");
     type Row = { id: string; display_phone_number?: string; verified_name?: string; status?: string; name_status?: string; quality_rating?: string };
-    const lists = await Promise.all(
-        wabas.map(async (waba) => {
-            const r = await graph<{ data: Row[] }>(`${waba}/phone_numbers?fields=id,display_phone_number,verified_name,status,name_status,quality_rating`);
-            return r.data.map((n) => ({
-                id: n.id,
-                display: n.display_phone_number ?? "",
-                name: n.verified_name ?? "",
-                status: n.status ?? "",
-                nameStatus: n.name_status ?? "",
-                quality: n.quality_rating ?? "",
-                wabaId: waba,
-            }));
+    return Promise.all(
+        accounts.map(async (a): Promise<WaAccountListing> => {
+            try {
+                const r = await graph<{ data: Row[] }>(`${a.wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,status,name_status,quality_rating`);
+                const numbers = r.data.map((n) => ({
+                    id: n.id,
+                    display: n.display_phone_number ?? "",
+                    name: n.verified_name ?? "",
+                    status: n.status ?? "",
+                    nameStatus: n.name_status ?? "",
+                    quality: n.quality_rating ?? "",
+                    wabaId: a.wabaId,
+                    accountLabel: a.label,
+                }));
+                return { ...a, numbers, error: null };
+            } catch (e) {
+                return { ...a, numbers: [], error: e instanceof Error ? e.message : String(e) };
+            }
         }),
     );
-    return lists.flat();
 }
 
 /** Set or change a Connected number's 2-step PIN (no old PIN needed — the token's

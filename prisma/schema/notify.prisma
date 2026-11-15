@@ -26,6 +26,8 @@ model WhatsAppTemplate {
   viewButton   String?
   /// Text of the "Get our app" URL button; null = no button.
   appButton    String?
+  /// LEGACY (before 2026-11-15): status + approval of the one bills account.
+  /// Read once to fill WhatsAppTemplateApproval for that account; not written since.
   /// DRAFT (edited, not sent) | PENDING (with Meta) | APPROVED | REJECTED
   status       String    @default("DRAFT")
   /// Name of the copy last sent to Meta — `<kind>_bill_v<version>`.
@@ -41,6 +43,45 @@ model WhatsAppTemplate {
   approvedApp  String?
   approvedAt   DateTime?
   updatedAt    DateTime  @default(now()) @updatedAt
+}
+
+/// A WhatsApp Business Account (WABA) we send from — each stands on its own:
+/// its numbers are listed, registered and picked separately, and every
+/// template is approved per account (WhatsAppTemplateApproval). The OTP and
+/// bills accounts in App Settings are always included even without a row;
+/// "Connect number" adds one here for an account it brings in.
+model WhatsAppAccount {
+  wabaId    String   @id
+  /// Staff's name for it, e.g. "Network Service Abhayapuri".
+  label     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+/// One template's standing at one WhatsApp account. Meta approves a template
+/// per account, so a new account is approved here while the old one keeps
+/// sending with its own approved copy. The wording itself stays on
+/// WhatsAppTemplate (one draft for every account).
+model WhatsAppTemplateApproval {
+  kind         String
+  wabaId       String
+  /// DRAFT (wording changed / never sent) | PENDING | APPROVED | REJECTED
+  status       String    @default("DRAFT")
+  metaName     String?
+  metaId       String?
+  rejectReason String?
+  /// Meta keeps a used name reserved per account, so each submission bumps this.
+  version      Int       @default(0)
+  submittedAt  DateTime?
+  /// The last copy Meta approved at this account — what bills from it use.
+  approvedName String?
+  approvedBody String?
+  approvedView String?
+  approvedApp  String?
+  approvedAt   DateTime?
+  updatedAt    DateTime  @default(now()) @updatedAt
+
+  @@id([kind, wabaId])
 }
 
 /// One document announced to its customer — once per (kind, refId). `refId` is
