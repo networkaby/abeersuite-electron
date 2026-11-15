@@ -1,30 +1,18 @@
-# v1.17.6
+# v1.17.7
 
-Every counter should take this update. It carries a database change for product prices and fixes the "Copy incomplete" badge some counters were showing. **Update the counters first.** The office site gets the database change afterwards, and a counter's sync pauses until it is updated.
+Every counter should install this update. It adds two new tables for WhatsApp numbers, so the counter must update before the office site is deployed — until it does, its sync stays paused.
 
-## Pricing
-- **Fixed Price until next purchase.** A new clock button in the Fixed Price box makes a price temporary. When the next purchase or GRN is posted, the product goes back to its earlier selling price and Fixed Price on its own.
-- The price box shows what a temporary Fixed Price will go back to.
+## WhatsApp numbers
 
-## Deals and customers
-- The deal screen now shows the customer's history, past messages, and a lead quality column.
-- You can send WhatsApp from the deal screen: a normal text inside the 24-hour window, an approved template after that. Every message sent is saved on the deal's timeline. The WhatsApp link opens this screen instead of wa.me.
-- On purchase lines, the price shown is what the customer actually paid (after discount, with GST). Matching similar items now allows small spelling mistakes, like "pendrive" and "pen drive".
-- Credit limit and the POS customer summary now count online orders as well.
+- Each WhatsApp number now has its own record in Settings → WhatsApp numbers: its own ids, an optional token of its own, and a **Test** button that shows whether it is working.
+- Choose per number whether it sends login OTPs, bills, or both.
+- Your existing OTP and bills numbers are carried over automatically the first time the screen opens — nothing to re-enter.
 
-## WhatsApp tickets
-- Customers pick from a ticket menu with tap buttons or a list, so they no longer have to type a number. Plain "yes" / "haan" and "no" replies are understood.
+## WhatsApp message templates
 
-## E-Commerce
-- New **Can deep edit** tick on the Role page. E-Commerce staff can edit a product's main details without full product rights. Tax, opening stock, SKU and sale price stay locked.
+- Template approval is now kept per WhatsApp account. A newly added account gets its templates approved on its own before bills move to it, so bills keep going out from the old account meanwhile.
+- Your current approved templates stay as they are.
 
-## Reports
-- Every BI report now counts additional costs (freight etc.) in item cost.
+## Messages
 
-## Security and sign-in
-- Wrong password, OTP and PIN attempts are now counted on the server, so the limit holds everywhere.
-- Outside services that connect without a key are now refused, and Razorpay payment messages are checked for a valid signature.
-- Settings → Incoming API shows each caller's key with a copy button.
-
-## Sync
-- Fixed the red "Copy incomplete" badge that stayed on some counters with nothing left to retry.
+- When WhatsApp refuses a reply, the Messages screen now shows Meta's actual reason instead of a general "failed" message.
