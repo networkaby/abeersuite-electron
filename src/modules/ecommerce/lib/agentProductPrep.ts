@@ -337,7 +337,7 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>) {
     const s = state.search;
     const p = await prisma.invProduct.findUniqueOrThrow({
         where: { id },
-        select: { name: true, imageUrl: true, galleryJson: true, specsJson: true, brandId: true, brand: { select: { name: true } }, weightGrams: true, lengthCm: true },
+        select: { name: true, imageUrl: true, galleryJson: true, specsJson: true, brandId: true, brand: { select: { name: true } }, weightGrams: true, lengthCm: true, shopDraftJson: true },
     });
 
     // The fact check, exactly as product-copy's — but on the SAVED pages, no download.
@@ -358,7 +358,10 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>) {
     if (!written.success) throw new AgentCopyError(`copy does not match the keys in "writing": ${written.error.issues.slice(0, 3).map((x) => `${x.path.join(".")} ${x.message}`).join("; ")}`);
     const checked = checkWrittenCopy(p.name, { labelFacts: s.labelFacts, seen: s.seen }, s.found, written.data);
 
-    const notes = [...b.notes];
+    // Part 1 / Part 2 notes sit in the Draft notes, which this save replaces —
+    // carried over (signs left out) so staff still see what Part 1 found.
+    const earlier = (readShopDraft(p.shopDraftJson)?.notes ?? []).filter((n) => !/^Part \d done/.test(n));
+    const notes = [...earlier, ...b.notes];
     const patch: ShopProductPatch = { shopDescription: checked.copy.shopDescription, shopSubheading: checked.copy.title };
 
     // Specs: improved rows replace ours with the same label; our other rows stay.
