@@ -56,6 +56,23 @@ Start at **part `partDone + 1`**:
 
 Photos blocked? `GET /api/agent/products/<id>/photos/<n>` (n = place in `photos`, from 1).
 
+## How a run goes: one call when nothing stops
+
+Do the thinking of Parts 1, 2 and 3 in order (below), then send it **all in one call** — one read at the start, one write at the end, like product-copy:
+
+```bash
+curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json"   "$ABEERSUITE_URL/api/agent/prep/<id>/run" -d '{ "part1": {…}, "part2": {…}, "part3": {…} }'
+```
+
+Each key holds exactly what that part's own call would take (shown in each Part below). The server runs them in order:
+- Part 1 finds a **major** problem or `enough: false` → it stops there: `{ result: "attention", stoppedAt: 1 }` — the clean-up and notes are kept, nothing else is written. So **decide Part 1 before you search**: if you already know it will stop, send only Part 1 (`/part1`) and do not spend the search.
+- Otherwise it saves the search and writes Part 3 → `{ result: "part3", … }`, product in Draft.
+- Part 3 refused (`422`) → the search is still saved; fix and send `/part3` alone.
+
+For Part 3 in one run you work from the pages **you** read (product-copy step 3, `read-page` when blocked) — the server reads the same pages once and checks every fact; `specSources` are those page urls.
+
+Use the single-part endpoints (`/part1`, `/part2`, `/part3`) only to **restart part-way**: after Attention is fixed, or when the product already has a saved search (then leave `part2` out of `run`, or call `/part3`, working from `prep.pages`).
+
 ---
 
 ## Part 1 — Prepare the seed (remove only, add nothing)

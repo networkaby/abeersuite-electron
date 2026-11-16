@@ -12,7 +12,7 @@ import type { ShopProductPatch } from "@/modules/ecommerce/lib/updateShopProduct
 import { parkInAttention } from "@/modules/ecommerce/lib/shopAttention";
 import { arrangeFrom, checkWrittenCopy, writtenCopySchema } from "@/modules/ecommerce/lib/aiVerifiedCopy";
 import { readGivenPages, type PageSearch } from "@/modules/ecommerce/lib/aiPageReader";
-import { checkFact, cmOf, gramsOf } from "@/modules/ecommerce/lib/aiFactCheck";
+import { checkFact, cmOf, gramsOf, normForCheck } from "@/modules/ecommerce/lib/aiFactCheck";
 import { PHOTO_REMOVE_REASONS, checklistFrom, isPhotoKind, type PhotoKind, type PhotoRemoveReason, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
 import { cloudinarySignature } from "@/shared/lib/cloudinary";
 import { AgentCopyError, pickableMasters, productForAgent, specsOf, writeAsDraft } from "@/modules/ecommerce/lib/agentProductCopy";
@@ -68,7 +68,15 @@ async function readState(id: number): Promise<PrepState | null> {
     try { return JSON.parse(raw) as PrepState; } catch { return null; }
 }
 
-async function writeState(id: number, s: PrepState) {
+/**
+ * One run of Parts 1–3 in a single call (owner, 2026-11-17): the saved state is
+ * read once at the start and written once at the end — in between the parts
+ * pass it along here instead of going back to R2.
+ */
+type RunCtx = { state: PrepState | null; identityChanged: boolean };
+
+async function writeState(id: number, s: PrepState, run?: RunCtx) {
+    if (run) { run.state = s; run.identityChanged = false; return; }
     requireR2();
     await putR2(messagesBucket(), keyOf(id), new TextEncoder().encode(JSON.stringify(s)).buffer as ArrayBuffer, "application/json");
 }
@@ -82,7 +90,8 @@ async function currentIdentity(id: number): Promise<Identity> {
 }
 
 /** The saved state, or null when it was searched for another identity (staff changed brand / model / barcode). */
-async function liveState(id: number): Promise<{ state: PrepState | null; identityChanged: boolean }> {
+async function liveState(id: number, run?: RunCtx): Promise<{ state: PrepState | null; identityChanged: boolean }> {
+    if (run) return run;
     const s = await readState(id);
     if (!s) return { state: null, identityChanged: false };
     const now = await currentIdentity(id);
@@ -199,7 +208,7 @@ export const part1Schema = z.object({
     need: z.string().trim().max(300).default(""),
 });
 
-export async function savePart1(id: number, b: z.infer<typeof part1Schema>) {
+export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?: RunCtx) {
     requireR2();
     const p = await prisma.invProduct.findUnique({ where: { id }, select: { imageUrl: true, galleryJson: true, specsJson: true } });
     if (!p) throw new AgentCopyError("Product not found");
@@ -241,8 +250,8 @@ export async function savePart1(id: number, b: z.infer<typeof part1Schema>) {
         return { result: "attention" as const, removed: gone.size, notes: reason.length };
     }
     // A search saved for this same identity is kept (one search per lifecycle).
-    const { state: prev } = await liveState(id);
-    await writeState(id, { ...(prev?.search && { search: prev.search }), part: prev?.search ? Math.max(prev.part, 1) as PrepState["part"] : 1, at: new Date().toISOString(), identity: await currentIdentity(id) });
+    const { state: prev } = await liveState(id, run);
+    await writeState(id, { ...(prev?.search && { search: prev.search }), part: prev?.search ? Math.max(prev.part, 1) as PrepState["part"] : 1, at: new Date().toISOString(), identity: await currentIdentity(id) }, run);
     await addDraftNotes(id, [...done, ...unsure, ...b.notes, SIGN(1)]);
     return { result: "part1" as const, removed: gone.size, notes: done.length + unsure.length + b.notes.length };
 }
@@ -261,8 +270,8 @@ export const part2Schema = z.object({
     again: z.boolean().default(false),
 });
 
-export async function savePart2(id: number, b: z.infer<typeof part2Schema>) {
-    const { state, identityChanged } = await liveState(id);
+export async function savePart2(id: number, b: z.infer<typeof part2Schema>, run?: RunCtx) {
+    const { state, identityChanged } = await liveState(id, run);
     if (!state || state.part < 1) throw new AgentCopyError(identityChanged ? "Brand / model / barcode changed since Part 1 — run Part 1 again first." : "Part 1 is not done for this product — run it first.");
     if (state.search && !b.again) throw new AgentCopyError(`Already searched on ${state.search.at.slice(0, 10)} — one search per product. Use the saved pages (Part 3); send "again": true only when the owner asks.`);
     const p = await prisma.invProduct.findUniqueOrThrow({ where: { id }, select: { name: true } });
@@ -283,7 +292,7 @@ export async function savePart2(id: number, b: z.infer<typeof part2Schema>) {
         identity,
         search: { at: new Date().toISOString(), found, verdicts, labelFacts: b.labelFacts, seen: b.seen, labelWebsite: b.labelWebsite },
     };
-    await writeState(id, next);
+    await writeState(id, next, run);
     await addDraftNotes(id, [
         accepted.length
             ? `Searched once: ${accepted.length} page(s) kept (${accepted.map((pg) => pg.site).join(", ")}).`
@@ -331,8 +340,8 @@ export const part3Schema = z.object({
     notes: lines,
 });
 
-export async function savePart3(id: number, b: z.infer<typeof part3Schema>) {
-    const { state, identityChanged } = await liveState(id);
+export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?: RunCtx) {
+    const { state, identityChanged } = await liveState(id, run);
     if (!state?.search || state.part < 2) throw new AgentCopyError(identityChanged ? "Brand / model / barcode changed since the search — start again at Part 1." : "No saved search — Part 2 is not done.");
     const s = state.search;
     const p = await prisma.invProduct.findUniqueOrThrow({
@@ -388,8 +397,11 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>) {
     // Shipping: fill only when empty, and say it came from the internet.
     if (b.shipping) {
         const src = b.shipping.source.trim();
-        const pg = s.found.pages.find((x) => x.url === src && checked.trusted.includes(x));
-        if (!pg) notes.push(`Shipping not used: "${src}" is not a kept page.`);
+        // The label counts as a source, as in product-copy: its printed facts are the "page".
+        const pg = src.toLowerCase() === "label"
+            ? { site: "the label", norm: normForCheck([...Object.entries(s.labelFacts).flat(), ...Object.entries(s.seen).flat()].join(" ")) }
+            : s.found.pages.find((x) => x.url === src && checked.trusted.includes(x));
+        if (!pg) notes.push(`Shipping not used: "${src}" is not the label or a kept page.`);
         else {
             const w = b.shipping.weight && checkFact(pg.norm, "Weight", b.shipping.weight) ? gramsOf(b.shipping.weight) : null;
             const d = b.shipping.dimensions && checkFact(pg.norm, "Dimensions", b.shipping.dimensions) ? cmOf(b.shipping.dimensions) : null;
@@ -447,7 +459,7 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>) {
         photoSuggestions: suggested,
     };
     const shopStatus = await writeAsDraft(id, patch, () => ({ aiCopy: draft, notes: undefined, notesAt: undefined, kept: undefined }));
-    await writeState(id, { ...state, part: 3, at: new Date().toISOString() });
+    await writeState(id, { ...state, part: 3, at: new Date().toISOString() }, run);
     return {
         result: "part3" as const, shopStatus,
         kept: { specs: checked.copy.specs, highlights: checked.copy.highlights, warranty: checked.copy.warranty },
@@ -455,6 +467,39 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>) {
         photos: { removed: gone.size, added: added.length, ordered: ordered.length > 0, suggested: suggested.length },
         notes: draft.notes,
     };
+}
+
+// ── Parts 1–3 in one call ─────────────────────────────────────────────────────
+
+export const runSchema = z.object({
+    part1: part1Schema,
+    /** The one search. Left out when the product already has a saved search (rerun). */
+    part2: part2Schema.optional(),
+    part3: part3Schema,
+});
+
+/**
+ * A run with no stop is one call, like product-copy: Part 1 → Part 2 → Part 3,
+ * R2 read once and written once. A major problem in Part 1 ends it there
+ * (Attention, the cleaned data and notes kept); the parts' own endpoints stay
+ * for a run that restarts at a given part.
+ */
+export async function runParts(id: number, b: z.infer<typeof runSchema>) {
+    const run: RunCtx = await liveState(id);
+    const p1 = await savePart1(id, b.part1, run);
+    if (p1.result === "attention") {
+        // Part 1 stopped: the saved state did not change, nothing to write.
+        return { result: "attention" as const, stoppedAt: 1, part1: p1 };
+    }
+    const p2 = b.part2 ? await savePart2(id, b.part2, run) : null;
+    if (!b.part2 && !run.state?.search) throw new AgentCopyError("No saved search for this product — send part2 (the search) in the run.");
+    try {
+        const p3 = await savePart3(id, b.part3, run);
+        return { ...p3, part1: p1, part2: p2 };
+    } finally {
+        // The search is never lost, even when Part 3 is refused (422) — the next run reuses it.
+        if (run.state) await writeState(id, run.state);
+    }
 }
 
 // ── Part 4: verify (no internet) ──────────────────────────────────────────────

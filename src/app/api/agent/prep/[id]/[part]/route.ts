@@ -3,9 +3,9 @@ import type { z } from "zod";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { requireIncomingKey } from "@/modules/incoming/lib/incomingApi";
 import { AgentCopyError } from "@/modules/ecommerce/lib/agentProductCopy";
-import { part1Schema, part2Schema, part3Schema, part4Schema, savePart1, savePart2, savePart3, savePart4 } from "@/modules/ecommerce/lib/agentProductPrep";
+import { part1Schema, part2Schema, part3Schema, part4Schema, runParts, runSchema, savePart1, savePart2, savePart3, savePart4 } from "@/modules/ecommerce/lib/agentProductPrep";
 
-// POST /api/agent/prep/[id]/part1 | part2 | part3 | part4 — product prep's four parts.
+// POST /api/agent/prep/[id]/run | part1 | part2 | part3 | part4 — product prep's four parts.
 // part1 clean the seed · part2 the one search (saved) · part3 process from the
 // saved pages → Draft · part4 verify (no internet). Never publishes.
 
@@ -16,6 +16,8 @@ const PARTS = {
     part2: { schema: part2Schema, run: savePart2 },
     part3: { schema: part3Schema, run: savePart3 },
     part4: { schema: part4Schema, run: savePart4 },
+    // Parts 1–3 in one call — the usual run; the parts above restart a run part-way.
+    run: { schema: runSchema, run: runParts },
 } as const;
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string; part: string }> }) {
@@ -24,7 +26,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string; pa
     const id = Number(rawId);
     if (!Number.isInteger(id) || id <= 0) return NextResponse.json({ error: "Bad product id" }, { status: 400 });
     const def = PARTS[part as keyof typeof PARTS];
-    if (!def) return NextResponse.json({ error: "Unknown part — use part1, part2, part3 or part4" }, { status: 404 });
+    if (!def) return NextResponse.json({ error: "Unknown part — use run, part1, part2, part3 or part4" }, { status: 404 });
     const { data, error } = await validateRequest(req, def.schema as z.ZodType<unknown>);
     if (error) return error;
     try {

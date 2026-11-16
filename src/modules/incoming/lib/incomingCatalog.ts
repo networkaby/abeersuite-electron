@@ -54,6 +54,7 @@ export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
             "POST /api/agent/read-page",
             // Product prep (the /product-prep and /product-recheck skills) — same key.
             "GET /api/agent/prep/{id}",
+            "POST /api/agent/prep/{id}/run",
             "POST /api/agent/prep/{id}/part1",
             "POST /api/agent/prep/{id}/part2",
             "POST /api/agent/prep/{id}/part3",
