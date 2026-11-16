@@ -165,7 +165,7 @@ export async function updateShopProduct(
             const kept = keptReviewNotes(info, existing.shopAttention, existing.shopAttentionAt ?? existing.shopDraftAt);
             return kept ? (kept as unknown as Prisma.InputJsonValue) : Prisma.DbNull;
         };
-        const inWork = existing.shopStatus === "DRAFT" || existing.shopStatus === "ATTENTION";
+        const inWork = existing.shopStatus === "DRAFT" || existing.shopStatus === "ATTENTION" || existing.shopStatus === "WAITING";
         if (existing.shopStatus === "ATTENTION" && b.shopStatus && !b.draft) {
             return { response: NextResponse.json({ error: "Parked in Attention — Save as draft to work on it, or Save as ready." }, { status: 409 }) };
         }

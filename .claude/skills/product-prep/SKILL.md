@@ -34,8 +34,13 @@ Same as product-copy: `$ABEERSUITE_URL` (office site, no trailing `/`) and
 
 ## 0. Pick products and find where each one stands
 
-List with product-copy's list call (`GET /api/agent/products?<filters>`, same
-filters — `sku=`, `q=`, `stage=`, `limit=`…). Tell the owner the list first, then one at a time.
+**Staff choose the work**: they shortlist products with **Start AI** (Products list, row or bulk, or the product page) — including Attention products they have fixed. Those sit in the **Waiting** stage. So with no products named, take the Waiting list first:
+
+```bash
+curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$ABEERSUITE_URL/api/agent/products?stage=waiting&need=all&limit=20"
+```
+
+Waiting is empty → say so and ask the owner (do not fall back to Unpublished on your own). Products named by the owner (`sku=`, `q=`, ids) are taken whatever their stage. Same filters as product-copy's list (`sku=`, `q=`, `stage=`, `limit=`…). Tell the owner the list first, then one at a time. A Waiting product leaves Waiting by itself: Part 1 stopping → Attention, Part 3 → Draft.
 
 Read each product:
 

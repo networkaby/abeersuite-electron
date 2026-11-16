@@ -30,7 +30,7 @@ export async function parkInAttention(
     await prisma.$transaction(
         ok.map((r) => {
             const info = readShopDraft(r.shopDraftJson);
-            const stageBefore = r.shopStatus === "DRAFT" || r.shopStatus === "ATTENTION" ? info?.stageBefore : r.shopStatus;
+            const stageBefore = r.shopStatus === "DRAFT" || r.shopStatus === "ATTENTION" || r.shopStatus === "WAITING" ? info?.stageBefore : r.shopStatus;
             const next: ShopDraft = { ...info, ...(stageBefore && { stageBefore }) };
             return prisma.invProduct.update({
                 where: { id: r.id },

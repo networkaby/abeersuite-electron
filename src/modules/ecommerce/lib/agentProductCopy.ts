@@ -40,7 +40,7 @@ export const backlogQuery = z.object({
     /** Words to find in the name, SKU or a barcode — like the Products search. */
     q: z.string().trim().min(2).max(100).optional(),
     /** Which shop stage. Default: unpublished, or all when sku / q is sent. */
-    stage: z.enum(["unpublished", "draft", "attention", "ready", "published", "all"]).optional(),
+    stage: z.enum(["unpublished", "waiting", "draft", "attention", "ready", "published", "all"]).optional(),
     /** copy = no description yet; all = every product. Default: copy, or all when sku / q is sent. */
     need: z.enum(["copy", "all"]).optional(),
     /** At least this many photos usable by AI ("Skip for AI" ones not counted). */

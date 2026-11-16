@@ -110,12 +110,12 @@ export default function AiBulkCopyPage() {
         }
         const f = { ...filters, query };
         return products
-            .filter((p) => (pick ? pick.has(p.id) && !work[p.id]?.saved : !hasDescription(p) && p.shopStatus !== "DRAFT" && p.shopStatus !== "ATTENTION"))
+            .filter((p) => (pick ? pick.has(p.id) && !work[p.id]?.saved : !hasDescription(p) && p.shopStatus !== "DRAFT" && p.shopStatus !== "ATTENTION" && p.shopStatus !== "WAITING"))
             .filter(productFilterMatcher(f, DEFAULT_SHOP_PUBLISH_RULES, trees))
             .sort(priority);
     }, [products, pick, filters, query, work, batch, trees]);
-    const backlog = useMemo(() => products.filter((p) => p.isActive && !hasDescription(p) && p.shopStatus !== "DRAFT" && p.shopStatus !== "ATTENTION").length, [products]);
-    const withPhoto = useMemo(() => products.filter((p) => p.isActive && !hasDescription(p) && p.shopStatus !== "DRAFT" && p.shopStatus !== "ATTENTION" && p.galleryUrls.length > 0).length, [products]);
+    const backlog = useMemo(() => products.filter((p) => p.isActive && !hasDescription(p) && p.shopStatus !== "DRAFT" && p.shopStatus !== "ATTENTION" && p.shopStatus !== "WAITING").length, [products]);
+    const withPhoto = useMemo(() => products.filter((p) => p.isActive && !hasDescription(p) && p.shopStatus !== "DRAFT" && p.shopStatus !== "ATTENTION" && p.shopStatus !== "WAITING" && p.galleryUrls.length > 0).length, [products]);
 
     // A new filter / search / pick starts from the first batch again (while rendering).
     if ([useValueChange(filters), useValueChange(query), useValueChange(pick)].some(Boolean)) setShown(SHOW_STEP);

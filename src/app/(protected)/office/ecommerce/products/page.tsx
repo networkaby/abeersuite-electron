@@ -48,6 +48,7 @@ import {
     ChevronRight,
     ExternalLink,
     Sparkles,
+    Hourglass,
     // SlidersHorizontal,
 } from "lucide-react";
 import { productPreviewPath, productShopUrl } from "@/shared/lib/shop/productPublic";
@@ -67,10 +68,11 @@ const COL_COUNT = 11;
 const PAGE_SIZE = 25;
 
 /** Stages: Unpublished → Draft → Ready → Published (live) / Pending — one stage per product (owner, 2026-11-10).
- *  Attention = a Draft parked until a manual check is done; leaves by Save as draft / ready (owner, 2026-11-11). */
+ *  Attention = a Draft parked until a manual check is done; leaves by Save as draft / ready (owner, 2026-11-11).
+ *  Waiting = shortlisted for the AI run (Start AI); the run moves it to Draft / Attention (owner, 2026-11-17). */
 type TabKey = "all" | ProductStatus["kind"];
-const TAB_KEYS: TabKey[] = ["all", "unpublished", "draft", "ready", "live", "pending", "attention"];
-const TAB_LABEL: Record<TabKey, string> = { all: "All", unpublished: "Unpublished", draft: "Draft", ready: "Ready", live: "Published", pending: "Pending", attention: "Attention" };
+const TAB_KEYS: TabKey[] = ["all", "unpublished", "waiting", "draft", "ready", "live", "pending", "attention"];
+const TAB_LABEL: Record<TabKey, string> = { all: "All", unpublished: "Unpublished", waiting: "Waiting", draft: "Draft", ready: "Ready", live: "Published", pending: "Pending", attention: "Attention" };
 // Persist the list view (page / filters / scroll) per browser tab so leaving for
 // a product's Edit page and coming back (Esc → router.back) returns to the same
 // place instead of resetting to page 1.
@@ -120,6 +122,10 @@ function StatusBadge({ status, attention }: { status: ProductStatus; attention?:
     ) : status.kind === "ready" ? (
         <Badge variant="outline" className="gap-1 border-violet-200 bg-violet-50 text-violet-700" title="Complete — waiting to be published">
             <CheckCircle2 className="size-3" /> Ready
+        </Badge>
+    ) : status.kind === "waiting" ? (
+        <Badge variant="outline" className="gap-1 border-indigo-200 bg-indigo-50 text-indigo-700" title="Waiting for the AI run — not in the shop">
+            <Hourglass className="size-3" /> Waiting
         </Badge>
     ) : status.kind === "draft" ? (
         <Badge variant="outline" className="gap-1 border-sky-200 bg-sky-50 text-sky-700" title="Being worked on — not in the shop">
@@ -209,7 +215,7 @@ export default function EcommerceProductsPage() {
     // One status per product, shared by the tab counts, the tab filter and the rows.
     const statusOf = useMemo(() => new Map(products.map((p) => [p.id, productStatus(p, rules)])), [products, rules]);
     const counts = useMemo(() => {
-        const c: Record<TabKey, number> = { all: products.length, unpublished: 0, draft: 0, ready: 0, live: 0, pending: 0, attention: 0 };
+        const c: Record<TabKey, number> = { all: products.length, unpublished: 0, waiting: 0, draft: 0, ready: 0, live: 0, pending: 0, attention: 0 };
         for (const st of statusOf.values()) c[st.kind]++;
         return c;
     }, [products, statusOf]);
@@ -307,7 +313,7 @@ export default function EcommerceProductsPage() {
         if (ids.length === 0) return;
         setBulkBusy(true);
         try {
-            const { data } = await axios.post<{ published: number; pending: number; unpublished: number; ready?: number; skipped?: { inDraft: number; names: string[]; inAttention?: number; attentionNames?: string[] } }>(
+            const { data } = await axios.post<{ published: number; pending: number; unpublished: number; ready?: number; skipped?: { inDraft: number; names: string[]; inAttention?: number; attentionNames?: string[]; inWaiting?: number; waitingNames?: string[] } }>(
                 "/api/ecommerce/products/bulk",
                 { ids, action }
             );
@@ -328,10 +334,35 @@ export default function EcommerceProductsPage() {
                 const names = data.skipped.attentionNames ?? [];
                 toast.info(`${data.skipped.inAttention} skipped — parked in Attention (${names.join(", ")}${data.skipped.inAttention > names.length ? ", …" : ""}). Check it, then Save as draft or Save as ready.`);
             }
+            if (data.skipped?.inWaiting) {
+                const names = data.skipped.waitingNames ?? [];
+                toast.info(`${data.skipped.inWaiting} skipped — Waiting for the AI (${names.join(", ")}${data.skipped.inWaiting > names.length ? ", …" : ""}). Remove it from Waiting first.`);
+            }
             clearSelection();
             load();
         } catch {
             toast.error("Bulk update failed");
+        } finally {
+            setBulkBusy(false);
+        }
+    };
+
+    // Start AI / Remove from Waiting (owner, 2026-11-17) — rows and the bulk bar.
+    const sendToAi = async (ids: number[], action: "start" | "remove") => {
+        if (!ids.length) return;
+        setBulkBusy(true);
+        try {
+            const { data } = await axios.post<{ queued?: number; published?: string[]; removed?: number }>("/api/ecommerce/products/waiting", { ids, action });
+            if (action === "start") {
+                toast.success(`${data.queued ?? 0} sent to Waiting — the next AI run picks them up`);
+                if (data.published?.length) toast.info(`Off the shop while waiting: ${data.published.slice(0, 5).join(", ")}${data.published.length > 5 ? ", …" : ""}`);
+            } else {
+                toast.success(`${data.removed ?? 0} removed from Waiting — back to their earlier stage`);
+            }
+            clearSelection();
+            load();
+        } catch (e: unknown) {
+            toast.error(extractApiError(e, "Could not update Waiting"));
         } finally {
             setBulkBusy(false);
         }
@@ -384,7 +415,7 @@ export default function EcommerceProductsPage() {
                 <div>
                     <h1 className="text-2xl font-semibold tracking-tight">Products</h1>
                     <p className="text-muted-foreground text-sm">
-                        One catalogue across shop, POS and Sale vouchers. Unpublished → Ready (complete, waiting) → Published; a published product missing a publish rule waits as Pending. Draft = being worked on, off the shop until Save as ready. Attention = a Draft parked until something is checked by hand — Save as draft or Save as ready from there.
+                        One catalogue across shop, POS and Sale vouchers. Unpublished → Ready (complete, waiting) → Published; a published product missing a publish rule waits as Pending. Waiting = shortlisted for the AI (Start AI). Draft = being worked on, off the shop until Save as ready. Attention = a Draft parked until something is checked by hand — fix it, then Start AI, Save as draft or Save as ready.
                     </p>
                 </div>
                 <div className="flex gap-2">
@@ -486,6 +517,15 @@ export default function EcommerceProductsPage() {
                     <Button size="sm" variant="outline" disabled={bulkBusy} onClick={() => void runBulk("unpublish")}>
                         Unpublish
                     </Button>
+                    {tab === "waiting" ? (
+                        <Button size="sm" variant="outline" disabled={bulkBusy} onClick={() => void sendToAi([...selected], "remove")}>
+                            Remove from Waiting
+                        </Button>
+                    ) : (
+                        <Button size="sm" variant="outline" disabled={bulkBusy} title="Shortlist for the AI run — off the shop until it is done" onClick={() => void sendToAi([...selected], "start")}>
+                            <Hourglass className="size-4" /> Start AI
+                        </Button>
+                    )}
                     {tab === "draft" ? (
                         <Button size="sm" variant="outline" disabled={bulkBusy} onClick={() => setFlagIds([...selected])}>
                             <AlertTriangle className="size-4" /> Flag attention
@@ -601,8 +641,18 @@ export default function EcommerceProductsPage() {
                                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                             <div className="flex items-center justify-end gap-1.5">
                                                 {status.kind === "attention" ? (
-                                                    <Button size="sm" variant="outline" asChild title="Check it, then Save as draft or Save as ready">
-                                                        <Link href={`/office/ecommerce/products/${p.id}`}>Open</Link>
+                                                    <>
+                                                        <Button size="sm" variant="outline" asChild title="Check it, then Save as draft or Save as ready">
+                                                            <Link href={`/office/ecommerce/products/${p.id}`}>Open</Link>
+                                                        </Button>
+                                                        <Button size="sm" variant="ghost" className="text-indigo-700" disabled={bulkBusy} title="Fixed — clear the flag and send it back to the AI" onClick={() => void sendToAi([p.id], "start")}>
+                                                            <Hourglass className="size-3.5" />
+                                                            Start AI
+                                                        </Button>
+                                                    </>
+                                                ) : status.kind === "waiting" ? (
+                                                    <Button size="sm" variant="ghost" disabled={bulkBusy} title="Take it off the AI list — back to its earlier stage" onClick={() => void sendToAi([p.id], "remove")}>
+                                                        Remove
                                                     </Button>
                                                 ) : status.kind === "draft" ? (
                                                     <>
@@ -615,14 +665,20 @@ export default function EcommerceProductsPage() {
                                                         </Button>
                                                     </>
                                                 ) : status.kind === "unpublished" ? (
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        disabled={publishing.has(p.id)}
-                                                        onClick={() => void moveStage(p, "READY")}
-                                                    >
-                                                        {publishing.has(p.id) ? "…" : "Mark ready"}
-                                                    </Button>
+                                                    <>
+                                                        <Button size="sm" variant="ghost" className="text-indigo-700" disabled={bulkBusy} title="Shortlist for the AI run" onClick={() => void sendToAi([p.id], "start")}>
+                                                            <Hourglass className="size-3.5" />
+                                                            Start AI
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            disabled={publishing.has(p.id)}
+                                                            onClick={() => void moveStage(p, "READY")}
+                                                        >
+                                                            {publishing.has(p.id) ? "…" : "Mark ready"}
+                                                        </Button>
+                                                    </>
                                                 ) : status.kind === "ready" ? (
                                                     <Button
                                                         size="sm"
@@ -682,6 +738,8 @@ export default function EcommerceProductsPage() {
                                                         value={
                                                             status.kind === "attention"
                                                                 ? `Attention — parked${p.shopAttentionBy ? ` by ${p.shopAttentionBy}` : ""}${p.shopAttentionAt ? ` on ${formatDate(p.shopAttentionAt)}` : ""}: ${p.shopAttention ?? "—"}. Off the shop; check it, then Save as draft or Save as ready.`
+                                                                : status.kind === "waiting"
+                                                                ? "Waiting — shortlisted for the AI run, not in the shop. The run moves it to Draft (or Attention); Remove puts it back."
                                                                 : status.kind === "draft"
                                                                 ? `Draft — being worked on, not in the shop.${p.shopAttention ? ` Was parked for: ${p.shopAttention}` : ""}`
                                                                 : status.kind === "live"

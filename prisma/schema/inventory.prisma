@@ -255,6 +255,10 @@ model InvNamingConfig {
 /// Online-shop stage of a product — see InvProduct.shopStatus.
 enum ShopStatus {
   UNPUBLISHED
+  /// Waiting for the AI (owner, 2026-11-17): staff shortlist products — or send
+  /// an Attention one back once fixed — and the product-prep run takes them from
+  /// here to Draft (or Attention). Off the shop; Remove goes back to stageBefore.
+  WAITING
   /// Being worked on, off the shop (owner, 2026-11-10: a stage again, one copy).
   DRAFT
   /// Parked: work blocked until something is checked by hand (owner, 2026-11-11:
