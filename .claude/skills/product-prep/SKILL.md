@@ -144,7 +144,8 @@ Read the product again (`GET /api/agent/prep/<id>`); work only from `prep.pages`
 2. **Brand** — `brandId` from `masters.brands` when it is in the list. A well-known brand not in the list → **a note** ("Brand X is printed but not in the Brand list — create it, then set it"), no stop. Little-known / no name → Unbranded id + note "Change to Premium Unbranded if this is the good-quality line".
 3. **Collections — set fresh.** `collectionIds` replaces the current set, main first. Same picking rules as product-copy §5 (Shop by Need + Setup Kits, never Offers, the live `masters.collections` list wins). At least one; nothing fits → a note.
 4. **Shipping** — package weight / size quoted exactly as a saved page prints it, `source` = that page url. The server fills it **only when ours is empty**, and adds the note "taken from the internet, not weighed — add wrapper and packing weight". Ours already filled → it only notes a big difference.
-5. **Photos**:
+5. **Model No** — when ours is empty, send `"modelNo": { "value": "POR 3046", "source": "label" }` (the maker's model / part code exactly as printed, or a kept page url). The server fills it only when ours is empty and the code is really on that source, then rebuilds the office name like an inventory edit — taking the code out of the custom part first, so the name never shows it twice (a custom part that is only the code is left alone, name unchanged). Ours already set and different → it only notes it. **Local goods** (Unbranded / Premium Unbranded): never sent — their codes are one-off, staff decide.
+6. **Photos**:
    - `add`: photos from the saved pages you are **sure** show this exact model and colour (maker's first, sharp, no other brand's logo or watermark) → copied into our photo storage and added to the gallery now (a copy that fails is offered to staff instead). Do not also keep our own lower-quality copy of the same image — put it in `remove`.
    - `suggest`: the ones you are not sure about → offered to staff.
    - `remove` / `suggestRemove`: same as Part 1 for anything still wrong.
@@ -152,7 +153,7 @@ Read the product again (`GET /api/agent/prep/<id>`); work only from `prep.pages`
    - `look`: crops / fixes from `photoLookOptions` (staff press Use / Undo).
    - `have` / `must` / `nice`: photo kinds (`photoKinds` keys).
    - Primary photo with any logo, watermark or text → do not put it first; note "Pick a clean primary photo".
-6. **Mistake check → `notes`** — product-copy §8's list, one problem per line (name, model no. / barcode to copy in, group, photos, price plainly off …).
+7. **Mistake check → `notes`** — product-copy §8's list, one problem per line (name, model no. / barcode to copy in, group, photos, price plainly off …).
 
 ```bash
 curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json" \

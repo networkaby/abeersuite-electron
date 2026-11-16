@@ -15,6 +15,7 @@ import { readGivenPages, type PageSearch } from "@/modules/ecommerce/lib/aiPageR
 import { checkFact, cmOf, gramsOf, normForCheck } from "@/modules/ecommerce/lib/aiFactCheck";
 import { PHOTO_REMOVE_REASONS, checklistFrom, isPhotoKind, type PhotoKind, type PhotoRemoveReason, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
 import { cloudinarySignature } from "@/shared/lib/cloudinary";
+import { regenerateProductNamesSafe } from "@/modules/inventory/lib/regenerateNames";
 import { AgentCopyError, pickableMasters, productForAgent, specsOf, writeAsDraft } from "@/modules/ecommerce/lib/agentProductCopy";
 
 /**
@@ -317,6 +318,8 @@ export const part3Schema = z.object({
     /** The collections, main first — they REPLACE the ones set now. */
     collectionIds: z.array(z.number().int().positive()).min(1).max(10),
     shipping: z.object({ weight: z.string().trim().max(60).optional(), dimensions: z.string().trim().max(80).optional(), source: z.string().trim().max(500) }).optional(),
+    /** The maker's model / part code as printed ("label" or a kept page url) — filled only when our Model No is empty. */
+    modelNo: z.object({ value: z.string().trim().min(1).max(100), source: z.string().trim().max(500) }).optional(),
     photos: z.object({
         /** From the saved pages, sure: added to the gallery now. */
         add: z.array(photoPick).max(15).default([]),
@@ -346,7 +349,7 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
     const s = state.search;
     const p = await prisma.invProduct.findUniqueOrThrow({
         where: { id },
-        select: { name: true, imageUrl: true, galleryJson: true, specsJson: true, brandId: true, brand: { select: { name: true } }, weightGrams: true, lengthCm: true, shopDraftJson: true },
+        select: { name: true, namePart: true, modelNo: true, imageUrl: true, galleryJson: true, specsJson: true, brandId: true, brand: { select: { name: true } }, weightGrams: true, lengthCm: true, shopDraftJson: true },
     });
 
     // The fact check, exactly as product-copy's — but on the SAVED pages, no download.
@@ -417,6 +420,20 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
         }
     }
 
+    // Model No: only when ours is empty, and only a code really on the label / a kept page.
+    let fillModelNo: string | null = null;
+    // Local (unbranded) goods carry one-off codes — their Model No is left to staff (owner, 2026-11-17).
+    const local = /unbranded|special|generic/i.test(p.brand?.name ?? "");
+    if (b.modelNo && !local) {
+        const m = b.modelNo, src = m.source.trim();
+        const srcNorm = src.toLowerCase() === "label"
+            ? normForCheck([...Object.entries(s.labelFacts).flat(), ...Object.entries(s.seen).flat()].join(" "))
+            : s.found.pages.find((x) => x.url === src && checked.trusted.includes(x))?.norm;
+        if (!srcNorm || !srcNorm.includes(normForCheck(m.value))) notes.push(`Model No "${m.value}" not found on the label or a kept page — not filled.`);
+        else if (p.modelNo?.trim()) { if (normForCheck(p.modelNo) !== normForCheck(m.value)) notes.push(`Model No is "${p.modelNo}", the ${src === "label" ? "box" : "maker"} says "${m.value}" — check.`); }
+        else fillModelNo = m.value;
+    }
+
     // Photos: sure ones applied now, the rest left for staff.
     const gallery = galleryOf(p);
     const onPage = new Map(checked.trusted.flatMap((pg) => pg.photos.map((u) => [u, pg] as const)));
@@ -462,8 +479,23 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
         ...(arrange && { photoArrange: arrange }),
         photoSuggestions: suggested,
     };
+    if (fillModelNo) draft.notes = [...(draft.notes ?? []).filter((n) => n !== SIGN(3)), `Model No filled: ${fillModelNo} (from the ${b.modelNo!.source.toLowerCase() === "label" ? "box" : "maker page"}).`, SIGN(3)];
     const shopStatus = await writeAsDraft(id, patch, () => ({ aiCopy: draft, notes: undefined, notesAt: undefined, kept: undefined }));
-    await writeState(id, { ...state, part: 3, at: new Date().toISOString() }, run);
+    if (fillModelNo) {
+        // Model No feeds the office name. The custom part often already holds the
+        // code ("2m POR 1624") — it is taken out there, so the rebuilt name shows it
+        // once (owner, 2026-11-17). Then the name is rebuilt, as an inventory edit does.
+        const chunks = fillModelNo.match(/[a-z]+|[0-9]+/gi) ?? [];
+        const inPart = chunks.length ? new RegExp(`(^|[^a-z0-9])${chunks.join("[\\s._-]*")}(?![a-z0-9])`, "gi") : null;
+        const stripped = p.namePart && inPart?.test(p.namePart) ? p.namePart.replace(inPart, "$1").replace(/\s{2,}/g, " ").trim() : undefined;
+        // The custom part was ONLY the code: the name already shows it once, and an
+        // empty custom part would stop the name ever being rebuilt — leave both alone.
+        const keepName = stripped === "";
+        await prisma.invProduct.update({ where: { id }, data: { modelNo: fillModelNo, ...(stripped && { namePart: stripped }) } });
+        if (!keepName) await regenerateProductNamesSafe({ ids: [id] });
+    }
+    // Model No is part of the identity the search was saved for — keep it matching.
+    await writeState(id, { ...state, part: 3, at: new Date().toISOString(), ...(fillModelNo && { identity: await currentIdentity(id) }) }, run);
     return {
         result: "part3" as const, shopStatus,
         kept: { specs: checked.copy.specs, highlights: checked.copy.highlights, warranty: checked.copy.warranty },
