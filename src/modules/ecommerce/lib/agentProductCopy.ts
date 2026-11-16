@@ -430,7 +430,7 @@ export async function saveAgentCopy(id: number, body: z.infer<typeof agentCopySc
  * (owner, 2026-11-10) — off the shop until staff Save as ready; Discard draft
  * puts the stage back. `extra` adds Claude's notes / copy beside it.
  */
-async function writeAsDraft(id: number, fields: ShopProductPatch, extra: (info: ShopDraft | null) => Partial<ShopDraft>): Promise<ShopStatus> {
+export async function writeAsDraft(id: number, fields: ShopProductPatch, extra: (info: ShopDraft | null) => Partial<ShopDraft>): Promise<ShopStatus> {
     const saved = await updateShopProduct(id, { ...fields, draft: "save" });
     if (saved.response) {
         const err = (await saved.response.json().catch(() => null)) as { error?: string } | null;
@@ -494,7 +494,7 @@ export async function readPageForAgent(b: z.infer<typeof readPageSchema>) {
 }
 
 /** InvProduct.specsJson as label → text (null when empty or not an object). */
-function specsOf(raw: unknown): Record<string, string> | null {
+export function specsOf(raw: unknown): Record<string, string> | null {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
     return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, String(v)]));
 }

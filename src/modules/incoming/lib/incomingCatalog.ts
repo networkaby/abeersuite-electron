@@ -52,6 +52,12 @@ export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
             "POST /api/agent/products/{id}/notes",
             "POST /api/agent/products/{id}/compatibility",
             "POST /api/agent/read-page",
+            // Product prep (the /product-prep and /product-recheck skills) — same key.
+            "GET /api/agent/prep/{id}",
+            "POST /api/agent/prep/{id}/part1",
+            "POST /api/agent/prep/{id}/part2",
+            "POST /api/agent/prep/{id}/part3",
+            "POST /api/agent/prep/{id}/part4",
         ],
     },
     // Its own key too (owner: "dont mix all") — read only, it can change nothing.

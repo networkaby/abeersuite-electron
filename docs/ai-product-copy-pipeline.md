@@ -292,6 +292,8 @@ cost on the server:
 - **Claude only leaves products in Draft** (owner, 2026-11-08): it never presses Save as ready and never publishes. Review notes park it in Attention instead.
 - **One skill file** tells Claude the steps and rules, including a mistake checklist (name, codes, brand, collections, group, photos, description, shipping).
 
+- **Product prep (a separate loop, 2026-11-16):** the `product-prep` / `product-recheck` skills run the same checks in four parts — clean our data, ONE saved search (R2 `ai-prep/<id>.json`), process from the saved pages, verify without internet — through `/api/agent/prep/{id}` (`agentProductPrep.ts`). product-copy's own route is unchanged.
+
 ### A9. Shop stages (Draft is a stage)
 
 **Stages:** Unpublished → Draft → Ready → Published, plus Pending. One product = one copy = one stage (owner, 2026-11-10: *"only one copy no parallel"*).
