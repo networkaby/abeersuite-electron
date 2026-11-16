@@ -260,7 +260,9 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
         .catch(() => { /* the next signal tries again */ }), []);
     useEffect(() => { if (allowed) void load(); }, [allowed, load]);
     // A call logged, a ticket or a Reconnect activity answers a chat too.
-    useRealtimeTopics(["messages", "tickets"], () => void load(), allowed, ["Message", "MessageClaim", "Call", "Ticket", "TicketLog"]);
+    // MessageConversation: staff's Close writes only that row — without it a
+    // counter's replica never refreshes the popup after a Close.
+    useRealtimeTopics(["messages", "tickets"], () => void load(), allowed, ["Message", "MessageClaim", "MessageConversation", "Call", "Ticket", "TicketLog"]);
 
     // The hand-back to everyone is a matter of time passing, not of new data.
     useEffect(() => {
