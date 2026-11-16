@@ -31,6 +31,9 @@ Full design: `docs/ai-product-copy-pipeline.md`.
 - `https://office.networkservice.in` — the office site, e.g. `https://office.example.com` (no trailing `/`).
 - `balkelaharami@420` — the **Claude — Product copy** key from Settings → Incoming API.
 
+The commands below read them as `$ABEERSUITE_URL` (the site) and
+`$PRODUCT_COPY_API_KEY` (the key) — set both before the first call.
+
 Never print the key or write it into a file. `401` on any call → wrong key, or the
 card is switched off — stop and tell the owner.
 
@@ -70,6 +73,7 @@ Answer: `{ products: [{ id, sku, name, brand, group, shopStatus, hasDescription,
 - `notFound` → tell the owner. Several `q` matches → show the list and ask.
 - Skip `photos: 0` unless told otherwise. `shopStatus: "DRAFT"` → someone is working on it; say so and ask before writing over it. What you read is exactly what staff and the shop data hold.
 - **Tell the owner the list before starting.** Then do them **one at a time**, steps 1–9 each.
+- Each product is saved the moment its step 9 (or its stop notes) goes through — keep a running done / stopped list in the chat. A run that broke off is resumed by listing again: finished ones now show `shopStatus: "DRAFT"` (done) or Attention (stopped); start from the first one still untouched.
 
 ## 1. Read the product
 
@@ -98,7 +102,8 @@ Never use your own memory of the product.
    ```bash
    curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json"      "$ABEERSUITE_URL/api/agent/products/<id>/notes" -d '{ "notes": ["STOPPED — capacity: typed \"128GB\", photo 3 sticker shows \"256G\". Check the real unit, then ask Claude to run product copy again.", "Model No is empty — sticker prints HS-SSD-E1000."] }'
    ```
-   The clash first, then every other problem from the mistake check (step 8) you already saw, one per line.
+   The clash first. Then, before sending, go once through the **mistake check list (step 8)** using only what you already have (product data + photos — no searching), and add each problem it finds, one per line. Staff then fix everything in one visit.
+   **Brand missing from the list is also a stop, decided here** — before any search or writing: a **well-known** brand printed on the item but absent from `masters.brands` → same notes route, line "Brand X is printed but not in the Brand list — create it, then ask Claude to run product copy again".
 2. **labelFacts** — printed on product / box / label, copied as printed.
 3. **seen** — only visible, counts as "at least N".
 4. **identity** — what tells it from sister models (capacity, size, wattage, yield…).
@@ -139,7 +144,7 @@ Follow the `writing` lines exactly (house style and keys: `title`, `summary`, `h
 - `brandId` from `masters.brands` **only** — same rule as the in-app AI:
   - `brand` is a real brand already → leave it (a printed mismatch is a clash, step 2).
   - `brand` empty or Unbranded / Premium Unbranded → the printed brand **if it is in the list**.
-  - A **well-known** brand printed but **missing from the list** → stop: notes route (Attention) with "Brand X is printed but not in the Brand list — create it, then set it".
+  - A **well-known** brand printed but **missing from the list** → already stopped in step 2; you never reach here with one.
   - Little-known or no name, `brand` empty → the **Unbranded** id, plus a note "Change to Premium Unbranded if this is the good-quality line".
 - `collectionIds` from `masters.collections` — **added** to `currentCollections`; nothing is removed, the first one (★ main) stays.
 
@@ -149,7 +154,7 @@ Follow the `writing` lines exactly (house style and keys: `title`, `summary`, `h
 
 A product may sit in **several** collections (usually 1–3). **Every shop product needs at least one.** There is no fallback / "Other" collection.
 
-The collections (read `masters.collections` for the ids and any new ones):
+The table below only explains **which customer each collection is for**. The live list is `masters.collections` — it wins: staff add, rename and remove collections in the office. Use its ids and names; a collection in the live list but not in this table → judge it by its name; one in this table but not in the live list → it no longer exists, never pick it.
 
 | Collection | Customer / setup | Typical items |
 |---|---|---|
@@ -189,7 +194,7 @@ The server finds the text on that source, converts it itself (grams; whole cm, r
 
 ## 7. Photos from the maker / seller pages
 
-Products with few photos: pick from the **accepted** pages' `photos` and send `photoPicks`, best first, each with the kind it fills:
+Run this when the product has **fewer than 4 good photos** (after leaving out the ones you will mark for removal) **or** any `must` kind is missing. Pick from the **accepted** pages' `photos` and send `photoPicks`, best first, each with the kind it fills:
 
 ```json
 "photoPicks": [ { "url": "https://www.portronics.com/cdn/shop/files/M8_-_1.png", "kind": "front" } ]
@@ -288,6 +293,8 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
 
 Notes are **added** to the Attention reason already there (`replace: false`, the default). Use `replace: true` only when the owner asks for a fresh review — it drops the old ones. Nothing wrong → send nothing and say "no problems found".
 
+**Published products: send only problems worth taking it off the shop** — a wrong spec, wrong compatibility, a clash, our support period shown as the maker's warranty, a wrong group (GST), a logo on the primary photo. Small things (a name that could read better, a nice-to-have photo, a missed extra collection) do **not** go to the server for a Published product — list them in the report under "Minor, not sent" so the owner decides.
+
 ---
 
 ## Report (always, at the end)
@@ -297,6 +304,8 @@ A short table, one row per product:
 | Product | Result | Kept | Unsure | Notes |
 |---|---|---|---|---|
 | SKU · name | draft / stopped: clash / reviewed | specs n · compatible n · photos picked n · shipping ✓ | n | the 1–3 most important |
+
+In Review mode, add **Minor, not sent** — the small points held back for Published products.
 
 Then: **stopped products** with the exact clash (staff must fix the data or the photos), and the next step for the owner:
 
