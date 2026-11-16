@@ -7,11 +7,12 @@ import { phoneMatchKey } from "@/shared/lib/format";
 import { isMissedCall } from "@/shared/lib/calls";
 import { ASSIGNED_POSITION_SELECT } from "@/shared/lib/api/ticketSelects";
 import { officeLinksFor, officeTicketHref } from "@/modules/message/lib/messageLinks";
-import { claimsByPhone, conversationsByPhone, mediaLink, menuAfterTemplateApplies, ownersByPhone, replyWindowOpen, setNumberSpam } from "@/modules/message/lib/customerMessages";
+import { claimsByPhone, conversationsByPhone, mediaLink, menuAfterTemplateApplies, ownersByPhone, partyPhones, replyWindowOpen, setNumberSpam } from "@/modules/message/lib/customerMessages";
 
 // /api/messages/thread?phone=<10 digits>
 //
-// GET   — one customer's thread: their messages and calls by time, the
+// GET   — one customer's thread: their messages and calls by time across
+//         every number the party has (`numbers`; `phone` is the reply number), the
 //         customer the number belongs to, the open conversation (topic) and its
 //         ticket, and whether a free reply is still allowed. Read-only.
 // PATCH — { phone, seen: true } marks their messages read;
@@ -27,25 +28,34 @@ export async function GET(req: Request) {
         const phone = phoneMatchKey(new URL(req.url).searchParams.get("phone"));
         if (!phone) return NextResponse.json({ error: "phone is required" }, { status: 400 });
 
+        // One customer, every number of theirs: shown as one chat. `phone` stays
+        // the number replies, claim, conversation and spam act on.
+        const customer = (await ownersByPhone([phone])).get(phone) ?? null;
+        const phones = await partyPhones(phone, customer);
         const messages = await prisma.message.findMany({
-            where: { phone },
+            where: { phone: { in: phones } },
             orderBy: { occurredAt: "desc" },
             take: THREAD_LIMIT,
         });
         const oldest = messages[messages.length - 1]?.occurredAt;
-        const [owners, calls, window, claims, conversations] = await Promise.all([
-            ownersByPhone([phone]),
+        const [calls, window, claims, conversations] = await Promise.all([
             prisma.call.findMany({
-                where: { phone, spam: false, ...(oldest && messages.length === THREAD_LIMIT ? { occurredAt: { gte: oldest } } : {}) },
+                where: { phone: { in: phones }, spam: false, ...(oldest && messages.length === THREAD_LIMIT ? { occurredAt: { gte: oldest } } : {}) },
                 orderBy: { occurredAt: "desc" },
                 take: THREAD_LIMIT,
-                select: { id: true, direction: true, occurredAt: true, durationSec: true, speechSec: true, note: true },
+                select: { id: true, phone: true, direction: true, occurredAt: true, durationSec: true, speechSec: true, note: true },
             }),
             replyWindowOpen(phone),
             claimsByPhone([phone]),
             conversationsByPhone([phone]),
         ]);
-        const customer = owners.get(phone) ?? null;
+        // The reply picker: each number that has messages, with when the
+        // customer last wrote from it (the default reply goes to the latest).
+        const lastIn = new Map<string, string>();
+        for (const m of messages) if (m.direction === "IN" && m.phone && !lastIn.has(m.phone)) lastIn.set(m.phone, m.occurredAt.toISOString());
+        const numbers = phones
+            .filter((p) => p === phone || messages.some((m) => m.phone === p))
+            .map((p) => ({ phone: p, lastInAt: lastIn.get(p) ?? null }));
 
         // The open conversation decides the ticket shown — never a guess from older messages.
         const conversation = conversations.get(phone) ?? null;
@@ -87,6 +97,7 @@ export async function GET(req: Request) {
                 type: "message" as const,
                 id: m.id,
                 at: m.occurredAt.toISOString(),
+                phone: m.phone,
                 channel: m.channel,
                 direction: m.direction,
                 kind: m.kind,
@@ -116,6 +127,7 @@ export async function GET(req: Request) {
                 type: "call" as const,
                 id: c.id,
                 at: c.occurredAt.toISOString(),
+                phone: c.phone,
                 direction: c.direction,
                 missed: isMissedCall(c.direction, c.speechSec, c.durationSec),
                 durationSec: c.speechSec || c.durationSec,
@@ -125,9 +137,11 @@ export async function GET(req: Request) {
 
         return NextResponse.json({
             phone,
+            /** The customer's numbers in this chat — more than one shows the Reply-via picker. */
+            numbers,
             customer,
-            senderName: messages.find((m) => m.senderName)?.senderName ?? null,
-            spam: messages.some((m) => m.spam),
+            senderName: messages.find((m) => m.phone === phone && m.senderName)?.senderName ?? null,
+            spam: messages.some((m) => m.phone === phone && m.spam),
             ticket: ticket
                 ? {
                     id: ticket.id,
@@ -166,7 +180,8 @@ export async function PATCH(req: Request) {
         const phone = phoneMatchKey(data.phone);
         if (!phone) return NextResponse.json({ error: "Not a valid number" }, { status: 400 });
         if (data.seen) {
-            await prisma.message.updateMany({ where: { phone, direction: { in: ["IN", "NOTE"] }, seenAt: null }, data: { seenAt: new Date() } });
+            // Opening the chat reads every number of the customer — it is one chat on screen.
+            await prisma.message.updateMany({ where: { phone: { in: await partyPhones(phone) }, direction: { in: ["IN", "NOTE"] }, seenAt: null }, data: { seenAt: new Date() } });
         }
         if (data.spam !== undefined) {
             return NextResponse.json({ ok: true, ...(await setNumberSpam(phone, data.spam)) });

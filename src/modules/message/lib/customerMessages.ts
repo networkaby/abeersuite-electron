@@ -122,6 +122,27 @@ export async function ownersByPhone(keys: string[]): Promise<Map<string, Custome
     return owners;
 }
 
+/** "person:12" / "company:7" — the key one customer's numbers merge under on the Messages screen. */
+export function ownerKey(o: Pick<CustomerOwner, "kind" | "id">): string {
+    return `${o.kind}:${o.id}`;
+}
+
+/**
+ * Every match key the customer owning `phone` has, `phone` first. A number that
+ * is not a party yet answers just itself. The Messages screen shows these as
+ * one chat; storage stays per number (the merge is display-only for now).
+ */
+export async function partyPhones(phone: string, owner?: CustomerOwner | null): Promise<string[]> {
+    const o = owner === undefined ? (await ownersByPhone([phone])).get(phone) ?? null : owner;
+    if (!o) return [phone];
+    const rows = await prisma.phone.findMany({
+        where: o.kind === "person" ? { personId: o.id } : { companyId: o.id },
+        select: { phone: true },
+    });
+    const keys = rows.map((r) => phoneMatchKey(r.phone)).filter((k): k is string => !!k);
+    return Array.from(new Set([phone, ...keys]));
+}
+
 // ── Conversations (MessageConversation) ─────────────────────────────────────────
 //
 // A conversation is a run of messages with one number about ONE thing. Its topic

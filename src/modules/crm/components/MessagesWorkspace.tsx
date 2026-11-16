@@ -41,6 +41,8 @@ type Owner = {
 };
 interface Conversation {
     phone: string;
+    /** The customer's numbers merged into this row (display-only), newest first. */
+    phones?: string[];
     customer: Owner | null;
     senderName: string | null;
     unread: number;
@@ -53,7 +55,7 @@ type Topic = "ASKING" | "TICKET" | "NEW";
 interface ConversationsResponse { items: Conversation[]; page: number; hasMore: boolean; totalUnread: number }
 
 type ThreadMessage = {
-    type: "message"; id: number; at: string; channel: string; direction: string; kind: string; body: string;
+    type: "message"; id: number; at: string; phone?: string | null; channel: string; direction: string; kind: string; body: string;
     senderName: string | null; businessNumber?: string | null; sentBy: string | null; billKind: string | null; billRefId: number | null;
     /** Office page of the bill / ticket this message is about (the server resolves it). */
     billHref?: string | null; ticketHref?: string | null;
@@ -62,7 +64,10 @@ type ThreadMessage = {
 } & MediaInfo;
 type ThreadCall = { type: "call"; id: number; at: string; direction: string; missed: boolean; durationSec: number; note: string | null };
 interface Thread {
+    /** The reply number — replies, claim, conversation and spam act on it. */
     phone: string;
+    /** Every number of this customer in the chat; more than one shows the Reply-via picker. */
+    numbers?: { phone: string; lastInAt: string | null }[];
     customer: Owner | null;
     senderName: string | null;
     spam: boolean;
@@ -320,6 +325,13 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
         }
     };
 
+    /** Same customer, another of their numbers: the chat stays on screen, only the reply number changes. */
+    const switchReplyNumber = (phone: string) => {
+        setSelected(phone);
+        setThread((prev) => (prev ? { ...prev, phone } : prev));
+        void loadThread(phone);
+    };
+
     // The new-message popup opens a chat here as ?phone=... once per arrival.
     const wantPhone = openPhone ?? searchParams.get("phone");
     const openedFromLink = useRef<string | null>(null);
@@ -452,6 +464,9 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
 
     // Indexes of thread items where a conversation begins — after older messages
     // or after the previous conversation; never above the very first message.
+    /** The customer has written from more than one number: tag bubbles, show the Reply-via picker. */
+    const multiNumber = (thread?.numbers?.length ?? 0) > 1;
+
     const conversationStarts = useMemo(() => {
         const starts = new Set<number>();
         let prev: number | null | undefined;
@@ -637,7 +652,7 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                                 onClick={() => openConversation(c.phone)}
                                 className={cn(
                                     "block w-full border-b px-3 py-2 text-left hover:bg-muted/60",
-                                    selected === c.phone && "bg-primary/10",
+                                    selected && (c.phones ?? [c.phone]).includes(selected) && "bg-primary/10",
                                 )}
                             >
                                 <div className="flex items-center gap-2.5">
@@ -653,6 +668,7 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                                             <span className={cn("truncate text-sm", c.unread ? "font-semibold" : "font-medium")}>
                                                 {!c.customer && <UserPlus className="mr-1 inline size-3.5 text-amber-600" aria-label="Not a party yet" />}
                                                 {displayName(c)}
+                                                {(c.phones?.length ?? 1) > 1 && <span className="ml-1 rounded bg-muted px-1 text-[10px] font-normal text-muted-foreground">{c.phones!.length} numbers</span>}
                                             </span>
                                             <span className="shrink-0 text-xs text-muted-foreground">{shortTime(c.last.at)}</span>
                                         </div>
@@ -733,11 +749,29 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                                                         ? <span className="shrink-0 rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-100">Customer</span>
                                                         : <span className="shrink-0 rounded bg-muted px-1 text-[10px] text-muted-foreground">Not a party</span>}
                                                 </div>
-                                                <div className="truncate text-xs text-muted-foreground">
-                                                    +91 {thread.phone}{thread.senderName && thread.customer ? ` · WA: ${thread.senderName}` : ""}
-                                                </div>
+                                                {!multiNumber && (
+                                                    <div className="truncate text-xs text-muted-foreground">
+                                                        +91 {thread.phone}{thread.senderName && thread.customer ? ` · WA: ${thread.senderName}` : ""}
+                                                    </div>
+                                                )}
                                             </div>
                                         </button>
+                                        {multiNumber && (
+                                            // One customer, several numbers: replies, claim and spam act on the number picked here.
+                                            <label className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                                                <span className="hidden sm:inline">Reply via</span>
+                                                <select
+                                                    value={thread.phone}
+                                                    onChange={(e) => switchReplyNumber(e.target.value)}
+                                                    className="h-7 min-w-0 rounded-md border bg-background px-1 text-xs text-foreground"
+                                                    aria-label="Reply via number"
+                                                >
+                                                    {thread.numbers!.map((n) => (
+                                                        <option key={n.phone} value={n.phone}>+91 {n.phone}</option>
+                                                    ))}
+                                                </select>
+                                            </label>
+                                        )}
                                     </div>
                                     <div className="flex shrink-0 items-center gap-1">
                                         {!thread.customer && (
@@ -920,6 +954,7 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                                                         <ChannelIcon channel={it.channel} businessNumber={it.businessNumber} className="size-3 inline-block" />
                                                     </span>
                                                 )}
+                                                {multiNumber && it.phone && <span title={`+91 ${it.phone}`}>…{it.phone.slice(-4)}</span>}
                                                 <span>{messageTime(it.at)}</span>
                                                 {out && <Ticks m={it} />}
                                             </div>

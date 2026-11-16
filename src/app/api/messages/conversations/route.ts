@@ -4,11 +4,11 @@ import { Prisma } from "@/generated/prisma/client";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { phoneMatchKey } from "@/shared/lib/format";
-import { ownersByPhone } from "@/modules/message/lib/customerMessages";
+import { ownerKey, ownersByPhone, type CustomerOwner } from "@/modules/message/lib/customerMessages";
 import { WA_CONVERSATION_TIMEOUT_MS } from "@/shared/lib/constants/whatsapp";
 
 // GET /api/messages/conversations — the Messages screen's left list: one row per
-// customer number, newest first, with its unread count and the topic of its
+// customer (a party's numbers merged; an unknown number on its own), newest first, with its unread count and the topic of its
 // open conversation (asking / ticket #N / new).
 //
 //   filter = all | unread | open (conversation is on a ticket) | unknown (no party yet)
@@ -19,6 +19,30 @@ import { WA_CONVERSATION_TIMEOUT_MS } from "@/shared/lib/constants/whatsapp";
 // one for the owners — never a query per conversation.
 
 const PAGE_SIZE = 50;
+
+/**
+ * One customer with several numbers is one chat: rows are already newest
+ * first, so the first row of an owner leads (its number, topic and last
+ * message) and the rest add their numbers and unread counts. Display-only —
+ * a customer's numbers on different pages each merge within their own page.
+ */
+function mergeByOwner(rows: Row[], owners: Map<string, CustomerOwner>) {
+    const out: { r: Row; phones: string[]; unread: number }[] = [];
+    const byOwner = new Map<string, (typeof out)[number]>();
+    for (const r of rows) {
+        const o = owners.get(r.phone);
+        const lead = o ? byOwner.get(ownerKey(o)) : undefined;
+        if (lead) {
+            lead.phones.push(r.phone);
+            lead.unread += r.unread;
+            continue;
+        }
+        const entry = { r, phones: [r.phone], unread: r.unread };
+        out.push(entry);
+        if (o) byOwner.set(ownerKey(o), entry);
+    }
+    return out;
+}
 /** `unknown` is decided after the owner lookup, so it scans this many rows. */
 const UNKNOWN_SCAN = 500;
 
@@ -102,11 +126,13 @@ export async function GET(req: Request) {
         `;
 
         const owners = await ownersByPhone(rows.map((r) => r.phone));
-        let list = rows.map((r) => ({
+        let list = mergeByOwner(rows, owners).map(({ r, phones, unread }) => ({
             phone: r.phone,
+            /** Every number of this customer on this page, newest first — shown as one chat. */
+            phones,
             customer: owners.get(r.phone) ?? null,
             senderName: r.senderName,
-            unread: r.unread,
+            unread,
             openTicketId: r.openTicketId,
             /** The open conversation's topic: ASKING | TICKET | NEW, null = none open. */
             topic: r.topic,
