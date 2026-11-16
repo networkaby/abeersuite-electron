@@ -92,6 +92,11 @@ export async function ensureDirectMessageRoom(userA: number, userB: number) {
     return room;
 }
 
+/** Messages that count as unread for this user: never their own (a "Message
+ *  yourself" chat would otherwise always show unread). senderUserId is null for
+ *  system notes, which do count — hence the OR, not a bare NOT. */
+const notMine = (userId: number) => ({ OR: [{ senderUserId: null }, { senderUserId: { not: userId } }] });
+
 /** Which rooms this user may see — one definition, shared by the list and the unread total. */
 const accessibleRoomsWhere = (userId: number) => ({
     isActive: true,
@@ -182,6 +187,7 @@ export async function listAccessibleRooms(user: ResolvedUser) {
                         where: {
                             roomId,
                             ...(lastReadAt ? { createdAt: { gt: lastReadAt } } : {}),
+                            ...notMine(user.id),
                         },
                     });
                     return [roomId, count] as const;
@@ -224,6 +230,7 @@ export async function getUnreadTotal(user: ResolvedUser) {
             where: {
                 roomId: room.id,
                 ...(lastReadAt ? { createdAt: { gt: lastReadAt } } : {}),
+                ...notMine(user.id),
             },
         });
     }));

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Download, FileText } from "lucide-react";
+import { Download, FileSpreadsheet, FileText } from "lucide-react";
 import { ImageViewer } from "@/shared/components/ImageViewer";
 
 /**
@@ -17,10 +17,14 @@ export type MediaInfo = {
     mediaSize?: number | null;
 };
 
-function sizeLabel(n: number | null | undefined): string {
+export function sizeLabel(n: number | null | undefined): string {
     if (!n) return "";
     if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
     return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+export function isSheet(name: string | null | undefined): boolean {
+    return /\.(xlsx?|xlsm|csv|ods)$/i.test(name ?? "");
 }
 
 export function MessageMedia({ m }: { m: MediaInfo }) {
@@ -96,7 +100,9 @@ export function MessageMedia({ m }: { m: MediaInfo }) {
             rel="noreferrer"
             className="flex items-center gap-2 rounded-md border bg-background/60 px-2 py-1.5 hover:bg-background"
         >
-            <FileText className="size-5 shrink-0" />
+            {isSheet(m.fileName)
+                ? <FileSpreadsheet className="size-5 shrink-0 text-emerald-600" />
+                : <FileText className="size-5 shrink-0" />}
             <span className="min-w-0">
                 <span className="block truncate font-medium">{m.fileName ?? "Document"}</span>
                 <span className="block text-[11px] opacity-70">{[type.split("/").pop()?.toUpperCase(), sizeLabel(m.mediaSize)].filter(Boolean).join(" · ")}</span>

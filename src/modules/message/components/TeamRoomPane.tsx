@@ -14,7 +14,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Send, MessageSquare, Loader2, Hash, AtSign, Bell, ChevronLeft, Paperclip, X, FileText, FileSpreadsheet, Download } from "lucide-react";
+import { Send, MessageSquare, Loader2, Hash, AtSign, Bell, ChevronLeft, Paperclip, X, FileText, FileSpreadsheet } from "lucide-react";
 import { extractApiError } from "@/shared/lib/api";
 import { GatedLink } from "@/shared/components/GatedLink";
 import { supabase } from "@/shared/lib/supabase/supabaseClient";
@@ -26,6 +26,7 @@ import { writeCache } from "@/shared/lib/browser/pollCache";
 import { initials } from "@/shared/lib/format/initials";
 import { useValueChange } from "@/shared/hooks/useValueChange";
 import { putToSignedUrl } from "@/shared/lib/storage/signedUpload";
+import { MessageMedia, isSheet, sizeLabel as formatSize } from "@/modules/crm/components/MessageMedia";
 import { TEAM_FILE_BLOCKED_EXT, TEAM_FILE_MAX_BYTES } from "@/shared/lib/constants/whatsapp";
 
 /** Cross-tab mirror of "which room is open" — see `GlobalInboxListener.tsx`'s reader. */
@@ -77,41 +78,19 @@ function fileProblem(f: File): string | null {
     return null;
 }
 
-function formatSize(bytes: number | null | undefined): string {
-    if (!bytes) return "";
-    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function isSheet(name: string | null | undefined): boolean {
-    return /\.(xlsx?|xlsm|csv|ods)$/i.test(name ?? "");
-}
-
-/** A message's file: a photo shows small, anything else as a name + Download card. */
+/** A message's file — shown exactly like a WhatsApp attachment (zoom viewer
+ *  for photos, inline video / audio, a file card with Download). While it is
+ *  still uploading only the local preview shows; Download waits for the save. */
 function FileCard({ message }: { message: Message }) {
-    const name = message.fileName ?? "file";
-    if (message.mediaType?.startsWith("image/") && message.fileUrl) {
-        return (
-            <a href={message.downloadUrl ?? message.fileUrl} target="_blank" rel="noreferrer" className="mt-1 block w-fit" title={`Download ${name}`}>
-                {/* eslint-disable-next-line @next/next/no-img-element -- signed R2 link, not an optimisable asset */}
-                <img src={message.fileUrl} alt={name} className="max-h-60 max-w-xs rounded-md border border-border object-contain" />
-            </a>
-        );
-    }
-    const sheet = isSheet(name);
-    const Icon = sheet ? FileSpreadsheet : FileText;
     return (
-        <div className="mt-1 flex w-fit max-w-sm items-center gap-3 rounded-md border border-border bg-card px-3 py-2">
-            <Icon size={22} className={sheet ? "shrink-0 text-emerald-600" : "shrink-0 text-muted-foreground"} />
-            <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-foreground">{name}</p>
-                <p className="text-[11px] text-muted-foreground">{formatSize(message.mediaSize)}</p>
-            </div>
-            {message.downloadUrl && !message.pending && (
-                <a href={message.downloadUrl} className="ml-1 rounded-md p-1.5 text-primary hover:bg-muted" title="Download" aria-label={`Download ${name}`}>
-                    <Download size={16} />
-                </a>
-            )}
+        <div className="mt-1 w-fit max-w-sm">
+            <MessageMedia m={{
+                mediaUrl: message.fileUrl,
+                downloadUrl: message.pending ? null : message.downloadUrl,
+                mediaType: message.mediaType,
+                fileName: message.fileName,
+                mediaSize: message.mediaSize,
+            }} />
         </div>
     );
 }

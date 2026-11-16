@@ -252,7 +252,9 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
         window.addEventListener("inbox:unread", h);
         return () => window.removeEventListener("inbox:unread", h);
     }, [loadRooms]);
-    const roomTitle = (r: Room) => (r.type === "DIRECT_MESSAGE" && me ? users.find((u) => u.id === dmPartnerId(r, me))?.name ?? r.name : r.name);
+    const roomTitle = (r: Room) => (r.type === "DIRECT_MESSAGE" && me
+        ? (dmPartnerId(r, me) === me ? "You (notes to self)" : users.find((u) => u.id === dmPartnerId(r, me))?.name ?? r.name)
+        : r.name);
     const openRoom = (id: string) => {
         setRoomId(id);
         setSelected(null);
@@ -532,7 +534,9 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
     // "@name" (and the Team chip) also offer colleagues there is no chat with yet.
     const dmWith = new Set(rooms.filter((r) => r.type === "DIRECT_MESSAGE" && me).map((r) => dmPartnerId(r, me)));
     const startRows: Row[] = staffSearch || filter === "team"
-        ? users.filter((u) => u.id !== me && !dmWith.has(u.id) && (!q || u.name.toLowerCase().includes(q)))
+        // Me first — "Message yourself", a chat for notes and files (no WhatsApp).
+        ? users.filter((u) => !dmWith.has(u.id) && (!q || u.name.toLowerCase().includes(q) || (u.id === me && "you".includes(q))))
+            .sort((a, b) => Number(b.id === me) - Number(a.id === me))
             .slice(0, staffSearch ? 8 : 50)
             .map((u) => ({ kind: "start" as const, key: `u:${u.id}`, at: "", user: u }))
         : [];
@@ -602,7 +606,9 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                                         <MessageSquarePlus className="size-4 shrink-0" />
                                     </div>
                                     <div className="min-w-0 flex-1 truncate">
-                                        Start chat with <span className="font-medium text-foreground">{row.user.name}</span>
+                                        {row.user.id === me
+                                            ? <span className="font-medium text-foreground">Message yourself</span>
+                                            : <>Start chat with <span className="font-medium text-foreground">{row.user.name}</span></>}
                                     </div>
                                 </button>
                             );

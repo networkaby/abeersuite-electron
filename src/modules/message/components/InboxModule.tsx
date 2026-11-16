@@ -22,6 +22,7 @@ type TeamUser = {
 /** Derive a display name for a DM room from the room key + current user id. */
 function dmPartnerName(room: Room, currentUserId: number, teamUsers: TeamUser[]): string {
     const partnerId = dmPartnerId(room, currentUserId);
+    if (partnerId === currentUserId) return "You (notes to self)";
     return teamUsers.find((u) => u.id === partnerId)?.name ?? room.name;
 }
 

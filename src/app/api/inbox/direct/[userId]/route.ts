@@ -13,7 +13,8 @@ export async function POST(
     const { userId } = await params;
     const targetId = parseInt(userId, 10);
 
-    if (isNaN(targetId) || targetId === user.id) {
+    // targetId === user.id is "Message yourself" — a one-member chat for notes and files.
+    if (isNaN(targetId) || targetId <= 0) {
         return NextResponse.json({ error: "Invalid user" }, { status: 400 });
     }
 
