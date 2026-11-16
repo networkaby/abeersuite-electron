@@ -14,6 +14,7 @@ import { arrangeFrom, checkWrittenCopy, writtenCopySchema } from "@/modules/ecom
 import { readGivenPages, type PageSearch } from "@/modules/ecommerce/lib/aiPageReader";
 import { checkFact, cmOf, gramsOf } from "@/modules/ecommerce/lib/aiFactCheck";
 import { PHOTO_REMOVE_REASONS, checklistFrom, isPhotoKind, type PhotoKind, type PhotoRemoveReason, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
+import { cloudinarySignature } from "@/shared/lib/cloudinary";
 import { AgentCopyError, pickableMasters, productForAgent, specsOf, writeAsDraft } from "@/modules/ecommerce/lib/agentProductCopy";
 
 /**
@@ -96,6 +97,25 @@ async function addDraftNotes(id: number, lines: string[]) {
     const old = (info.notes ?? []).filter((n) => !/^Part \d done/.test(n));
     const notes = [...new Set([...old, ...lines])].slice(-40);
     await prisma.invProduct.update({ where: { id }, data: { shopDraftJson: { ...info, notes, notesAt: new Date().toISOString(), kept: undefined } as never } });
+}
+
+/** Copy a page photo into our Cloudinary (shop/products) — Cloudinary fetches the URL itself. Null when it fails. */
+async function copyToOurPhotos(url: string): Promise<string | null> {
+    const sig = await cloudinarySignature("shop/products");
+    if (!sig) return null;
+    const form = new FormData();
+    form.append("file", url);
+    form.append("api_key", sig.apiKey);
+    form.append("timestamp", String(sig.timestamp));
+    form.append("signature", sig.signature);
+    form.append("folder", sig.folder);
+    try {
+        const res = await fetch(`https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`, { method: "POST", body: form, signal: AbortSignal.timeout(30_000) });
+        if (!res.ok) return null;
+        return ((await res.json()) as { secure_url?: string }).secure_url ?? null;
+    } catch {
+        return null;
+    }
 }
 
 // ── Read ──────────────────────────────────────────────────────────────────────
@@ -372,10 +392,20 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>) {
     const gallery = galleryOf(p);
     const onPage = new Map(checked.trusted.flatMap((pg) => pg.photos.map((u) => [u, pg] as const)));
     const gone = new Set(b.photos.remove.map((r) => r.url).filter((u) => gallery.includes(u)));
-    const added = b.photos.add.filter((x) => onPage.has(x.url) && !gallery.includes(x.url)).slice(0, AI_PHOTO_LIMITS.total);
+    const wanted = b.photos.add.filter((x) => onPage.has(x.url) && !gallery.includes(x.url)).slice(0, AI_PHOTO_LIMITS.total);
     for (const x of b.photos.add) if (!onPage.has(x.url)) notes.push(`Photo not on a kept page — not added: ${x.url}`);
-    let next = [...gallery.filter((u) => !gone.has(u)), ...added.map((x) => x.url)];
-    const ordered = [...new Set(b.photos.order.filter((u) => next.includes(u)))];
+    // Copied into our Cloudinary first, as staff's Add does (AiPhotoPicker): the
+    // shop and product page only show our own photo hosts, and the maker's link may move.
+    const copyOf = new Map<string, string>();
+    const failed: typeof wanted = [];
+    for (const x of wanted) {
+        const ours = await copyToOurPhotos(x.url);
+        if (ours) copyOf.set(x.url, ours); else failed.push(x);
+    }
+    if (failed.length) notes.push(`${failed.length} photo(s) could not be copied to our storage — offered to add by hand instead.`);
+    const added = wanted.filter((x) => copyOf.has(x.url));
+    let next = [...gallery.filter((u) => !gone.has(u)), ...added.map((x) => copyOf.get(x.url)!)];
+    const ordered = [...new Set(b.photos.order.map((u) => copyOf.get(u) ?? u).filter((u) => next.includes(u)))];
     if (ordered.length) next = [...ordered, ...next.filter((u) => !ordered.includes(u))];
     if (gone.size || added.length || ordered.length) {
         patch.galleryUrls = next;
@@ -384,7 +414,7 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>) {
         if (added.length) notes.push(`Added ${added.length} photo(s) from ${[...new Set(added.map((x) => onPage.get(x.url)!.site))].join(", ")} — check they show this exact model and colour.`);
     }
     if (added.some((x) => !onPage.get(x.url)?.maker)) notes.push("Some added photos are from a seller's page, not the maker's.");
-    const suggested: PhotoSuggestion[] = b.photos.suggest
+    const suggested: PhotoSuggestion[] = [...b.photos.suggest, ...failed]
         .filter((x) => onPage.has(x.url) && !next.includes(x.url))
         .map((x) => ({ url: x.url, site: onPage.get(x.url)!.site, kind: isPhotoKind(x.kind) ? x.kind : null }));
     const kinds = (xs: string[]) => xs.filter(isPhotoKind) as PhotoKind[];

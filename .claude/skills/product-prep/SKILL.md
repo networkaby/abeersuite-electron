@@ -127,7 +127,7 @@ Read the product again (`GET /api/agent/prep/<id>`); work only from `prep.pages`
 3. **Collections — set fresh.** `collectionIds` replaces the current set, main first. Same picking rules as product-copy §5 (Shop by Need + Setup Kits, never Offers, the live `masters.collections` list wins). At least one; nothing fits → a note.
 4. **Shipping** — package weight / size quoted exactly as a saved page prints it, `source` = that page url. The server fills it **only when ours is empty**, and adds the note "taken from the internet, not weighed — add wrapper and packing weight". Ours already filled → it only notes a big difference.
 5. **Photos**:
-   - `add`: photos from the saved pages you are **sure** show this exact model and colour (maker's first, sharp, no other brand's logo or watermark) → added to the gallery now.
+   - `add`: photos from the saved pages you are **sure** show this exact model and colour (maker's first, sharp, no other brand's logo or watermark) → copied into our photo storage and added to the gallery now (a copy that fails is offered to staff instead). Do not also keep our own lower-quality copy of the same image — put it in `remove`.
    - `suggest`: the ones you are not sure about → offered to staff.
    - `remove` / `suggestRemove`: same as Part 1 for anything still wrong.
    - `order`: the whole gallery as you want it (our kept photos + added ones) — a clean product front first, then sides / close-ups, then box, then feel photos. Applied now.
