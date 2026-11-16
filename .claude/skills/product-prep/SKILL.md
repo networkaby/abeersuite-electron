@@ -56,7 +56,8 @@ Start at **part `partDone + 1`**:
 - `partDone: 0`, or `identityChanged: true` (staff changed brand / model / barcode — the saved search no longer counts) → **Part 1**.
 - `1` → Part 2 (`searchAllowed` true) — or Part 3 if `searchAllowed` is false and a page was kept.
 - `2` → Part 3.
-- `3` or `4` → done here; tell the owner to run **product-recheck**.
+- `3` or `4` → done here; tell the owner to run **product-recheck** — **unless the product is in Waiting**.
+- **In Waiting (`shopStatus: "WAITING"`) → always start again at Part 1**, whatever `partDone` says: staff sent it back (after fixing Attention, or to redo it). Use the saved search when there is one — send `run` with `part1` + `part3` and **no `part2`** (no new search); only a product with no saved search (`searchAllowed: true`) gets `part2`.
 - In Attention: first read `attention` — check staff fixed each STOPPED line (look at the data / photos again). Not fixed → say so, leave it, next product.
 
 Photos blocked? `GET /api/agent/products/<id>/photos/<n>` (n = place in `photos`, from 1).

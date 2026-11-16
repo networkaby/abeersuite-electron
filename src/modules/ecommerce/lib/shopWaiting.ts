@@ -42,7 +42,7 @@ export async function startAi(ids: number[]): Promise<{ queued: number; publishe
 }
 
 /** Remove from Waiting: back to the stage it came from (Unpublished when unknown). */
-export async function cancelWaiting(ids: number[]): Promise<{ removed: number }> {
+export async function cancelWaiting(ids: number[]): Promise<{ removed: number; moved: { id: number; shopStatus: ShopStatus }[] }> {
     const rows = await prisma.invProduct.findMany({
         where: { id: { in: ids }, shopStatus: "WAITING" },
         select: { id: true, shopDraftJson: true },
@@ -60,5 +60,6 @@ export async function cancelWaiting(ids: number[]): Promise<{ removed: number }>
             });
         }),
     );
-    return { removed: rows.length };
+    // Each product's new stage, so the list moves the row at once.
+    return { removed: rows.length, moved: rows.map((r) => ({ id: r.id, shopStatus: readShopDraft(r.shopDraftJson)?.stageBefore ?? "UNPUBLISHED" })) };
 }

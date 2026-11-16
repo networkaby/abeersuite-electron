@@ -350,9 +350,20 @@ export default function EcommerceProductsPage() {
     // Start AI / Remove from Waiting (owner, 2026-11-17) — rows and the bulk bar.
     const sendToAi = async (ids: number[], action: "start" | "remove") => {
         if (!ids.length) return;
+        // Rows move at once (AGENTS §7): Start AI always lands in Waiting, so it moves
+        // before the request and rolls back on failure; Remove moves when the server
+        // says where each one goes back to.
+        const move = (stageOf: Map<number, ShopProductAdmin["shopStatus"]>) =>
+            setProducts((prev) => prev.map((p) => {
+                const st = stageOf.get(p.id);
+                return st ? { ...p, shopStatus: st, isListedInShop: false, ...(st === "WAITING" && { shopAttention: null }) } : p;
+            }));
+        const before = products.filter((p) => ids.includes(p.id));
+        if (action === "start") move(new Map(ids.map((id) => [id, "WAITING"])));
         setBulkBusy(true);
         try {
-            const { data } = await axios.post<{ queued?: number; published?: string[]; removed?: number }>("/api/ecommerce/products/waiting", { ids, action });
+            const { data } = await axios.post<{ queued?: number; published?: string[]; removed?: number; moved?: { id: number; shopStatus: ShopProductAdmin["shopStatus"] }[] }>("/api/ecommerce/products/waiting", { ids, action });
+            if (action === "remove") move(new Map((data.moved ?? []).map((m) => [m.id, m.shopStatus])));
             if (action === "start") {
                 toast.success(`${data.queued ?? 0} sent to Waiting — the next AI run picks them up`);
                 if (data.published?.length) toast.info(`Off the shop while waiting: ${data.published.slice(0, 5).join(", ")}${data.published.length > 5 ? ", …" : ""}`);
@@ -362,6 +373,8 @@ export default function EcommerceProductsPage() {
             clearSelection();
             load();
         } catch (e: unknown) {
+            const back = new Map(before.map((p) => [p.id, p]));
+            setProducts((prev) => prev.map((p) => back.get(p.id) ?? p));
             toast.error(extractApiError(e, "Could not update Waiting"));
         } finally {
             setBulkBusy(false);
