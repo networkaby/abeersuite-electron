@@ -409,7 +409,11 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
             else if (w && p.weightGrams && Math.abs(w - p.weightGrams) / p.weightGrams > 0.25) notes.push(`Weight: ours ${p.weightGrams} g, ${pg.site} says ${w} g — check (ours may include packing).`);
             if (d && !p.lengthCm) [patch.lengthCm, patch.breadthCm, patch.heightCm] = d;
             else if (d && p.lengthCm) notes.push(`Parcel size on ${pg.site}: ${d.join(" × ")} cm — ours is already filled, not changed.`);
-            if (patch.weightGrams || patch.lengthCm) notes.push(`Weight / size taken from ${pg.site}, not weighed by us — add wrapper and packing weight if needed.`);
+            if (patch.weightGrams || patch.lengthCm) {
+                notes.push(src.toLowerCase() === "label"
+                    ? "Weight / size as printed on the box, not weighed by us — add wrapper and packing weight if needed."
+                    : `Weight / size taken from ${pg.site}, not weighed by us — add wrapper and packing weight if needed.`);
+            }
         }
     }
 
