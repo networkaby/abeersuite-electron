@@ -1,18 +1,27 @@
-# v1.17.7
+# v1.17.8
 
-Every counter should install this update. It adds two new tables for WhatsApp numbers, so the counter must update before the office site is deployed — until it does, its sync stays paused.
+Every counter should install this update. It adds a new "Waiting" stage for shop products, so the counter must update before the office site is deployed — until it does, its sync stays paused.
 
-## WhatsApp numbers
+## Messages and WhatsApp
 
-- Each WhatsApp number now has its own record in Settings → WhatsApp numbers: its own ids, an optional token of its own, and a **Test** button that shows whether it is working.
-- Choose per number whether it sends login OTPs, bills, or both.
-- Your existing OTP and bills numbers are carried over automatically the first time the screen opens — nothing to re-enter.
+- One chat per customer: messages from all of a customer's numbers now show in a single conversation, with a **Reply via** picker to choose which number to answer on.
+- Messages your staff send from the WhatsApp Business app on the phone now also appear in the inbox.
+- Bill and ticket chips in a chat open the bill or ticket in the office straight away; **+ Ticket** can link any open ticket to the chat.
+- A WhatsApp message the app cannot show now keeps Meta's reason, so you know why.
+- On a counter, the WhatsApp popup closes at once when staff close the conversation.
+- Messages to numbers that are not in your WhatsApp numbers list are ignored.
 
-## WhatsApp message templates
+## Team chat
 
-- Template approval is now kept per WhatsApp account. A newly added account gets its templates approved on its own before bills move to it, so bills keep going out from the old account meanwhile.
-- Your current approved templates stay as they are.
+- **Message yourself** — keep notes and files in your own chat.
+- Photos and files in Team chat open full-screen, like WhatsApp.
 
-## Messages
+## Roles
 
-- When WhatsApp refuses a reply, the Messages screen now shows Meta's actual reason instead of a general "failed" message.
+- Each module's ticks in the Role screen are now split into **Pages**, **Add / Edit / Delete**, **Special actions** and **What they can see**, so it is easier to find the right tick.
+
+## Online shop products
+
+- New **Waiting** stage: staff can shortlist products for the AI preparation run, or send a product back there from Attention once it is fixed. Waiting rows move at once.
+- AI product preparation now works in steps — clean our data, one saved internet search, then write the copy, photos and shipping details — and parks a product in Attention when something needs staff.
+- It fills an empty Model No from the box or the maker's page, takes shipping size from the box label, copies added photos into our own storage, and keeps the earlier notes for staff.
