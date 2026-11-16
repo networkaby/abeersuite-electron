@@ -153,6 +153,7 @@ export default function RolePage() {
     );
 
     const permissionById = useMemo(() => new Map(allPerms.map((permission) => [permission.id, permission])), [allPerms]);
+    const describePerm = useCallback((id: string) => permissionById.get(id)?.description ?? undefined, [permissionById]);
 
     // Granular create/edit/delete ids unlocked because their owning sidebar link is
     // pooled. The pool carries MODULE VISIBILITY (`ui:sidebar:*`), never the granular
@@ -544,6 +545,7 @@ export default function RolePage() {
                                     selected={selected}
                                     original={original}
                                     inLens={inLens}
+                                    describe={describePerm}
                                     onTogglePerm={togglePerm}
                                 />
 
@@ -552,6 +554,7 @@ export default function RolePage() {
                                     original={original}
                                     search={search}
                                     inLens={inLens}
+                                    describe={describePerm}
                                     onTogglePerm={togglePerm}
                                 />
 

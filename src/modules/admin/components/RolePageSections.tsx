@@ -21,6 +21,11 @@ import {
     Trash2,
     Users,
     Globe,
+    Eye,
+    PencilLine,
+    Zap,
+    Filter,
+    Info,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -47,6 +52,7 @@ import {
     SIDEBAR_LINK_MATRIX_ROW_KEY,
     extraTogglesFor,
     MODULE_EXTRA_TOGGLE,
+    RISKY_PERMISSION_IDS,
     type WorkRow,
     type WorkGroupRow,
     type Department,
@@ -712,91 +718,134 @@ export function WorkAccessSection({
 // `ui:sidebar:<module>:<child>` permission, so the link shows in the role's
 // sidebar. Modules outside the department pool offer no links and are dropped, so
 // a role only sees links inside the modules its department allows.
+// The four kinds of permission a module carries, each in its own lane so a
+// "can open the page" tick never sits beside a "can do this" tick:
+//   Pages            — ui:sidebar:* links (nested sub-nav keeps its tree)
+//   Add / Edit / Delete — the CRUD matrix rows the ticked links unlock
+//   Special actions  — the per-link extra yes/no ticks (send, reset, change tax…)
+//   What they can see — module-wide toggles that widen or narrow the data shown
+const LANE_STYLE = {
+    pages: { icon: Eye, title: "Pages", hint: "Shows the link in the sidebar. Everything below needs its page ticked.", bar: "border-l-blue-500", tint: "bg-blue-500/10 text-blue-700 dark:text-blue-300", on: "border-blue-500 bg-blue-500/10", box: "border-blue-500 bg-blue-500" },
+    crud: { icon: PencilLine, title: "Add / Edit / Delete", hint: "Change records on the ticked pages. Each column is separate.", bar: "border-l-emerald-500", tint: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300", on: "border-emerald-500 bg-emerald-500/10", box: "border-emerald-500 bg-emerald-500" },
+    special: { icon: Zap, title: "Special actions", hint: "One powerful button each. RISKY ones reach many customers, move money or reset data.", bar: "border-l-amber-500", tint: "bg-amber-500/10 text-amber-700 dark:text-amber-300", on: "border-amber-500 bg-amber-500/10", box: "border-amber-500 bg-amber-500" },
+    see: { icon: Filter, title: "What they can see", hint: "Widens or narrows the data shown inside the pages.", bar: "border-l-violet-500", tint: "bg-violet-500/10 text-violet-700 dark:text-violet-300", on: "border-violet-500 bg-violet-500/10", box: "border-violet-500 bg-violet-500" },
+} as const;
+type LaneKind = keyof typeof LANE_STYLE;
+
+function PermTick({
+    id,
+    label,
+    kind,
+    selected,
+    original,
+    describe,
+    onTogglePerm,
+    note,
+}: {
+    id: string;
+    label: string;
+    kind: LaneKind;
+    selected: Set<string>;
+    original: Set<string>;
+    describe: (id: string) => string | undefined;
+    onTogglePerm: (id: string) => void;
+    note?: string;
+}) {
+    const on = selected.has(id);
+    const changed = on !== original.has(id);
+    const style = LANE_STYLE[kind];
+    const desc = describe(id);
+    const risky = RISKY_PERMISSION_IDS.has(id);
+    return (
+        <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => onTogglePerm(id)}
+            title={[label, desc, note, id].filter(Boolean).join("\n\n")}
+            aria-pressed={on}
+            className={[
+                "h-auto items-center gap-1.5 rounded-md border px-2 py-1 text-left transition-colors",
+                on ? style.on : "border-border hover:border-primary/60 hover:bg-primary/5",
+                changed ? "ring-2 ring-primary/25" : "",
+            ].join(" ")}
+        >
+            <span
+                className={[
+                    "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                    on ? `${style.box} text-white` : "border-border",
+                ].join(" ")}
+            >
+                {on && <Check size={10} strokeWidth={3} />}
+            </span>
+            <span className="text-[11px] font-medium leading-tight">{label}</span>
+            {risky && (
+                <span className="rounded border border-destructive px-1 text-[9px] font-bold tracking-wide text-destructive">RISKY</span>
+            )}
+            {note && <span className="text-[10px] font-normal text-muted-foreground">{note}</span>}
+            {desc && <Info size={11} className="shrink-0 text-muted-foreground" />}
+        </Button>
+    );
+}
+
+function Lane({ kind, children }: { kind: LaneKind; children: React.ReactNode }) {
+    const style = LANE_STYLE[kind];
+    const Icon = style.icon;
+    return (
+        <div className={`grid gap-2 border-l-[3px] border-t border-t-border px-3 py-2.5 sm:grid-cols-[170px_minmax(0,1fr)] ${style.bar}`}>
+            <div className="flex items-start gap-2">
+                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${style.tint}`}>
+                    <Icon size={13} />
+                </span>
+                <p className="pt-1 text-[12px] font-semibold leading-tight" title={style.hint}>{style.title}</p>
+            </div>
+            <div className="min-w-0">{children}</div>
+        </div>
+    );
+}
+
 export function SidebarVisibilitySection({
     selected,
     original,
     search,
     inLens,
+    describe,
     onTogglePerm,
 }: {
     selected: Set<string>;
     original: Set<string>;
     search: string;
     inLens: (id: string) => boolean;
+    describe: (id: string) => string | undefined;
     onTogglePerm: (id: string) => void;
 }) {
     const term = search.trim().toLowerCase();
-    // Which granular matrices are expanded — keyed by LEVEL + matrix row, so the
-    // table opens *in the place you clicked*. Links sharing a row at the SAME level
-    // (e.g. Products + Item Ledger) sync to one table; the same row reached from a
-    // DIFFERENT level (e.g. the ledger books up top vs. the Masters children) opens
-    // its own table there, and only there.
-    const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-    const rowStateKey = (scopeKey: string, rowKey: string) => `${scopeKey}::${rowKey}`;
-    const toggleRow = (scopeKey: string, rowKey: string) =>
-        setExpandedRows((prev) => {
+    const [closed, setClosed] = useState<Set<string>>(new Set());
+    const toggleModule = (key: string) =>
+        setClosed((prev) => {
             const next = new Set(prev);
-            const k = rowStateKey(scopeKey, rowKey);
-            if (next.has(k)) next.delete(k); else next.add(k);
+            if (next.has(key)) next.delete(key); else next.add(key);
             return next;
         });
-    const matrixRowForLink = (node: SidebarChildRow) => {
-        const rowKey = SIDEBAR_LINK_MATRIX_ROW_KEY[node.permissionId];
-        // The five RECORD_ELIGIBILITY_ROWS keys render their CRUD table in the
-        // top-level Records card instead — no inline table here, just the plain
-        // nav-visibility chip (see INLINE_HIDDEN_MATRIX_ROW_KEYS).
-        if (!rowKey || INLINE_HIDDEN_MATRIX_ROW_KEYS.has(rowKey)) return undefined;
-        return MATRIX_ROWS.find((row) => row.key === rowKey);
-    };
-
-    // A single yes/no capability chip (extra toggle) — shared by the per-link
-    // toggles (rendered beside a chip) and the module-level toggle (rendered on
-    // its own row after a module's links).
-    const extraToggleChip = (toggle: { id: string; label: string }) => {
-        const on = selected.has(toggle.id);
-        const changed = on !== original.has(toggle.id);
-        return (
-            <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => onTogglePerm(toggle.id)}
-                title={toggle.id}
-                className={[
-                    "h-auto items-center gap-1.5 rounded-md border px-2 py-1 text-left transition-colors",
-                    on
-                        ? "border-primary bg-primary/10 text-foreground hover:bg-primary/15"
-                        : "border-border hover:border-primary/60 hover:bg-primary/5",
-                    changed ? "ring-2 ring-primary/20" : "",
-                ].join(" ")}
-            >
-                <span
-                    className={[
-                        "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
-                        on ? "border-primary bg-primary text-primary-foreground" : "border-border",
-                    ].join(" ")}
-                >
-                    {on && <Check size={10} strokeWidth={3} />}
-                </span>
-                <span className="text-[11px] font-medium leading-tight">{toggle.label}</span>
-            </Button>
-        );
-    };
 
     // Gate per MODULE, not per link: a module is offered if the department pool
     // carries ANY of its links (all-access pools offer everything; Workspace is
     // always offered). Once offered, EVERY current link from constants shows — so
     // adding a nav item (or sub-nav) appears automatically, no re-pooling needed.
-    // Then prune only by the search term, keeping ancestors of a match.
+    // Then prune by the search term (link label or any of its action labels),
+    // keeping ancestors of a match.
     const modules = SIDEBAR_MODULES
         .map((mod) => {
             const moduleOffered = !mod.pooled || mod.childPermissionIds.some((id) => inLens(id));
             if (!moduleOffered) return { ...mod, children: [] as SidebarChildRow[] };
             const moduleMatch = !term || mod.label.toLowerCase().includes(term);
+            const nodeMatch = (node: SidebarChildRow) =>
+                node.label.toLowerCase().includes(term) ||
+                extraTogglesFor(node.permissionId).some((t) => t.label.toLowerCase().includes(term));
             const prune = (nodes: SidebarChildRow[]): SidebarChildRow[] =>
                 nodes.reduce<SidebarChildRow[]>((acc, node) => {
                     const kids = node.children ? prune(node.children) : undefined;
-                    const keep = moduleMatch || node.label.toLowerCase().includes(term) || (!!kids && kids.length > 0);
+                    const keep = moduleMatch || nodeMatch(node) || (!!kids && kids.length > 0);
                     if (keep) acc.push({ ...node, children: kids && kids.length ? kids : undefined });
                     return acc;
                 }, []);
@@ -806,139 +855,34 @@ export function SidebarVisibilitySection({
 
     if (modules.length === 0) return null;
 
-    const countLinks = (nodes: SidebarChildRow[]): number =>
-        nodes.reduce((n, c) => n + 1 + (c.children ? countLinks(c.children) : 0), 0);
+    const flatten = (nodes: SidebarChildRow[]): SidebarChildRow[] =>
+        nodes.flatMap((n) => [n, ...(n.children ? flatten(n.children) : [])]);
 
-    const chip = (node: SidebarChildRow, scopeKey: string) => {
-        const isOn = selected.has(node.permissionId);
-        const changed = isOn !== original.has(node.permissionId);
-        const matrixRow = matrixRowForLink(node);
-        // Every link mapping to a matrix row gets a chevron. State is keyed by
-        // level + row, so links sharing a row at THIS level open one table here;
-        // the same row at another level opens its own table there.
-        const expanded = matrixRow ? expandedRows.has(rowStateKey(scopeKey, matrixRow.key)) : false;
-        const extraToggles = extraTogglesFor(node.permissionId);
-        // When a ticked link carries its own controls (a create/edit/delete matrix
-        // and/or a guard toggle), wrap the whole group in a subtle cluster so those
-        // controls read as belonging to THIS link — not the next chip beside it.
-        const hasControls = isOn && (!!matrixRow || extraToggles.length > 0);
-        return (
-            <div
-                key={node.permissionId}
-                className={[
-                    "inline-flex items-stretch gap-1",
-                    hasControls ? "rounded-lg border border-border bg-muted/40 p-1" : "",
-                ].join(" ")}
-            >
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onTogglePerm(node.permissionId)}
-                    title={node.permissionId}
-                    className={[
-                        "h-auto items-center gap-1.5 rounded-md border px-2 py-1 text-left transition-colors",
-                        isOn
-                            ? "border-primary bg-primary/10 text-foreground hover:bg-primary/15"
-                            : "border-border hover:border-primary/60 hover:bg-primary/5",
-                        changed ? "ring-2 ring-primary/20" : "",
-                    ].join(" ")}
-                >
-                    <span
-                        className={[
-                            "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
-                            isOn ? "border-primary bg-primary text-primary-foreground" : "border-border",
-                        ].join(" ")}
-                    >
-                        {isOn && <Check size={10} strokeWidth={3} />}
-                    </span>
-                    <span className="text-[11px] font-medium leading-tight">{node.label}</span>
-                </Button>
-                {/* Some links (Users, Role, Organisation…) also carry a granular
-                    create/view/edit/delete grant — this reveals that row inline.
-                    Only offered once the link itself is ticked (no point granting
-                    Create/Edit/Delete for a link the role can't even see). */}
-                {matrixRow && isOn && (
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => toggleRow(scopeKey, matrixRow.key)}
-                        title={`${expanded ? "Hide" : "Show"} granular permissions for ${node.label}`}
-                        className="h-auto w-6 shrink-0 rounded-md border border-border text-muted-foreground hover:border-primary/60 hover:bg-primary/5"
-                    >
-                        <ChevronDown size={12} className={["transition-transform", expanded ? "rotate-180" : ""].join(" ")} />
-                    </Button>
-                )}
-                {/* Extra yes/no capabilities on top of "can see this page" (e.g. Tax
-                    Classification's edit grant) — only offered once the link itself
-                    is ticked. */}
-                {isOn && extraToggles.map((t) => (
-                    <React.Fragment key={t.id}>{extraToggleChip(t)}</React.Fragment>
-                ))}
-            </div>
-        );
-    };
-
-    // Leaves wrap in a row; parents render their own chip then an indented block of
-    // their children (recursive), so sub-nav shows nested with its own checkboxes.
-    const renderLevel = (nodes: SidebarChildRow[], scopeKey: string, trailing?: React.ReactNode) => {
+    // Pages lane — leaves wrap in a row; a parent shows its own tick then, once
+    // ticked, an indented block of its children (a child shows only under a
+    // checked parent).
+    const renderPages = (nodes: SidebarChildRow[]): React.ReactNode => {
         const leaves = nodes.filter((n) => !n.children?.length);
         const parents = nodes.filter((n) => n.children?.length);
-        // One table per EXPANDED row at THIS level, even if several leaves here map
-        // to it (dedupe by row key) — so Products + Item Ledger open a single table.
-        const expandedRowsAtLevel: (typeof MATRIX_ROWS)[number][] = [];
-        const seenRowKeys = new Set<string>();
-        for (const n of leaves) {
-            const row = matrixRowForLink(n);
-            if (row && selected.has(n.permissionId) && expandedRows.has(rowStateKey(scopeKey, row.key)) && !seenRowKeys.has(row.key)) {
-                seenRowKeys.add(row.key);
-                expandedRowsAtLevel.push(row);
-            }
-        }
         return (
             <div className="space-y-1.5">
-                {(leaves.length > 0 || trailing) && (
+                {leaves.length > 0 && (
                     <div className="flex flex-wrap items-start gap-1.5">
-                        {leaves.map((n) => chip(n, scopeKey))}
-                        {trailing}
+                        {leaves.map((n) => (
+                            <PermTick key={n.permissionId} id={n.permissionId} label={n.label} kind="pages"
+                                selected={selected} original={original} describe={describe} onTogglePerm={onTogglePerm} />
+                        ))}
                     </div>
                 )}
-                {expandedRowsAtLevel.map((row) => (
-                    <SharedPermissionMatrix
-                        key={row.key}
-                        title={`${row.label} — granular permissions`}
-                        rows={[toSharedMatrixRow(row)]}
-                        columnGroups={CORE_MATRIX_COLUMN_GROUPS}
-                        selected={selected}
-                        onTogglePerm={onTogglePerm}
-                    />
+                {parents.map((p) => (
+                    <div key={p.permissionId} className="space-y-1">
+                        <PermTick id={p.permissionId} label={p.label} kind="pages"
+                            selected={selected} original={original} describe={describe} onTogglePerm={onTogglePerm} />
+                        {selected.has(p.permissionId) && (
+                            <div className="ml-3 border-l border-border pl-2.5">{renderPages(p.children!)}</div>
+                        )}
+                    </div>
                 ))}
-                {parents.map((p) => {
-                    // A parent link can also carry a matrix (e.g. Inventory → Masters,
-                    // one create/edit/delete for all the setup tables under it).
-                    const pRow = matrixRowForLink(p);
-                    const pExpanded = !!pRow && selected.has(p.permissionId) && expandedRows.has(rowStateKey(scopeKey, pRow.key));
-                    return (
-                        <div key={p.permissionId} className="space-y-1">
-                            <div className="flex flex-wrap items-start gap-1.5">{chip(p, scopeKey)}</div>
-                            {pExpanded && pRow && (
-                                <SharedPermissionMatrix
-                                    title={`${pRow.label} — granular permissions`}
-                                    rows={[toSharedMatrixRow(pRow)]}
-                                    columnGroups={CORE_MATRIX_COLUMN_GROUPS}
-                                    selected={selected}
-                                    onTogglePerm={onTogglePerm}
-                                />
-                            )}
-                            {/* Sub-links are offered only once the parent is ticked — a child
-                                shows in the sidebar only under a checked parent. */}
-                            {selected.has(p.permissionId) && (
-                                <div className="ml-3 border-l border-border pl-2.5">{renderLevel(p.children!, p.permissionId)}</div>
-                            )}
-                        </div>
-                    );
-                })}
             </div>
         );
     };
@@ -948,35 +892,129 @@ export function SidebarVisibilitySection({
             <CardContent className="space-y-3 pt-4">
                 <div>
                     <h2 className="flex items-center gap-2 text-base font-bold tracking-tight">
-                        <PanelLeft size={15} /> Sidebar links
+                        <PanelLeft size={15} /> Modules — pages and what they can do there
                     </h2>
                     <p className="mt-0.5 text-[11px] text-muted-foreground">
-                        Pick which navigation links this role sees in the sidebar — including nested sub-nav. Workspace is always available; other modules appear only if the role&rsquo;s department pool offers them. Mobile App lists the staff phone app&rsquo;s screens instead of sidebar links.
+                        Each module is split by kind of permission. Tick a page first; its add / edit / delete and special actions then appear below it. Hover any tick to read what it allows. Workspace is always available; other modules appear only if the role&rsquo;s department pool offers them.
                     </p>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                    {(Object.keys(LANE_STYLE) as LaneKind[]).map((k) => {
+                        const s = LANE_STYLE[k];
+                        const Icon = s.icon;
+                        return (
+                            <div key={k} className="flex items-start gap-2 rounded-md border border-border px-2.5 py-2">
+                                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${s.tint}`}><Icon size={13} /></span>
+                                <div>
+                                    <p className="text-[12px] font-semibold leading-tight">{s.title}</p>
+                                    <p className="mt-0.5 text-[10.5px] leading-snug text-muted-foreground">{s.hint}</p>
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
 
                 <div className="space-y-2">
                     {modules.map((mod) => {
-                        // A module-wide capability toggle (e.g. Contacts → show suppliers)
-                        // renders on its own row after the links, once ANY of its trigger
-                        // links is ticked — so it reads as spanning the module, not one link.
+                        const links = flatten(mod.children);
+                        const ticked = links.filter((n) => selected.has(n.permissionId));
+
+                        // CRUD rows unlocked by the ticked links (deduped — Products and
+                        // Item Ledger share one row). The five record rows live in the
+                        // Records card above; this lane points there instead.
+                        const crudRows: (typeof MATRIX_ROWS)[number][] = [];
+                        let recordsElsewhere = false;
+                        for (const n of ticked) {
+                            const rowKey = SIDEBAR_LINK_MATRIX_ROW_KEY[n.permissionId];
+                            if (!rowKey) continue;
+                            if (INLINE_HIDDEN_MATRIX_ROW_KEYS.has(rowKey)) { recordsElsewhere = true; continue; }
+                            const row = MATRIX_ROWS.find((r) => r.key === rowKey);
+                            if (row && !crudRows.some((r) => r.key === row.key)) crudRows.push(row);
+                        }
+                        const hasCrud = links.some((n) => SIDEBAR_LINK_MATRIX_ROW_KEY[n.permissionId]);
+
+                        // Special actions — one tick per id, labelled with the page it sits on.
+                        const specials: { id: string; label: string; page: string }[] = [];
+                        for (const n of ticked) {
+                            for (const t of extraTogglesFor(n.permissionId)) {
+                                if (!specials.some((s) => s.id === t.id)) specials.push({ ...t, page: n.label });
+                            }
+                        }
+                        const hasSpecial = links.some((n) => extraTogglesFor(n.permissionId).length > 0);
+
                         const modToggle = MODULE_EXTRA_TOGGLE[mod.key];
-                        const showModToggle = !!modToggle && !modToggle.global && modToggle.showWhenAnyLinkId.some((id) => selected.has(id));
+                        const showSee = !!modToggle && !modToggle.global && modToggle.showWhenAnyLinkId.some((id) => selected.has(id));
+                        const hasSee = !!modToggle && !modToggle.global;
+
+                        const crudIds = crudRows.flatMap((r) => Object.values(toSharedMatrixRow(r).cells).filter((id): id is string => !!id));
+                        const isClosed = closed.has(mod.key) && !term;
+                        const pill = (k: LaneKind, text: string) => (
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums ${LANE_STYLE[k].tint}`}>{text}</span>
+                        );
+
                         return (
-                            <div key={mod.key} className="overflow-hidden rounded-lg border border-border bg-card px-3 py-2.5">
-                                <div className="mb-1.5 flex items-center gap-2">
+                            <div key={mod.key} className="overflow-hidden rounded-lg border border-border bg-card">
+                                <button
+                                    type="button"
+                                    onClick={() => toggleModule(mod.key)}
+                                    className="flex w-full flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-muted/40"
+                                >
                                     <span className="text-[11px] font-bold uppercase tracking-wider text-foreground">{mod.label}</span>
-                                    <span className="text-[10px] text-muted-foreground">
-                                        {countLinks(mod.children)} {mod.unit ?? "links"}
+                                    <span className="flex flex-wrap items-center gap-1.5">
+                                        {pill("pages", `${ticked.length}/${links.length} ${mod.unit ?? "pages"}`)}
+                                        {hasCrud && crudIds.length > 0 && pill("crud", `${new Set(crudIds.filter((id) => selected.has(id))).size}/${new Set(crudIds).size} add·edit·delete`)}
+                                        {hasSpecial && specials.length > 0 && pill("special", `${specials.filter((s) => selected.has(s.id)).length}/${specials.length} special`)}
+                                        <ChevronDown size={14} className={["text-muted-foreground transition-transform", isClosed ? "-rotate-90" : ""].join(" ")} />
                                     </span>
-                                </div>
-                                {mod.note && (
-                                    <p className="mb-1.5 text-[11px] text-muted-foreground">{mod.note}</p>
-                                )}
-                                {renderLevel(
-                                    mod.children,
-                                    mod.key,
-                                    showModToggle ? extraToggleChip(modToggle!) : undefined,
+                                </button>
+                                {!isClosed && (
+                                    <div>
+                                        {mod.note && <p className="border-t border-border px-3 py-1.5 text-[11px] text-muted-foreground">{mod.note}</p>}
+                                        <Lane kind="pages">{renderPages(mod.children)}</Lane>
+                                        {hasCrud && (
+                                            <Lane kind="crud">
+                                                {crudRows.length > 0 && (
+                                                    <SharedPermissionMatrix
+                                                        rows={crudRows.map(toSharedMatrixRow)}
+                                                        columnGroups={CORE_MATRIX_COLUMN_GROUPS}
+                                                        selected={selected}
+                                                        onTogglePerm={onTogglePerm}
+                                                    />
+                                                )}
+                                                {recordsElsewhere && (
+                                                    <p className="mt-1 text-[11px] text-muted-foreground">Add / edit / delete for this module&rsquo;s records is in the Records card above.</p>
+                                                )}
+                                                {crudRows.length === 0 && !recordsElsewhere && (
+                                                    <p className="text-[11px] text-muted-foreground">Tick a page above to choose what they can add, edit or delete there.</p>
+                                                )}
+                                            </Lane>
+                                        )}
+                                        {hasSpecial && (
+                                            <Lane kind="special">
+                                                {specials.length > 0 ? (
+                                                    <div className="flex flex-wrap items-start gap-1.5">
+                                                        {specials.map((s) => (
+                                                            <PermTick key={s.id} id={s.id} label={s.label} kind="special" note={`on ${s.page}`}
+                                                                selected={selected} original={original} describe={describe} onTogglePerm={onTogglePerm} />
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-[11px] text-muted-foreground">Tick a page above to see its special actions.</p>
+                                                )}
+                                            </Lane>
+                                        )}
+                                        {hasSee && (
+                                            <Lane kind="see">
+                                                {showSee ? (
+                                                    <PermTick id={modToggle!.id} label={modToggle!.label} kind="see"
+                                                        selected={selected} original={original} describe={describe} onTogglePerm={onTogglePerm} />
+                                                ) : (
+                                                    <p className="text-[11px] text-muted-foreground">Tick a page above first.</p>
+                                                )}
+                                            </Lane>
+                                        )}
+                                    </div>
                                 )}
                             </div>
                         );
@@ -995,11 +1033,13 @@ export function GlobalPermissionsSection({
     selected,
     original,
     inLens,
+    describe,
     onTogglePerm,
 }: {
     selected: Set<string>;
     original: Set<string>;
     inLens: (id: string) => boolean;
+    describe: (id: string) => string | undefined;
     onTogglePerm: (id: string) => void;
 }) {
     // Collect every MODULE_EXTRA_TOGGLE entry marked global.
@@ -1016,55 +1056,22 @@ export function GlobalPermissionsSection({
             <CardContent className="space-y-3 pt-4">
                 <div>
                     <h2 className="flex items-center gap-2 text-base font-bold tracking-tight">
-                        <Globe size={15} className="text-amber-700 dark:text-amber-400" /> Global
+                        <Globe size={15} className="text-amber-700 dark:text-amber-400" /> Sign-in &amp; what they can see everywhere
                     </h2>
                     <p className="mt-0.5 text-[11px] text-muted-foreground">
-                        Cross-section permissions that affect behaviour outside their native module.
+                        Not tied to one page: these decide where they can sign in, and which data shows across many screens. Hover a tick to read what it allows.
                     </p>
                 </div>
                 <div className="space-y-2">
-                    {visible.map((toggle) => {
-                        const on = selected.has(toggle.id);
-                        const changed = on !== original.has(toggle.id);
-                        return (
-                            <div
-                                key={toggle.id}
-                                className="flex items-start gap-3 rounded-lg border border-border bg-card px-3 py-2.5"
-                            >
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => onTogglePerm(toggle.id)}
-                                    title={toggle.id}
-                                    className={
-                                        ["h-auto shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-left transition-colors",
-                                        on
-                                            ? "border-primary bg-primary/10 text-foreground hover:bg-primary/15"
-                                            : "border-border hover:border-primary/60 hover:bg-primary/5",
-                                        changed ? "ring-2 ring-primary/20" : "",
-                                    ].join(" ")
-                                }
-                                >
-                                    <span
-                                        className={
-                                            ["flex h-4 w-4 shrink-0 items-center justify-center rounded border",
-                                            on ? "border-primary bg-primary text-primary-foreground" : "border-border",
-                                        ].join(" ")
-                                    }
-                                    >
-                                        {on && <Check size={10} strokeWidth={3} />}
-                                    </span>
-                                    <span className="text-[11px] font-medium leading-tight">{toggle.label}</span>
-                                </Button>
-                                {toggle.globalDescription && (
-                                    <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                                        {toggle.globalDescription}
-                                    </p>
-                                )}
-                            </div>
-                        );
-                    })}
+                    {visible.map((toggle) => (
+                        <div key={toggle.id} className="flex flex-wrap items-start gap-3 rounded-lg border border-border bg-card px-3 py-2.5">
+                            <PermTick id={toggle.id} label={toggle.label} kind="see"
+                                selected={selected} original={original} describe={describe} onTogglePerm={onTogglePerm} />
+                            {toggle.globalDescription && (
+                                <p className="mt-1 min-w-0 flex-1 text-[11px] leading-relaxed text-muted-foreground">{toggle.globalDescription}</p>
+                            )}
+                        </div>
+                    ))}
                 </div>
             </CardContent>
         </Card>

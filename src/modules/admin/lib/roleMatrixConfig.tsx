@@ -678,6 +678,23 @@ export const SIDEBAR_LINK_EXTRA_TOGGLE: Record<string, ExtraToggle | ExtraToggle
     [sidebarChildPermissionId("campaigns", "channels")]: { id: "campaigns:google:connect", label: "Can connect Google" },
 };
 
+// Special actions that reach many customers, move money, reset data or change
+// what every bill / shop page does. The Role page tags these RISKY so they are
+// granted with care. Display only — it grants or blocks nothing.
+export const RISKY_PERMISSION_IDS = new Set<string>([
+    "compliance:tax:edit",
+    "pricing:strategy:reset",
+    "campaigns:send",
+    "accountancy:reminders:send-all",
+    "hr:payroll:run",
+    "settings:manage",
+    "settings:app:manage",
+    "settings:tracking:manage",
+    "pos:shift:force-close",
+    "ecommerce:fallback:unlock",
+    "ecommerce:product:deep-edit",
+]);
+
 /** The extra toggles for a link, as a list (bare entries normalise to one item). */
 export function extraTogglesFor(linkPermissionId: string): ExtraToggle[] {
     const v = SIDEBAR_LINK_EXTRA_TOGGLE[linkPermissionId];
