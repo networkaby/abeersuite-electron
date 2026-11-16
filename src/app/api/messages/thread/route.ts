@@ -6,6 +6,7 @@ import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { phoneMatchKey } from "@/shared/lib/format";
 import { isMissedCall } from "@/shared/lib/calls";
 import { ASSIGNED_POSITION_SELECT } from "@/shared/lib/api/ticketSelects";
+import { officeLinksFor, officeTicketHref } from "@/modules/message/lib/messageLinks";
 import { claimsByPhone, conversationsByPhone, mediaLink, menuAfterTemplateApplies, ownersByPhone, replyWindowOpen, setNumberSpam } from "@/modules/message/lib/customerMessages";
 
 // /api/messages/thread?phone=<10 digits>
@@ -79,6 +80,7 @@ export async function GET(req: Request) {
             ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } })
             : [];
         const userName = new Map(users.map((u) => [u.id, u.name]));
+        const links = await officeLinksFor(messages);
 
         const items = [
             ...messages.map((m) => ({
@@ -100,7 +102,9 @@ export async function GET(req: Request) {
                 sentBy: m.sentByUserId != null ? (userName.get(m.sentByUserId) ?? "Staff") : null,
                 billKind: m.billKind,
                 billRefId: m.billRefId,
+                billHref: m.billKind && m.billRefId != null ? (links.get(`bill:${m.billKind}:${m.billRefId}`) ?? null) : null,
                 ticketId: m.ticketId,
+                ticketHref: m.ticketId != null ? (links.get(`ticket:${m.ticketId}`) ?? null) : null,
                 conversationId: m.conversationId,
                 status: m.status,
                 deliveredAt: m.deliveredAt?.toISOString() ?? null,
@@ -132,11 +136,7 @@ export async function GET(req: Request) {
                     status: ticket.ticketStatus?.label ?? null,
                     assignee: ticket.assignedPosition?.holders.map((h) => h.user.name).join(", ") || ticket.assignedPosition?.title || null,
                     kind: ticket.repair ? "repair" : ticket.deal ? "deal" : "help",
-                    href: ticket.repair
-                        ? `/office/repairing/tickets/${ticket.id}`
-                        : ticket.deal
-                            ? `/office/crm/deals`
-                            : `/office/help?ticket=${ticket.id}`,
+                    href: officeTicketHref(ticket),
                 }
                 : null,
             claim: claims.get(phone) ?? null,

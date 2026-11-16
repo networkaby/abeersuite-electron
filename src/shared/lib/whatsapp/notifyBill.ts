@@ -473,6 +473,8 @@ export type WaOutcome = { status: string; messageId?: string; error?: string };
  *  document; a due reminder logs its own (dueReminders.ts). */
 export async function sendPushAndWhatsApp(d: {
     kind: WaAnyKind;
+    /** See deliver — a built-in kind sent for a ticket is recorded as TICKET:<kind>. */
+    claimKind?: string;
     refId: number;
     linkCode: string;
     personId: number | null;
@@ -498,7 +500,7 @@ export async function sendPushAndWhatsApp(d: {
         sendWhatsApp(d.kind, d.linkCode, mobile, d.values, d.headerImage),
     ]);
     if (mobile && wa.messageId) {
-        await recordBillMessage({ mobile10: mobile, externalId: wa.messageId, billKind: d.kind, billRefId: d.refId, body: d.summary });
+        await recordBillMessage({ mobile10: mobile, externalId: wa.messageId, billKind: d.claimKind ?? d.kind, billRefId: d.refId, body: d.summary });
     }
     return { mobile, push, wa };
 }

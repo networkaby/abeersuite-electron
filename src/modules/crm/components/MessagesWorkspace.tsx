@@ -24,6 +24,7 @@ import TeamRoomPane, { dmPartnerId, type Room } from "@/modules/message/componen
 import { MessageMedia, captionOf, type MediaInfo } from "./MessageMedia";
 import { CustomerAvatar } from "./CustomerAvatar";
 import { CustomerProfileDialog } from "./CustomerProfileDialog";
+import LinkTicketPicker from "./LinkTicketPicker";
 import { WhatsAppIcon } from "@/shared/components/WhatsAppIcon";
 
 
@@ -54,6 +55,8 @@ interface ConversationsResponse { items: Conversation[]; page: number; hasMore: 
 type ThreadMessage = {
     type: "message"; id: number; at: string; channel: string; direction: string; kind: string; body: string;
     senderName: string | null; businessNumber?: string | null; sentBy: string | null; billKind: string | null; billRefId: number | null;
+    /** Office page of the bill / ticket this message is about (the server resolves it). */
+    billHref?: string | null; ticketHref?: string | null;
     ticketId: number | null; conversationId?: number | null; status: string | null; deliveredAt: string | null; readAt: string | null; error: string | null;
     pending?: boolean;
 } & MediaInfo;
@@ -145,14 +148,20 @@ function messageTime(iso: string) {
 }
 
 
+/** The message "+ Ticket" acts on: the newest saved one of the open
+ *  conversation (or of the thread), so its conversation is the one moved onto
+ *  the ticket — never an old, closed one at the top of the history. */
+function latestMessageId(thread: Thread | null): number | undefined {
+    if (!thread) return undefined;
+    const saved = thread.items.filter((it): it is ThreadMessage => it.type === "message" && !it.pending);
+    const convId = thread.conversation?.id;
+    const inConv = convId != null ? saved.filter((m) => m.conversationId === convId) : [];
+    return (inConv.length ? inConv : saved).at(-1)?.id;
+}
+
 function hoursLeft(closesAt: string | null) {
     if (!closesAt) return 0;
     return Math.max(0, Math.round((new Date(closesAt).getTime() - Date.now()) / 3_600_000));
-}
-
-function billLink(kind: string | null, refId: number | null) {
-    if (!kind || refId == null) return null;
-    return `/portal/b/${kind.startsWith("REPAIR") ? `t${refId}` : refId}`;
 }
 
 /** What the open conversation is about: waiting for the customer's pick, a new
@@ -414,7 +423,7 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
             setTicketSubmitting(true);
             const targetMessageId = (opts.messageId && opts.messageId > 0)
                 ? opts.messageId
-                : (thread?.items.find((it) => it.type === "message") as ThreadMessage | undefined)?.id;
+                : latestMessageId(thread);
             if (!targetMessageId) {
                 toast.error("No message in conversation to convert yet.");
                 return;
@@ -817,6 +826,8 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                         {thread.ticket && (
                             <a
                                 href={thread.ticket.href ?? `/office/help?ticket=${thread.ticket.id}`}
+                                target="_blank"
+                                rel="noreferrer"
                                 className="mx-4 mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-sky-300 bg-sky-50 px-3 py-2 text-sm text-sky-900 hover:bg-sky-100 dark:border-sky-700 dark:bg-sky-950 dark:text-sky-100"
                             >
                                 <span className="flex items-center gap-2">
@@ -863,7 +874,7 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                                     );
                                 }
                                 const out = it.direction === "OUT";
-                                const link = billLink(it.billKind, it.billRefId);
+                                const link = it.billHref ?? null;
                                 // Same sender straight after: tuck under the bubble above, no repeat tag.
                                 const prev = thread.items[i - 1];
                                 const cont = !!prev && prev.type !== "call" && !conversationStarts.has(i)
@@ -885,13 +896,16 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                                                 <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[11px]">
                                                     {it.ticketId && !cont && (
                                                         <span className="inline-flex items-center gap-0.5 rounded bg-sky-100 px-1 py-0.5 text-[10px] font-medium text-sky-800 dark:bg-sky-950 dark:text-sky-300">
-                                                            <Ticket className="size-3" /> #{it.ticketId}
+                                                            <Ticket className="size-3" />
+                                                            {it.ticketHref
+                                                                ? <a href={it.ticketHref} target="_blank" rel="noreferrer" className="underline" title="Open this ticket in a new tab">#{it.ticketId}</a>
+                                                                : <>#{it.ticketId}</>}
                                                         </span>
                                                     )}
                                                     {it.billKind && (
                                                         <span className="inline-flex items-center gap-0.5 rounded bg-black/5 px-1 py-0.5 text-[10px] font-medium text-foreground/80 dark:bg-white/10">
                                                             <FileText className="size-3" />
-                                                            {link ? <a href={link} target="_blank" rel="noreferrer" className="underline">{out ? "Bill" : "Reply to bill"}</a> : "Bill"}
+                                                            {link ? <a href={link} target="_blank" rel="noreferrer" className="underline" title="Open in a new tab">{out ? "Bill" : "Reply to bill"}</a> : "Bill"}
                                                         </span>
                                                     )}
                                                 </div>
@@ -1006,7 +1020,7 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
 
             {ticketModalMessageId !== null && thread && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                    <div className="w-full max-w-sm rounded-lg border bg-background p-5 shadow-lg space-y-4">
+                    <div className="max-h-[90vh] w-full max-w-md space-y-4 overflow-y-auto rounded-lg border bg-background p-5 shadow-lg">
                         <div className="flex items-center justify-between">
                             <h3 className="text-base font-semibold text-foreground">Create or Link Ticket</h3>
                             <button
@@ -1069,6 +1083,13 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                                 </button>
                             )}
                         </div>
+
+                        <LinkTicketPicker
+                            phone={thread.phone}
+                            currentTicketId={thread.ticket?.id ?? null}
+                            disabled={ticketSubmitting}
+                            onPick={(ticketId) => void raiseTicket({ messageId: ticketModalMessageId, ticketId })}
+                        />
 
                         <div className="flex justify-end pt-2">
                             <Button

@@ -98,6 +98,15 @@ export default function DealsWorkspace({
     };
 
     const openCreate = () => { setEditingDeal(null); setFormOpen(true); };
+    // Deep link: /office/crm/deals?deal=<id> opens that deal (CRM → Messages links here).
+    const dealParam = Number(searchParams.get("deal")) || null;
+    const [handledDealParam, setHandledDealParam] = useState<number | null>(null);
+    if (dealParam !== null && handledDealParam !== dealParam) {
+        setHandledDealParam(dealParam);
+        setDetailId(dealParam);
+        setDetailOpen(true);
+    }
+
     const openDetail = (id: number) => { setDetailId(id); setDetailOpen(true); };
     const openEdit = (deal: DealDetailDto) => { setDetailOpen(false); setEditingDeal(deal); setFormOpen(true); };
 

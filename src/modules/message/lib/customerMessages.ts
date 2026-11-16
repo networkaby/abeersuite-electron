@@ -1,4 +1,5 @@
 import "server-only";
+import { isTicketBillKind } from "@/modules/message/lib/messageLinks";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { Prisma } from "@/generated/prisma/client";
 import { closingForAccounts } from "@/modules/accountancy/lib/aggregateLedger";
@@ -1034,7 +1035,7 @@ export async function recordBillMessage(args: {
     body: string;
 }): Promise<void> {
     try {
-        const isTicketMsg = args.billKind.startsWith("REPAIR_") || args.billKind === "DEAL_CREATED" || args.billKind === "HELP_CREATED";
+        const isTicketMsg = isTicketBillKind(args.billKind);
         const ticketId = isTicketMsg ? args.billRefId : null;
         const phone = phoneMatchKey(args.mobile10);
         const conv = phone ? await currentConversation(phone) : null;
@@ -1307,6 +1308,14 @@ export async function ticketFromMessage(
         select: { id: true, phone: true, body: true, senderName: true, occurredAt: true, conversationId: true },
     });
     if (!msg) throw new ReplyRefusedError("Message not found.");
+    if (existingTicketId != null) {
+        const target = await prisma.ticket.findUnique({
+            where: { id: existingTicketId },
+            select: { ticketStatus: { select: { isTerminal: true } } },
+        });
+        if (!target) throw new ReplyRefusedError(`Ticket #${existingTicketId} not found.`);
+        if (target.ticketStatus?.isTerminal) throw new ReplyRefusedError(`Ticket #${existingTicketId} is closed — reopen it first, or raise a new one.`);
+    }
 
     const owner = msg.phone ? (await ownersByPhone([msg.phone])).get(msg.phone) ?? null : null;
     const author = await buildActorSnapshot(userId);
