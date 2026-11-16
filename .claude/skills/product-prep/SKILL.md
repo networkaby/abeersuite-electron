@@ -13,7 +13,7 @@ it shop-ready in parts, and **never writes from bad data**:
 | Part | Does | Major problem → | Pass → |
 |---|---|---|---|
 | **1 Prepare seed** | Read everything; remove what is wrong; add nothing. Then: is what is left enough to search? | Attention | sign `Part 1 done` |
-| **2 Search** | The **one** internet search for this product; the pages are saved | report to owner | sign `Part 2 done` |
+| **2 Search** | The **one** internet search for this product; the pages are saved | — (no good page = go on from the label) | sign `Part 2 done` |
 | **3 Process** | Everything from the saved pages — no new search | — (problems are notes) | Draft, sign `Part 3 done` |
 | **4 Verify** | separate skill: **product-recheck** | | |
 
@@ -113,10 +113,10 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
   "$ABEERSUITE_URL/api/agent/prep/<id>/part2" -d '{ "pages": [ { "url": "https://…", "accepted": true, "why": "maker, part code on page" } ], "labelFacts": { "Model": "M8" }, "seen": {}, "labelWebsite": "" }'
 ```
 
-Answer: `{ result: "part2" | "no-good-page", read, dropped }`. The server saves the pages (text + photos) for Part 3 and Part 4.
-- `part2` → go on to Part 3 now, from the saved pages (read the product again to get them).
-- `no-good-page` → **stop and tell the owner** (what to do then is the owner's call — not decided yet). Do not search again.
-- `422 Already searched` → never retry; use the saved pages.
+Answer: `{ result: "part2" | "no-good-page", read, dropped }`. The server saves the pages (text + photos) for Part 3 and Part 4. Either way **go on to Part 3 now** (read the product again to get the saved pages).
+- `no-good-page` → searching again gains nothing without better seed. Part 3 works from the label and photos only; your own knowledge may shape the wording, never a fact (the server drops any fact not on the label or a kept page). Part 4 flags it if that is not enough — staff then improve the seed, or publish by hand.
+- Found nothing at all? Send `"pages": []` — it still counts as the one search.
+- `422 Already searched` → never retry; use the saved pages. Only when the owner asks to run Part 2 again, send `"again": true` (it replaces the saved search).
 
 ## Part 3 — Process (from the saved pages only)
 
@@ -175,4 +175,4 @@ Answer: `{ result: "part3", shopStatus, kept, unsure, flags, photos: { removed, 
 Then:
 > **Attention** tab: the stopped ones — fix what the reason says, then run **product prep** again (it starts at the next part).
 > **Draft** tab: the processed ones — carry out the notes (Remove / Use / add photos), then run **product-recheck**.
-> **No good page**: list them — your call what to do.
+> **No good page**: written from the label only — check them first.

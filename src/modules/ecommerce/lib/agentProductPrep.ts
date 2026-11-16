@@ -252,19 +252,22 @@ export async function savePart1(id: number, b: z.infer<typeof part1Schema>) {
 const record = z.record(z.string(), z.coerce.string()).default({});
 
 export const part2Schema = z.object({
-    pages: z.array(z.object({ url: z.string().url(), accepted: z.boolean(), why: z.string().trim().max(300).default("") })).min(1).max(8),
+    /** Every page read, accepted or not. Empty = the search found nothing usable. */
+    pages: z.array(z.object({ url: z.string().url(), accepted: z.boolean(), why: z.string().trim().max(300).default("") })).max(8).default([]),
     labelFacts: record,
     seen: record,
     labelWebsite: z.string().trim().max(200).default(""),
+    /** Only when the owner asks to run Part 2 again: replaces the saved search. */
+    again: z.boolean().default(false),
 });
 
 export async function savePart2(id: number, b: z.infer<typeof part2Schema>) {
     const { state, identityChanged } = await liveState(id);
     if (!state || state.part < 1) throw new AgentCopyError(identityChanged ? "Brand / model / barcode changed since Part 1 — run Part 1 again first." : "Part 1 is not done for this product — run it first.");
-    if (state.search) throw new AgentCopyError(`Already searched on ${state.search.at.slice(0, 10)} — one search per product. Use the saved pages (Part 3).`);
+    if (state.search && !b.again) throw new AgentCopyError(`Already searched on ${state.search.at.slice(0, 10)} — one search per product. Use the saved pages (Part 3); send "again": true only when the owner asks.`);
     const p = await prisma.invProduct.findUniqueOrThrow({ where: { id }, select: { name: true } });
     const identity = await currentIdentity(id);
-    const found = await readGivenPages({
+    const found: PageSearch = !b.pages.length ? { pages: [], dropped: [], searchNote: "The search found no usable page" } : await readGivenPages({
         urls: b.pages.map((x) => x.url),
         brand: identity.brand || p.name.split(/\s+/)[0] || "",
         labelSite: b.labelWebsite,
@@ -273,13 +276,20 @@ export async function savePart2(id: number, b: z.infer<typeof part2Schema>) {
     const verdicts = b.pages.map((x) => ({ url: x.url, accepted: x.accepted, why: x.why }));
     const accepted = found.pages.filter((pg) => pg.codeMatch || verdicts.find((v) => v.url === pg.url)?.accepted);
     const next: PrepState = {
-        part: accepted.length ? 2 : 1,
+        // No good page is not a stop (owner, 2026-11-17): searching again gains
+        // nothing without new seed, so Part 3 goes on from the label and photos.
+        part: 2,
         at: new Date().toISOString(),
         identity,
         search: { at: new Date().toISOString(), found, verdicts, labelFacts: b.labelFacts, seen: b.seen, labelWebsite: b.labelWebsite },
     };
     await writeState(id, next);
-    if (accepted.length) await addDraftNotes(id, [`Searched once: ${accepted.length} page(s) kept (${accepted.map((pg) => pg.site).join(", ")}).`, SIGN(2)]);
+    await addDraftNotes(id, [
+        accepted.length
+            ? `Searched once: ${accepted.length} page(s) kept (${accepted.map((pg) => pg.site).join(", ")}).`
+            : "Searched once: no maker or seller page matched — the copy is from the label and photos only.",
+        SIGN(2),
+    ]);
     return {
         result: accepted.length ? ("part2" as const) : ("no-good-page" as const),
         read: found.pages.map((pg) => ({ url: pg.url, site: pg.site, maker: pg.maker, codeMatch: pg.codeMatch, accepted: accepted.includes(pg) })),
@@ -323,7 +333,7 @@ export const part3Schema = z.object({
 
 export async function savePart3(id: number, b: z.infer<typeof part3Schema>) {
     const { state, identityChanged } = await liveState(id);
-    if (!state?.search || state.part < 2) throw new AgentCopyError(identityChanged ? "Brand / model / barcode changed since the search — start again at Part 1." : "No saved search with a kept page — Part 2 is not done.");
+    if (!state?.search || state.part < 2) throw new AgentCopyError(identityChanged ? "Brand / model / barcode changed since the search — start again at Part 1." : "No saved search — Part 2 is not done.");
     const s = state.search;
     const p = await prisma.invProduct.findUniqueOrThrow({
         where: { id },
