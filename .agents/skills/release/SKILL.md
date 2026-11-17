@@ -32,7 +32,7 @@ git status --porcelain && git branch --show-current && git log --oneline -1
 ```
 
 - Working tree clean? Uncommitted work must be resolved or stashed first — ask the owner, never discard.
-- `.env` present with `GITHUB_UPDATE_REPO_1` + `GH_TOKEN_1` (the script scans `_1`, `_2`, … until a gap; a repo with no matching token is fatal).
+- `.env` present with `GITHUB_UPDATE_REPO_1` + `GITHUB_UPDATE_REPO_1_TOKEN` (the script scans `_1`, `_2`, … until a gap; a repo with no matching token is fatal).
 - **Ask the owner to confirm the build variant** — `APP_MODE` and `LANDING_PAGE` in `.env` decide which product this installer is. Do not guess.
 
 **Stop anything that can lock the build, before step 6 — not after it fails.** `electron-builder` unpacks Electron into `dist-app/win-unpacked.tmp` and renames it to `dist-app/win-unpacked`. A leftover `AbeerSuite.exe` (an earlier smoke test still open) or `electron.exe` (a `pnpm dev` / `pnpm electron:dev` session still running) holds those files open and turns that rename into `EPERM: operation not permitted, rename 'win-unpacked.tmp' -> 'win-unpacked'` — a real failure, unlike the transient antivirus one covered by the EPERM-resumable memory. A dev server left on port `786` (`electron:dev`) or `3000` (`pnpm dev`) can just as easily clash with the fresh `.next` output the same pack step writes.
@@ -148,7 +148,7 @@ One command owns all of this — never do any part of it by hand:
 - Assembles the release notes: your `RELEASE_NOTES.md`, then the auto commit log since the previous version tag, in that order.
 - Creates the annotated git tag **`v<version>`** if it does not already exist.
 - `git push origin HEAD --tags` — `main` **and** the tag to `origin`.
-- **Publishes a GitHub release.** A normal version goes to **every** `GITHUB_UPDATE_REPO_N`, each with its own `GH_TOKEN_N` — one `electron-builder --publish always --prepackaged` run per repo, carrying the installer, the blockmap, `latest.yml` and the notes. A version with a `-` in it goes to **repo 2 only**, marked a prerelease; the script says which it is doing before it starts, so read that line.
+- **Publishes a GitHub release.** A normal version goes to **every** `GITHUB_UPDATE_REPO_N`, each with its own `GITHUB_UPDATE_REPO_N_TOKEN` — one `electron-builder --publish always --prepackaged` run per repo, carrying the installer, the blockmap, `latest.yml` and the notes. A version with a `-` in it goes to **repo 2 only**, marked a prerelease; the script says which it is doing before it starts, so read that line.
 
 **No smoke-test pause.** Never stop to ask the owner to test. If the release needs a
 check the gate cannot make, do it yourself before or after the pack, then let
