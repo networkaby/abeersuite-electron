@@ -87,6 +87,9 @@ jobs:
           # them here so every later step gets a plain libpq address.
           libpq() {
             local u="$1" base q out="" p
+            # A secret pasted with quotes or a trailing newline reads as a bare database
+            # name, and psql then tries the local socket (2026-11-18).
+            u="$(printf '%s' "$u" | tr -d '\r\n' | sed -E "s/^[[:space:]\"']+//; s/[[:space:]\"']+\$//")"
             case "$u" in *\?*) base="${u%%\?*}"; q="${u#*\?}" ;; *) printf '%s' "$u"; return ;; esac
             IFS='&' read -ra parts <<< "$q"
             for p in "${parts[@]}"; do
@@ -97,6 +100,7 @@ jobs:
           for N in 1 2; do
             VAR="DB_URL_$N"; [ -n "${!VAR:-}" ] || continue
             CLEAN=$(libpq "${!VAR}"); echo "::add-mask::$CLEAN"; printf -v "$VAR" '%s' "$CLEAN"
+            case "$CLEAN" in postgres://*|postgresql://*) ;; *) echo "WARNING: DIRECT_DATABASE_URL_$N does not start with postgresql:// - check the secret (${#CLEAN} characters)." ;; esac
             # 6543 is the transaction pooler: the copy's "read-only off" reaches only new
             # server sessions, and the pooler hands out old ones still read-only, so the
             # restore fails half-way (2026-11-18). The copy needs 5432 (session / direct).
