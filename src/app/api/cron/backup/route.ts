@@ -1,6 +1,6 @@
 import { backupWorkflowFile, triggerWorkflow } from "@/shared/lib/backup/githubDispatch";
 import { makeBackupFileName } from "@/shared/lib/backup/dropbox";
-import { libpqUrl, projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
+import { projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
 import { backupAvailability } from "@/shared/lib/backup/availability";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { requireIncomingKey } from "@/modules/incoming/lib/incomingApi";
@@ -55,46 +55,30 @@ export async function GET(req: Request) {
     const domain = process.env.VERCEL_URL?.trim() ?? "";
     const inputs: Record<string, string> = { source: "cron", domain };
 
-    // ── The app supplies the database URL ───────────────────────────────────────
-    // KEEP THIS BLOCK. Each Vercel project may use a different database, and this is
-    // how the runner learns which one: without it the runner dumps whatever the
-    // DIRECT_DATABASE_URL repo secret points at. Cost, accepted: the password appears
-    // in the (private) run log, because workflow inputs are not masked.
-    //
-    // The PRIMARY's direct URL (DB1 / DB2, dbPrimary.ts) — after a switch, DIRECT_URL
-    // may name staging. Without a direct URL, the pooled one cleaned of Prisma's
-    // `pgbouncer=true` by libpqUrl — the same fallback as the settings route.
+    // ── Which database: a LABEL, never an address ───────────────────────────────
+    // Addresses live only in the GitHub secrets DIRECT_DATABASE_URL_1 / _2 (owner,
+    // 2026-11-17). backup.yml picks the secret for this label and cross-checks it with
+    // the databases' own `_db_switch` row, so a stale label stops the run instead of
+    // dumping the standby.
     const { primary, staging } = await primaryAndStaging();
-    const dbUrl = libpqUrl(primary.direct) ?? libpqUrl(primary.pooled);
-    if (!dbUrl) {
-        console.error("[cron/backup] 500: DIRECT_URL / DATABASE_URL missing or invalid.");
-        return Response.json(
-            { error: "Active database URL is missing or invalid in server environment." },
-            { status: 500 },
-        );
-    }
-    inputs.source_db_url = dbUrl;
-    inputs.file_name = makeBackupFileName({ domain, projectRef: projectRefFromDbUrl(dbUrl), source: "cron" });
-    // ── end of database URL block ───────────────────────────────────────────────
+    inputs.source_db = primary.id;
+    inputs.file_name = makeBackupFileName({ domain, projectRef: projectRefFromDbUrl(primary.direct), source: "cron" });
 
-    // ── Nightly copy into staging (DB1 / DB2 only) ──────────────────────────────
-    // The same run restores this dump into staging and reports to /api/cron/db-copied.
-    // That copy is what opens the morning switch window (dbSwitch.server.ts).
-    const stagingUrl = staging ? libpqUrl(staging.direct) : null;
-    if (staging && stagingUrl) {
-        inputs.staging_db_url = stagingUrl;
-        inputs.staging_name = staging.id;
+    // ── Nightly copy into the standby (DB1 / DB2 only) ──────────────────────────
+    // The same run restores this dump into the standby and reports to
+    // /api/cron/db-copied. That copy is what opens the morning switch window.
+    if (staging) {
+        inputs.standby_db = staging.id;
         await markCopyStarted(staging.id, inputs.file_name);
     }
 
     try {
         await triggerWorkflow(await backupWorkflowFile(), inputs);
     } catch (err) {
-        if (staging && stagingUrl) await markCopyFinished(staging.id, false).catch(() => {});
+        if (staging) await markCopyFinished(staging.id, false).catch(() => {});
         console.error("[cron/backup] 500: workflow dispatch failed:", (err as Error).message);
         return Response.json({ error: (err as Error).message }, { status: 500 });
     }
 
-    // null once the block above is commented out — this side cannot know the name then.
     return Response.json({ ok: true, fileName: inputs.file_name ?? null, triggeredAt: new Date().toISOString() });
 }

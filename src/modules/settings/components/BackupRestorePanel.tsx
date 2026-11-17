@@ -85,7 +85,18 @@ export function BackupRestorePanel() {
     const [backups, setBackups] = useState<DropboxBackup[]>([]);
     const [loadingList, setLoadingList] = useState(true);
     const [selectedPath, setSelectedPath] = useState("");
-    const [targetDbUrl, setTargetDbUrl] = useState("");
+    const [targetDb, setTargetDb] = useState<"" | "DB1" | "DB2">("");
+    // DB1 / DB2 and which is primary, from the Databases card's own API. A label is
+    // all that leaves: restore.yml takes the address from the GitHub secret.
+    const [dbRoles, setDbRoles] = useState<{ id: "DB1" | "DB2"; role: "primary" | "staging" }[]>([]);
+    useEffect(() => {
+        void fetch("/api/settings/db-switch", { cache: "no-store" })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((j: { dbs?: { id: "DB1" | "DB2"; role: "primary" | "staging" }[] } | null) => {
+                if (j?.dbs) setDbRoles(j.dbs.map((d) => ({ id: d.id, role: d.role })));
+            })
+            .catch(() => {});
+    }, []);
     const [confirmText, setConfirmText] = useState("");
     const [restoring, setRestoring] = useState(false);
     const [availability, setAvailability] = useState<Availability | null>(null);
@@ -164,8 +175,8 @@ export function BackupRestorePanel() {
     const counterOnly = availability != null && (!canBackup || !canRestore);
     const missing = availability?.missing ?? [];
 
-    const isTargetDbValid =
-        targetDbUrl.trim().startsWith("postgres://") || targetDbUrl.trim().startsWith("postgresql://");
+    const isTargetDbValid = targetDb !== "";
+    const targetIsPrimary = dbRoles.find((d) => d.id === targetDb)?.role === "primary";
 
     async function handleBackup() {
         if (!canBackup) return;
@@ -197,8 +208,12 @@ export function BackupRestorePanel() {
     async function handleRestore() {
         if (!canRestore || !selectedPath || !isTargetDbValid || confirmText !== "RESTORE") return;
         const ok = await confirmAction({
-            title: "Replace the entire target database with this Dropbox backup?",
-            body: "Last chance — everything in the target database is overwritten by the selected backup.",
+            title: targetIsPrimary
+                ? `Replace ${targetDb}, the PRIMARY, with this Dropbox backup?`
+                : `Replace ${targetDb} with this Dropbox backup?`,
+            body: targetIsPrimary
+                ? `${targetDb} is the PRIMARY — every user and counter works on it. Everyone's data since this backup is replaced. This cannot be undone.`
+                : `Last chance — everything in ${targetDb} is overwritten by the selected backup.`,
             confirmLabel: "Restore backup",
         });
         if (!ok) return;
@@ -210,7 +225,7 @@ export function BackupRestorePanel() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     path: selectedPath,
-                    targetDbUrl: targetDbUrl.trim(),
+                    targetDb,
                     confirm: "RESTORE",
                 }),
             });
@@ -365,20 +380,26 @@ export function BackupRestorePanel() {
                     </Select>
                 </div>
 
-                <div className="space-y-1">
+                <div className="space-y-1 max-w-[320px]">
                     <Label className="text-xs">
-                        Target Database URL (DIRECT URL) <span className="text-destructive font-semibold">*</span>
+                        Restore into <span className="text-destructive font-semibold">*</span>
                     </Label>
-                    <Input
-                        className="h-9 font-mono text-xs"
-                        value={targetDbUrl}
-                        onChange={(e) => setTargetDbUrl(e.target.value)}
-                        placeholder="postgresql://postgres.[project-ref]:[password]@[host]:5432/postgres"
-                        autoComplete="off"
-                        disabled={!canRestore}
-                    />
-                    <p className="text-[11px] text-muted-foreground">
-                        Mandatory: restore will strictly overwrite this database. Paste the DIRECT URL — Supabase → Connect → Session pooler, port 5432 — not the app&apos;s port 6543 <span className="font-mono">?pgbouncer=true</span> URL.
+                    <Select value={targetDb} onValueChange={(v) => setTargetDb(v as "DB1" | "DB2")} disabled={!canRestore}>
+                        <SelectTrigger className="h-9 text-xs">
+                            <SelectValue placeholder="Pick DB1 or DB2" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {(dbRoles.length ? dbRoles : [{ id: "DB1" as const, role: "primary" as const }]).map((d) => (
+                                <SelectItem key={d.id} value={d.id} className="text-xs">
+                                    {d.id} — {d.role === "primary" ? "Primary" : "Standby"}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <p className={`text-[11px] ${targetIsPrimary ? "font-medium text-destructive" : "text-muted-foreground"}`}>
+                        {targetIsPrimary
+                            ? "This is the PRIMARY — everyone's data is replaced by the backup."
+                            : "Everything in the chosen database is overwritten. Its address comes from GitHub (DIRECT_DATABASE_URL_1 / _2)."}
                     </p>
                 </div>
 

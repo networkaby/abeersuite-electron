@@ -12,8 +12,8 @@ on:
       file_path:
         description: Full Dropbox path of the dump to restore (e.g. /smx-backup-….dump)
         required: true
-      target_db_url:
-        description: Mandatory direct Postgres connection URL to restore into (e.g. postgresql://...)
+      target_db:
+        description: Which database to restore into, DB1 or DB2 - a label; the address comes from the DIRECT_DATABASE_URL_1 / _2 secret.
         required: true
 
 concurrency:
@@ -24,26 +24,28 @@ jobs:
   restore:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # target_db_url is NOT put in env here: a job-level env value is printed in every
-    # step's log header, and an input is not masked the way a secret is. The first
-    # step reads it straight from the event file, masks it, and only then exports it.
+    # Database addresses live ONLY in GitHub secrets (owner, 2026-11-17): the app
+    # sends DB1 or DB2, never an address. Secrets are masked in every log.
     env:
       DROPBOX_APP_KEY: ${{ secrets.DROPBOX_APP_KEY }}
       DROPBOX_APP_SECRET: ${{ secrets.DROPBOX_APP_SECRET }}
       DROPBOX_REFRESH_TOKEN: ${{ secrets.DROPBOX_REFRESH_TOKEN }}
       FILE_PATH: ${{ github.event.inputs.file_path }}
+      TARGET_DB: ${{ github.event.inputs.target_db }}
+      DB_URL_1: ${{ secrets.DIRECT_DATABASE_URL_1 }}
+      DB_URL_2: ${{ secrets.DIRECT_DATABASE_URL_2 }}
     steps:
-      - name: Hide the target database URL in the logs
+      - name: Pick the target database
         run: |
           set -euo pipefail
-          URL=$(jq -r '.inputs.target_db_url // empty' "$GITHUB_EVENT_PATH")
-          if [ -z "$URL" ]; then echo "target_db_url input is empty."; exit 1; fi
-          # Masks the whole URL and the password on its own, in every later line.
-          echo "::add-mask::$URL"
-          NOPROTO="${URL#*://}"
-          USERINFO="${NOPROTO%@*}"
-          case "$USERINFO" in *:*) echo "::add-mask::${USERINFO#*:}" ;; esac
+          case "${TARGET_DB:-}" in
+            DB1) URL="${DB_URL_1:-}" ;;
+            DB2) URL="${DB_URL_2:-}" ;;
+            *)   echo "target_db must be DB1 or DB2 (got '${TARGET_DB:-}')."; exit 1 ;;
+          esac
+          if [ -z "$URL" ]; then echo "DIRECT_DATABASE_URL_${TARGET_DB#DB} secret is not set."; exit 1; fi
           echo "DIRECT_DATABASE_URL=$URL" >> "$GITHUB_ENV"
+          echo "restoring into $TARGET_DB"
 
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -91,6 +93,20 @@ jobs:
           if [ "$HTTP" -ge 400 ]; then cat restore.dump || true; echo; exit 1; fi
           ls -lh restore.dump
 
+      # The standby is read-only at the database level (dbSwitch.server.ts). Open it for
+      # the restore and the migration, and close it again in the last step.
+      - name: Open the target for writing
+        run: |
+          set -euo pipefail
+          PSQL=/usr/lib/postgresql/17/bin/psql
+          RO=$("$PSQL" "$DIRECT_DATABASE_URL" -Atq -c "SELECT current_setting('default_transaction_read_only')")
+          echo "WAS_READ_ONLY=$RO" >> "$GITHUB_ENV"
+          if [ "$RO" = "on" ]; then
+            "$PSQL" "$DIRECT_DATABASE_URL" -v ON_ERROR_STOP=1 -q -c \
+              "BEGIN READ WRITE; DO \$\$ BEGIN EXECUTE format('ALTER DATABASE %I SET default_transaction_read_only = off', current_database()); END \$\$; COMMIT;"
+            echo "$TARGET_DB is the read-only standby - opened for the restore"
+          fi
+
       - name: Run pg_restore
         run: |
           set -euo pipefail
@@ -107,17 +123,21 @@ jobs:
             --dbname "$DIRECT_DATABASE_URL" \
             restore.dump
 
-      # The dump's schema reflects whatever the database looked like at backup time.
-      # If a Prisma schema change shipped after that backup, `--clean` just reverted
-      # it — db push re-applies the current repo's schema on top so the app (running
-      # current code) doesn't immediately break on a missing table/column. Additive
-      # only: no --accept-data-loss, so a genuinely destructive diff fails loudly
-      # here instead of silently dropping data.
-      - name: Sync schema to current code (additive only)
+      # The dump carries `_prisma_migrations` as it was at backup time. If migrations
+      # shipped after that backup, `--clean` just reverted them — migrate deploy applies
+      # the committed ones on top (docs/migrations.md; never `db push`, which would
+      # leave a schema no migration describes).
+      - name: Apply migrations newer than the dump
         env:
-          DIRECT_URL: ${{ env.DIRECT_DATABASE_URL }}
-          DATABASE_URL: ${{ env.DIRECT_DATABASE_URL }}
-        run: pnpm prisma db push
+          PRISMA_MIGRATE_URL: ${{ env.DIRECT_DATABASE_URL }}
+        run: pnpm prisma migrate deploy
+
+      - name: Close the standby again
+        if: always() && env.WAS_READ_ONLY == 'on'
+        run: |
+          /usr/lib/postgresql/17/bin/psql "$DIRECT_DATABASE_URL" -v ON_ERROR_STOP=1 -q -c \
+            "BEGIN READ WRITE; DO \$\$ BEGIN EXECUTE format('ALTER DATABASE %I SET default_transaction_read_only = on', current_database()); END \$\$; COMMIT;" \
+            || echo "WARNING: could not set $TARGET_DB back to read-only"
 
       - name: Append run to Dropbox log
         if: always()

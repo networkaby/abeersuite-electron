@@ -77,14 +77,14 @@ jobs:
           case "$BODY" in
             *'"due":true'*)
               echo "due this hour: $BODY"
-              # Let the app dispatch backup.yml itself: only the app knows which of
-              # DB1 / DB2 is primary today, and it adds the nightly copy into staging.
-              # The DIRECT_DATABASE_URL secret below may name staging after a switch.
-              # The app not answering → fall back to the secret, as before.
+              # Let the app dispatch backup.yml itself: it adds the nightly copy into
+              # the standby and keeps its bookkeeping. The app not answering → run
+              # backup.yml here with no inputs; it finds the primary from the
+              # DIRECT_DATABASE_URL_1 / _2 secrets and makes no copy.
               RUN=$(curl -sS --max-time 60 "${AUTH[@]}" "${APP_BASE_URL%/}/api/cron/backup" || echo '')
               case "$RUN" in
                 *'"ok":true'*) echo "app dispatched the backup: $RUN"; echo "due=false" >> "$GITHUB_OUTPUT" ;;
-                *)             echo "app did not dispatch (got: ${RUN:-nothing}) — backing up from the secret"
+                *)             echo "app did not dispatch (got: ${RUN:-nothing}) — backing up from the secrets"
                                echo "due=true" >> "$GITHUB_OUTPUT" ;;
               esac ;;
             *'"due":false'*) echo "not due: $BODY";       echo "due=false" >> "$GITHUB_OUTPUT" ;;
@@ -95,7 +95,7 @@ jobs:
   backup:
     needs: gate
     if: needs.gate.outputs.due == 'true'
-    # No inputs: backup.yml finds github.event.inputs empty, falls back to the
-    # DIRECT_DATABASE_URL secret, and builds its own "…-git-…" file name.
+    # No inputs: backup.yml reads which of DB1 / DB2 is primary from the databases
+    # (DIRECT_DATABASE_URL_1 / _2 secrets), dumps it, and names the file "…-git-…".
     uses: ./.github/workflows/backup.yml
     secrets: inherit

@@ -105,7 +105,10 @@ export async function envChecklist(copy?: CopyProof): Promise<EnvRow[]> {
     };
     gh("GitHub", "APP_BASE_URL", "Office address, e.g. https://office…", "Hourly gate + copy-done report", "required", true);
     gh("GitHub", "CRON_SECRET", "Same value as on Vercel", "Hourly gate + copy-done report", "recommended", true);
-    gh("GitHub", "DIRECT_DATABASE_URL", "Direct URL of the primary", "Sunday safety-net backup only", "recommended", false);
+    // Database addresses live only here; the app sends DB1 / DB2 labels (owner, 2026-11-17).
+    // A good nightly copy used both, so it vouches for them.
+    gh("GitHub", "DIRECT_DATABASE_URL_1", "DB1 direct connection (5432)", "Every backup, copy and restore of DB1", "required", true);
+    gh("GitHub", "DIRECT_DATABASE_URL_2", "DB2 direct connection (5432)", "Every backup, copy and restore of DB2", "db2", true);
     gh("Dropbox", "DROPBOX_APP_KEY", "Dropbox app key", "Every backup", "required", true);
     gh("Dropbox", "DROPBOX_APP_SECRET", "Dropbox app secret", "Every backup", "required", true);
     gh("Dropbox", "DROPBOX_REFRESH_TOKEN", "Dropbox refresh token", "Every backup", "required", true);

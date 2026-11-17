@@ -14,8 +14,7 @@ name: Database Backup
 
 on:
   # Called by backup-scheduled.yml, which owns the timetable. No inputs arrive that
-  # way, so the steps below fall back to the DIRECT_DATABASE_URL secret and build
-  # their own file name.
+  # way, so the steps below find the primary themselves and build their own file name.
   workflow_call:
 
   workflow_dispatch:
@@ -23,8 +22,8 @@ on:
       file_name:
         description: Dump file name to create in Dropbox. Blank = generate one here.
         required: false
-      source_db_url:
-        description: Direct Postgres URL to dump from. Blank = use the DIRECT_DATABASE_URL secret.
+      source_db:
+        description: Which database is primary, DB1 or DB2 - a label, never an address. Blank = read it from the databases.
         required: false
       source:
         description: What started this — manual, cron or git. Only used when generating a name.
@@ -33,11 +32,8 @@ on:
       domain:
         description: Site that asked for it, e.g. office.networkservice.in. Name only.
         required: false
-      staging_db_url:
-        description: Direct URL of STAGING (DB1 / DB2). Set = restore this dump into it after the upload (nightly copy).
-        required: false
-      staging_name:
-        description: Which one staging is, DB1 or DB2 — reported back to the app with the result.
+      standby_db:
+        description: Nightly copy - restore this dump into the standby, DB1 or DB2, after the upload. Blank = no copy.
         required: false
 
 concurrency:
@@ -50,29 +46,75 @@ jobs:
     # Dump + upload, plus the nightly restore into staging when the app asks for it.
     timeout-minutes: 35
     env:
-      # Scheduled runs have no inputs, so fall back to the repo secret. The secret
-      # is also the safer path: GitHub masks secrets in logs, but a workflow INPUT
-      # is echoed in full in the job's env group — password included.
-      DIRECT_DATABASE_URL: ${{ github.event.inputs.source_db_url || secrets.DIRECT_DATABASE_URL }}
+      # Database addresses live ONLY in GitHub secrets (owner, 2026-11-17): the app
+      # sends a label, DB1 or DB2, never an address. Secrets are masked in every log.
+      DB_URL_1: ${{ secrets.DIRECT_DATABASE_URL_1 }}
+      DB_URL_2: ${{ secrets.DIRECT_DATABASE_URL_2 }}
+      SOURCE_DB: ${{ github.event.inputs.source_db }}
+      STANDBY_DB: ${{ github.event.inputs.standby_db }}
       DROPBOX_APP_KEY: ${{ secrets.DROPBOX_APP_KEY }}
       DROPBOX_APP_SECRET: ${{ secrets.DROPBOX_APP_SECRET }}
       DROPBOX_REFRESH_TOKEN: ${{ secrets.DROPBOX_REFRESH_TOKEN }}
       DROPBOX_FOLDER: ${{ secrets.DROPBOX_FOLDER }}
       FILE_NAME: ${{ github.event.inputs.file_name }}
     steps:
-      # staging_db_url is read from the event file and masked, never put in env: an
-      # input in env is printed in full in every step's header (same as restore.yml).
-      - name: Hide the staging database URL in the logs
-        if: github.event.inputs.staging_name
+      - name: Install PostgreSQL 17 client
         run: |
           set -euo pipefail
-          URL=$(jq -r '.inputs.staging_db_url // empty' "$GITHUB_EVENT_PATH")
-          if [ -z "$URL" ]; then echo "staging_name is set but staging_db_url is empty."; exit 1; fi
-          echo "::add-mask::$URL"
-          NOPROTO="${URL#*://}"
-          USERINFO="${NOPROTO%@*}"
-          case "$USERINFO" in *:*) echo "::add-mask::${USERINFO#*:}" ;; esac
-          echo "STAGING_DB_URL=$URL" >> "$GITHUB_ENV"
+          date +%s > "$RUNNER_TEMP/run_start" || true   # for duration in the Dropbox log
+          # apt accepts the ASCII-armored key directly — avoids `gpg --dearmor`
+          # which fails under sudo on the runner (cannot open /dev/tty).
+          sudo install -d /usr/share/keyrings
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo tee /usr/share/keyrings/pgdg.asc > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/pgdg.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      # Which database is primary, from the databases themselves: the `_db_switch` row,
+      # latest switched_at wins, no row = DB1 (src/shared/lib/db/dbPrimary.ts). The app's
+      # label is only cross-checked against it, so a wrong or stale label can never make
+      # this run dump the standby or overwrite the primary.
+      - name: Pick the primary and the standby
+        run: |
+          set -euo pipefail
+          PSQL=/usr/lib/postgresql/17/bin/psql
+          if [ -z "${DB_URL_1:-}" ]; then echo "DIRECT_DATABASE_URL_1 secret is not set."; exit 1; fi
+          BEST=""; BEST_AT=-1; ANSWERED=0
+          for N in 1 2; do
+            VAR="DB_URL_$N"; URL="${!VAR:-}"
+            [ -n "$URL" ] || continue
+            if ROW=$("$PSQL" "$URL" -Atq -c 'SELECT primary_db || chr(32) || floor(extract(epoch FROM switched_at))::bigint FROM "_db_switch" WHERE only_row' 2>/dev/null); then
+              ANSWERED=1
+            elif "$PSQL" "$URL" -Atq -c "SELECT 1" >/dev/null 2>&1; then
+              ANSWERED=1; ROW=""   # answered, never switched (no table yet)
+            else
+              echo "DB$N did not answer"; ROW=""
+            fi
+            if [ -n "$ROW" ]; then
+              ID="${ROW%% *}"; AT="${ROW##* }"
+              if [ "$AT" -gt "$BEST_AT" ]; then BEST="$ID"; BEST_AT="$AT"; fi
+            fi
+          done
+          if [ "$ANSWERED" = 0 ]; then echo "Neither database answered."; exit 1; fi
+          PRIMARY="${BEST:-DB1}"
+          if [ -n "${SOURCE_DB:-}" ] && [ "$SOURCE_DB" != "$PRIMARY" ]; then
+            echo "The app says $SOURCE_DB is primary, but the databases say $PRIMARY. Stopping - nothing dumped or copied."
+            exit 1
+          fi
+          N="${PRIMARY#DB}"; VAR="DB_URL_$N"
+          if [ -z "${!VAR:-}" ]; then echo "DIRECT_DATABASE_URL_$N secret is not set."; exit 1; fi
+          echo "DIRECT_DATABASE_URL=${!VAR}" >> "$GITHUB_ENV"
+          echo "primary: $PRIMARY"
+          if [ -n "${STANDBY_DB:-}" ]; then
+            if [ "$STANDBY_DB" = "$PRIMARY" ]; then echo "Refusing to copy into $STANDBY_DB: it is the primary."; exit 1; fi
+            M="${STANDBY_DB#DB}"; VAR="DB_URL_$M"
+            if [ -z "${!VAR:-}" ]; then echo "DIRECT_DATABASE_URL_$M secret is not set - no copy."; exit 1; fi
+            echo "STANDBY_DB_URL=${!VAR}" >> "$GITHUB_ENV"
+            echo "DO_COPY=true" >> "$GITHUB_ENV"
+            echo "standby: $STANDBY_DB (copy after upload)"
+          fi
 
       - name: Resolve dump file name
         env:
@@ -82,12 +124,10 @@ jobs:
           set -euo pipefail
           if [ -n "${FILE_NAME:-}" ]; then echo "using supplied name: $FILE_NAME"; exit 0; fi
 
-          # No name supplied, so build one here. This is the path that matters when
-          # the app stops sending source_db_url: the dump is then of whatever
-          # DIRECT_DATABASE_URL points at, and the app cannot know that database's
-          # project ref — so the name has to be built where the URL actually is.
+          # No name supplied (a GitHub-timed or hand-started run), so build one here
+          # from the primary's secret, which is where the project ref is.
           RAW="${DIRECT_DATABASE_URL:-}"
-          if [ -z "$RAW" ]; then echo "No source_db_url input and no DIRECT_DATABASE_URL secret."; exit 1; fi
+          if [ -z "$RAW" ]; then echo "No primary database address - check the DIRECT_DATABASE_URL_1 / _2 secrets."; exit 1; fi
           NOPROTO="${RAW#*://}"
           case "$NOPROTO" in *@*) USERINFO="${NOPROTO%%@*}" ;; *) USERINFO="" ;; esac
           DB_USER="${USERINFO%%:*}"
@@ -120,20 +160,6 @@ jobs:
           NAME="$NAME-$SRC-$IST_NOW-IST.dump"
           echo "FILE_NAME=$NAME" >> "$GITHUB_ENV"
           echo "generated name: $NAME"
-
-      - name: Install PostgreSQL 17 client
-        run: |
-          set -euo pipefail
-          date +%s > "$RUNNER_TEMP/run_start" || true   # for duration in the Dropbox log
-          # apt accepts the ASCII-armored key directly — avoids `gpg --dearmor`
-          # which fails under sudo on the runner (cannot open /dev/tty).
-          sudo install -d /usr/share/keyrings
-          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
-            | sudo tee /usr/share/keyrings/pgdg.asc > /dev/null
-          echo "deb [signed-by=/usr/share/keyrings/pgdg.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
-            | sudo tee /etc/apt/sources.list.d/pgdg.list
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client-17
 
       - name: Run pg_dump
         run: |
@@ -173,37 +199,37 @@ jobs:
           echo "upload HTTP $HTTP"; cat resp.txt || true; echo
           test "$HTTP" -lt 400
 
-      # ── Nightly copy into staging (DB1 / DB2) ──────────────────────────────────
-      # Staging is kept READ-ONLY at the database level so nothing on a stale pointer
+      # ── Nightly copy into the standby (DB1 / DB2) ──────────────────────────────
+      # The standby is kept READ-ONLY at the database level so nothing on a stale pointer
       # can write to it (src/shared/lib/db/dbSwitch.server.ts). Opened for the restore,
       # closed again whatever happens. No `prisma db push` here, unlike restore.yml:
       # this dump is tonight's primary, so its schema is already the current one.
-      - name: Copy the dump into staging
+      - name: Copy the dump into the standby
         id: copy
-        if: github.event.inputs.staging_name
+        if: env.DO_COPY == 'true'
         run: |
           set -euo pipefail
           PSQL=/usr/lib/postgresql/17/bin/psql
           ro() {
-            "$PSQL" "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -q -c \
+            "$PSQL" "$STANDBY_DB_URL" -v ON_ERROR_STOP=1 -q -c \
               "BEGIN READ WRITE; DO \$\$ BEGIN EXECUTE format('ALTER DATABASE %I SET default_transaction_read_only = $1', current_database()); END \$\$; COMMIT;"
           }
           ro off
-          trap 'ro on || echo "WARNING: could not set staging back to read-only"' EXIT
+          trap 'ro on || echo "WARNING: could not set the standby back to read-only"' EXIT
           /usr/lib/postgresql/17/bin/pg_restore \
             --clean --if-exists --no-owner --no-privileges \
             --schema=public \
             --jobs=4 \
-            --dbname "$STAGING_DB_URL" \
+            --dbname "$STANDBY_DB_URL" \
             backup.dump
-          echo "restored into ${{ github.event.inputs.staging_name }}"
+          echo "restored into $STANDBY_DB"
 
       - name: Report the copy to the app
-        if: always() && github.event.inputs.staging_name
+        if: always() && github.event.inputs.standby_db
         env:
           APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          INTO: ${{ github.event.inputs.staging_name }}
+          INTO: ${{ github.event.inputs.standby_db }}
           OK: ${{ steps.copy.outcome == 'success' }}
         run: |
           set -uo pipefail

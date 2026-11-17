@@ -3,6 +3,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { restoreWorkflowFile, triggerWorkflow } from "@/shared/lib/backup/githubDispatch";
 import { backupFolder, isUnderBackupFolder } from "@/shared/lib/backup/dropbox";
 import { backupAvailability, COUNTER_ONLY_MESSAGE } from "@/shared/lib/backup/availability";
+import { isDbId } from "@/shared/lib/db/dbTargets";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,17 +34,15 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => null)) as {
         path?: string;
         confirm?: string;
-        targetDbUrl?: string;
+        targetDb?: string;
     } | null;
     if (!body || body.confirm !== "RESTORE") {
         return Response.json({ error: "Type RESTORE to confirm." }, { status: 400 });
     }
-    const targetDbUrl = body.targetDbUrl?.trim();
-    if (!targetDbUrl || (!targetDbUrl.startsWith("postgres://") && !targetDbUrl.startsWith("postgresql://"))) {
-        return Response.json(
-            { error: "Target Database URL (DIRECT URL) is required and must start with postgresql:// or postgres://" },
-            { status: 400 },
-        );
+    // A label, never an address: restore.yml takes the address from the GitHub secret
+    // DIRECT_DATABASE_URL_1 / _2 (owner, 2026-11-17).
+    if (!isDbId(body.targetDb)) {
+        return Response.json({ error: "Pick the database to restore into: DB1 or DB2." }, { status: 400 });
     }
     if (!isUnderBackupFolder(body.path, await backupFolder())) {
         return Response.json({ error: "Invalid or unsupported backup path." }, { status: 400 });
@@ -52,7 +51,7 @@ export async function POST(req: Request) {
     try {
         await triggerWorkflow(await restoreWorkflowFile(), {
             file_path: body.path,
-            target_db_url: targetDbUrl,
+            target_db: body.targetDb,
         });
     } catch (err) {
         return Response.json({ error: (err as Error).message }, { status: 500 });

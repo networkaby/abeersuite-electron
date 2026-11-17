@@ -2,9 +2,9 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { backupWorkflowFile, triggerWorkflow } from "@/shared/lib/backup/githubDispatch";
 import { makeBackupFileName } from "@/shared/lib/backup/dropbox";
-import { libpqUrl, projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
+import { projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
 import { backupAvailability, COUNTER_ONLY_MESSAGE } from "@/shared/lib/backup/availability";
-import { primaryAndStaging } from "@/shared/lib/db/dbPrimary";
+import { primaryAndStaging, realtimePrimary } from "@/shared/lib/db/dbPrimary";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,31 +37,15 @@ export async function POST(req: Request) {
     // the project ref of whatever database it ends up dumping.
     const inputs: Record<string, string> = { source: "manual", domain };
 
-    // ── The app supplies the database URL ───────────────────────────────────────
-    // KEEP THIS BLOCK. Without it the runner dumps whatever the DIRECT_DATABASE_URL
-    // repo secret points at — not necessarily the database this app uses. Two Vercel
-    // projects share one backup repo and may each use a different database, so the
-    // URL has to come from here; a rotation then needs no repo change either.
-    //
-    // It costs one thing — source_db_url is
-    // a workflow INPUT, and GitHub echoes inputs in full in the job's env group.
-    // Secrets are masked; inputs are not. So every run below prints the password.
-    //
-    // DIRECT_URL first. The desktop app has none (counterEnv.ts withholds it), so it
-    // sends the live DATABASE_URL — the pgBouncer pool, cleaned of Prisma's
-    // `pgbouncer=true` by libpqUrl, exactly as "Back up to this PC" does.
-    // The PRIMARY (DB1 / DB2) — DB1 is DIRECT_URL / DATABASE_URL until DB2 is set up.
+    // ── Which database: a LABEL, never an address ───────────────────────────────
+    // Addresses live only in the GitHub secrets DIRECT_DATABASE_URL_1 / _2 (owner,
+    // 2026-11-17); backup.yml picks the secret and cross-checks the label with the
+    // databases' own `_db_switch` row. On a counter the office's DB_PRIMARY_ID says which
+    // one its DATABASE_URL is (realtimePrimary), since a counter holds only that one URL.
     const { primary } = await primaryAndStaging();
-    const dbUrl = libpqUrl(primary.direct) ?? libpqUrl(primary.pooled);
-    if (!dbUrl) {
-        return Response.json(
-            { error: "Active database URL is missing or invalid in server environment." },
-            { status: 500 },
-        );
-    }
-    inputs.source_db_url = dbUrl;
-    inputs.file_name = makeBackupFileName({ domain, projectRef: projectRefFromDbUrl(dbUrl), source: "manual" });
-    // ── end of database URL block ───────────────────────────────────────────────
+    inputs.source_db = realtimePrimary();
+    inputs.file_name = makeBackupFileName({ domain, projectRef: projectRefFromDbUrl(primary.direct), source: "manual" });
+
 
     try {
         await triggerWorkflow(await backupWorkflowFile(), inputs);
@@ -69,6 +53,5 @@ export async function POST(req: Request) {
         return Response.json({ error: (err as Error).message }, { status: 500 });
     }
 
-    // null once the block above is commented out — this side cannot know the name then.
     return Response.json({ fileName: inputs.file_name ?? null });
 }
