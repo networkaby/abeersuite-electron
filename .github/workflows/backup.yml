@@ -234,8 +234,28 @@ jobs:
           }
           ro off
           trap 'ro on || echo "WARNING: could not set the standby back to read-only"' EXIT
+          # The standby is an exact mirror, so start it from an empty public schema rather
+          # than `--clean`: a table or view the primary no longer has (or an old FK on it)
+          # makes --clean fail to drop what depends on it (2026-11-18, "InvCategory").
+          # Supabase's own schemas (auth, storage, realtime …) are not touched.
+          "$PSQL" "$STANDBY_DB_URL" -v ON_ERROR_STOP=1 -q <<'SQL'
+          BEGIN READ WRITE;
+          DROP SCHEMA IF EXISTS public CASCADE;
+          CREATE SCHEMA public;
+          GRANT USAGE, CREATE ON SCHEMA public TO PUBLIC;
+          DO $$ DECLARE r text; BEGIN
+            FOREACH r IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+              IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
+                EXECUTE format('GRANT USAGE ON SCHEMA public TO %I', r);
+                EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO %I', r);
+                EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO %I', r);
+              END IF;
+            END LOOP;
+          END $$;
+          COMMIT;
+          SQL
           /usr/lib/postgresql/17/bin/pg_restore \
-            --clean --if-exists --no-owner --no-privileges \
+            --no-owner --no-privileges \
             --schema=public \
             --jobs=4 \
             --dbname "$STANDBY_DB_URL" \
