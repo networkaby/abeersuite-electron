@@ -94,8 +94,19 @@ function writeConfig(syncUrl: string): string | null {
     const config = {
         sourceUrl,
         localUrl: syncUrl,
-        supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || undefined,
-        supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || undefined,
+        // The primary's realtime project (DB_PRIMARY_ID from the office, read at start);
+        // `_1` falls back to the old unsuffixed names. A switch while the counter runs
+        // leaves the worker on the old project — its 10-minute timer still syncs.
+        ...(process.env.DB_PRIMARY_ID?.trim() === "DB2" && process.env.NEXT_PUBLIC_SUPABASE_URL_2
+            ? {
+                  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL_2,
+                  supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_2 || undefined,
+              }
+            : {
+                  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL_1 || process.env.NEXT_PUBLIC_SUPABASE_URL || undefined,
+                  supabaseAnonKey:
+                      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_1 || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || undefined,
+              }),
         ...(registryPath ? { registryPath } : {}),
     };
 

@@ -60,7 +60,7 @@
  */
 
 import type { AxiosInstance } from "axios";
-import { supabase } from "@/shared/lib/supabase/supabaseClient";
+import { realtimeReady, supabase } from "@/shared/lib/supabase/supabaseClient";
 import { topicsForApiPath, type Topic } from "./topics";
 import { writeCache, readCache, subscribeToCache } from "@/shared/lib/browser/pollCache";
 import { isTabLeader, onBecomeLeader } from "./tabLeader";
@@ -131,7 +131,7 @@ if (typeof window !== "undefined") {
  */
 function connect(): Promise<ReturnType<typeof supabase.channel>> {
     if (joining) return joining;
-    joining = new Promise((resolve) => {
+    joining = realtimeReady.then(() => new Promise<ReturnType<typeof supabase.channel>>((resolve) => {
         const ch = supabase
             .channel(CHANNEL_NAME)
             .on("broadcast", { event: EVENT_NAME }, ({ payload }) => {
@@ -147,7 +147,7 @@ function connect(): Promise<ReturnType<typeof supabase.channel>> {
         // Never leave a publish waiting forever on a join that is not coming;
         // a send on an unjoined channel simply fails, which is what we want.
         setTimeout(() => resolve(ch), JOIN_TIMEOUT_MS);
-    });
+    }));
     void joining.then((ch) => { channel = ch; });
     return joining;
 }

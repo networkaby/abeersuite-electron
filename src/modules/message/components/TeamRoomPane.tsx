@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import { Send, MessageSquare, Loader2, Hash, AtSign, Bell, ChevronLeft, Paperclip, X, FileText, FileSpreadsheet } from "lucide-react";
 import { extractApiError } from "@/shared/lib/api";
 import { GatedLink } from "@/shared/components/GatedLink";
-import { supabase } from "@/shared/lib/supabase/supabaseClient";
+import { realtimeReady, supabase } from "@/shared/lib/supabase/supabaseClient";
 import { formatInboxTime } from "@/shared/lib/format/formatDate";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -221,7 +221,11 @@ export default function TeamRoomPane({
     const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
     useEffect(() => {
-        const channel = supabase
+        let channel: ReturnType<typeof supabase.channel> | null = null;
+        let cancelled = false;
+        void realtimeReady.then(() => {
+            if (cancelled) return;
+            channel = supabase
             .channel(`room:${roomId}`)
             .on("broadcast", { event: "new_message" }, ({ payload }) => {
                 const msg = payload as Message;
@@ -237,9 +241,11 @@ export default function TeamRoomPane({
                 });
             })
             .subscribe();
-        channelRef.current = channel;
+            channelRef.current = channel;
+        });
         return () => {
-            void supabase.removeChannel(channel);
+            cancelled = true;
+            if (channel) void supabase.removeChannel(channel);
             channelRef.current = null;
         };
     }, [roomId, currentUserId]);

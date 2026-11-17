@@ -66,6 +66,10 @@ export async function POST(req: Request) {
     }
     // DB1 / DB2: a counter gets the PRIMARY's pooled URL as its one DATABASE_URL, read
     // fresh at every start. Staging never reaches a counter. Same as before without DB2.
-    body.DATABASE_URL = (await primaryAndStaging()).primary.pooled;
+    const { primary } = await primaryAndStaging();
+    body.DATABASE_URL = primary.pooled;
+    // Which realtime project (NEXT_PUBLIC_SUPABASE_*_1 / _2, baked into the counter
+    // build) goes with that database — shared/lib/db/dbPrimary.ts realtimePrimary().
+    body.DB_PRIMARY_ID = primary.id;
     return NextResponse.json(body, { headers: { "Cache-Control": "no-store" } });
 }

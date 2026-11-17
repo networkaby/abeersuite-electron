@@ -71,6 +71,12 @@ export const COUNTER_ENV_COPIED: readonly string[] = [
     "NEXT_PUBLIC_SUPABASE_URL",
     "NEXT_PUBLIC_SUPABASE_ANON_KEY",
     "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+    // DB1 / DB2 realtime projects — the counter uses the primary's, named by
+    // DB_PRIMARY_ID from /api/counter/config (src/shared/lib/supabase/supabaseClient.ts).
+    "NEXT_PUBLIC_SUPABASE_URL_1",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY_1",
+    "NEXT_PUBLIC_SUPABASE_URL_2",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY_2",
 
     // ── Staff login ──────────────────────────────────────────────────────────
     // Absent, the domain allowlist fails closed and every sign-in is refused with

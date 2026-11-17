@@ -17,6 +17,7 @@ import { Database, RefreshCw, ArrowLeftRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { realtimeProject } from "@/shared/lib/supabase/supabaseClient";
 
 /** Mirrors DbSwitchStatus in shared/lib/db/dbSwitch.server.ts (client cannot import it). */
 interface DbInfo {
@@ -33,8 +34,24 @@ interface Status {
     dbs: DbInfo[];
     copy: { startedAt: string | null; copiedAt: string | null; failedAt: string | null; into: string | null; file: string | null };
     window: { open: boolean; until: string | null; reason: string | null };
-    envKeys: { key: string; set: boolean }[];
+    checklist: EnvRow[];
 }
+/** Mirrors EnvRow in shared/lib/db/envChecklist.server.ts. */
+interface EnvRow {
+    key: string;
+    what: string;
+    neededFor: string;
+    where: "Vercel" | "GitHub";
+    set: boolean | null;
+    light: "green" | "amber" | "red" | "grey";
+}
+
+const LIGHT: Record<EnvRow["light"], string> = {
+    green: "bg-emerald-500",
+    amber: "bg-amber-500",
+    red: "bg-red-500",
+    grey: "bg-muted-foreground/30",
+};
 
 const when = (iso: string | null) =>
     iso ? new Date(iso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "—";
@@ -74,15 +91,45 @@ export function DatabaseSwitchCard() {
     if (!status) return null;
 
     const keyList = (
-        <p className="text-[11px] text-muted-foreground">
-            {status.envKeys.map((k, i) => (
-                <span key={k.key}>
-                    {i > 0 && " · "}
-                    <span className="font-mono">{k.key}</span>{" "}
-                    <span className={k.set ? "text-emerald-600" : "text-muted-foreground/70"}>{k.set ? "set" : "not set"}</span>
+        <details className="rounded-md border bg-background" open={status.checklist.some((r) => r.light === "red")}>
+            <summary className="cursor-pointer px-3 py-2 text-xs font-medium">
+                Settings needed on Vercel and GitHub
+                <span className="ml-2 text-muted-foreground">
+                    {status.checklist.filter((r) => r.light === "red").length} missing ·{" "}
+                    {status.checklist.filter((r) => r.light === "amber").length} to check
                 </span>
-            ))}
-        </p>
+            </summary>
+            <div className="overflow-x-auto border-t">
+                <table className="w-full text-[11px]">
+                    <thead className="text-left text-muted-foreground">
+                        <tr>
+                            <th className="px-3 py-1.5 font-medium" />
+                            <th className="px-2 py-1.5 font-medium">Name</th>
+                            <th className="px-2 py-1.5 font-medium">What</th>
+                            <th className="px-2 py-1.5 font-medium">Needed for</th>
+                            <th className="px-2 py-1.5 font-medium">Where</th>
+                            <th className="px-2 py-1.5 font-medium">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {status.checklist.map((r) => (
+                            <tr key={`${r.where}:${r.key}`} className="border-t">
+                                <td className="px-3 py-1.5">
+                                    <span className={`inline-block size-2.5 rounded-full ${LIGHT[r.light]}`} />
+                                </td>
+                                <td className="px-2 py-1.5 font-mono">{r.key}</td>
+                                <td className="px-2 py-1.5">{r.what}</td>
+                                <td className="px-2 py-1.5 text-muted-foreground">{r.neededFor}</td>
+                                <td className="px-2 py-1.5">{r.where}</td>
+                                <td className="px-2 py-1.5">
+                                    {r.set === null ? "Cannot check here" : r.set ? "Set" : "Not set"}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </details>
     );
 
     if (!status.dual) {
@@ -175,6 +222,7 @@ export function DatabaseSwitchCard() {
                     {copy.into ? <span className="text-muted-foreground"> (into {copy.into})</span> : null}
                 </p>
                 {copyFailed && <p className="text-destructive">Copy failed at {when(copy.failedAt)}.</p>}
+                <p className="text-muted-foreground">Live updates on this page use {realtimeProject()}&apos;s realtime project.</p>
             </div>
 
             <div className="space-y-2 border-t pt-3">

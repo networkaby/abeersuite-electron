@@ -18,9 +18,12 @@ const COUNTER_BUILD = process.env.COUNTER_BUILD === "1";
 // anyone can host a file there and push it through our optimizer. Hostname-only is
 // kept as the fallback when the env is missing (a dev checkout without keys).
 const CLOUDINARY_CLOUD = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME?.trim();
-const SUPABASE_HOST = (() => {
-  try { return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").hostname; } catch { return ""; }
-})();
+// DB1 / DB2 each have their own project (`_1` falls back to the old unsuffixed name).
+const hostOf = (u: string | undefined) => { try { return new URL(u ?? "").hostname; } catch { return ""; } };
+const SUPABASE_HOSTS = [
+  hostOf(process.env.NEXT_PUBLIC_SUPABASE_URL_1 || process.env.NEXT_PUBLIC_SUPABASE_URL),
+  hostOf(process.env.NEXT_PUBLIC_SUPABASE_URL_2),
+].filter(Boolean);
 
 const nextConfig: NextConfig = {
   // `next dev` otherwise appends its own docs block to AGENTS.md whenever it
@@ -91,7 +94,7 @@ const nextConfig: NextConfig = {
         hostname: "res.cloudinary.com",
         ...(CLOUDINARY_CLOUD ? { pathname: `/${CLOUDINARY_CLOUD}/**` } : {}),
       },
-      { protocol: "https", hostname: SUPABASE_HOST || "*.supabase.co" },
+      ...(SUPABASE_HOSTS.length ? SUPABASE_HOSTS : ["*.supabase.co"]).map((hostname) => ({ protocol: "https" as const, hostname })),
       { protocol: "https", hostname: "images.pexels.com" },
       { protocol: "https", hostname: "images.unsplash.com" },
     ],

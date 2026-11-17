@@ -19,7 +19,7 @@
 import "server-only";
 import type { PoolClient } from "pg";
 import { projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
-import { dbEnvKeys, dbTarget, DB_IDS, isDualDb, otherDb, type DbId } from "./dbTargets";
+import { dbTarget, isDualDb, otherDb, type DbId } from "./dbTargets";
 import { readSwitchRow, refreshPrimary, SWITCH_TABLE_SQL, withDb, type SwitchRow } from "./dbPrimary";
 
 /** A copy that has not reported back within this long is treated as dead. */
@@ -101,8 +101,6 @@ export interface DbSwitchStatus {
         file: string | null;
     };
     window: SwitchWindow;
-    /** Which `.env` names this server has — names and set / not set only, never a value. */
-    envKeys: { key: string; set: boolean }[];
 }
 
 async function probe(id: DbId): Promise<{ reachable: boolean; readOnly: boolean | null }> {
@@ -174,12 +172,6 @@ export async function dbSwitchStatus(): Promise<DbSwitchStatus> {
         window: dual
             ? windowFrom(row, staging!)
             : { open: false, until: null, reason: "Only one database is set up (no DATABASE_URL_2)." },
-        envKeys: DB_IDS.flatMap((id) => {
-            const k = dbEnvKeys(id);
-            return [k.pooled, k.direct];
-        })
-            .concat("DATABASE_URL", "DIRECT_URL")
-            .map((key) => ({ key, set: !!process.env[key]?.trim() })),
     };
 }
 

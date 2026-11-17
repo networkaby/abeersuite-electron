@@ -18,13 +18,23 @@
 import { createClient } from "@supabase/supabase-js";
 import { CHANGE_CHANNEL_NAME, CHANGE_EVENT_NAME } from "./channel";
 import type { Topic } from "./topics";
+import { realtimePrimary } from "@/shared/lib/db/dbPrimary";
 
 /** Optional extras on the wire. `deleted` names Prisma models that lost rows on the
  *  source — read only by the counter sync worker (see `deleteAnnounce.ts`). */
 export type ServerSignalExtras = { deleted?: readonly string[] };
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+/** The primary database's realtime project — the one every open tab listens on
+ *  (`supabaseClient.ts`). `_1` falls back to the old unsuffixed names. */
+function realtimePair(): { url: string; key: string } {
+    const db2 = realtimePrimary() === "DB2" && process.env.NEXT_PUBLIC_SUPABASE_URL_2 && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_2;
+    return db2
+        ? { url: process.env.NEXT_PUBLIC_SUPABASE_URL_2!, key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_2! }
+        : {
+              url: (process.env.NEXT_PUBLIC_SUPABASE_URL_1 || process.env.NEXT_PUBLIC_SUPABASE_URL)!,
+              key: (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_1 || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)!,
+          };
+}
 
 const JOIN_TIMEOUT_MS = 5_000;
 
@@ -37,6 +47,7 @@ export async function publishChangeServer(
     if (topics.length === 0 && !(extras.deleted && extras.deleted.length > 0)) return;
     let client: ReturnType<typeof createClient> | undefined;
     try {
+        const { url, key } = realtimePair();
         client = createClient(url, key);
         const channel = client.channel(CHANGE_CHANNEL_NAME);
         try {

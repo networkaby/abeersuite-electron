@@ -43,7 +43,7 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
-import { supabase } from "@/shared/lib/supabase/supabaseClient";
+import { realtimeReady, supabase } from "@/shared/lib/supabase/supabaseClient";
 import { usePolling } from "@/shared/hooks/usePolling";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { INBOX_ROOMS_POLL_MS } from "@/shared/lib/constants/polling";
@@ -179,6 +179,7 @@ export default function GlobalInboxListener({ currentUserId }: { currentUserId?:
             if (syncing) return;
             syncing = true;
             try {
+                await realtimeReady;
                 const res = await axios.get<Room[]>("/api/inbox/rooms");
                 for (const room of res.data) {
                     if (subscribedIds.has(room.id)) continue; // already subscribed

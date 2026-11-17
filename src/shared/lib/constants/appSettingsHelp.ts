@@ -57,8 +57,12 @@ export const ENV_ONLY_PROVIDERS: EnvOnlyProvider[] = [
         section: "Server & security",
         why: "Only sends \"something changed\" messages (Broadcast) — never reads the database, so it may be a different Supabase project. Built into the website (NEXT_PUBLIC_), so .env only.",
         keys: [
-            { key: "NEXT_PUBLIC_SUPABASE_URL", label: "Project URL" },
-            { key: "NEXT_PUBLIC_SUPABASE_ANON_KEY", label: "anon public key" },
+            { key: "NEXT_PUBLIC_SUPABASE_URL_1", label: "DB1 project URL" },
+            { key: "NEXT_PUBLIC_SUPABASE_ANON_KEY_1", label: "DB1 anon public key" },
+            { key: "NEXT_PUBLIC_SUPABASE_URL_2", label: "DB2 project URL" },
+            { key: "NEXT_PUBLIC_SUPABASE_ANON_KEY_2", label: "DB2 anon public key" },
+            { key: "NEXT_PUBLIC_SUPABASE_URL", label: "Project URL — old name, used when _1 is not set" },
+            { key: "NEXT_PUBLIC_SUPABASE_ANON_KEY", label: "anon public key — old name, used when _1 is not set" },
         ],
     },
     {
@@ -324,8 +328,10 @@ export const PROVIDER_HELP: Record<string, ProviderHelp> = {
     "Supabase (live updates)": {
         about: "Pushes changes to open screens in real time.",
         terms: [
-            { key: "NEXT_PUBLIC_SUPABASE_URL", theirs: "Project URL" },
-            { key: "NEXT_PUBLIC_SUPABASE_ANON_KEY", theirs: "anon public key" },
+            { key: "NEXT_PUBLIC_SUPABASE_URL_1", theirs: "DB1 project — Project URL" },
+            { key: "NEXT_PUBLIC_SUPABASE_ANON_KEY_1", theirs: "DB1 project — anon public key" },
+            { key: "NEXT_PUBLIC_SUPABASE_URL_2", theirs: "DB2 project — Project URL" },
+            { key: "NEXT_PUBLIC_SUPABASE_ANON_KEY_2", theirs: "DB2 project — anon public key" },
         ],
         steps: ["supabase.com → project → Project Settings → API (Data API): Project URL and the anon public key."],
         link: { label: "Supabase dashboard", url: "https://supabase.com/dashboard/projects" },

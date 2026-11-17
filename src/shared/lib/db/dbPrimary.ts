@@ -148,6 +148,16 @@ export function currentPrimary(): DbId {
     return cache.primary;
 }
 
+/**
+ * The primary for picking a REALTIME project. The office (two databases) knows it; a
+ * counter holds one database URL, so the office hands it `DB_PRIMARY_ID` at start
+ * (`/api/counter/config`) — without it, DB1.
+ */
+export function realtimePrimary(): DbId {
+    if (isDualDb()) return currentPrimary();
+    return process.env.DB_PRIMARY_ID?.trim() === "DB2" ? "DB2" : "DB1";
+}
+
 /** Forget the cached answer — called when a write hit a read-only database (a stale pointer). */
 export function invalidatePrimary(): void {
     cache.checkedAt = 0;

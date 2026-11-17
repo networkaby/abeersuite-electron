@@ -145,3 +145,23 @@ export async function setScheduledBackupEnabled(enabled: boolean): Promise<void>
 /** Workflow file names — Settings → App Settings, else env, else the default. */
 export const backupWorkflowFile = async () => cleanEnvValue(await appSetting("GITHUB_BACKUP_WORKFLOW")) || "backup.yml";
 export const restoreWorkflowFile = async () => cleanEnvValue(await appSetting("GITHUB_RESTORE_WORKFLOW")) || "restore.yml";
+
+/**
+ * Names of the repo's Actions secrets (never values — GitHub does not return them), or
+ * null when the token may not list them (needs "Secrets: read" on a fine-grained PAT).
+ * For the env checklist on Settings → Backup & Restore.
+ */
+export async function listActionSecretNames(): Promise<Set<string> | null> {
+    try {
+        const { token, repo } = await githubConfig();
+        const res = await fetch(`https://api.github.com/repos/${repo}/actions/secrets?per_page=100`, {
+            headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" },
+            cache: "no-store",
+        });
+        if (!res.ok) return null;
+        const json = (await res.json()) as { secrets?: { name: string }[] };
+        return new Set((json.secrets ?? []).map((s) => s.name));
+    } catch {
+        return null;
+    }
+}
