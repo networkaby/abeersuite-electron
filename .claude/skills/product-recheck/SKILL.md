@@ -27,12 +27,15 @@ Every **GET** (reading a product, a list, a photo) goes to `$READ_URL`; every **
 | **4 · Office** | Owner says "office" on this computer — reads from the counter app's own copy (no Supabase egress), writes to the office site | `http://localhost:786` | `https://office.networkservice.in` | `.env.local`, else `.env` |
 
 - **Key from `.env.local`, else `.env`**: the line `PRODUCT_COPY_API_KEY=` — `.env.local` first, then `.env`; neither has it → use the key above. Read it into the variable only, never echo it.
-- **Mode not named and running on the owner's computer** → ask once ("cloud, local, smart local or office?"), then keep it for the whole run.
 - Before the first product, check both URLs answer (`GET $READ_URL/api/agent/products?limit=1` and the same on `$WRITE_URL`). One not answering → stop and say which (dev server or counter app not running).
-- **Mode 3 needs both sides on the same data.** The counter app on `:786` holds a copy of whichever database it syncs with (normally **live**), while the dev server on `:3000` may use the local copy — then reads and writes do not match (a product, its photos and its Part done sign differ). Use mode 3 only when the dev server points at the same database the counter syncs with; otherwise use mode 2.
+- **Mode 3 runs on live data.** The counter app on `:786` holds a copy of **live**, so for mode 3 the dev server on `:3000` points at the **live** database too (owner, 2026-11-17: saves Vercel CPU — the writes run on this computer). Writes then change live products. If the reads and writes clearly disagree (a product, its photos, its Part done sign), the dev server is on another database — stop and say so.
 - Modes 3 and 4 read from the counter app's replica, which can lag the office by a little: if a read looks older than what you just wrote, read that one product again from `$WRITE_URL`.
 - `401` → wrong key or the card is off for that server — stop and tell the owner.
 - Why: reading from `localhost:786` keeps reads off Supabase egress and Vercel CPU; only the writes go to the server that owns them.
+
+## Start: ask the mode first
+
+Before anything else, ask the owner **which mode** — cloud · local · smart local · office (Setup above) — unless the request already says. Running in the cloud → do not ask, it is always **cloud**. This skill is Part 4 only; for Parts 1–3 say so and switch to **product-prep**.
 
 ## 1. Pick
 

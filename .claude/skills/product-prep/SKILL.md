@@ -41,12 +41,25 @@ Every **GET** (reading a product, a list, a photo) goes to `$READ_URL`; every **
 | **4 · Office** | Owner says "office" on this computer — reads from the counter app's own copy (no Supabase egress), writes to the office site | `http://localhost:786` | `https://office.networkservice.in` | `.env.local`, else `.env` |
 
 - **Key from `.env.local`, else `.env`**: the line `PRODUCT_COPY_API_KEY=` — `.env.local` first, then `.env`; neither has it → use the key above. Read it into the variable only, never echo it.
-- **Mode not named and running on the owner's computer** → ask once ("cloud, local, smart local or office?"), then keep it for the whole run.
 - Before the first product, check both URLs answer (`GET $READ_URL/api/agent/products?limit=1` and the same on `$WRITE_URL`). One not answering → stop and say which (dev server or counter app not running).
-- **Mode 3 needs both sides on the same data.** The counter app on `:786` holds a copy of whichever database it syncs with (normally **live**), while the dev server on `:3000` may use the local copy — then reads and writes do not match (a product, its photos and its Part done sign differ). Use mode 3 only when the dev server points at the same database the counter syncs with; otherwise use mode 2.
+- **Mode 3 runs on live data.** The counter app on `:786` holds a copy of **live**, so for mode 3 the dev server on `:3000` points at the **live** database too (owner, 2026-11-17: saves Vercel CPU — the writes run on this computer). Writes then change live products. If the reads and writes clearly disagree (a product, its photos, its Part done sign), the dev server is on another database — stop and say so.
 - Modes 3 and 4 read from the counter app's replica, which can lag the office by a little: if a read looks older than what you just wrote, read that one product again from `$WRITE_URL`.
 - `401` → wrong key or the card is off for that server — stop and tell the owner.
 - Why: reading from `localhost:786` keeps reads off Supabase egress and Vercel CPU; only the writes go to the server that owns them.
+
+## Start: ask two things first
+
+Before anything else, ask the owner **both** questions in one message, unless the request already answers them:
+
+1. **Which mode?** — cloud · local · smart local · office (Setup above). Running in the cloud → do not ask, it is always **cloud**.
+2. **Which part?**
+   - **Full run** — Parts 1 → 3 in one call (the usual).
+   - **Part 1 only** — clean the data and check it is enough to search; no search.
+   - **Part 2 only** — the one search, saved (Part 1 must be done).
+   - **Part 3 only** — write from the saved search (Part 2 must be done).
+   - **Part 4** — verify; that is the **product-recheck** skill, say so and switch to it.
+
+Keep both answers for the whole run. A part that cannot run yet for a product (its earlier part not done) → skip that product and name it in the report, never run the earlier part on your own.
 
 ## 0. Pick products and find where each one stands
 
