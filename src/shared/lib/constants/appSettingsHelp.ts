@@ -294,7 +294,7 @@ export const PROVIDER_HELP: Record<string, ProviderHelp> = {
         link: { label: "HanuOTP", url: "https://hanuotp.in/" },
     },
     "Database (Supabase Postgres)": {
-        about: "Two Supabase projects, DB1 and DB2. Either can be primary; the other is staging, copied every night. Settings → Backup & Restore → Databases shows which.",
+        about: "Two Supabase projects, DB1 and DB2. Either can be primary; the other is the standby, copied every night. Settings → Backup & Restore → Databases shows which.",
         terms: [
             { key: "DATABASE_URL_1", theirs: "DB1 — Connection string, Transaction pooler (port 6543)" },
             { key: "DIRECT_URL_1", theirs: "DB1 — Connection string, Direct / Session (port 5432)" },

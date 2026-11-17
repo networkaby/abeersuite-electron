@@ -92,7 +92,7 @@ export function DatabaseSwitchCard() {
                     <Database className="size-4" /> Databases
                 </h2>
                 <p className="text-xs text-muted-foreground">
-                    Only one database is set up, so there is no staging copy and no switch. Add DATABASE_URL_2 and
+                    Only one database is set up, so there is no standby copy and no switch. Add DATABASE_URL_2 and
                     DIRECT_URL_2 on Vercel for DB2.
                 </p>
                 {keyList}
@@ -104,7 +104,7 @@ export function DatabaseSwitchCard() {
         if (!status || typed !== "SWITCH") return;
         const ok = await confirmAction({
             title: `Make ${status.staging} the primary?`,
-            body: `Every user, counter and service moves from ${status.primary} to ${status.staging} within a minute. ${status.primary} becomes staging, is locked read-only, and gets tonight's copy. Counters left open overnight must be restarted.`,
+            body: `Every user, counter and service moves from ${status.primary} to ${status.staging} within a minute. ${status.primary} becomes the standby, is locked read-only, and gets tonight's copy. Counters left open overnight must be restarted.`,
             confirmLabel: `Switch to ${status.staging}`,
         });
         if (!ok) return;
@@ -138,7 +138,7 @@ export function DatabaseSwitchCard() {
                         <Database className="size-4" /> Databases
                     </h2>
                     <p className="mt-1 text-xs text-muted-foreground">
-                        Everyone works on the primary. Staging gets a full copy every night and stays read-only.
+                        Everyone works on the primary. The standby gets a full copy every night and stays read-only.
                     </p>
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading}>
@@ -156,7 +156,7 @@ export function DatabaseSwitchCard() {
                                     db.role === "primary" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
                                 }`}
                             >
-                                {db.role}
+                                {db.role === "primary" ? "Primary" : "Standby"}
                             </span>
                         </div>
                         <p className="mt-1 font-mono text-[11px] text-muted-foreground">{db.projectRef || "—"}</p>
@@ -171,7 +171,7 @@ export function DatabaseSwitchCard() {
 
             <div className="space-y-0.5 text-xs">
                 <p>
-                    Last copy into staging: <span className="font-medium">{when(copy.copiedAt)}</span>
+                    Last copy into standby: <span className="font-medium">{when(copy.copiedAt)}</span>
                     {copy.into ? <span className="text-muted-foreground"> (into {copy.into})</span> : null}
                 </p>
                 {copyFailed && <p className="text-destructive">Copy failed at {when(copy.failedAt)}.</p>}
