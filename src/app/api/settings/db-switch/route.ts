@@ -15,12 +15,16 @@ export const dynamic = "force-dynamic";
  * Office only: a counter holds just the primary's pooled URL (counter/config), so it can
  * neither see staging nor switch.
  */
+async function withChecklist() {
+    const status = await dbSwitchStatus();
+    return { ...status, checklist: await envChecklist(status.copy) };
+}
+
 export async function GET() {
     const { response } = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
     if (response) return response;
     if (IS_COUNTER_PC) return Response.json({ error: "Open this on the office site." }, { status: 404 });
-    const [status, checklist] = await Promise.all([dbSwitchStatus(), envChecklist()]);
-    return Response.json({ ...status, checklist });
+    return Response.json(await withChecklist());
 }
 
 export async function POST(req: Request) {
@@ -33,7 +37,7 @@ export async function POST(req: Request) {
 
     try {
         const out = await switchPrimary();
-        return Response.json({ ok: true, ...out, status: { ...(await dbSwitchStatus()), checklist: await envChecklist() } });
+        return Response.json({ ok: true, ...out, status: await withChecklist() });
     } catch (e) {
         if (e instanceof SwitchRefused) return Response.json({ error: e.message }, { status: 409 });
         console.error("[db-switch] switch failed:", e);

@@ -38,13 +38,25 @@ interface Status {
 }
 /** Mirrors EnvRow in shared/lib/db/envChecklist.server.ts. */
 interface EnvRow {
+    group: "DB1" | "DB2" | "Vercel cron" | "GitHub" | "Dropbox";
     key: string;
     what: string;
     neededFor: string;
     where: "Vercel" | "GitHub";
     set: boolean | null;
+    note: string;
     light: "green" | "amber" | "red" | "grey";
 }
+
+/** Rows by group, in the order the server sent them. */
+function byGroup(rows: EnvRow[]): [EnvRow["group"], EnvRow[]][] {
+    const out = new Map<EnvRow["group"], EnvRow[]>();
+    for (const r of rows) out.set(r.group, [...(out.get(r.group) ?? []), r]);
+    return [...out];
+}
+
+const groupLight = (rows: EnvRow[]): EnvRow["light"] =>
+    rows.some((r) => r.light === "red") ? "red" : rows.some((r) => r.light === "amber") ? "amber" : rows.every((r) => r.light === "grey") ? "grey" : "green";
 
 const LIGHT: Record<EnvRow["light"], string> = {
     green: "bg-emerald-500",
@@ -111,22 +123,30 @@ export function DatabaseSwitchCard() {
                             <th className="px-2 py-1.5 font-medium">Status</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        {status.checklist.map((r) => (
-                            <tr key={`${r.where}:${r.key}`} className="border-t">
+                    {byGroup(status.checklist).map(([group, rows]) => (
+                        <tbody key={group}>
+                            <tr className="border-t bg-muted/40">
                                 <td className="px-3 py-1.5">
-                                    <span className={`inline-block size-2.5 rounded-full ${LIGHT[r.light]}`} />
+                                    <span className={`inline-block size-2.5 rounded-full ${LIGHT[groupLight(rows)]}`} />
                                 </td>
-                                <td className="px-2 py-1.5 font-mono">{r.key}</td>
-                                <td className="px-2 py-1.5">{r.what}</td>
-                                <td className="px-2 py-1.5 text-muted-foreground">{r.neededFor}</td>
-                                <td className="px-2 py-1.5">{r.where}</td>
-                                <td className="px-2 py-1.5">
-                                    {r.set === null ? "Cannot check here" : r.set ? "Set" : "Not set"}
+                                <td colSpan={5} className="px-2 py-1.5 font-semibold">
+                                    {group}
                                 </td>
                             </tr>
-                        ))}
-                    </tbody>
+                            {rows.map((r) => (
+                                <tr key={`${r.where}:${r.key}`} className="border-t">
+                                    <td className="px-3 py-1.5 pl-6">
+                                        <span className={`inline-block size-2 rounded-full ${LIGHT[r.light]}`} />
+                                    </td>
+                                    <td className="px-2 py-1.5 font-mono">{r.key}</td>
+                                    <td className="px-2 py-1.5">{r.what}</td>
+                                    <td className="px-2 py-1.5 text-muted-foreground">{r.neededFor}</td>
+                                    <td className="px-2 py-1.5">{r.where}</td>
+                                    <td className="px-2 py-1.5">{r.note}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    ))}
                 </table>
             </div>
         </details>
