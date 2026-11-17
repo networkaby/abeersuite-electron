@@ -10,8 +10,8 @@ export const dynamic = "force-dynamic";
  * Body { into: "DB1" | "DB2", ok: boolean }. Same key as /api/cron/backup (CRON_SECRET or
  * the Incoming API cron key).
  *
- * A false "ok" cannot open the switch window on its own: the switch also compares every
- * table on both databases and refuses on any difference.
+ * A false "ok" cannot make a switch go wrong on its own: "Lock for switch" also compares
+ * every table on both databases and refuses on any difference.
  */
 export async function POST(req: Request) {
     if (!(await requireIncomingKey(req, "CRON"))) {

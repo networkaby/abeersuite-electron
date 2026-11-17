@@ -1,14 +1,14 @@
 "use client";
 
 /**
- * Settings → Backup & Restore → Databases: DB1 / DB2, which is primary, the nightly copy
- * into staging, and the Switch button.
+ * Settings → Backup & Restore → Databases: DB1 / DB2, which is primary (NEXT_PUBLIC_DB_PRIMARY),
+ * the nightly copy into the standby, and "Lock for switch" (step 1 of a switch; step 2 is
+ * the Vercel setting and a redeploy).
  *
  * Hidden on a counter or without settings:manage. With one database it still shows, so
  * the owner can see which of DATABASE_URL_1/_2, DIRECT_URL_1/_2 this deployment has.
- * The button opens only in the window the server allows (after a good nightly copy,
- * before 8 AM IST); the server checks again, and compares both databases, before it
- * switches — the button state is a convenience, not the guard.
+ * The button state is a convenience; the server checks the copy and compares both
+ * databases again before it locks anything.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -33,7 +33,8 @@ interface Status {
     staging: string | null;
     dbs: DbInfo[];
     copy: { startedAt: string | null; copiedAt: string | null; failedAt: string | null; into: string | null; file: string | null };
-    window: { open: boolean; until: string | null; reason: string | null };
+    locked: boolean;
+    lockBlocked: string | null;
     checklist: EnvRow[];
 }
 /** Mirrors EnvRow in shared/lib/db/envChecklist.server.ts. */
@@ -167,34 +168,37 @@ export function DatabaseSwitchCard() {
         );
     }
 
-    async function doSwitch() {
-        if (!status || typed !== "SWITCH") return;
-        const ok = await confirmAction({
-            title: `Make ${status.staging} the primary?`,
-            body: `Every user, counter and service moves from ${status.primary} to ${status.staging} within a minute. ${status.primary} becomes the standby, is locked read-only, and gets tonight's copy. Counters left open overnight must be restarted.`,
-            confirmLabel: `Switch to ${status.staging}`,
-        });
-        if (!ok) return;
+    async function post(action: "lock" | "unlock") {
+        if (!status) return;
+        if (action === "lock") {
+            if (typed !== "LOCK") return;
+            const ok = await confirmAction({
+                title: `Lock ${status.primary} for a switch?`,
+                body: `${status.primary} becomes read-only now: every save, sale and counter write fails until you change NEXT_PUBLIC_DB_PRIMARY to ${status.staging} on Vercel (office AND shop) and the redeploy finishes, about 3–5 minutes. Do this when nobody is billing.`,
+                confirmLabel: `Lock ${status.primary}`,
+            });
+            if (!ok) return;
+        }
         setSwitching(true);
         try {
             const res = await fetch("/api/settings/db-switch", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ confirm: "SWITCH" }),
+                body: JSON.stringify(action === "lock" ? { action, confirm: "LOCK" } : { action }),
             });
-            const json = (await res.json().catch(() => null)) as { error?: string; primary?: string; status?: Status } | null;
+            const json = (await res.json().catch(() => null)) as { error?: string; status?: Status } | null;
             if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`);
-            toast.success(`${json?.primary} is now the primary.`);
+            toast.success(action === "lock" ? `${status.primary} is locked. Now change the Vercel setting and redeploy.` : `${status.primary} is writable again.`);
             if (json?.status) setStatus(json.status);
             setTyped("");
         } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Switch failed");
+            toast.error(err instanceof Error ? err.message : "Failed");
         } finally {
             setSwitching(false);
         }
     }
 
-    const { copy, window: win } = status;
+    const { copy } = status;
     const copyFailed = !!copy.failedAt && (!copy.copiedAt || copy.failedAt > copy.copiedAt);
 
     return (
@@ -245,23 +249,42 @@ export function DatabaseSwitchCard() {
                 <p className="text-muted-foreground">Live updates on this page use {realtimeProject()}&apos;s realtime project.</p>
             </div>
 
-            <div className="space-y-2 border-t pt-3">
-                <p className={`text-xs ${win.open ? "text-emerald-600" : "text-muted-foreground"}`}>
-                    {win.open ? `Switching is open until ${when(win.until)}.` : win.reason}
-                </p>
-                <div className="flex flex-wrap items-center gap-2">
-                    <Input
-                        value={typed}
-                        onChange={(e) => setTyped(e.target.value.toUpperCase())}
-                        placeholder="SWITCH"
-                        className="h-8 w-32 font-mono text-xs"
-                        disabled={!win.open}
-                    />
-                    <Button size="sm" onClick={() => void doSwitch()} disabled={!win.open || typed !== "SWITCH" || switching}>
-                        <ArrowLeftRight className="mr-1.5 size-3.5" />
-                        {switching ? "Switching…" : `Make ${status.staging} primary`}
-                    </Button>
-                </div>
+            <div className="space-y-2 border-t pt-3 text-xs">
+                <p className="font-medium">Switch to {status.staging}</p>
+                {status.locked ? (
+                    <>
+                        <p className="text-amber-600">
+                            {status.primary} is locked (read-only). Saves fail until the switch finishes. On Vercel, set{" "}
+                            <span className="font-mono">NEXT_PUBLIC_DB_PRIMARY={status.staging}</span> on the office AND shop
+                            projects and redeploy both.
+                        </p>
+                        <Button size="sm" variant="outline" onClick={() => void post("unlock")} disabled={switching}>
+                            Cancel: unlock {status.primary}
+                        </Button>
+                    </>
+                ) : (
+                    <>
+                        <p className="text-muted-foreground">
+                            1. Lock {status.primary} here (checks the last copy and that both databases match). 2. Set{" "}
+                            <span className="font-mono">NEXT_PUBLIC_DB_PRIMARY={status.staging}</span> on Vercel (office and shop)
+                            and redeploy. If {status.primary} is dead, skip step 1.
+                        </p>
+                        {status.lockBlocked && <p className="text-muted-foreground">{status.lockBlocked}</p>}
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Input
+                                value={typed}
+                                onChange={(e) => setTyped(e.target.value.toUpperCase())}
+                                placeholder="LOCK"
+                                className="h-8 w-32 font-mono text-xs"
+                                disabled={!!status.lockBlocked}
+                            />
+                            <Button size="sm" onClick={() => void post("lock")} disabled={!!status.lockBlocked || typed !== "LOCK" || switching}>
+                                <ArrowLeftRight className="mr-1.5 size-3.5" />
+                                {switching ? "Locking…" : `Lock ${status.primary} for switch`}
+                            </Button>
+                        </div>
+                    </>
+                )}
             </div>
         </section>
     );

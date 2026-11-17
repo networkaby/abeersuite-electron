@@ -62,6 +62,18 @@ export async function envChecklist(copy?: CopyProof): Promise<EnvRow[]> {
             light: light(set, need, db2),
         });
 
+    const named = process.env.NEXT_PUBLIC_DB_PRIMARY?.trim().toUpperCase();
+    rows.push({
+        group: "DB1",
+        key: "NEXT_PUBLIC_DB_PRIMARY",
+        what: "Which database is primary: DB1 or DB2 (office AND shop, same value)",
+        neededFor: "Every save — change it + redeploy to switch",
+        where: "Vercel",
+        set: !!named,
+        note: named === "DB1" || named === "DB2" ? `Set — ${named}` : named ? `"${named}" is not DB1 / DB2 — using DB1` : "Not set — using DB1",
+        light: named === "DB1" || named === "DB2" ? "green" : named ? "red" : db2 ? "amber" : "green",
+    });
+
     for (const n of [1, 2] as const) {
         const g: EnvGroup = n === 1 ? "DB1" : "DB2";
         const need: Need = n === 1 ? "required" : "db2";

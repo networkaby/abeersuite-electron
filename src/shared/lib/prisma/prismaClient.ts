@@ -2,8 +2,8 @@ import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { OfflineWriteBlockedError } from "./offlineError";
-import { dbTargets, isDualDb, type DbId } from "@/shared/lib/db/dbTargets";
-import { currentPrimary, invalidatePrimary } from "@/shared/lib/db/dbPrimary";
+import { dbTarget, type DbId } from "@/shared/lib/db/dbTargets";
+import { currentPrimary } from "@/shared/lib/db/dbPrimary";
 import { noteDeleted } from "@/shared/lib/realtime/deleteAnnounce";
 import { isConnectionFailure } from "@/shared/lib/sync/connectionError";
 import {
@@ -37,12 +37,10 @@ function normalize(url: string | undefined): string | undefined {
     return url?.replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
 }
 
-// DB1 / DB2 (dbTargets.ts). Without DATABASE_URL_2 this is just DB1, one client,
-// and the exports below are the plain clients — no Proxy, exactly as before.
-const liveUrls: Partial<Record<DbId, string | undefined>> = Object.fromEntries(
-    dbTargets().map((t) => [t.id, normalize(t.pooled)]),
-);
-const DUAL = isDualDb();
+// The PRIMARY only (NEXT_PUBLIC_DB_PRIMARY, dbPrimary.ts). It is fixed for the life of a
+// deployment — a switch is a redeploy — so there is one client and no per-call choice.
+const PRIMARY: DbId = currentPrimary();
+const liveUrls: Partial<Record<DbId, string | undefined>> = { [PRIMARY]: normalize(dbTarget(PRIMARY)?.pooled) };
 const localUrl = normalize(process.env.LOCAL_DATABASE_URL);
 
 // Local Postgres (localhost) speaks plaintext — forcing SSL there fails the
@@ -161,31 +159,11 @@ const globalForPrisma = globalThis as unknown as {
  * extra connections — it only changes which reads may be answered from the replica.
  */
 const baseLives: Partial<Record<DbId, PrismaClient>> = globalForPrisma.__prismaBases ?? {};
-for (const id of (Object.keys(liveUrls).length ? Object.keys(liveUrls) : ["DB1"]) as DbId[]) {
-    baseLives[id] ??= new PrismaClient({ adapter: new PrismaPg(createPool(liveUrls[id])) });
-}
+baseLives[PRIMARY] ??= new PrismaClient({ adapter: new PrismaPg(createPool(liveUrls[PRIMARY])) });
 
-/** The primary's base client (DB1 in single-database mode). */
+/** The primary's base client. */
 function baseLive(): PrismaClient {
-    return (DUAL ? baseLives[currentPrimary()] : undefined) ?? baseLives.DB1!;
-}
-
-/**
- * One wrapper per database, chosen per property access. A whole `$transaction` stays on
- * the client it started on, because the method is read once from one client.
- */
-function byPrimary(clients: Partial<Record<DbId, PrismaClient>>): PrismaClient {
-    if (!DUAL) return clients.DB1!;
-    const pick = () => clients[currentPrimary()] ?? clients.DB1!;
-    return new Proxy({} as PrismaClient, {
-        get: (_t, prop) => Reflect.get(pick(), prop),
-        has: (_t, prop) => Reflect.has(pick(), prop),
-    });
-}
-
-/** Postgres "read-only transaction": this server wrote to staging on a stale pointer. */
-function noteReadOnly(e: unknown): void {
-    if (DUAL && (e as { code?: string } | null)?.code === "25006") invalidatePrimary();
+    return baseLives[PRIMARY]!;
 }
 
 /**
@@ -212,14 +190,8 @@ function noteReadOnly(e: unknown): void {
  */
 type ReadRedirect = "preference" | "outage" | "never";
 
-function wrapLive(redirect: ReadRedirect): Partial<Record<DbId, PrismaClient>> {
-    return Object.fromEntries(
-        (Object.keys(baseLives) as DbId[]).map((id) => [id, wrapOne(redirect, baseLives[id]!)]),
-    );
-}
-
-function wrapOne(redirect: ReadRedirect, base: PrismaClient): PrismaClient {
-    return base.$extends({
+function wrapLive(redirect: ReadRedirect): PrismaClient {
+    return baseLive().$extends({
         name: `live-reads-${redirect}`,
         query: {
             $allModels: {
@@ -241,7 +213,6 @@ function wrapOne(redirect: ReadRedirect, base: PrismaClient): PrismaClient {
                             else if (operation === "deleteMany" && (out as { count?: number } | null)?.count) noteDeleted(model);
                             return out;
                         } catch (e) {
-                            noteReadOnly(e);
                             if (localClient && isConnectionFailure(e)) reportLiveDown();
                             throw e;
                         }
@@ -528,7 +499,7 @@ export function getLocalClient(): PrismaClient | null {
  * The name used to mean something weaker: it was the ordinary live client, whose reads
  * DID redirect to the replica. Nothing relied on that, so it now says what it does.
  */
-export const prismaLive: PrismaClient = byPrimary(wrapLive("never"));
+export const prismaLive: PrismaClient = wrapLive("never");
 
 /**
  * Supabase whenever Supabase is reachable — never the replica merely because
@@ -548,10 +519,10 @@ export const prismaLive: PrismaClient = byPrimary(wrapLive("never"));
  * then beats no answer. What it removes is the SILENT staleness while perfectly
  * online, which is the case that reads as a bug.
  */
-const prismaOnline: PrismaClient = byPrimary(wrapLive("outage"));
+const prismaOnline: PrismaClient = wrapLive("outage");
 
 /** Reads that redirect to the replica whenever `READ_MODE` says they may. */
-const prismaReadRouted: PrismaClient = byPrimary(wrapLive("preference"));
+const prismaReadRouted: PrismaClient = wrapLive("preference");
 
 /** The counter's replica, or null everywhere else. */
 const localClient: PrismaClient | null = localUrl

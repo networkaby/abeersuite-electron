@@ -57,16 +57,16 @@ export async function GET(req: Request) {
 
     // ── Which database: a LABEL, never an address ───────────────────────────────
     // Addresses live only in the GitHub secrets DIRECT_DATABASE_URL_1 / _2 (owner,
-    // 2026-11-17). backup.yml picks the secret for this label and cross-checks it with
-    // the databases' own `_db_switch` row, so a stale label stops the run instead of
-    // dumping the standby.
+    // 2026-11-17). backup.yml picks the secret for this label (NEXT_PUBLIC_DB_PRIMARY)
+    // and refuses to copy into a database that is not read-only, so a wrong label can
+    // never overwrite the live one.
     const { primary, staging } = await primaryAndStaging();
     inputs.source_db = primary.id;
     inputs.file_name = makeBackupFileName({ domain, projectRef: projectRefFromDbUrl(primary.direct), source: "cron" });
 
     // ── Nightly copy into the standby (DB1 / DB2 only) ──────────────────────────
     // The same run restores this dump into the standby and reports to
-    // /api/cron/db-copied. That copy is what opens the morning switch window.
+    // /api/cron/db-copied. A finished copy is what "Lock for switch" needs.
     if (staging) {
         inputs.standby_db = staging.id;
         await markCopyStarted(staging.id, inputs.file_name);

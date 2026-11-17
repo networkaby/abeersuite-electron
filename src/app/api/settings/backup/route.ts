@@ -39,8 +39,8 @@ export async function POST(req: Request) {
 
     // ── Which database: a LABEL, never an address ───────────────────────────────
     // Addresses live only in the GitHub secrets DIRECT_DATABASE_URL_1 / _2 (owner,
-    // 2026-11-17); backup.yml picks the secret and cross-checks the label with the
-    // databases' own `_db_switch` row. On a counter the office's DB_PRIMARY_ID says which
+    // 2026-11-17); backup.yml picks the secret for the label and refuses to copy into
+    // a writable database. On a counter the office's DB_PRIMARY_ID says which
     // one its DATABASE_URL is (realtimePrimary), since a counter holds only that one URL.
     const { primary } = await primaryAndStaging();
     inputs.source_db = realtimePrimary();

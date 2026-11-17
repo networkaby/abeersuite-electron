@@ -72,10 +72,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client-17
 
-      # Which database is primary, from the databases themselves: the `_db_switch` row,
-      # latest switched_at wins, no row = DB1 (src/shared/lib/db/dbPrimary.ts). The app's
-      # label is only cross-checked against it, so a wrong or stale label can never make
-      # this run dump the standby or overwrite the primary.
+      # Which database is primary: the app's label (NEXT_PUBLIC_DB_PRIMARY, dbPrimary.ts),
+      # or without the app, the one writable database. The standby is always read-only,
+      # and a copy refuses to overwrite a writable database - so a wrong label can never
+      # make this run copy over the live one.
       - name: Pick the primary and the standby
         run: |
           set -euo pipefail
@@ -106,34 +106,34 @@ jobs:
             # restore fails half-way (2026-11-18). The copy needs 5432 (session / direct).
             case "$CLEAN" in *:6543/*) echo "WARNING: DIRECT_DATABASE_URL_$N is the pooled address (6543) - set the session/direct one (5432)."; printf -v "BAD_$N" '%s' 1 ;; esac
           done
-          BEST=""; BEST_AT=-1; ANSWERED=0
+          # Each database's lock state: "on" = read-only (the standby, or a primary locked
+          # for a switch), "off" = writable (the primary), "" = did not answer.
+          declare -A RO
           for N in 1 2; do
             VAR="DB_URL_$N"; URL="${!VAR:-}"
             [ -n "$URL" ] || continue
-            if ROW=$("$PSQL" "$URL" -Atq -c 'SELECT primary_db || chr(32) || floor(extract(epoch FROM switched_at))::bigint FROM "_db_switch" WHERE only_row' 2>/dev/null); then
-              ANSWERED=1
-            elif "$PSQL" "$URL" -Atq -c "SELECT 1" >/dev/null 2>&1; then
-              ANSWERED=1; ROW=""   # answered, never switched (no table yet)
-            else
-              echo "DB$N did not answer"; ROW=""
-            fi
-            if [ -n "$ROW" ]; then
-              ID="${ROW%% *}"; AT="${ROW##* }"
-              if [ "$AT" -gt "$BEST_AT" ]; then BEST="$ID"; BEST_AT="$AT"; fi
-            fi
+            RO[DB$N]=$("$PSQL" "$URL" -Atq -c "SELECT current_setting('default_transaction_read_only')" 2>/dev/null || true)
+            [ -n "${RO[DB$N]}" ] || echo "DB$N did not answer"
           done
-          if [ "$ANSWERED" = 0 ]; then echo "Neither database answered."; exit 1; fi
-          PRIMARY="${BEST:-DB1}"
-          if [ -n "${SOURCE_DB:-}" ] && [ "$SOURCE_DB" != "$PRIMARY" ]; then
-            echo "The app says $SOURCE_DB is primary, but the databases say $PRIMARY. Stopping - nothing dumped or copied."
-            exit 1
+          if [ -n "${SOURCE_DB:-}" ]; then
+            PRIMARY="$SOURCE_DB"          # the app's NEXT_PUBLIC_DB_PRIMARY
+          else
+            # No app (a GitHub-timed or hand-started run): the one writable database.
+            W=""; for ID in DB1 DB2; do [ "${RO[$ID]:-}" = "off" ] && W="$W $ID"; done
+            set -- $W
+            if [ "$#" -ne 1 ]; then echo "Cannot tell the primary: writable =${W:- none}. Stopping."; exit 1; fi
+            PRIMARY="$1"
           fi
+          [ -n "${RO[$PRIMARY]:-}" ] || { echo "$PRIMARY (primary) did not answer."; exit 1; }
           N="${PRIMARY#DB}"; VAR="DB_URL_$N"
           if [ -z "${!VAR:-}" ]; then echo "DIRECT_DATABASE_URL_$N secret is not set."; exit 1; fi
           echo "DIRECT_DATABASE_URL=${!VAR}" >> "$GITHUB_ENV"
           echo "primary: $PRIMARY"
           if [ -n "${STANDBY_DB:-}" ]; then
             if [ "$STANDBY_DB" = "$PRIMARY" ]; then echo "Refusing to copy into $STANDBY_DB: it is the primary."; exit 1; fi
+            # Never overwrite a WRITABLE database: the standby is always read-only, so a
+            # writable one here means the app's label is wrong or a switch is half done.
+            if [ "${RO[$STANDBY_DB]:-}" != "on" ]; then echo "Refusing to copy into $STANDBY_DB: it is not read-only (${RO[$STANDBY_DB]:-no answer}), so it may be in use. Nothing dumped or changed."; exit 1; fi
             M="${STANDBY_DB#DB}"; VAR="DB_URL_$M"
             if [ -z "${!VAR:-}" ]; then echo "DIRECT_DATABASE_URL_$M secret is not set - no copy."; exit 1; fi
             BADVAR="BAD_$M"

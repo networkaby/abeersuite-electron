@@ -1,16 +1,17 @@
 #!/usr/bin/env node
 /**
- * `prisma migrate deploy` on whichever database is PRIMARY — run by `vercel-build`.
+ * `prisma migrate deploy` on the PRIMARY — run by `vercel-build`.
  *
- * DB1 = DIRECT_URL_1 / DATABASE_URL_1,
- * DB2 = DIRECT_URL_2 / DATABASE_URL_2 — see src/shared/lib/db/dbTargets.ts.
- * The primary is the `_db_switch` row in both databases, latest `switched_at` wins, no row
- * = DB1 (src/shared/lib/db/dbPrimary.ts). Staging is never migrated: it is read-only and
- * takes the new schema from the nightly copy; the switch refuses until both match.
+ * The primary is the Vercel setting NEXT_PUBLIC_DB_PRIMARY (DB1 | DB2, unset = DB1);
+ * see src/shared/lib/db/dbPrimary.ts.
+ *   DB1 = DIRECT_URL_1 / DATABASE_URL_1,  DB2 = DIRECT_URL_2 / DATABASE_URL_2.
+ *
+ * Step 2 of a switch is "change the setting, redeploy", so this is also where the new
+ * primary is OPENED: the standby is kept read-only, and the database named here is made
+ * writable before migrating. The old primary was locked read-only by step 1 ("Lock for
+ * switch") and stays so — it is the standby now.
  *
  * Plain .mjs on purpose: it runs before the build, with only node_modules to lean on.
- * Fails the build when two databases are set and neither answers — migrating a guess
- * could put the schema on staging and leave the primary behind.
  */
 import { spawnSync } from "node:child_process";
 import pg from "pg";
@@ -24,57 +25,39 @@ try {
 }
 
 const clean = (v) => (v && v.trim()) || undefined;
-
-function target(n) {
-    const pooled = clean(process.env[`DATABASE_URL_${n}`]);
-    const direct = clean(process.env[`DIRECT_URL_${n}`]) ?? pooled;
-    return direct ? { id: `DB${n}`, direct } : null;
+const id = clean(process.env.NEXT_PUBLIC_DB_PRIMARY)?.toUpperCase() === "DB2" ? "DB2" : "DB1";
+const n = id.slice(2);
+const direct = clean(process.env[`DIRECT_URL_${n}`]) ?? clean(process.env[`DATABASE_URL_${n}`]);
+if (!direct) {
+    console.error(`[migrate-primary] NEXT_PUBLIC_DB_PRIMARY is ${id} but DIRECT_URL_${n} / DATABASE_URL_${n} is not set.`);
+    process.exit(1);
 }
 
-async function readRow(t) {
-    const url = t.direct.replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
+// Open the primary (a no-op when it is already writable).
+{
+    const url = direct.replace(/[?&](sslmode|pgbouncer)=[^&]*/g, "").replace(/[?&]$/, "");
     const local = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(url);
     const client = new pg.Client({ connectionString: url, ssl: local ? false : { rejectUnauthorized: false }, connectionTimeoutMillis: 10_000 });
     await client.connect();
     try {
-        const r = await client.query(`SELECT primary_db, switched_at FROM "_db_switch" WHERE only_row`);
-        return r.rows[0] ?? null;
-    } catch (e) {
-        if (e.code === "42P01") return null; // never switched
-        throw e;
+        const ro = await client.query("SELECT current_setting('default_transaction_read_only') AS ro");
+        if (ro.rows[0]?.ro === "on") {
+            await client.query("BEGIN READ WRITE");
+            await client.query(
+                "DO $$ BEGIN EXECUTE format('ALTER DATABASE %I SET default_transaction_read_only = off', current_database()); END $$",
+            );
+            await client.query("COMMIT");
+            console.log(`[migrate-primary] ${id} was read-only (locked or standby) — made writable as the primary.`);
+        }
     } finally {
         await client.end().catch(() => {});
     }
 }
 
-const targets = [target(1), target(2)].filter(Boolean);
-if (targets.length === 0) {
-    console.error("[migrate-primary] No database URL set (DIRECT_URL_1 / DATABASE_URL_1).");
-    process.exit(1);
-}
-
-let primary = targets[0];
-if (targets.length === 2) {
-    const answers = await Promise.allSettled(targets.map(readRow));
-    if (answers.every((a) => a.status === "rejected")) {
-        console.error("[migrate-primary] Neither DB1 nor DB2 answered — cannot tell which is primary.");
-        for (const a of answers) console.error("  ", a.reason?.message);
-        process.exit(1);
-    }
-    let best = null;
-    for (const a of answers) {
-        const row = a.status === "fulfilled" ? a.value : null;
-        if (!row || (row.primary_db !== "DB1" && row.primary_db !== "DB2")) continue;
-        const at = new Date(row.switched_at).getTime();
-        if (!best || at > best.at) best = { id: row.primary_db, at };
-    }
-    primary = targets.find((t) => t.id === (best?.id ?? "DB1")) ?? targets[0];
-}
-
-console.log(`[migrate-primary] migrating ${primary.id} (primary)`);
+console.log(`[migrate-primary] migrating ${id} (primary)`);
 const run = spawnSync("npx", ["prisma", "migrate", "deploy"], {
     stdio: "inherit",
     shell: true,
-    env: { ...process.env, PRISMA_MIGRATE_URL: primary.direct },
+    env: { ...process.env, PRISMA_MIGRATE_URL: direct },
 });
 process.exit(run.status ?? 1);

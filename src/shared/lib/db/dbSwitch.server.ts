@@ -1,50 +1,29 @@
 /**
- * Switching the primary between DB1 and DB2, and the nightly copy's bookkeeping.
+ * Switching DB1 / DB2 — the LOCK step, plus the nightly copy's bookkeeping.
  *
- * The rule (owner, 2026-11-17): a switch is allowed only after a successful nightly
- * copy into staging and before 08:00 IST the next morning. In that window the two
- * databases are the same, so a switch is invisible to everyone. Outside it, a counter
- * could be half a day ahead of the database it would be moved to.
+ * A switch is two steps (owner, 2026-11-18: "simplify", rare switches, easy to trust):
+ *   1. "Lock for switch" here: both databases must answer, the last copy into the
+ *      standby must have finished, and every table must match on both (row count and
+ *      latest updatedAt). The primary is made READ-ONLY first and compared after, so no
+ *      save can slip in between; if they differ the lock is undone.
+ *   2. Change NEXT_PUBLIC_DB_PRIMARY on Vercel and redeploy. The deploy's migrate step
+ *      (scripts/migrate-primary.mjs) makes the new primary writable before migrating.
  *
- * Belt and braces, because "the clock says it is safe" is not proof:
- *   1. the window (copied_at → next 08:00 IST), one switch per copy;
- *   2. no copy running right now;
- *   3. both databases answer, and every table has the same row count and latest
- *      "updatedAt" on both — a sale made at 1 AM, or a migration applied to only one,
- *      refuses the switch;
- *   4. staging is READ-ONLY at the database level (`default_transaction_read_only`).
- *      A server or counter still on the old pointer cannot write to it — the write fails
- *      loudly instead of landing in the database that tonight's copy will overwrite.
+ * "Unlock" undoes step 1 if the owner changes their mind before redeploying.
+ *
+ * When the primary is DEAD there is nothing to lock or compare: change the setting and
+ * redeploy. The loss is whatever happened since the last copy.
  */
 import "server-only";
 import type { PoolClient } from "pg";
 import { projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
 import { dbTarget, isDualDb, otherDb, type DbId } from "./dbTargets";
-import { readSwitchRow, refreshPrimary, SWITCH_TABLE_SQL, withDb, type SwitchRow } from "./dbPrimary";
+import { currentPrimary, readSwitchRow, SWITCH_TABLE_SQL, withDb, type SwitchRow } from "./dbPrimary";
 
 /** A copy that has not reported back within this long is treated as dead. */
 const COPY_STALE_MS = 2 * 60 * 60 * 1000;
-const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
-/** 08:00 IST — the end of the switch window. */
-const WINDOW_END_HOUR_IST = 8;
-/**
- * Dev testing only: `DB_SWITCH_TEST_IGNORE_CLOCK=1` skips the two time-of-day rules (night
- * copy, before 8 AM) so a switch can be tried in the afternoon. Every other check stays.
- * Never honoured in a production build.
- */
-const IGNORE_CLOCK = process.env.NODE_ENV !== "production" && process.env.DB_SWITCH_TEST_IGNORE_CLOCK === "1";
-/** A copy finishing from 20:00 IST counts as the night copy. */
-const NIGHT_START_HOUR_IST = 20;
 
-/** The first 08:00 IST strictly after `from`. */
-export function nextWindowEnd(from: Date): Date {
-    const ist = new Date(from.getTime() + IST_OFFSET_MS);
-    const end = new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate(), WINDOW_END_HOUR_IST));
-    if (end.getTime() <= ist.getTime()) end.setUTCDate(end.getUTCDate() + 1);
-    return new Date(end.getTime() - IST_OFFSET_MS);
-}
-
-/** Runs `fn` in a transaction that may write even on a read-only (staging) database. */
+/** Runs `fn` in a transaction that may write even on a read-only database. */
 async function writeTx<T>(id: DbId, fn: (c: PoolClient) => Promise<T>): Promise<T> {
     return withDb(id, async (c) => {
         await c.query("BEGIN READ WRITE");
@@ -80,14 +59,6 @@ export interface DbInfo {
     readOnly: boolean | null;
 }
 
-export interface SwitchWindow {
-    open: boolean;
-    /** When the current window closes (ISO), if a copy opened one. */
-    until: string | null;
-    /** Why it is closed — plain words for the Settings screen. */
-    reason: string | null;
-}
-
 export interface DbSwitchStatus {
     dual: boolean;
     primary: DbId;
@@ -100,7 +71,10 @@ export interface DbSwitchStatus {
         into: string | null;
         file: string | null;
     };
-    window: SwitchWindow;
+    /** The primary is read-only: locked, waiting for the setting change + redeploy. */
+    locked: boolean;
+    /** Why "Lock for switch" would refuse right now, or null when it may be tried. */
+    lockBlocked: string | null;
 }
 
 async function probe(id: DbId): Promise<{ reachable: boolean; readOnly: boolean | null }> {
@@ -114,35 +88,23 @@ async function probe(id: DbId): Promise<{ reachable: boolean; readOnly: boolean 
 
 const iso = (d: Date | null | undefined) => (d ? new Date(d).toISOString() : null);
 
-/** The window as the primary's row describes it. Pure apart from `now`. */
-export function windowFrom(row: SwitchRow | null, staging: DbId, now = new Date()): SwitchWindow {
-    const closed = (reason: string, until: Date | null = null): SwitchWindow => ({ open: false, until: iso(until), reason });
-    if (!row?.copied_at) return closed("No nightly copy into the standby has finished yet.");
-
+/** Why the last copy is not good enough to switch on, or null. Pure apart from `now`. */
+export function copyProblem(row: SwitchRow | null, standby: DbId, now = new Date()): string | null {
+    if (!row?.copied_at) return "No copy into the standby has finished yet.";
     const copiedAt = new Date(row.copied_at);
     const startedAt = row.copy_started_at ? new Date(row.copy_started_at) : null;
     if (startedAt && startedAt > copiedAt && now.getTime() - startedAt.getTime() < COPY_STALE_MS) {
-        return closed("A copy into the standby is running right now. Wait for it to finish.");
+        return "A copy into the standby is running right now. Wait for it to finish.";
     }
     if (row.copy_failed_at && new Date(row.copy_failed_at) > copiedAt) {
-        return closed("Last night's copy into the standby failed. Switching stays locked until a copy succeeds.");
+        return "The last copy into the standby failed. Run a copy that succeeds first.";
     }
-    if (row.copy_into !== staging) {
-        return closed("The last copy went into the other database — this one has already been switched. Wait for tonight's copy.");
-    }
-    // A daytime copy (08:00–20:00 IST) never opens a window: it would stay open through
-    // working hours, and the rule is "after the NIGHTLY copy".
-    const copyHourIst = new Date(copiedAt.getTime() + IST_OFFSET_MS).getUTCHours();
-    if (!IGNORE_CLOCK && copyHourIst >= WINDOW_END_HOUR_IST && copyHourIst < NIGHT_START_HOUR_IST) {
-        return closed("The last copy ran in the daytime. Switching opens only after a night copy (8 PM to 8 AM).");
-    }
-    const until = nextWindowEnd(copiedAt);
-    if (!IGNORE_CLOCK && now >= until) return closed("Switching is allowed only after the nightly copy and before 8 AM.", until);
-    return { open: true, until: iso(until), reason: null };
+    if (row.copy_into !== standby) return `The last copy went into ${row.copy_into ?? "neither database"}, not ${standby}.`;
+    return null;
 }
 
 export async function dbSwitchStatus(): Promise<DbSwitchStatus> {
-    const primary = await refreshPrimary();
+    const primary = currentPrimary();
     const dual = isDualDb();
     const staging = dual ? otherDb(primary) : null;
     const ids: DbId[] = dual ? ["DB1", "DB2"] : ["DB1"];
@@ -156,6 +118,7 @@ export async function dbSwitchStatus(): Promise<DbSwitchStatus> {
         }))),
         dual ? readSwitchRow(primary).catch(() => null) : Promise.resolve(null),
     ]);
+    const locked = infos.find((d) => d.id === primary)?.readOnly === true;
 
     return {
         dual,
@@ -169,9 +132,8 @@ export async function dbSwitchStatus(): Promise<DbSwitchStatus> {
             into: row?.copy_into ?? null,
             file: row?.copy_file ?? null,
         },
-        window: dual
-            ? windowFrom(row, staging!)
-            : { open: false, until: null, reason: "Only one database is set up (no DATABASE_URL_2)." },
+        locked,
+        lockBlocked: !dual ? "Only one database is set up (no DATABASE_URL_2)." : locked ? null : copyProblem(row, staging!),
     };
 }
 
@@ -201,108 +163,71 @@ async function fingerprint(id: DbId): Promise<Map<string, string>> {
     });
 }
 
-/** Tables that differ, as "name (primary vs staging)" — empty when both are the same. */
-async function differences(primary: DbId, staging: DbId): Promise<string[]> {
-    const [a, b] = await Promise.all([fingerprint(primary), fingerprint(staging)]);
+async function differences(a: DbId, b: DbId): Promise<string[]> {
+    const [x, y] = await Promise.all([fingerprint(a), fingerprint(b)]);
     const diffs: string[] = [];
-    for (const name of new Set([...a.keys(), ...b.keys()])) {
-        if (a.get(name) !== b.get(name)) diffs.push(`${name} (${a.get(name) ?? "missing"} vs ${b.get(name) ?? "missing"})`);
+    for (const name of new Set([...x.keys(), ...y.keys()])) {
+        if (x.get(name) !== y.get(name)) diffs.push(`${name} (${x.get(name) ?? "missing"} vs ${y.get(name) ?? "missing"})`);
     }
     return diffs;
 }
 
-// ── Switch ──────────────────────────────────────────────────────────────────
+// ── Lock / unlock ───────────────────────────────────────────────────────────
 
 export class SwitchRefused extends Error {}
 
-/**
- * Makes staging the primary. Refuses (SwitchRefused) unless every check above passes and
- * BOTH databases answer.
- *
- * Why this order (owner-approved, 2026-11-17): the old primary is fenced FIRST — row set
- * to the new primary and `default_transaction_read_only = on` in one transaction — and
- * only then is the new one opened and named. The other way round, an old primary that
- * stopped answering mid-switch would be left writable while the newer `switched_at` had
- * already moved the app away; stale servers and counters could keep writing to it, and
- * tonight's copy would wipe those writes. Fencing first means the worst case is a short
- * moment with both read-only (writes fail loudly), and if opening the new one fails, the
- * fence is rolled back so the system never ends up pointing at a database that refused.
- */
-export async function switchPrimary(): Promise<{ primary: DbId; staging: DbId }> {
+/** Step 1 of a switch: checks, then the primary goes read-only. */
+export async function lockForSwitch(): Promise<{ locked: DbId; next: DbId }> {
     if (!isDualDb()) throw new SwitchRefused("Only one database is set up.");
-    const from = await refreshPrimary();
+    const from = currentPrimary();
     const to = otherDb(from);
 
-    // Both must answer before anything is written.
     for (const id of [from, to]) {
         const ok = await withDb(id, (c) => c.query("SELECT 1")).then(() => true, () => false);
         if (!ok) throw new SwitchRefused(`${id} (${id === from ? "primary" : "standby"}) is not answering.`);
     }
+    const problem = copyProblem(await readSwitchRow(from), to);
+    if (problem) throw new SwitchRefused(problem);
 
-    const row = await readSwitchRow(from).catch(() => {
-        throw new SwitchRefused(`${from} (primary) is not answering.`);
-    });
-    const win = windowFrom(row, to);
-    if (!win.open) throw new SwitchRefused(win.reason ?? "Switching is locked.");
+    // Read-only FIRST, then compare: a save made between the two would otherwise slip in
+    // after the check. If they differ, the lock is undone and nothing has changed.
+    await writeTx(from, (c) => c.query(setReadOnlySql(true)));
+    await withDb(from, (c) =>
+        c.query(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity
+                 WHERE datname = current_database() AND usename = current_user AND pid <> pg_backend_pid()`),
+    ).catch((e) => console.warn("[dbSwitch] could not drop open sessions on", from, e));
 
     let diffs: string[];
     try {
         diffs = await differences(from, to);
     } catch (e) {
+        await unlockPrimary().catch(() => {});
         throw new SwitchRefused(`Could not compare the two databases: ${(e as Error).message}`);
     }
     if (diffs.length > 0) {
+        await unlockPrimary();
         const shown = diffs.slice(0, 5).join("; ");
         throw new SwitchRefused(
-            `The two databases are not the same — something changed after the nightly copy. ${shown}${diffs.length > 5 ? ` and ${diffs.length - 5} more` : ""}.`,
+            `The two databases are not the same — something changed after the copy, so ${from} stays unlocked. ${shown}${diffs.length > 5 ? ` and ${diffs.length - 5} more` : ""}.`,
         );
     }
+    console.info(`[dbSwitch] ${from} locked for a switch to ${to}`);
+    return { locked: from, next: to };
+}
 
-    const setRow = (c: PoolClient, primary: DbId, at: Date) =>
-        c.query(`UPDATE "_db_switch" SET primary_db = $1, switched_at = $2 WHERE only_row`, [primary, at]);
-
-    // (a) Fence the old primary: named as staging and read-only, in one transaction.
-    const at = new Date();
-    await writeTx(from, async (c) => {
-        await ensureRow(c, from);
-        await setRow(c, to, at);
-        await c.query(setReadOnlySql(true));
-    });
-    // Best-effort: open sessions keep the old default until they reconnect.
-    await withDb(from, (c) =>
-        c.query(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity
-                 WHERE datname = current_database() AND usename = current_user AND pid <> pg_backend_pid()`),
-    ).catch((e) => console.warn("[dbSwitch] could not drop old sessions on", from, e));
-
-    // (b) Open and name the new primary. On failure, undo (a) with a fresh switched_at
-    // so the old primary wins again everywhere and is writable.
-    try {
-        await writeTx(to, async (c) => {
-            await c.query(setReadOnlySql(false));
-            await ensureRow(c, from);
-            await setRow(c, to, at);
-        });
-    } catch (e) {
-        await writeTx(from, async (c) => {
-            await setRow(c, from, new Date());
-            await c.query(setReadOnlySql(false));
-        }).catch((undoErr) =>
-            console.error(`[dbSwitch] ROLLBACK FAILED — ${from} may be left read-only:`, undoErr),
-        );
-        await refreshPrimary();
-        throw new Error(`${to} refused the switch, ${from} stays primary: ${(e as Error).message}`);
-    }
-
-    const now = await refreshPrimary();
-    console.info(`[dbSwitch] primary switched ${from} → ${to} (reads ${now})`);
-    return { primary: to, staging: from };
+/** Undo the lock: the primary is writable again. */
+export async function unlockPrimary(): Promise<DbId> {
+    const id = currentPrimary();
+    await writeTx(id, (c) => c.query(setReadOnlySql(false)));
+    console.info(`[dbSwitch] ${id} unlocked`);
+    return id;
 }
 
 // ── Nightly copy bookkeeping (kept on the primary's row) ────────────────────
 
-/** Called just before the backup run that will copy into staging is dispatched. */
+/** Called just before the backup run that will copy into the standby is dispatched. */
 export async function markCopyStarted(into: DbId, file: string): Promise<void> {
-    const primary = await refreshPrimary();
+    const primary = currentPrimary();
     if (into === primary) throw new Error(`Refusing to copy into ${into}: it is the primary.`);
     await writeTx(primary, async (c) => {
         await ensureRow(c, primary);
@@ -313,12 +238,10 @@ export async function markCopyStarted(into: DbId, file: string): Promise<void> {
     });
 }
 
-/** The backup run reports back after pg_restore into staging. */
+/** The backup run reports back after pg_restore into the standby. */
 export async function markCopyFinished(into: DbId, ok: boolean): Promise<{ recorded: boolean; reason?: string }> {
-    const primary = await refreshPrimary();
+    const primary = currentPrimary();
     if (into === primary) {
-        // Cannot happen while switching refuses during a copy — but if it ever does, the
-        // copy landed on today's primary and nobody must believe it was a clean night.
         console.error(`[dbSwitch] copy reported into ${into}, which is the PRIMARY.`);
         return { recorded: false, reason: `${into} is the primary` };
     }
