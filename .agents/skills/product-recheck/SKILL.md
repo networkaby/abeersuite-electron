@@ -35,7 +35,7 @@ Every **GET** (reading a product, a list, a photo) goes to `$PRODUCT_COPY_READ_U
 
 ## Start: ask the mode first
 
-Before anything else, ask the owner **which mode** — cloud · local · smart local · office (Setup above) — unless the request already says. Running in the cloud → do not ask, it is always **cloud**. This skill is Part 4 only; for Parts 1–3 say so and switch to **product-prep**.
+Before anything else, ask the owner **which mode** — cloud · local · smart local · office (Setup above) — unless the request already says. Running in the cloud → do not ask, it is always **cloud**. This skill is Part 4 only — it never changes the product. For Parts 1–3, or **Part 5 (touch-up: photos and small fixes)** when your check finds only small things to fix, say so and switch to **product-prep**.
 
 ## 1. Pick
 
@@ -60,9 +60,9 @@ Use: the product fields, every photo (open each — `GET /api/agent/products/<id
 | **Collections** | None, or plainly wrong for who buys it |
 | **Group** | Plainly wrong (GST) — always pending until staff fix it |
 | **Shipping** | Weight or size empty |
-| **Photos** | Main photo not a clean product front, or has a logo / watermark / text; another product's photo; blurry / dark; duplicates; a `must` photo kind still missing |
+| **Photos** | Main photo not a clean product front, or has a logo / watermark / text (our own too); another product's photo; someone else's watermark on any photo; blurry / dark; duplicates; a `must` photo kind still missing. Our own logo / address on a **non-main** photo is fine — never flag it |
 
-**Pending** = would be wrong or embarrassing on the shop. Small things (wording could be nicer, a nice-to-have photo) are `notes`, not pending.
+**Pending** = would be wrong or embarrassing on the shop. Smaller things (wording could be nicer, a nice-to-have photo) go in `notes`. **Any line in either sends the product to Attention** (owner, 2026-11-17) — a Published product too; going off the shop is accepted. So write a line only for a real problem; nothing found → send both empty.
 
 ## 4. Send
 
@@ -71,8 +71,11 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
   "$PRODUCT_COPY_WRITE_URL/api/agent/prep/<id>/part4" -d '{ "pending": ["Photo 4 (another hub) still in the gallery — press Remove"], "notes": [] }'
 ```
 
-- `pending: []` → `{ result: "verified" }`: it stays in Draft with the note "Part 4 done — verified, ready to Save as ready". **You never press Save as ready.**
-- Any pending → `{ result: "attention" }`: parked in Attention with only the pending lines. Staff fix, then run product-recheck again (not product-prep — unless a pending line says so).
+- `pending: []` **and** `notes: []` → `{ result: "verified" }`: it stays in Draft with "Part 4 done — verified, ready to Save as ready". **You never press Save as ready.**
+- With any problem, also send **`next`** — the part to run after staff look: `"part5"` when only small things are wrong (photo order or removals, one spec row, a typo, an empty Model No / weight), `"part3"` when the text needs rewriting from the saved search, `"part1"` when the product itself is in doubt (wrong photos of another item, data badly wrong). It shows on the Last run line.
+- **Products made before the skills existed** start here: Part 4 is the cheapest first look (no search, no change); its `next` tells the owner whether Part 5 or a full run is needed.
+- Any line in `pending` or `notes` → `{ result: "attention" }`: parked in Attention with every line (PENDING first, then NOTE), plus a line the server adds saying where it came from ("Was Published (live on the shop) before this check — if the fix is small, publish it again") so staff can put a live product back. Staff fix, then run product-recheck again (not product-prep — unless a line says so).
+- Every run leaves one **Last run** line (part, India time, result) on the product, replacing the old one — read it at the start: it shows when this product was last checked and what came of it.
 
 ## Report
 
