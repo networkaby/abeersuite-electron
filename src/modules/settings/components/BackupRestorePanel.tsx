@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { BackupScheduleCard } from "@/modules/settings/components/BackupScheduleCard";
 import { LocalBackupCard } from "@/modules/settings/components/LocalBackupCard";
+import { DatabaseSwitchCard } from "@/modules/settings/components/DatabaseSwitchCard";
 import { useIsDesktopApp } from "@/shared/lib/bridge";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -234,6 +235,9 @@ export function BackupRestorePanel() {
                 ships. First because on a desktop app it is the path that works — the
                 Dropbox ones below need keys counter builds no longer carry. */}
             {isElectron && <LocalBackupCard />}
+
+            {/* DB1 / DB2 — hides itself with one database, on a counter, or without permission. */}
+            <DatabaseSwitchCard />
 
             {/* Counter-only build — the keys this needs were not shipped in the installer */}
             {counterOnly && (

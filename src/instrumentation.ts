@@ -5,6 +5,11 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     await import("./sentry.server.config");
 
+    // DB1 / DB2: read which one is primary before the first request, so a fresh server
+    // never writes to staging on a guess. Single-database mode returns at once.
+    const { refreshPrimary } = await import("@/shared/lib/db/dbPrimary");
+    await refreshPrimary();
+
     // Counter only: electron/main.ts sets LOCAL_DATABASE_URL AND COUNTER_PC=true
     // together, and only once the embedded replica actually provisioned. Both are
     // required here on purpose: a LOCAL_DATABASE_URL on its own — a leftover in a

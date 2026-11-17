@@ -4,6 +4,8 @@ import { libpqUrl, projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
 import { backupAvailability } from "@/shared/lib/backup/availability";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { requireIncomingKey } from "@/modules/incoming/lib/incomingApi";
+import { primaryAndStaging } from "@/shared/lib/db/dbPrimary";
+import { markCopyFinished, markCopyStarted } from "@/shared/lib/db/dbSwitch.server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -59,9 +61,11 @@ export async function GET(req: Request) {
     // DIRECT_DATABASE_URL repo secret points at. Cost, accepted: the password appears
     // in the (private) run log, because workflow inputs are not masked.
     //
-    // DIRECT_URL first; without it, the live DATABASE_URL cleaned of Prisma's
+    // The PRIMARY's direct URL (DB1 / DB2, dbPrimary.ts) — after a switch, DIRECT_URL
+    // may name staging. Without a direct URL, the pooled one cleaned of Prisma's
     // `pgbouncer=true` by libpqUrl — the same fallback as the settings route.
-    const dbUrl = libpqUrl(process.env.DIRECT_URL) ?? libpqUrl(process.env.DATABASE_URL);
+    const { primary, staging } = await primaryAndStaging();
+    const dbUrl = libpqUrl(primary.direct) ?? libpqUrl(primary.pooled);
     if (!dbUrl) {
         console.error("[cron/backup] 500: DIRECT_URL / DATABASE_URL missing or invalid.");
         return Response.json(
@@ -73,9 +77,20 @@ export async function GET(req: Request) {
     inputs.file_name = makeBackupFileName({ domain, projectRef: projectRefFromDbUrl(dbUrl), source: "cron" });
     // ── end of database URL block ───────────────────────────────────────────────
 
+    // ── Nightly copy into staging (DB1 / DB2 only) ──────────────────────────────
+    // The same run restores this dump into staging and reports to /api/cron/db-copied.
+    // That copy is what opens the morning switch window (dbSwitch.server.ts).
+    const stagingUrl = staging ? libpqUrl(staging.direct) : null;
+    if (staging && stagingUrl) {
+        inputs.staging_db_url = stagingUrl;
+        inputs.staging_name = staging.id;
+        await markCopyStarted(staging.id, inputs.file_name);
+    }
+
     try {
         await triggerWorkflow(await backupWorkflowFile(), inputs);
     } catch (err) {
+        if (staging && stagingUrl) await markCopyFinished(staging.id, false).catch(() => {});
         console.error("[cron/backup] 500: workflow dispatch failed:", (err as Error).message);
         return Response.json({ error: (err as Error).message }, { status: 500 });
     }

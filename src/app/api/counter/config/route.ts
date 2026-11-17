@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { primaryAndStaging } from "@/shared/lib/db/dbPrimary";
 import {
     AI_ENV_NAME,
     COUNTER_CONFIG_NEVER,
@@ -63,5 +64,8 @@ export async function POST(req: Request) {
         const value = process.env[key]?.trim();
         if (value) body[key] = value;
     }
+    // DB1 / DB2: a counter gets the PRIMARY's pooled URL as its one DATABASE_URL, read
+    // fresh at every start. Staging never reaches a counter. Same as before without DB2.
+    body.DATABASE_URL = (await primaryAndStaging()).primary.pooled;
     return NextResponse.json(body, { headers: { "Cache-Control": "no-store" } });
 }

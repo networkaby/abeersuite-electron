@@ -4,6 +4,7 @@ import { backupWorkflowFile, triggerWorkflow } from "@/shared/lib/backup/githubD
 import { makeBackupFileName } from "@/shared/lib/backup/dropbox";
 import { libpqUrl, projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
 import { backupAvailability, COUNTER_ONLY_MESSAGE } from "@/shared/lib/backup/availability";
+import { primaryAndStaging } from "@/shared/lib/db/dbPrimary";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,7 +50,9 @@ export async function POST(req: Request) {
     // DIRECT_URL first. The desktop app has none (counterEnv.ts withholds it), so it
     // sends the live DATABASE_URL — the pgBouncer pool, cleaned of Prisma's
     // `pgbouncer=true` by libpqUrl, exactly as "Back up to this PC" does.
-    const dbUrl = libpqUrl(process.env.DIRECT_URL) ?? libpqUrl(process.env.DATABASE_URL);
+    // The PRIMARY (DB1 / DB2) — DB1 is DIRECT_URL / DATABASE_URL until DB2 is set up.
+    const { primary } = await primaryAndStaging();
+    const dbUrl = libpqUrl(primary.direct) ?? libpqUrl(primary.pooled);
     if (!dbUrl) {
         return Response.json(
             { error: "Active database URL is missing or invalid in server environment." },

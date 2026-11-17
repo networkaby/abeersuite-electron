@@ -158,3 +158,14 @@ byte-identical names, and the project ref in the name says which database a dump
 Restore is different: the operator types the target database, so its URL travels
 as an input too. `restore.yml`'s first step reads it from the event file and masks it
 (and its password) before anything else runs, so it shows as `***` in every log line.
+
+
+## Two databases: primary + staging (DB1 / DB2)
+
+Set `DB2_DATABASE_URL` / `DB2_DIRECT_URL` on Vercel (and optionally `DB1_*`; without them DB1 is `DATABASE_URL` / `DIRECT_URL`). From then on:
+
+- **Every backup dumps the primary**, whichever of DB1 / DB2 that is today — the app passes its URL, never the `DIRECT_DATABASE_URL` secret, except on the Sunday safety net or a hand-started run of `backup-scheduled.yml` (those still use the secret; after a switch, update it or it dumps staging).
+- **The app's nightly backup also copies into staging.** `/api/cron/backup` passes `staging_db_url` + `staging_name`; `backup.yml` restores the same dump into staging, keeps staging read-only (`default_transaction_read_only = on`) around the restore, and calls `POST /api/cron/db-copied` (`APP_BASE_URL` + `CRON_SECRET` secrets). The hourly gate now asks `/api/cron/backup` to dispatch, so a GitHub-timed backup copies too.
+- **Switch window:** after a successful copy until the next 08:00 IST, once per copy. Settings → Backup & Restore → Databases, type SWITCH. The server also refuses if any table differs between the two (row count or latest `updatedAt`).
+- After a switch: the old primary is read-only staging; counters pick up the new primary at their next start (restart any left open overnight).
+- The staging URL is a workflow input today (masked in the log by the first step). Moving both URLs to GitHub secrets is planned.

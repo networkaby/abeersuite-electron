@@ -33,6 +33,12 @@ on:
       domain:
         description: Site that asked for it, e.g. office.networkservice.in. Name only.
         required: false
+      staging_db_url:
+        description: Direct URL of STAGING (DB1 / DB2). Set = restore this dump into it after the upload (nightly copy).
+        required: false
+      staging_name:
+        description: Which one staging is, DB1 or DB2 — reported back to the app with the result.
+        required: false
 
 concurrency:
   group: db-backup
@@ -41,7 +47,8 @@ concurrency:
 jobs:
   dump:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Dump + upload, plus the nightly restore into staging when the app asks for it.
+    timeout-minutes: 35
     env:
       # Scheduled runs have no inputs, so fall back to the repo secret. The secret
       # is also the safer path: GitHub masks secrets in logs, but a workflow INPUT
@@ -53,6 +60,20 @@ jobs:
       DROPBOX_FOLDER: ${{ secrets.DROPBOX_FOLDER }}
       FILE_NAME: ${{ github.event.inputs.file_name }}
     steps:
+      # staging_db_url is read from the event file and masked, never put in env: an
+      # input in env is printed in full in every step's header (same as restore.yml).
+      - name: Hide the staging database URL in the logs
+        if: github.event.inputs.staging_name
+        run: |
+          set -euo pipefail
+          URL=$(jq -r '.inputs.staging_db_url // empty' "$GITHUB_EVENT_PATH")
+          if [ -z "$URL" ]; then echo "staging_name is set but staging_db_url is empty."; exit 1; fi
+          echo "::add-mask::$URL"
+          NOPROTO="${URL#*://}"
+          USERINFO="${NOPROTO%@*}"
+          case "$USERINFO" in *:*) echo "::add-mask::${USERINFO#*:}" ;; esac
+          echo "STAGING_DB_URL=$URL" >> "$GITHUB_ENV"
+
       - name: Resolve dump file name
         env:
           SOURCE: ${{ github.event.inputs.source }}
@@ -151,6 +172,47 @@ jobs:
             --data-binary @backup.dump)
           echo "upload HTTP $HTTP"; cat resp.txt || true; echo
           test "$HTTP" -lt 400
+
+      # ── Nightly copy into staging (DB1 / DB2) ──────────────────────────────────
+      # Staging is kept READ-ONLY at the database level so nothing on a stale pointer
+      # can write to it (src/shared/lib/db/dbSwitch.server.ts). Opened for the restore,
+      # closed again whatever happens. No `prisma db push` here, unlike restore.yml:
+      # this dump is tonight's primary, so its schema is already the current one.
+      - name: Copy the dump into staging
+        id: copy
+        if: github.event.inputs.staging_name
+        run: |
+          set -euo pipefail
+          PSQL=/usr/lib/postgresql/17/bin/psql
+          ro() {
+            "$PSQL" "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -q -c \
+              "BEGIN READ WRITE; DO \$\$ BEGIN EXECUTE format('ALTER DATABASE %I SET default_transaction_read_only = $1', current_database()); END \$\$; COMMIT;"
+          }
+          ro off
+          trap 'ro on || echo "WARNING: could not set staging back to read-only"' EXIT
+          /usr/lib/postgresql/17/bin/pg_restore \
+            --clean --if-exists --no-owner --no-privileges \
+            --schema=public \
+            --jobs=4 \
+            --dbname "$STAGING_DB_URL" \
+            backup.dump
+          echo "restored into ${{ github.event.inputs.staging_name }}"
+
+      - name: Report the copy to the app
+        if: always() && github.event.inputs.staging_name
+        env:
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          INTO: ${{ github.event.inputs.staging_name }}
+          OK: ${{ steps.copy.outcome == 'success' }}
+        run: |
+          set -uo pipefail
+          if [ -z "${APP_BASE_URL:-}" ]; then echo "APP_BASE_URL secret is not set — the switch window will stay shut."; exit 0; fi
+          AUTH=(); [ -n "${CRON_SECRET:-}" ] && AUTH=(-H "Authorization: Bearer $CRON_SECRET")
+          curl -sS --max-time 30 -X POST "${AUTH[@]}" -H "Content-Type: application/json" \
+            -d "{\"into\":\"$INTO\",\"ok\":$OK}" "${APP_BASE_URL%/}/api/cron/db-copied" || true
+          echo
+          exit 0
 
       - name: Append run to Dropbox log
         if: always()

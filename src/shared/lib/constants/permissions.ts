@@ -212,6 +212,7 @@ export const PERMISSIONS = {
 
     // Settings
     SETTINGS_MANAGE: "settings:manage",
+    SETTINGS_DB_SWITCH: "settings:db:switch",
     SETTINGS_AI_MANAGE: "settings:ai:manage",
     SETTINGS_TRACKING_MANAGE: "settings:tracking:manage",
     // Settings → App Settings — WhatsApp number ids etc. (DB first, .env fallback).
