@@ -97,7 +97,10 @@ jobs:
           for N in 1 2; do
             VAR="DB_URL_$N"; [ -n "${!VAR:-}" ] || continue
             CLEAN=$(libpq "${!VAR}"); echo "::add-mask::$CLEAN"; printf -v "$VAR" '%s' "$CLEAN"
-            case "$CLEAN" in *:6543/*) echo "WARNING: DIRECT_DATABASE_URL_$N is the pooled address (6543) - set the direct one (5432)." ;; esac
+            # 6543 is the transaction pooler: the copy's "read-only off" reaches only new
+            # server sessions, and the pooler hands out old ones still read-only, so the
+            # restore fails half-way (2026-11-18). The copy needs 5432 (session / direct).
+            case "$CLEAN" in *:6543/*) echo "WARNING: DIRECT_DATABASE_URL_$N is the pooled address (6543) - set the session/direct one (5432)."; printf -v "BAD_$N" '%s' 1 ;; esac
           done
           BEST=""; BEST_AT=-1; ANSWERED=0
           for N in 1 2; do
@@ -129,6 +132,8 @@ jobs:
             if [ "$STANDBY_DB" = "$PRIMARY" ]; then echo "Refusing to copy into $STANDBY_DB: it is the primary."; exit 1; fi
             M="${STANDBY_DB#DB}"; VAR="DB_URL_$M"
             if [ -z "${!VAR:-}" ]; then echo "DIRECT_DATABASE_URL_$M secret is not set - no copy."; exit 1; fi
+            BADVAR="BAD_$M"
+            if [ -n "${!BADVAR:-}" ]; then echo "DIRECT_DATABASE_URL_$M is the 6543 pooled address - the copy into $STANDBY_DB needs the 5432 one. Stopping before anything is dumped or changed."; exit 1; fi
             echo "STANDBY_DB_URL=${!VAR}" >> "$GITHUB_ENV"
             echo "DO_COPY=true" >> "$GITHUB_ENV"
             echo "standby: $STANDBY_DB (copy after upload)"
