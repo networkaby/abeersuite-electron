@@ -112,7 +112,8 @@ jobs:
           for N in 1 2; do
             VAR="DB_URL_$N"; URL="${!VAR:-}"
             [ -n "$URL" ] || continue
-            RO[DB$N]=$("$PSQL" "$URL" -Atq -c "SELECT current_setting('default_transaction_read_only')" 2>/dev/null || true)
+            # The database's saved setting (a lock / the standby), not the session's.
+            RO[DB$N]=$("$PSQL" "$URL" -Atq -c "SELECT CASE WHEN EXISTS (SELECT 1 FROM pg_db_role_setting s JOIN pg_database d ON d.oid = s.setdatabase WHERE d.datname = current_database() AND s.setrole = 0 AND 'default_transaction_read_only=on' = ANY (s.setconfig)) THEN 'on' ELSE 'off' END" 2>/dev/null || true)
             [ -n "${RO[DB$N]}" ] || echo "DB$N did not answer"
           done
           if [ -n "${SOURCE_DB:-}" ]; then

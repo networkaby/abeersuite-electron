@@ -18,7 +18,7 @@ import "server-only";
 import type { PoolClient } from "pg";
 import { projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
 import { dbTarget, isDualDb, otherDb, type DbId } from "./dbTargets";
-import { currentPrimary, readSwitchRow, SWITCH_TABLE_SQL, withDb, type SwitchRow } from "./dbPrimary";
+import { currentPrimary, DB_READ_ONLY_SQL, readSwitchRow, SWITCH_TABLE_SQL, withDb, type SwitchRow } from "./dbPrimary";
 
 /** A copy that has not reported back within this long is treated as dead. */
 const COPY_STALE_MS = 2 * 60 * 60 * 1000;
@@ -79,8 +79,8 @@ export interface DbSwitchStatus {
 
 async function probe(id: DbId): Promise<{ reachable: boolean; readOnly: boolean | null }> {
     try {
-        const ro = await withDb(id, (c) => c.query<{ ro: string }>("SELECT current_setting('default_transaction_read_only') AS ro"));
-        return { reachable: true, readOnly: ro.rows[0]?.ro === "on" };
+        const ro = await withDb(id, (c) => c.query<{ ro: boolean }>(DB_READ_ONLY_SQL));
+        return { reachable: true, readOnly: ro.rows[0]?.ro === true };
     } catch {
         return { reachable: false, readOnly: null };
     }
@@ -91,6 +91,9 @@ const iso = (d: Date | null | undefined) => (d ? new Date(d).toISOString() : nul
 /** Why the last copy is not good enough to switch on, or null. Pure apart from `now`. */
 export function copyProblem(row: SwitchRow | null, standby: DbId, now = new Date()): string | null {
     if (!row?.copied_at) return "No copy into the standby has finished yet.";
+    // First: after a switch the new primary carries the row it received IN the copy, so
+    // anything else it says (even "running") is about the other direction.
+    if (row.copy_into !== standby) return `No copy into ${standby} yet since the switch. Tonight's copy will do it.`;
     const copiedAt = new Date(row.copied_at);
     const startedAt = row.copy_started_at ? new Date(row.copy_started_at) : null;
     if (startedAt && startedAt > copiedAt && now.getTime() - startedAt.getTime() < COPY_STALE_MS) {
@@ -99,7 +102,6 @@ export function copyProblem(row: SwitchRow | null, standby: DbId, now = new Date
     if (row.copy_failed_at && new Date(row.copy_failed_at) > copiedAt) {
         return "The last copy into the standby failed. Run a copy that succeeds first.";
     }
-    if (row.copy_into !== standby) return `The last copy went into ${row.copy_into ?? "neither database"}, not ${standby}.`;
     return null;
 }
 

@@ -40,8 +40,11 @@ if (!direct) {
     const client = new pg.Client({ connectionString: url, ssl: local ? false : { rejectUnauthorized: false }, connectionTimeoutMillis: 10_000 });
     await client.connect();
     try {
-        const ro = await client.query("SELECT current_setting('default_transaction_read_only') AS ro");
-        if (ro.rows[0]?.ro === "on") {
+        // The database's saved setting (what a lock / the standby sets), not the session's.
+        const ro = await client.query(
+            "SELECT EXISTS (SELECT 1 FROM pg_db_role_setting s JOIN pg_database d ON d.oid = s.setdatabase WHERE d.datname = current_database() AND s.setrole = 0 AND 'default_transaction_read_only=on' = ANY (s.setconfig)) AS ro",
+        );
+        if (ro.rows[0]?.ro === true) {
             await client.query("BEGIN READ WRITE");
             await client.query(
                 "DO $$ BEGIN EXECUTE format('ALTER DATABASE %I SET default_transaction_read_only = off', current_database()); END $$",

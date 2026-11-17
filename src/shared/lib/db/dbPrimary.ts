@@ -105,6 +105,16 @@ export async function withDb<T>(id: DbId, fn: (c: PoolClient) => Promise<T>): Pr
     }
 }
 
+/**
+ * Is `id` locked read-only? Read from the DATABASE's saved setting, not the session's:
+ * a session opened before a lock keeps the old value, so `current_setting(...)` on a
+ * reused connection says "writable" right after a lock (found in the 2026-11-18 test).
+ */
+export const DB_READ_ONLY_SQL = `
+SELECT EXISTS (SELECT 1 FROM pg_db_role_setting s JOIN pg_database d ON d.oid = s.setdatabase
+               WHERE d.datname = current_database() AND s.setrole = 0
+                 AND 'default_transaction_read_only=on' = ANY (s.setconfig)) AS ro`;
+
 /** The copy-bookkeeping row in `id`, or null when the table does not exist yet. */
 export async function readSwitchRow(id: DbId): Promise<SwitchRow | null> {
     return withDb(id, async (c) => {
