@@ -1,27 +1,26 @@
-# v1.17.8
+# v1.17.9
 
-Every counter should install this update. It adds a new "Waiting" stage for shop products, so the counter must update before the office site is deployed — until it does, its sync stays paused.
+Every counter should install this update. The counter's live sync now follows whichever database the office has chosen as the main one, so counters stay in step if the office ever switches databases.
 
-## Messages and WhatsApp
+## Database safety (office)
 
-- One chat per customer: messages from all of a customer's numbers now show in a single conversation, with a **Reply via** picker to choose which number to answer on.
-- Messages your staff send from the WhatsApp Business app on the phone now also appear in the inbox.
-- Bill and ticket chips in a chat open the bill or ticket in the office straight away; **+ Ticket** can link any open ticket to the chat.
-- A WhatsApp message the app cannot show now keeps Meta's reason, so you know why.
-- On a counter, the WhatsApp popup closes at once when staff close the conversation.
-- Messages to numbers that are not in your WhatsApp numbers list are ignored.
+- The business now keeps two databases: the main one and a **Standby** copy that is refreshed every night.
+- Settings → Backup & Restore can switch the main database to the Standby. The switch first locks the old one, refuses unless both databases answer, and rolls back if anything fails.
+- After a switch, the screen says plainly when no copy has been made yet, instead of showing "copy running".
+- Backup & Restore shows a red / green checklist of every setting the backups need, grouped by database, Vercel, GitHub and Dropbox. A nightly copy in the last 26 hours ticks the GitHub, Dropbox and cron rows for you.
+- The nightly Standby copy is more reliable: it starts from a clean database, refuses a wrong (pooled) database address up front, and cleans stray quotes or spaces from the saved address.
 
-## Team chat
+## Counters
 
-- **Message yourself** — keep notes and files in your own chat.
-- Photos and files in Team chat open full-screen, like WhatsApp.
-
-## Roles
-
-- Each module's ticks in the Role screen are now split into **Pages**, **Add / Edit / Delete**, **Special actions** and **What they can see**, so it is easier to find the right tick.
+- Live updates on the counter follow the main database, so new bills and changes keep arriving after a database switch.
+- Live updates now use Supabase's newer publishable keys.
 
 ## Online shop products
 
-- New **Waiting** stage: staff can shortlist products for the AI preparation run, or send a product back there from Attention once it is fixed. Waiting rows move at once.
-- AI product preparation now works in steps — clean our data, one saved internet search, then write the copy, photos and shipping details — and parks a product in Attention when something needs staff.
-- It fills an empty Model No from the box or the maker's page, takes shipping size from the box label, copies added photos into our own storage, and keeps the earlier notes for staff.
+- AI product preparation gets a Part 5 touch-up step; the check step suggests what to run next and can carry straight on.
+- Any problem the check finds parks the product in Attention, and every part leaves a "Last run" line on the product.
+- Attention notes say where the product's details came from. Our own logo on a photo other than the main one is no longer flagged.
+
+## Security
+
+- Updated the web framework (Next.js) to a version with a known security issue fixed.
