@@ -99,11 +99,11 @@ function writeConfig(syncUrl: string): string | null {
         ...(process.env.DB_PRIMARY_ID?.trim() === "DB2" && process.env.NEXT_PUBLIC_SUPABASE_URL_2
             ? {
                   supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL_2,
-                  supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_2 || undefined,
+                  supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY_2 || undefined,
               }
             : {
                   supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL_1 || undefined,
-                  supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_1 || undefined,
+                  supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY_1 || undefined,
               }),
         ...(registryPath ? { registryPath } : {}),
     };

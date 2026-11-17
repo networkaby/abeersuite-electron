@@ -41,9 +41,9 @@ export async function envChecklist(): Promise<EnvRow[]> {
     add("DATABASE_URL_2", "DB2 pooled connection (6543)", "Switch + nightly copy", "db2", has("DATABASE_URL_2"));
     add("DIRECT_URL_2", "DB2 direct connection (5432)", "Switch + nightly copy", "db2", has("DIRECT_URL_2"));
     add("NEXT_PUBLIC_SUPABASE_URL_1", "DB1 realtime project URL", "Required — live updates", "required", has("NEXT_PUBLIC_SUPABASE_URL_1"));
-    add("NEXT_PUBLIC_SUPABASE_ANON_KEY_1", "DB1 realtime anon key", "Required — live updates", "required", has("NEXT_PUBLIC_SUPABASE_ANON_KEY_1"));
+    add("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY_1", "DB1 realtime publishable key", "Required — live updates", "required", has("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY_1"));
     add("NEXT_PUBLIC_SUPABASE_URL_2", "DB2 realtime project URL", "Live updates when DB2 is primary", "db2", has("NEXT_PUBLIC_SUPABASE_URL_2"));
-    add("NEXT_PUBLIC_SUPABASE_ANON_KEY_2", "DB2 realtime anon key", "Live updates when DB2 is primary", "db2", has("NEXT_PUBLIC_SUPABASE_ANON_KEY_2"));
+    add("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY_2", "DB2 realtime publishable key", "Live updates when DB2 is primary", "db2", has("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY_2"));
     add("CRON_SECRET", "Key for the backup / copy-done calls", "Recommended — else those calls need the Incoming API cron key", "recommended", has("CRON_SECRET"));
 
     // GitHub Actions secrets the workflows read. Names only, if the token may list them.

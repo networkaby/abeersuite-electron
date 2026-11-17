@@ -56,9 +56,9 @@ export const ENV_ONLY_PROVIDERS: EnvOnlyProvider[] = [
         why: "Only sends \"something changed\" messages (Broadcast) — never reads the database, so it may be a different Supabase project. Built into the website (NEXT_PUBLIC_), so .env only.",
         keys: [
             { key: "NEXT_PUBLIC_SUPABASE_URL_1", label: "DB1 project URL" },
-            { key: "NEXT_PUBLIC_SUPABASE_ANON_KEY_1", label: "DB1 anon public key" },
+            { key: "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY_1", label: "DB1 publishable key (sb_publishable_…)" },
             { key: "NEXT_PUBLIC_SUPABASE_URL_2", label: "DB2 project URL" },
-            { key: "NEXT_PUBLIC_SUPABASE_ANON_KEY_2", label: "DB2 anon public key" },
+            { key: "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY_2", label: "DB2 publishable key (sb_publishable_…)" },
         ],
     },
     {
@@ -324,11 +324,11 @@ export const PROVIDER_HELP: Record<string, ProviderHelp> = {
         about: "Pushes changes to open screens in real time.",
         terms: [
             { key: "NEXT_PUBLIC_SUPABASE_URL_1", theirs: "DB1 project — Project URL" },
-            { key: "NEXT_PUBLIC_SUPABASE_ANON_KEY_1", theirs: "DB1 project — anon public key" },
+            { key: "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY_1", theirs: "DB1 project — Publishable key" },
             { key: "NEXT_PUBLIC_SUPABASE_URL_2", theirs: "DB2 project — Project URL" },
-            { key: "NEXT_PUBLIC_SUPABASE_ANON_KEY_2", theirs: "DB2 project — anon public key" },
+            { key: "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY_2", theirs: "DB2 project — Publishable key" },
         ],
-        steps: ["supabase.com → project → Project Settings → API (Data API): Project URL and the anon public key."],
+        steps: ["supabase.com → project → Project Settings → API Keys: the Publishable key (sb_publishable_…). Project URL is under Data API. Use the publishable key, not the legacy anon key."],
         link: { label: "Supabase dashboard", url: "https://supabase.com/dashboard/projects" },
     },
     "Sentry (error reports)": {

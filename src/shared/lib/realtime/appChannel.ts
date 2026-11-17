@@ -21,7 +21,7 @@
  * WHAT IT IS NOT. This is a nudge, not a delivery. A listener's job is to go and
  * re-read its own endpoint; the signal never carries data, so a forged or
  * duplicated one costs a wasted refetch and can leak nothing. That matters
- * because the browser publishes with the anon key, exactly as chat already does.
+ * because the browser publishes with the publishable key, exactly as chat already does.
  *
  * ONE CONNECTION PER COMPUTER, NOT PER TAB. `document.hidden` was tried first
  * and dropped: chat's room subscriptions (`GlobalInboxListener`) are

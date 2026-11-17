@@ -27,12 +27,12 @@ export type ServerSignalExtras = { deleted?: readonly string[] };
 /** The primary database's realtime project — the one every open tab listens on
  *  (`supabaseClient.ts`). */
 function realtimePair(): { url: string; key: string } {
-    const db2 = realtimePrimary() === "DB2" && process.env.NEXT_PUBLIC_SUPABASE_URL_2 && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_2;
+    const db2 = realtimePrimary() === "DB2" && process.env.NEXT_PUBLIC_SUPABASE_URL_2 && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY_2;
     return db2
-        ? { url: process.env.NEXT_PUBLIC_SUPABASE_URL_2!, key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_2! }
+        ? { url: process.env.NEXT_PUBLIC_SUPABASE_URL_2!, key: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY_2! }
         : {
               url: process.env.NEXT_PUBLIC_SUPABASE_URL_1!,
-              key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_1!,
+              key: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY_1!,
           };
 }
 
