@@ -36,36 +36,15 @@ export async function envChecklist(): Promise<EnvRow[]> {
     const add = (key: string, what: string, neededFor: string, need: Need, set: boolean | null, where: EnvRow["where"] = "Vercel") =>
         rows.push({ key, what, neededFor, where, set, light: light(set, need, db2) });
 
-    // A `_1` counts as set when the old unsuffixed name still carries it.
-    const viaOld = (key: string, old: string) => has(key) || has(old);
-
-    add("DATABASE_URL_1", "DB1 pooled connection (6543)", "Required", "required", viaOld("DATABASE_URL_1", "DATABASE_URL"));
-    add("DIRECT_URL_1", "DB1 direct connection (5432)", "Required — backups, migrations", "required", viaOld("DIRECT_URL_1", "DIRECT_URL"));
+    add("DATABASE_URL_1", "DB1 pooled connection (6543)", "Required", "required", has("DATABASE_URL_1"));
+    add("DIRECT_URL_1", "DB1 direct connection (5432)", "Required — backups, migrations", "required", has("DIRECT_URL_1"));
     add("DATABASE_URL_2", "DB2 pooled connection (6543)", "Switch + nightly copy", "db2", has("DATABASE_URL_2"));
     add("DIRECT_URL_2", "DB2 direct connection (5432)", "Switch + nightly copy", "db2", has("DIRECT_URL_2"));
-    add("NEXT_PUBLIC_SUPABASE_URL_1", "DB1 realtime project URL", "Required — live updates", "required", viaOld("NEXT_PUBLIC_SUPABASE_URL_1", "NEXT_PUBLIC_SUPABASE_URL"));
-    add("NEXT_PUBLIC_SUPABASE_ANON_KEY_1", "DB1 realtime anon key", "Required — live updates", "required", viaOld("NEXT_PUBLIC_SUPABASE_ANON_KEY_1", "NEXT_PUBLIC_SUPABASE_ANON_KEY"));
+    add("NEXT_PUBLIC_SUPABASE_URL_1", "DB1 realtime project URL", "Required — live updates", "required", has("NEXT_PUBLIC_SUPABASE_URL_1"));
+    add("NEXT_PUBLIC_SUPABASE_ANON_KEY_1", "DB1 realtime anon key", "Required — live updates", "required", has("NEXT_PUBLIC_SUPABASE_ANON_KEY_1"));
     add("NEXT_PUBLIC_SUPABASE_URL_2", "DB2 realtime project URL", "Live updates when DB2 is primary", "db2", has("NEXT_PUBLIC_SUPABASE_URL_2"));
     add("NEXT_PUBLIC_SUPABASE_ANON_KEY_2", "DB2 realtime anon key", "Live updates when DB2 is primary", "db2", has("NEXT_PUBLIC_SUPABASE_ANON_KEY_2"));
     add("CRON_SECRET", "Key for the backup / copy-done calls", "Recommended — else those calls need the Incoming API cron key", "recommended", has("CRON_SECRET"));
-
-    // Old names: only a fallback for `_1`. Grey once the `_1` is set — safe to delete then.
-    for (const [old, now] of [
-        ["DATABASE_URL", "DATABASE_URL_1"],
-        ["DIRECT_URL", "DIRECT_URL_1"],
-        ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL_1"],
-        ["NEXT_PUBLIC_SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY_1"],
-    ] as const) {
-        const newSet = has(now);
-        rows.push({
-            key: old,
-            what: `Old name — used only when ${now} is not set`,
-            neededFor: newSet ? "Safe to delete" : has(old) ? `Keep until ${now} is set` : "—",
-            where: "Vercel",
-            set: has(old),
-            light: newSet ? "grey" : has(old) ? "green" : "grey",
-        });
-    }
 
     // GitHub Actions secrets the workflows read. Names only, if the token may list them.
     const secrets = await listActionSecretNames();

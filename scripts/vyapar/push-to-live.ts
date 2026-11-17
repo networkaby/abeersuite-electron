@@ -54,7 +54,7 @@ function newestBackupAgeMinutes(): number | null {
 
 async function main(): Promise<void> {
     const go = process.argv.includes("--yes-replace-live");
-    const raw = process.env.DIRECT_URL ?? "";
+    const raw = process.env.DIRECT_URL_1 ?? "";
     if (!/supabase/.test(raw)) throw new Error("DIRECT_URL is not Supabase — refusing");
 
     const u = new URL(raw.replace(/[?&]sslmode=[^&]*/g, ""));

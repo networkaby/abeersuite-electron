@@ -7,9 +7,9 @@ dotenv.config({ path: ".env" });
 export default defineConfig({
   schema: "prisma/schema",
   datasource: {
-    // DIRECT_URL is set by scripts/migrate-primary.mjs on deploy (the primary, DB1 or DB2).
-    // Elsewhere: the old names, then DB1's new ones.
-    url: (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? process.env.DIRECT_URL_1 ?? process.env.DATABASE_URL_1)!,
+    // PRISMA_MIGRATE_URL is set by scripts/migrate-primary.mjs on deploy (the primary,
+    // DB1 or DB2). Otherwise DB1. The old DIRECT_URL / DATABASE_URL names are gone.
+    url: (process.env.PRISMA_MIGRATE_URL ?? process.env.DIRECT_URL_1 ?? process.env.DATABASE_URL_1)!,
   },
   migrations: {
     // Committed migrations live here (docs/migrations.md). Spelled out because

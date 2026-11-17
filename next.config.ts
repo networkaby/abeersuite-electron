@@ -18,10 +18,10 @@ const COUNTER_BUILD = process.env.COUNTER_BUILD === "1";
 // anyone can host a file there and push it through our optimizer. Hostname-only is
 // kept as the fallback when the env is missing (a dev checkout without keys).
 const CLOUDINARY_CLOUD = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME?.trim();
-// DB1 / DB2 each have their own project (`_1` falls back to the old unsuffixed name).
+// DB1 / DB2 each have their own Supabase project.
 const hostOf = (u: string | undefined) => { try { return new URL(u ?? "").hostname; } catch { return ""; } };
 const SUPABASE_HOSTS = [
-  hostOf(process.env.NEXT_PUBLIC_SUPABASE_URL_1 || process.env.NEXT_PUBLIC_SUPABASE_URL),
+  hostOf(process.env.NEXT_PUBLIC_SUPABASE_URL_1),
   hostOf(process.env.NEXT_PUBLIC_SUPABASE_URL_2),
 ].filter(Boolean);
 

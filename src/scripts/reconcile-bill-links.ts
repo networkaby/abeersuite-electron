@@ -59,7 +59,7 @@ import { planAutoLink, type AutoLinkOutcome } from "@/modules/accountancy/lib/au
 import { assertLinkPlan, createLink, BillLinkError } from "@/modules/accountancy/lib/billLink";
 import { formatInr } from "@/shared/lib/format/moneyInr";
 
-const rawUrl = (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "")
+const rawUrl = (process.env.DIRECT_URL_1 ?? process.env.DATABASE_URL_1 ?? "")
     .replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
 const isLocalDb = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(rawUrl);
 const pool = new Pool({ connectionString: rawUrl, ssl: isLocalDb ? false : { rejectUnauthorized: false }, max: 2 });

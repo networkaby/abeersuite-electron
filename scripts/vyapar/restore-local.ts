@@ -51,7 +51,7 @@ async function main(): Promise<void> {
     const force = process.argv.includes("--force");
     if (!dump || !existsSync(dump)) throw new Error(`dump file not found: ${dump ?? "(no path given)"}`);
 
-    const raw = (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "").replace(/[?&]sslmode=[^&]*/g, "");
+    const raw = (process.env.DIRECT_URL_1 ?? process.env.DATABASE_URL_1 ?? "").replace(/[?&]sslmode=[^&]*/g, "");
     if (!raw) throw new Error("no DIRECT_URL / DATABASE_URL — is .env.local set up?");
 
     const u = new URL(raw);

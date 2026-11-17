@@ -25,7 +25,7 @@ const PG_BIN = "D:/Program Files/PostgreSQL/17/bin";
 const OUT_DIR = "D:/AbeerSuite/live-backups";
 
 function main(): void {
-    const raw = process.env.DIRECT_URL ?? "";
+    const raw = process.env.DIRECT_URL_1 ?? "";
     if (!/supabase/.test(raw)) throw new Error("DIRECT_URL is not Supabase — nothing to back up");
 
     const u = new URL(raw);

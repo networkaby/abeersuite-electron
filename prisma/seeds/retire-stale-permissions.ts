@@ -29,7 +29,7 @@ import { assertNotCounterReplica } from "./lib/assertNotCounter";
 dotenv.config({ path: ".env.local" });
 dotenv.config({ path: ".env" });
 
-const rawUrl = (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "")
+const rawUrl = (process.env.DIRECT_URL_1 ?? process.env.DATABASE_URL_1 ?? "")
     .replace(/[?&]sslmode=[^&]*/g, "")
     .replace(/[?&]$/, "");
 const pool = new Pool({ connectionString: rawUrl, ssl: /@(localhost|127\.0\.0\.1)/.test(rawUrl) ? false : { rejectUnauthorized: false }, max: 2 });

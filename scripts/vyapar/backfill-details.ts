@@ -65,7 +65,7 @@ async function main(): Promise<void> {
     const K = KINDS[type];
     if (!K) throw new Error(`no model for ${type} — one of ${Object.keys(KINDS).join(", ")}`);
 
-    const url = (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "");
+    const url = (process.env.DIRECT_URL_1 ?? process.env.DATABASE_URL_1 ?? "");
     if (!url) throw new Error("no DIRECT_URL / DATABASE_URL");
     const pool = new Pool({ connectionString: url, max: 1 });
     const host = url.replace(/^.*@/, "").replace(/\/.*$/, "");

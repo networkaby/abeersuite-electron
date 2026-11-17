@@ -25,14 +25,14 @@ import { realtimePrimary } from "@/shared/lib/db/dbPrimary";
 export type ServerSignalExtras = { deleted?: readonly string[] };
 
 /** The primary database's realtime project — the one every open tab listens on
- *  (`supabaseClient.ts`). `_1` falls back to the old unsuffixed names. */
+ *  (`supabaseClient.ts`). */
 function realtimePair(): { url: string; key: string } {
     const db2 = realtimePrimary() === "DB2" && process.env.NEXT_PUBLIC_SUPABASE_URL_2 && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_2;
     return db2
         ? { url: process.env.NEXT_PUBLIC_SUPABASE_URL_2!, key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_2! }
         : {
-              url: (process.env.NEXT_PUBLIC_SUPABASE_URL_1 || process.env.NEXT_PUBLIC_SUPABASE_URL)!,
-              key: (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_1 || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)!,
+              url: process.env.NEXT_PUBLIC_SUPABASE_URL_1!,
+              key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_1!,
           };
 }
 

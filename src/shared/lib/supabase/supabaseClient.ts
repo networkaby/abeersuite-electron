@@ -7,8 +7,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
  * project, so realtime moves with the primary on a switch (owner, 2026-11-17: two
  * projects, so one free realtime quota running out does not stop updates for good).
  *
- *   NEXT_PUBLIC_SUPABASE_URL_1 / _ANON_KEY_1   — DB1's project (falls back to the old
- *                                                 NEXT_PUBLIC_SUPABASE_URL / _ANON_KEY)
+ *   NEXT_PUBLIC_SUPABASE_URL_1 / _ANON_KEY_1   — DB1's project
  *   NEXT_PUBLIC_SUPABASE_URL_2 / _ANON_KEY_2   — DB2's project
  *
  * Both pairs are public and baked into the bundle (spelled out literally so Next inlines
@@ -24,8 +23,8 @@ type RtId = "DB1" | "DB2";
 
 const PAIRS: Record<RtId, { url?: string; key?: string }> = {
     DB1: {
-        url: process.env.NEXT_PUBLIC_SUPABASE_URL_1 || process.env.NEXT_PUBLIC_SUPABASE_URL,
-        key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_1 || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+        url: process.env.NEXT_PUBLIC_SUPABASE_URL_1,
+        key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_1,
     },
     DB2: {
         url: process.env.NEXT_PUBLIC_SUPABASE_URL_2,

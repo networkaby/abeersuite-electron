@@ -22,7 +22,7 @@ const w = (s = "") => out.push(s);
 
 async function main(): Promise<void> {
     const path = process.argv.find((a) => a.endsWith(".md")) ?? "opening-1-apr-2026.md";
-    const url = (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "").replace(/[?&]sslmode=[^&]*/g, "");
+    const url = (process.env.DIRECT_URL_1 ?? process.env.DATABASE_URL_1 ?? "").replace(/[?&]sslmode=[^&]*/g, "");
     const pool = new Pool({ connectionString: url, ssl: false, max: 1 });
     const V = JSON.parse(readFileSync("prisma/seeds/data/vyapar-opening-31mar2026.json", "utf8"));
 

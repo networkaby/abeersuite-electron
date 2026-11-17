@@ -30,7 +30,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 dotenv.config({ path: ".env" });
-const url = (process.env.DIRECT_URL ?? "").replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
+const url = (process.env.DIRECT_URL_1 ?? "").replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
 const pool = new Pool({ connectionString: url, ssl: { rejectUnauthorized: false }, max: 2 });
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) } as never) as PrismaClient;
 

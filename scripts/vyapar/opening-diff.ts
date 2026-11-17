@@ -74,7 +74,7 @@ function compare(title: string, unit: (n: number) => string, a: Bal, b: Bal, tol
 }
 
 async function main(): Promise<void> {
-    const url = (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "").replace(/[?&]sslmode=[^&]*/g, "");
+    const url = (process.env.DIRECT_URL_1 ?? process.env.DATABASE_URL_1 ?? "").replace(/[?&]sslmode=[^&]*/g, "");
     if (!/localhost|127\.0\.0\.1/.test(url)) throw new Error("REFUSING: local only.");
     if (!/migrate-v1/.test(url)) throw new Error(`expected .env.local to point at the clean room, got ${url.replace(/^.*@/, "")}`);
 

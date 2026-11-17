@@ -5,13 +5,19 @@
  * primary every night and kept read-only). Which one is primary is not in `.env` — it is
  * a row in both databases (`dbPrimary.ts`), so a switch takes effect without a redeploy.
  *
- *   DATABASE_URL_1 / DIRECT_URL_1   — DB1. Fall back to DATABASE_URL / DIRECT_URL, which
- *                                      counters and local dev still use.
+ *   DATABASE_URL_1 / DIRECT_URL_1   — DB1.
  *   DATABASE_URL_2 / DIRECT_URL_2   — DB2. Absent = single-database mode: no switch, no
  *                                      nightly copy, and nothing below costs a thing.
  *
+ * No fallback to the old DATABASE_URL / DIRECT_URL on the office (owner, 2026-11-17: "next
+ * deploy directly read new env, old gone"). A COUNTER PC is the one exception: it is
+ * handed the primary's pooled URL as DATABASE_URL by `/api/counter/config`, exactly as
+ * before (owner: "no changes in counter"), so there DB1 = DATABASE_URL and DB2 is absent.
+ *
  * Pure (no Prisma, no Next) so scripts can read it too.
  */
+
+import { parseCounterPc } from "@/shared/lib/appModeCore";
 
 export type DbId = "DB1" | "DB2";
 
@@ -34,11 +40,15 @@ export function dbEnvKeys(id: DbId): { pooled: string; direct: string } {
 }
 
 function read(id: DbId): DbTarget | null {
+    if (parseCounterPc(process.env.COUNTER_PC) === true) {
+        // Counter: the one URL the office handed over — always the primary's.
+        const pooled = id === "DB1" ? clean(process.env.DATABASE_URL) : undefined;
+        return pooled ? { id, pooled, direct: pooled } : null;
+    }
     const keys = dbEnvKeys(id);
-    const pooled = clean(process.env[keys.pooled]) ?? (id === "DB1" ? clean(process.env.DATABASE_URL) : undefined);
+    const pooled = clean(process.env[keys.pooled]);
     if (!pooled) return null;
-    const direct =
-        clean(process.env[keys.direct]) ?? (id === "DB1" ? clean(process.env.DIRECT_URL) : undefined) ?? pooled;
+    const direct = clean(process.env[keys.direct]) ?? pooled;
     return { id, pooled, direct };
 }
 

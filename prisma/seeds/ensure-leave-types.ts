@@ -22,7 +22,7 @@ dotenv.config({ path: ".env" });
 
 // Same connection dance as the other seed scripts: the app's shared client is
 // configured for the server and does not start in a CLI.
-const rawUrl = (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "")
+const rawUrl = (process.env.DIRECT_URL_1 ?? process.env.DATABASE_URL_1 ?? "")
     .replace(/[?&]sslmode=[^&]*/g, "")
     .replace(/[?&]$/, "");
 const pool = new Pool({

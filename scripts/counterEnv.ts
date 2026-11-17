@@ -68,8 +68,6 @@ export const COUNTER_ENV_COPIED: readonly string[] = [
     // Next inlines NEXT_PUBLIC_* into the bundles at build time, so the browser half
     // already has these. They are copied for the server half in
     // shared/lib/realtime/serverPublish.ts, which reads process.env at runtime.
-    "NEXT_PUBLIC_SUPABASE_URL",
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
     "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
     // DB1 / DB2 realtime projects — the counter uses the primary's, named by
     // DB_PRIMARY_ID from /api/counter/config (src/shared/lib/supabase/supabaseClient.ts).

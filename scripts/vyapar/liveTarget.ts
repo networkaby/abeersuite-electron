@@ -48,7 +48,7 @@ function newestBackupAgeMinutes(): number | null {
 export async function openTarget(): Promise<Target> {
     const go = process.argv.includes("--apply");
     const rollback = process.argv.includes("--rollback");
-    const url = arg("--db") ?? process.env.DIRECT_URL ?? "";
+    const url = arg("--db") ?? process.env.DIRECT_URL_1 ?? "";
     if (!url) throw new Error("No database: pass --db <url> or set DIRECT_URL");
     const isLive = /supabase/.test(url);
     const u = new URL(url.replace(/[?&](sslmode|pgbouncer)=[^&]*/g, ""));

@@ -52,7 +52,7 @@ const FILE = fileFlag >= 0 && args[fileFlag + 1]
     ? args[fileFlag + 1]
     : "d:/Users/User/Desktop/contact-import-testing/Export Items_enriched_v2.csv";
 
-const url = (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "").replace(/[?&]sslmode=[^&]*/g, "");
+const url = (process.env.DIRECT_URL_1 ?? process.env.DATABASE_URL_1 ?? "").replace(/[?&]sslmode=[^&]*/g, "");
 const pool = new Pool({ connectionString: url, ssl: { rejectUnauthorized: false }, max: 2 });
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 

@@ -37,8 +37,6 @@ export const ENV_ONLY_PROVIDERS: EnvOnlyProvider[] = [
             { key: "DIRECT_URL_1", label: "DB1 direct connection (port 5432)" },
             { key: "DATABASE_URL_2", label: "DB2 pooled connection (port 6543)" },
             { key: "DIRECT_URL_2", label: "DB2 direct connection (port 5432)" },
-            { key: "DATABASE_URL", label: "Pooled connection — old name, used when DATABASE_URL_1 is not set" },
-            { key: "DIRECT_URL", label: "Direct connection — old name, used when DIRECT_URL_1 is not set" },
         ],
     },
     {
@@ -61,8 +59,6 @@ export const ENV_ONLY_PROVIDERS: EnvOnlyProvider[] = [
             { key: "NEXT_PUBLIC_SUPABASE_ANON_KEY_1", label: "DB1 anon public key" },
             { key: "NEXT_PUBLIC_SUPABASE_URL_2", label: "DB2 project URL" },
             { key: "NEXT_PUBLIC_SUPABASE_ANON_KEY_2", label: "DB2 anon public key" },
-            { key: "NEXT_PUBLIC_SUPABASE_URL", label: "Project URL — old name, used when _1 is not set" },
-            { key: "NEXT_PUBLIC_SUPABASE_ANON_KEY", label: "anon public key — old name, used when _1 is not set" },
         ],
     },
     {
@@ -308,7 +304,6 @@ export const PROVIDER_HELP: Record<string, ProviderHelp> = {
         steps: [
             "supabase.com → each project → Connect (top bar) → ORMs / connection strings.",
             "Put that project's password into both of its strings. Vercel needs all four; DB2 left blank = one database, no switch.",
-            "The old DATABASE_URL / DIRECT_URL still work as DB1 when the _1 names are not set.",
         ],
         link: { label: "Supabase dashboard", url: "https://supabase.com/dashboard/projects" },
     },

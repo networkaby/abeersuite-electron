@@ -37,7 +37,7 @@ import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 // global client; it now takes the client it should read with.
 import { accountIdsUnderGroup } from "@/modules/accountancy/lib/accountGroups";
 
-const rawUrl = (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "")
+const rawUrl = (process.env.DIRECT_URL_1 ?? process.env.DATABASE_URL_1 ?? "")
     .replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
 const isLocalDb = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(rawUrl);
 const pool = new Pool({ connectionString: rawUrl, ssl: isLocalDb ? false : { rejectUnauthorized: false }, max: 2 });

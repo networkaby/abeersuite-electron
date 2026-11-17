@@ -50,7 +50,7 @@ type V = {
 };
 
 async function main(): Promise<void> {
-    const url = (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "").replace(/[?&]sslmode=[^&]*/g, "");
+    const url = (process.env.DIRECT_URL_1 ?? process.env.DATABASE_URL_1 ?? "").replace(/[?&]sslmode=[^&]*/g, "");
     if (!/localhost|127\.0\.0\.1/.test(url)) throw new Error("REFUSING: local copy only, never live.");
 
     const V = JSON.parse(readFileSync(OPENINGS, "utf8")) as V;

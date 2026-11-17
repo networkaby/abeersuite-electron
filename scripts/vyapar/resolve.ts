@@ -47,7 +47,7 @@ type PartyRow = { rowIndex: number; values: Record<string, string> };
 
 async function main(): Promise<void> {
     const apply = process.argv.includes("--apply");
-    const url = (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "").replace(/[?&]sslmode=[^&]*/g, "");
+    const url = (process.env.DIRECT_URL_1 ?? process.env.DATABASE_URL_1 ?? "").replace(/[?&]sslmode=[^&]*/g, "");
     if (!/localhost|127\.0\.0\.1/.test(url)) throw new Error("REFUSING: run this against the local copy, not live.");
 
     const { db, close } = openVyb(process.argv.find((a) => a.endsWith(".vyb")) ?? DEFAULT_VYB, join(tmpdir(), "vy-resolve"));

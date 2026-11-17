@@ -162,7 +162,7 @@ as an input too. `restore.yml`'s first step reads it from the event file and mas
 
 ## Two databases: primary + standby (DB1 / DB2)
 
-Set `DATABASE_URL_1` / `DIRECT_URL_1` and `DATABASE_URL_2` / `DIRECT_URL_2` on Vercel (without the `_1` names DB1 is `DATABASE_URL` / `DIRECT_URL`). Deploy migrations run on the primary (`scripts/migrate-primary.mjs`). From then on:
+Set `DATABASE_URL_1` / `DIRECT_URL_1` and `DATABASE_URL_2` / `DIRECT_URL_2` on Vercel (the old `DATABASE_URL` / `DIRECT_URL` / `NEXT_PUBLIC_SUPABASE_URL` / `_ANON_KEY` are no longer read — delete them; also set `NEXT_PUBLIC_SUPABASE_URL_1` / `_ANON_KEY_1` and `_2`). Deploy migrations run on the primary (`scripts/migrate-primary.mjs`). From then on:
 
 - **Every backup dumps the primary**, whichever of DB1 / DB2 that is today — the app passes its URL, never the `DIRECT_DATABASE_URL` secret, except on the Sunday safety net or a hand-started run of `backup-scheduled.yml` (those still use the secret; after a switch, update it or it dumps standby).
 - **The app's nightly backup also copies into standby.** `/api/cron/backup` passes `staging_db_url` + `staging_name`; `backup.yml` restores the same dump into standby, keeps standby read-only (`default_transaction_read_only = on`) around the restore, and calls `POST /api/cron/db-copied` (`APP_BASE_URL` + `CRON_SECRET` secrets). The hourly gate now asks `/api/cron/backup` to dispatch, so a GitHub-timed backup copies too.

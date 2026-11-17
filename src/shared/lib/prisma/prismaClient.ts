@@ -37,12 +37,11 @@ function normalize(url: string | undefined): string | undefined {
     return url?.replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
 }
 
-// DB1 / DB2 (dbTargets.ts). Without DATABASE_URL_2 this is just DB1 = DATABASE_URL(_1), one client,
+// DB1 / DB2 (dbTargets.ts). Without DATABASE_URL_2 this is just DB1, one client,
 // and the exports below are the plain clients — no Proxy, exactly as before.
 const liveUrls: Partial<Record<DbId, string | undefined>> = Object.fromEntries(
     dbTargets().map((t) => [t.id, normalize(t.pooled)]),
 );
-if (!liveUrls.DB1) liveUrls.DB1 = normalize(process.env.DATABASE_URL);
 const DUAL = isDualDb();
 const localUrl = normalize(process.env.LOCAL_DATABASE_URL);
 
@@ -162,7 +161,7 @@ const globalForPrisma = globalThis as unknown as {
  * extra connections — it only changes which reads may be answered from the replica.
  */
 const baseLives: Partial<Record<DbId, PrismaClient>> = globalForPrisma.__prismaBases ?? {};
-for (const id of Object.keys(liveUrls) as DbId[]) {
+for (const id of (Object.keys(liveUrls).length ? Object.keys(liveUrls) : ["DB1"]) as DbId[]) {
     baseLives[id] ??= new PrismaClient({ adapter: new PrismaPg(createPool(liveUrls[id])) });
 }
 

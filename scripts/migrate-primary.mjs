@@ -2,7 +2,7 @@
 /**
  * `prisma migrate deploy` on whichever database is PRIMARY — run by `vercel-build`.
  *
- * DB1 = DIRECT_URL_1 / DATABASE_URL_1 (old names DIRECT_URL / DATABASE_URL as fallback),
+ * DB1 = DIRECT_URL_1 / DATABASE_URL_1,
  * DB2 = DIRECT_URL_2 / DATABASE_URL_2 — see src/shared/lib/db/dbTargets.ts.
  * The primary is the `_db_switch` row in both databases, latest `switched_at` wins, no row
  * = DB1 (src/shared/lib/db/dbPrimary.ts). Staging is never migrated: it is read-only and
@@ -26,9 +26,8 @@ try {
 const clean = (v) => (v && v.trim()) || undefined;
 
 function target(n) {
-    const pooled = clean(process.env[`DATABASE_URL_${n}`]) ?? (n === 1 ? clean(process.env.DATABASE_URL) : undefined);
-    const direct =
-        clean(process.env[`DIRECT_URL_${n}`]) ?? (n === 1 ? clean(process.env.DIRECT_URL) : undefined) ?? pooled;
+    const pooled = clean(process.env[`DATABASE_URL_${n}`]);
+    const direct = clean(process.env[`DIRECT_URL_${n}`]) ?? pooled;
     return direct ? { id: `DB${n}`, direct } : null;
 }
 
@@ -50,7 +49,7 @@ async function readRow(t) {
 
 const targets = [target(1), target(2)].filter(Boolean);
 if (targets.length === 0) {
-    console.error("[migrate-primary] No database URL set (DIRECT_URL_1 / DATABASE_URL_1 or DIRECT_URL / DATABASE_URL).");
+    console.error("[migrate-primary] No database URL set (DIRECT_URL_1 / DATABASE_URL_1).");
     process.exit(1);
 }
 
@@ -76,6 +75,6 @@ console.log(`[migrate-primary] migrating ${primary.id} (primary)`);
 const run = spawnSync("npx", ["prisma", "migrate", "deploy"], {
     stdio: "inherit",
     shell: true,
-    env: { ...process.env, DIRECT_URL: primary.direct },
+    env: { ...process.env, PRISMA_MIGRATE_URL: primary.direct },
 });
 process.exit(run.status ?? 1);

@@ -21,7 +21,7 @@ export function makeSeedPool(): Pool {
     dotenv.config({ path: ".env.local" });
     dotenv.config({ path: ".env" });
 
-    const rawUrl = (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "")
+    const rawUrl = (process.env.DIRECT_URL_1 ?? process.env.DATABASE_URL_1 ?? "")
         .replace(/[?&]sslmode=[^&]*/g, "")
         .replace(/[?&]$/, "");
 

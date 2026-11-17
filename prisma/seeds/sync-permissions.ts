@@ -61,7 +61,7 @@ import { crudSatisfied } from "../../src/shared/lib/auth/crudLadder";
 dotenv.config({ path: ".env.local" });
 dotenv.config({ path: ".env" });
 
-const rawUrl = (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "")
+const rawUrl = (process.env.DIRECT_URL_1 ?? process.env.DATABASE_URL_1 ?? "")
     .replace(/[?&]sslmode=[^&]*/g, "")
     .replace(/[?&]$/, "");
 const pool = new Pool({ connectionString: rawUrl, ssl: /@(localhost|127\.0\.0\.1)/.test(rawUrl) ? false : { rejectUnauthorized: false }, max: 2 });
@@ -102,7 +102,7 @@ async function main(): Promise<void> {
     assertNotCounterReplica("sync-permissions");
 
     if (!rawUrl) {
-        console.error("\n✖ No DIRECT_URL or DATABASE_URL found in .env.local / .env\n");
+        console.error("\n✖ No DIRECT_URL_1 or DATABASE_URL_1 found in .env.local / .env\n");
         process.exit(1);
     }
 

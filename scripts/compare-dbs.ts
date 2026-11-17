@@ -44,7 +44,7 @@ function getActiveDbPair(): { db1: { label: string; url: string }; db2: { label:
   }
 
   // 3. Fallback to DIRECT_URL / LOCAL_DATABASE_URL
-  const directUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
+  const directUrl = process.env.DIRECT_URL_1 || process.env.DATABASE_URL_1;
   const localUrl = process.env.LOCAL_DATABASE_URL;
 
   if (directUrl && localUrl) {
