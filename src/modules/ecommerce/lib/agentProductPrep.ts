@@ -109,6 +109,24 @@ async function liveState(id: number, run?: RunCtx): Promise<{ state: PrepState |
     return { state: s, identityChanged: false };
 }
 
+/**
+ * The stage a product came from before this work (owner, 2026-11-17): an
+ * Attention note names it, so a product that was live can be published again
+ * when the fix is small.
+ */
+const STAGE_WORDS: Record<string, string> = {
+    PUBLISHED: "Published (live on the shop) before this check — if the fix is small, publish it again",
+    READY: "Ready before this check — Save as ready again once fixed",
+    UNPUBLISHED: "Unpublished before this check",
+};
+async function originLine(id: number): Promise<string> {
+    const r = await prisma.invProduct.findUnique({ where: { id }, select: { shopStatus: true, shopDraftJson: true } });
+    if (!r) return "";
+    const work = r.shopStatus === "DRAFT" || r.shopStatus === "ATTENTION" || r.shopStatus === "WAITING";
+    const from = work ? readShopDraft(r.shopDraftJson)?.stageBefore ?? "UNPUBLISHED" : r.shopStatus;
+    return `Was ${STAGE_WORDS[from] ?? from}.`;
+}
+
 /** Add lines to the Draft notes ("Notes for you"), sign lines replaced. */
 async function addDraftNotes(id: number, lines: string[]) {
     const row = await prisma.invProduct.findUniqueOrThrow({ where: { id }, select: { shopDraftJson: true } });
@@ -257,7 +275,7 @@ export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?
             ...done, ...unsure, ...b.notes,
             lastRun(1, "stopped → Attention"),
         ];
-        await parkInAttention([id], reason.join("\n").slice(0, 10000), "Claude", "any");
+        await parkInAttention([id], [...reason, await originLine(id)].filter(Boolean).join("\n").slice(0, 10000), "Claude", "any");
         return { result: "attention" as const, removed: gone.size, notes: reason.length };
     }
     // A search saved for this same identity is kept (one search per lifecycle).
@@ -573,7 +591,7 @@ export async function savePart4(id: number, b: z.infer<typeof part4Schema>) {
             ...b.notes.map((x) => `NOTE (Part 4) — ${x}`),
             lastRun(4, `${problems} problem(s) → Attention`),
         ];
-        await parkInAttention([id], reason.join("\n").slice(0, 10000), "Claude", "any");
+        await parkInAttention([id], [...reason, await originLine(id)].filter(Boolean).join("\n").slice(0, 10000), "Claude", "any");
         return { result: "attention" as const, pending: b.pending.length, notes: b.notes.length };
     }
     const { state } = await liveState(id).catch(() => ({ state: null }));

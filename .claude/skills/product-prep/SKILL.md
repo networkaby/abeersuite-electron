@@ -187,7 +187,7 @@ Read the product again (`GET /api/agent/prep/<id>`); work only from `prep.pages`
    - `order`: the whole gallery as you want it (our kept photos + added ones) — a clean product front first, then sides / close-ups, then box, then feel photos. Applied now.
    - `look`: crops / fixes from `photoLookOptions` (staff press Use / Undo).
    - `have` / `must` / `nice`: photo kinds (`photoKinds` keys).
-   - Primary photo with any logo, watermark or text → do not put it first; note "Pick a clean primary photo".
+   - Primary photo with any logo, watermark or text → do not put it first; note "Pick a clean primary photo". **Our own shop logo / address on any other photo is fine — never flag it** (owner, 2026-11-17); someone else's watermark is always a problem.
 7. **Mistake check → `notes`** — product-copy §8's list, one problem per line (name, model no. / barcode to copy in, group, photos, price plainly off …).
 
 ```bash
