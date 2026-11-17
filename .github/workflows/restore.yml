@@ -44,6 +44,17 @@ jobs:
             *)   echo "target_db must be DB1 or DB2 (got '${TARGET_DB:-}')."; exit 1 ;;
           esac
           if [ -z "$URL" ]; then echo "DIRECT_DATABASE_URL_${TARGET_DB#DB} secret is not set."; exit 1; fi
+          # Drop Prisma-only options (?pgbouncer=true …) that make psql / pg_restore
+          # refuse the address — same as backup.yml.
+          case "$URL" in *\?*)
+            BASE="${URL%%\?*}"; OUT=""
+            IFS='&' read -ra PARTS <<< "${URL#*\?}"
+            for P in "${PARTS[@]}"; do
+              case "${P%%=*}" in pgbouncer|connection_limit|pool_timeout|schema|statement_cache_size|"") ;; *) OUT="${OUT:+$OUT&}$P" ;; esac
+            done
+            URL="$BASE${OUT:+?$OUT}" ;;
+          esac
+          echo "::add-mask::$URL"
           echo "DIRECT_DATABASE_URL=$URL" >> "$GITHUB_ENV"
           echo "restoring into $TARGET_DB"
 

@@ -81,6 +81,24 @@ jobs:
           set -euo pipefail
           PSQL=/usr/lib/postgresql/17/bin/psql
           if [ -z "${DB_URL_1:-}" ]; then echo "DIRECT_DATABASE_URL_1 secret is not set."; exit 1; fi
+          # Prisma-only URL options (?pgbouncer=true, connection_limit, pool_timeout,
+          # schema) make psql / pg_dump / pg_restore refuse the address outright -
+          # 2026-11-18 a DB2 secret copied from Vercel stopped the copy that way. Drop
+          # them here so every later step gets a plain libpq address.
+          libpq() {
+            local u="$1" base q out="" p
+            case "$u" in *\?*) base="${u%%\?*}"; q="${u#*\?}" ;; *) printf '%s' "$u"; return ;; esac
+            IFS='&' read -ra parts <<< "$q"
+            for p in "${parts[@]}"; do
+              case "${p%%=*}" in pgbouncer|connection_limit|pool_timeout|schema|statement_cache_size|"") ;; *) out="${out:+$out&}$p" ;; esac
+            done
+            printf '%s' "$base${out:+?$out}"
+          }
+          for N in 1 2; do
+            VAR="DB_URL_$N"; [ -n "${!VAR:-}" ] || continue
+            CLEAN=$(libpq "${!VAR}"); echo "::add-mask::$CLEAN"; printf -v "$VAR" '%s' "$CLEAN"
+            case "$CLEAN" in *:6543/*) echo "WARNING: DIRECT_DATABASE_URL_$N is the pooled address (6543) - set the direct one (5432)." ;; esac
+          done
           BEST=""; BEST_AT=-1; ANSWERED=0
           for N in 1 2; do
             VAR="DB_URL_$N"; URL="${!VAR:-}"
