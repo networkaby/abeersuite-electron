@@ -10,7 +10,7 @@ the app's agent API. The app decides what goes live: the agent only writes.
 
 ## Setup (ask once if missing)
 
-- `ABEERSUITE_URL` — the office site, e.g. `https://office.example.com` (no trailing `/`).
+- `ABEERSUITE_URL` = `https://office.networkservice.in` — the office site (no trailing `/`).
 - `COWORK_API_KEY` — the **Cowork** key from Settings → Incoming API.
 
 If either env var is missing, ask the owner for it. Never print the key back or

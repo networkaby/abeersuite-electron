@@ -13,7 +13,7 @@ the `abeer-tech-social-posts` skill.
 
 ## Setup (ask once if missing)
 
-- `ABEERSUITE_URL` — the office site, e.g. `https://office.example.com` (no trailing `/`).
+- `ABEERSUITE_URL` = `https://office.networkservice.in` — the office site (no trailing `/`).
 - `COWORK_API_KEY` — the **Cowork** key from Settings → Incoming API.
 
 Never print the key or write it into a file.
