@@ -12,7 +12,7 @@ The report is your own output; nothing is saved in the app.
 
 ## Setup (ask once if missing)
 
-- `ABEERSUITE_URL` — the office site, e.g. `https://office.example.com` (no trailing `/`).
+- `ABEERSUITE_URL` = `https://office.networkservice.in` — the office site (no trailing `/`).
 - `PRICE_WATCH_API_KEY` — the **Claude — Price watch** key from Settings → Incoming API (its own key).
 
 Never print the key or write it into a file. `401` → wrong key or the card is off — stop and tell the owner.
