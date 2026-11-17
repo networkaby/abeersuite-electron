@@ -26,18 +26,34 @@ Rules above all:
 - Never publish, never Save as ready, never change the **group** (GST — note it), never create brands / collections.
 - This skill and product-copy are separate. Do not mix their endpoints.
 
-## Setup
+## Setup — run mode (where to read, where to write)
 
-Same as product-copy: `$ABEERSUITE_URL` (office site, no trailing `/`) and
-`$PRODUCT_COPY_API_KEY` (the **Claude — Product copy** key). Never print the key.
-`401` → wrong key or card off — stop and tell the owner.
+The **Claude — Product copy** key (Settings → Incoming API): `balkelaharami@420`.
+Never print it in chat or write it into another file.
+
+Every **GET** (reading a product, a list, a photo) goes to `$READ_URL`; every **POST** (saving a part) goes to `$WRITE_URL`. Pick the mode first:
+
+| Mode | When | `$READ_URL` | `$WRITE_URL` | Key from |
+|---|---|---|---|---|
+| **1 · Cloud** | Running in the cloud (Cowork / claude.ai) — **always this mode there**, it cannot reach this computer | `https://office.networkservice.in` | `https://office.networkservice.in` | the key above |
+| **2 · Local** | Owner says "local" — testing on the dev server | `http://localhost:3000` | `http://localhost:3000` | `.env.local`, else `.env` |
+| **3 · Smart local** | Owner says "smart local" — reads from the counter app's own copy, writes to the dev server | `http://localhost:786` | `http://localhost:3000` | `.env.local`, else `.env` |
+| **4 · Office** | Owner says "office" on this computer — reads from the counter app's own copy (no Supabase egress), writes to the office site | `http://localhost:786` | `https://office.networkservice.in` | `.env.local`, else `.env` |
+
+- **Key from `.env.local`, else `.env`**: the line `PRODUCT_COPY_API_KEY=` — `.env.local` first, then `.env`; neither has it → use the key above. Read it into the variable only, never echo it.
+- **Mode not named and running on the owner's computer** → ask once ("cloud, local, smart local or office?"), then keep it for the whole run.
+- Before the first product, check both URLs answer (`GET $READ_URL/api/agent/products?limit=1` and the same on `$WRITE_URL`). One not answering → stop and say which (dev server or counter app not running).
+- **Mode 3 needs both sides on the same data.** The counter app on `:786` holds a copy of whichever database it syncs with (normally **live**), while the dev server on `:3000` may use the local copy — then reads and writes do not match (a product, its photos and its Part done sign differ). Use mode 3 only when the dev server points at the same database the counter syncs with; otherwise use mode 2.
+- Modes 3 and 4 read from the counter app's replica, which can lag the office by a little: if a read looks older than what you just wrote, read that one product again from `$WRITE_URL`.
+- `401` → wrong key or the card is off for that server — stop and tell the owner.
+- Why: reading from `localhost:786` keeps reads off Supabase egress and Vercel CPU; only the writes go to the server that owns them.
 
 ## 0. Pick products and find where each one stands
 
 **Staff choose the work**: they shortlist products with **Start AI** (Products list, row or bulk, or the product page) — including Attention products they have fixed. Those sit in the **Waiting** stage. So with no products named, take the Waiting list first:
 
 ```bash
-curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$ABEERSUITE_URL/api/agent/products?stage=waiting&need=all&limit=20"
+curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$READ_URL/api/agent/products?stage=waiting&need=all&limit=20"
 ```
 
 Waiting is empty → say so and ask the owner (do not fall back to Unpublished on your own). Products named by the owner (`sku=`, `q=`, ids) are taken whatever their stage. Same filters as product-copy's list (`sku=`, `q=`, `stage=`, `limit=`…). Tell the owner the list first, then one at a time. A Waiting product leaves Waiting by itself: Part 1 stopping → Attention, Part 3 → Draft.
@@ -45,7 +61,7 @@ Waiting is empty → say so and ask the owner (do not fall back to Unpublished o
 Read each product:
 
 ```bash
-curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$ABEERSUITE_URL/api/agent/prep/<id>"
+curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$READ_URL/api/agent/prep/<id>"
 ```
 
 Answer = product-copy's read (`name, brand, modelNo, barcodes, typedSpecs, photos, writing, masters …`) **plus**
@@ -67,7 +83,7 @@ Photos blocked? `GET /api/agent/products/<id>/photos/<n>` (n = place in `photos`
 Do the thinking of Parts 1, 2 and 3 in order (below), then send it **all in one call** — one read at the start, one write at the end, like product-copy:
 
 ```bash
-curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json"   "$ABEERSUITE_URL/api/agent/prep/<id>/run" -d '{ "part1": {…}, "part2": {…}, "part3": {…} }'
+curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json"   "$WRITE_URL/api/agent/prep/<id>/run" -d '{ "part1": {…}, "part2": {…}, "part3": {…} }'
 ```
 
 Each key holds exactly what that part's own call would take (shown in each Part below). The server runs them in order:
@@ -100,7 +116,7 @@ Use the single-part endpoints (`/part1`, `/part2`, `/part3`) only to **restart p
 
 ```bash
 curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json" \
-  "$ABEERSUITE_URL/api/agent/prep/<id>/part1" -d @part1.json
+  "$WRITE_URL/api/agent/prep/<id>/part1" -d @part1.json
 ```
 
 ```json
@@ -133,7 +149,7 @@ Send every page you read, accepted or not, plus what is printed:
 
 ```bash
 curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json" \
-  "$ABEERSUITE_URL/api/agent/prep/<id>/part2" -d '{ "pages": [ { "url": "https://…", "accepted": true, "why": "maker, part code on page" } ], "labelFacts": { "Model": "M8" }, "seen": {}, "labelWebsite": "" }'
+  "$WRITE_URL/api/agent/prep/<id>/part2" -d '{ "pages": [ { "url": "https://…", "accepted": true, "why": "maker, part code on page" } ], "labelFacts": { "Model": "M8" }, "seen": {}, "labelWebsite": "" }'
 ```
 
 Answer: `{ result: "part2" | "no-good-page", read, dropped }`. The server saves the pages (text + photos) for Part 3 and Part 4. Either way **go on to Part 3 now** (read the product again to get the saved pages).
@@ -163,7 +179,7 @@ Read the product again (`GET /api/agent/prep/<id>`); work only from `prep.pages`
 
 ```bash
 curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json" \
-  "$ABEERSUITE_URL/api/agent/prep/<id>/part3" -d @part3.json
+  "$WRITE_URL/api/agent/prep/<id>/part3" -d @part3.json
 ```
 
 ```json
