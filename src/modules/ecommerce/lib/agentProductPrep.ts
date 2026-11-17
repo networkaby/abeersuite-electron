@@ -38,6 +38,15 @@ import { AgentCopyError, pickableMasters, productForAgent, specsOf, writeAsDraft
 const galleryOf = (p: { galleryJson: unknown; imageUrl: string | null }) => productGalleryUrls(p.galleryJson as never, p.imageUrl);
 const keyOf = (id: number) => `ai-prep/${id}.json`;
 const SIGN = (n: number) => `Part ${n} done`;
+/**
+ * One "Last run" line per product (owner, 2026-11-17): which part ran, when (India
+ * time) and what came of it — staff and the owner decide from it whether to run
+ * again. A new run replaces the old line.
+ */
+const LAST_RUN = /^Last run: /;
+const lastRun = (part: number, result: string) =>
+    `Last run: Part ${part} · ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" })} · ${result}`;
+const isRunLine = (n: string) => /^Part \d done/.test(n) || LAST_RUN.test(n);
 
 type Identity = { brand: string; model: string; barcodes: string[] };
 const identityKey = (i: Identity) => [i.brand, i.model, ...[...i.barcodes].sort()].map((x) => x.trim().toLowerCase()).join("|");
@@ -104,7 +113,7 @@ async function liveState(id: number, run?: RunCtx): Promise<{ state: PrepState |
 async function addDraftNotes(id: number, lines: string[]) {
     const row = await prisma.invProduct.findUniqueOrThrow({ where: { id }, select: { shopDraftJson: true } });
     const info = readShopDraft(row.shopDraftJson) ?? {};
-    const old = (info.notes ?? []).filter((n) => !/^Part \d done/.test(n));
+    const old = (info.notes ?? []).filter((n) => !isRunLine(n));
     const notes = [...new Set([...old, ...lines])].slice(-40);
     await prisma.invProduct.update({ where: { id }, data: { shopDraftJson: { ...info, notes, notesAt: new Date().toISOString(), kept: undefined } as never } });
 }
@@ -246,6 +255,7 @@ export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?
             ...b.major.map((m) => `STOPPED (Part 1) — ${m}`),
             ...(!b.enough ? [`STOPPED (Part 1) — not enough to search${b.need ? `: ${b.need}` : ""}. Add it, then run product prep again.`] : []),
             ...done, ...unsure, ...b.notes,
+            lastRun(1, "stopped → Attention"),
         ];
         await parkInAttention([id], reason.join("\n").slice(0, 10000), "Claude", "any");
         return { result: "attention" as const, removed: gone.size, notes: reason.length };
@@ -253,7 +263,7 @@ export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?
     // A search saved for this same identity is kept (one search per lifecycle).
     const { state: prev } = await liveState(id, run);
     await writeState(id, { ...(prev?.search && { search: prev.search }), part: prev?.search ? Math.max(prev.part, 1) as PrepState["part"] : 1, at: new Date().toISOString(), identity: await currentIdentity(id) }, run);
-    await addDraftNotes(id, [...done, ...unsure, ...b.notes, SIGN(1)]);
+    await addDraftNotes(id, [...done, ...unsure, ...b.notes, SIGN(1), lastRun(1, "done")]);
     return { result: "part1" as const, removed: gone.size, notes: done.length + unsure.length + b.notes.length };
 }
 
@@ -299,6 +309,7 @@ export async function savePart2(id: number, b: z.infer<typeof part2Schema>, run?
             ? `Searched once: ${accepted.length} page(s) kept (${accepted.map((pg) => pg.site).join(", ")}).`
             : "Searched once: no maker or seller page matched — the copy is from the label and photos only.",
         SIGN(2),
+        lastRun(2, accepted.length ? `${accepted.length} page(s) kept` : "no good page — label only"),
     ]);
     return {
         result: accepted.length ? ("part2" as const) : ("no-good-page" as const),
@@ -372,7 +383,7 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
 
     // Part 1 / Part 2 notes sit in the Draft notes, which this save replaces —
     // carried over (signs left out) so staff still see what Part 1 found.
-    const earlier = (readShopDraft(p.shopDraftJson)?.notes ?? []).filter((n) => !/^Part \d done/.test(n));
+    const earlier = (readShopDraft(p.shopDraftJson)?.notes ?? []).filter((n) => !isRunLine(n));
     const notes = [...earlier, ...b.notes];
     const patch: ShopProductPatch = { shopDescription: checked.copy.shopDescription, shopSubheading: checked.copy.title };
 
@@ -471,7 +482,7 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
     const draft: ProductCopy = {
         ...checked.copy,
         note: `Written by Claude (product prep, from the saved search of ${s.at.slice(0, 10)}); ${checked.copy.note}`,
-        notes: [...notes, SIGN(3)],
+        notes: [...notes, SIGN(3), lastRun(3, "done → Draft")],
         photoChecklist: checklistFrom(
             kinds(b.photos.have), kinds(b.photos.must), kinds(b.photos.nice),
             b.photos.suggestRemove.filter((r) => next.includes(r.url) && r.why in PHOTO_REMOVE_REASONS).map((r) => ({ url: r.url, why: r.why as PhotoRemoveReason, note: r.note })),
@@ -479,7 +490,7 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
         ...(arrange && { photoArrange: arrange }),
         photoSuggestions: suggested,
     };
-    if (fillModelNo) draft.notes = [...(draft.notes ?? []).filter((n) => n !== SIGN(3)), `Model No filled: ${fillModelNo} (from the ${b.modelNo!.source.toLowerCase() === "label" ? "box" : "maker page"}).`, SIGN(3)];
+    if (fillModelNo) draft.notes = [...(draft.notes ?? []).filter((n) => !isRunLine(n)), `Model No filled: ${fillModelNo} (from the ${b.modelNo!.source.toLowerCase() === "label" ? "box" : "maker page"}).`, SIGN(3), lastRun(3, "done → Draft")];
     const shopStatus = await writeAsDraft(id, patch, () => ({ aiCopy: draft, notes: undefined, notesAt: undefined, kept: undefined }));
     if (fillModelNo) {
         // Model No feeds the office name. The custom part often already holds the
@@ -541,21 +552,32 @@ export async function runParts(id: number, b: z.infer<typeof runSchema>) {
 // ── Part 4: verify (no internet) ──────────────────────────────────────────────
 
 export const part4Schema = z.object({
-    /** What is still wrong or not done. Empty = verified. */
+    /** What is still wrong or not done. */
     pending: lines,
-    /** Small things that do not hold the product back. */
+    /** Smaller problems. Any line here still sends the product to Attention (owner, 2026-11-17). */
     notes: lines,
 });
 
+/**
+ * Part 4: any problem at all — pending or a note — parks the product in
+ * Attention with every line, even a Published one (owner, 2026-11-17: off the
+ * shop is fine). Only a product with nothing found is verified.
+ */
 export async function savePart4(id: number, b: z.infer<typeof part4Schema>) {
     const exists = await prisma.invProduct.findUnique({ where: { id }, select: { id: true } });
     if (!exists) throw new AgentCopyError("Product not found");
-    if (b.pending.length) {
-        await parkInAttention([id], [...b.pending.map((x) => `PENDING (Part 4) — ${x}`), ...b.notes].join("\n").slice(0, 10000), "Claude", "any");
-        return { result: "attention" as const, pending: b.pending.length };
+    const problems = b.pending.length + b.notes.length;
+    if (problems) {
+        const reason = [
+            ...b.pending.map((x) => `PENDING (Part 4) — ${x}`),
+            ...b.notes.map((x) => `NOTE (Part 4) — ${x}`),
+            lastRun(4, `${problems} problem(s) → Attention`),
+        ];
+        await parkInAttention([id], reason.join("\n").slice(0, 10000), "Claude", "any");
+        return { result: "attention" as const, pending: b.pending.length, notes: b.notes.length };
     }
     const { state } = await liveState(id).catch(() => ({ state: null }));
     if (state) await writeState(id, { ...state, part: 4, at: new Date().toISOString() });
-    await addDraftNotes(id, [...b.notes, "Part 4 done — verified, ready to Save as ready."]);
+    await addDraftNotes(id, ["Part 4 done — verified, ready to Save as ready.", lastRun(4, "verified, no problems")]);
     return { result: "verified" as const };
 }

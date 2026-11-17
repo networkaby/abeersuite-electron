@@ -62,7 +62,7 @@ Use: the product fields, every photo (open each — `GET /api/agent/products/<id
 | **Shipping** | Weight or size empty |
 | **Photos** | Main photo not a clean product front, or has a logo / watermark / text; another product's photo; blurry / dark; duplicates; a `must` photo kind still missing |
 
-**Pending** = would be wrong or embarrassing on the shop. Small things (wording could be nicer, a nice-to-have photo) are `notes`, not pending.
+**Pending** = would be wrong or embarrassing on the shop. Smaller things (wording could be nicer, a nice-to-have photo) go in `notes`. **Any line in either sends the product to Attention** (owner, 2026-11-17) — a Published product too; going off the shop is accepted. So write a line only for a real problem; nothing found → send both empty.
 
 ## 4. Send
 
@@ -71,8 +71,9 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
   "$PRODUCT_COPY_WRITE_URL/api/agent/prep/<id>/part4" -d '{ "pending": ["Photo 4 (another hub) still in the gallery — press Remove"], "notes": [] }'
 ```
 
-- `pending: []` → `{ result: "verified" }`: it stays in Draft with the note "Part 4 done — verified, ready to Save as ready". **You never press Save as ready.**
-- Any pending → `{ result: "attention" }`: parked in Attention with only the pending lines. Staff fix, then run product-recheck again (not product-prep — unless a pending line says so).
+- `pending: []` **and** `notes: []` → `{ result: "verified" }`: it stays in Draft with "Part 4 done — verified, ready to Save as ready". **You never press Save as ready.**
+- Any line in `pending` or `notes` → `{ result: "attention" }`: parked in Attention with every line (PENDING first, then NOTE). Staff fix, then run product-recheck again (not product-prep — unless a line says so).
+- Every run leaves one **Last run** line (part, India time, result) on the product, replacing the old one — read it at the start: it shows when this product was last checked and what came of it.
 
 ## Report
 

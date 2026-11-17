@@ -59,7 +59,7 @@ Before anything else, ask the owner **both** questions in one message, unless th
    - **Part 3 only** — write from the saved search (Part 2 must be done).
    - **Part 4** — verify; that is the **product-recheck** skill, say so and switch to it.
 
-Keep both answers for the whole run. A part that cannot run yet for a product (its earlier part not done) → skip that product and name it in the report, never run the earlier part on your own.
+Keep both answers for the whole run. Each product carries a **Last run** line (part, India time, result) from its previous run — read it first; it tells you what was done last and helps decide whether to run again. A part that cannot run yet for a product (its earlier part not done) → skip that product and name it in the report, never run the earlier part on your own.
 
 ## 0. Pick products and find where each one stands
 
