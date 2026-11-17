@@ -19,7 +19,7 @@
 import "server-only";
 import type { PoolClient } from "pg";
 import { projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
-import { dbTarget, isDualDb, otherDb, type DbId } from "./dbTargets";
+import { dbEnvKeys, dbTarget, DB_IDS, isDualDb, otherDb, type DbId } from "./dbTargets";
 import { readSwitchRow, refreshPrimary, SWITCH_TABLE_SQL, withDb, type SwitchRow } from "./dbPrimary";
 
 /** A copy that has not reported back within this long is treated as dead. */
@@ -27,6 +27,12 @@ const COPY_STALE_MS = 2 * 60 * 60 * 1000;
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 /** 08:00 IST — the end of the switch window. */
 const WINDOW_END_HOUR_IST = 8;
+/**
+ * Dev testing only: `DB_SWITCH_TEST_IGNORE_CLOCK=1` skips the two time-of-day rules (night
+ * copy, before 8 AM) so a switch can be tried in the afternoon. Every other check stays.
+ * Never honoured in a production build.
+ */
+const IGNORE_CLOCK = process.env.NODE_ENV !== "production" && process.env.DB_SWITCH_TEST_IGNORE_CLOCK === "1";
 /** A copy finishing from 20:00 IST counts as the night copy. */
 const NIGHT_START_HOUR_IST = 20;
 
@@ -95,6 +101,8 @@ export interface DbSwitchStatus {
         file: string | null;
     };
     window: SwitchWindow;
+    /** Which `.env` names this server has — names and set / not set only, never a value. */
+    envKeys: { key: string; set: boolean }[];
 }
 
 async function probe(id: DbId): Promise<{ reachable: boolean; readOnly: boolean | null }> {
@@ -127,11 +135,11 @@ export function windowFrom(row: SwitchRow | null, staging: DbId, now = new Date(
     // A daytime copy (08:00–20:00 IST) never opens a window: it would stay open through
     // working hours, and the rule is "after the NIGHTLY copy".
     const copyHourIst = new Date(copiedAt.getTime() + IST_OFFSET_MS).getUTCHours();
-    if (copyHourIst >= WINDOW_END_HOUR_IST && copyHourIst < NIGHT_START_HOUR_IST) {
+    if (!IGNORE_CLOCK && copyHourIst >= WINDOW_END_HOUR_IST && copyHourIst < NIGHT_START_HOUR_IST) {
         return closed("The last copy ran in the daytime. Switching opens only after a night copy (8 PM to 8 AM).");
     }
     const until = nextWindowEnd(copiedAt);
-    if (now >= until) return closed("Switching is allowed only after the nightly copy and before 8 AM.", until);
+    if (!IGNORE_CLOCK && now >= until) return closed("Switching is allowed only after the nightly copy and before 8 AM.", until);
     return { open: true, until: iso(until), reason: null };
 }
 
@@ -165,7 +173,13 @@ export async function dbSwitchStatus(): Promise<DbSwitchStatus> {
         },
         window: dual
             ? windowFrom(row, staging!)
-            : { open: false, until: null, reason: "Only one database is set up (no DB2_DATABASE_URL)." },
+            : { open: false, until: null, reason: "Only one database is set up (no DATABASE_URL_2)." },
+        envKeys: DB_IDS.flatMap((id) => {
+            const k = dbEnvKeys(id);
+            return [k.pooled, k.direct];
+        })
+            .concat("DATABASE_URL", "DIRECT_URL")
+            .map((key) => ({ key, set: !!process.env[key]?.trim() })),
     };
 }
 

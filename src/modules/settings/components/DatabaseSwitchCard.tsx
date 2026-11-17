@@ -4,7 +4,8 @@
  * Settings → Backup & Restore → Databases: DB1 / DB2, which is primary, the nightly copy
  * into staging, and the Switch button.
  *
- * Hidden when only one database is set up, on a counter, or without settings:manage.
+ * Hidden on a counter or without settings:manage. With one database it still shows, so
+ * the owner can see which of DATABASE_URL_1/_2, DIRECT_URL_1/_2 this deployment has.
  * The button opens only in the window the server allows (after a good nightly copy,
  * before 8 AM IST); the server checks again, and compares both databases, before it
  * switches — the button state is a convenience, not the guard.
@@ -32,6 +33,7 @@ interface Status {
     dbs: DbInfo[];
     copy: { startedAt: string | null; copiedAt: string | null; failedAt: string | null; into: string | null; file: string | null };
     window: { open: boolean; until: string | null; reason: string | null };
+    envKeys: { key: string; set: boolean }[];
 }
 
 const when = (iso: string | null) =>
@@ -69,7 +71,34 @@ export function DatabaseSwitchCard() {
         });
     }, []);
 
-    if (!status?.dual) return null;
+    if (!status) return null;
+
+    const keyList = (
+        <p className="text-[11px] text-muted-foreground">
+            {status.envKeys.map((k, i) => (
+                <span key={k.key}>
+                    {i > 0 && " · "}
+                    <span className="font-mono">{k.key}</span>{" "}
+                    <span className={k.set ? "text-emerald-600" : "text-muted-foreground/70"}>{k.set ? "set" : "not set"}</span>
+                </span>
+            ))}
+        </p>
+    );
+
+    if (!status.dual) {
+        return (
+            <section className="space-y-2 rounded-lg border bg-card p-4">
+                <h2 className="flex items-center gap-2 text-sm font-semibold">
+                    <Database className="size-4" /> Databases
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                    Only one database is set up, so there is no staging copy and no switch. Add DATABASE_URL_2 and
+                    DIRECT_URL_2 on Vercel for DB2.
+                </p>
+                {keyList}
+            </section>
+        );
+    }
 
     async function doSwitch() {
         if (!status || typed !== "SWITCH") return;
@@ -137,6 +166,8 @@ export function DatabaseSwitchCard() {
                     </div>
                 ))}
             </div>
+
+            {keyList}
 
             <div className="space-y-0.5 text-xs">
                 <p>

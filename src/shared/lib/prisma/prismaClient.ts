@@ -37,7 +37,7 @@ function normalize(url: string | undefined): string | undefined {
     return url?.replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
 }
 
-// DB1 / DB2 (dbTargets.ts). Without DB2_* this is just DB1 = DATABASE_URL, one client,
+// DB1 / DB2 (dbTargets.ts). Without DATABASE_URL_2 this is just DB1 = DATABASE_URL(_1), one client,
 // and the exports below are the plain clients — no Proxy, exactly as before.
 const liveUrls: Partial<Record<DbId, string | undefined>> = Object.fromEntries(
     dbTargets().map((t) => [t.id, normalize(t.pooled)]),

@@ -13,7 +13,7 @@
  * release before every deploy (schemaGuard). It IS in the public schema, so the nightly
  * dump carries the primary's row into staging — after a copy the two always agree.
  *
- * Single-database mode (no DB2_*): everything here answers "DB1" at once and never
+ * Single-database mode (no DATABASE_URL_2): everything here answers "DB1" at once and never
  * touches the network.
  */
 import { Pool, type PoolClient } from "pg";

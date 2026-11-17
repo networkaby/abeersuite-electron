@@ -33,8 +33,12 @@ export const ENV_ONLY_PROVIDERS: EnvOnlyProvider[] = [
         section: "Server & security",
         why: "The app needs these to reach the database where App Settings themselves are saved.",
         keys: [
-            { key: "DATABASE_URL", label: "Pooled connection (port 6543)" },
-            { key: "DIRECT_URL", label: "Direct connection — migrations" },
+            { key: "DATABASE_URL_1", label: "DB1 pooled connection (port 6543)" },
+            { key: "DIRECT_URL_1", label: "DB1 direct connection (port 5432)" },
+            { key: "DATABASE_URL_2", label: "DB2 pooled connection (port 6543)" },
+            { key: "DIRECT_URL_2", label: "DB2 direct connection (port 5432)" },
+            { key: "DATABASE_URL", label: "Pooled connection — old name, used when DATABASE_URL_1 is not set" },
+            { key: "DIRECT_URL", label: "Direct connection — old name, used when DIRECT_URL_1 is not set" },
         ],
     },
     {
@@ -290,12 +294,18 @@ export const PROVIDER_HELP: Record<string, ProviderHelp> = {
         link: { label: "HanuOTP", url: "https://hanuotp.in/" },
     },
     "Database (Supabase Postgres)": {
-        about: "The live database.",
+        about: "Two Supabase projects, DB1 and DB2. Either can be primary; the other is staging, copied every night. Settings → Backup & Restore → Databases shows which.",
         terms: [
-            { key: "DATABASE_URL", theirs: "Connection string — Transaction pooler (port 6543)" },
-            { key: "DIRECT_URL", theirs: "Connection string — Direct connection (port 5432)" },
+            { key: "DATABASE_URL_1", theirs: "DB1 — Connection string, Transaction pooler (port 6543)" },
+            { key: "DIRECT_URL_1", theirs: "DB1 — Connection string, Direct / Session (port 5432)" },
+            { key: "DATABASE_URL_2", theirs: "DB2 — Connection string, Transaction pooler (port 6543)" },
+            { key: "DIRECT_URL_2", theirs: "DB2 — Connection string, Direct / Session (port 5432)" },
         ],
-        steps: ["supabase.com → project → Connect (top bar) → ORMs / connection strings.", "Put the database password into both strings. Vercel needs both — migrations use DIRECT_URL."],
+        steps: [
+            "supabase.com → each project → Connect (top bar) → ORMs / connection strings.",
+            "Put that project's password into both of its strings. Vercel needs all four; DB2 left blank = one database, no switch.",
+            "The old DATABASE_URL / DIRECT_URL still work as DB1 when the _1 names are not set.",
+        ],
         link: { label: "Supabase dashboard", url: "https://supabase.com/dashboard/projects" },
     },
     "Sign-in & saved secrets": {

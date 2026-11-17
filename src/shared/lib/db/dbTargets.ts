@@ -5,11 +5,10 @@
  * primary every night and kept read-only). Which one is primary is not in `.env` — it is
  * a row in both databases (`dbPrimary.ts`), so a switch takes effect without a redeploy.
  *
- *   DB1_DATABASE_URL / DB1_DIRECT_URL   — fall back to DATABASE_URL / DIRECT_URL, so a
- *                                          deployment that has not added DB1_* keeps
- *                                          working exactly as before.
- *   DB2_DATABASE_URL / DB2_DIRECT_URL   — absent = single-database mode: no switch, no
- *                                          nightly copy, and nothing below costs a thing.
+ *   DATABASE_URL_1 / DIRECT_URL_1   — DB1. Fall back to DATABASE_URL / DIRECT_URL, which
+ *                                      counters and local dev still use.
+ *   DATABASE_URL_2 / DIRECT_URL_2   — DB2. Absent = single-database mode: no switch, no
+ *                                      nightly copy, and nothing below costs a thing.
  *
  * Pure (no Prisma, no Next) so scripts can read it too.
  */
@@ -28,12 +27,18 @@ export interface DbTarget {
 
 const clean = (v: string | undefined) => v?.trim() || undefined;
 
+/** The `.env` names for one database: DB1 → DATABASE_URL_1 / DIRECT_URL_1. */
+export function dbEnvKeys(id: DbId): { pooled: string; direct: string } {
+    const n = id.slice(2);
+    return { pooled: `DATABASE_URL_${n}`, direct: `DIRECT_URL_${n}` };
+}
+
 function read(id: DbId): DbTarget | null {
-    const pooled =
-        clean(process.env[`${id}_DATABASE_URL`]) ?? (id === "DB1" ? clean(process.env.DATABASE_URL) : undefined);
+    const keys = dbEnvKeys(id);
+    const pooled = clean(process.env[keys.pooled]) ?? (id === "DB1" ? clean(process.env.DATABASE_URL) : undefined);
     if (!pooled) return null;
     const direct =
-        clean(process.env[`${id}_DIRECT_URL`]) ?? (id === "DB1" ? clean(process.env.DIRECT_URL) : undefined) ?? pooled;
+        clean(process.env[keys.direct]) ?? (id === "DB1" ? clean(process.env.DIRECT_URL) : undefined) ?? pooled;
     return { id, pooled, direct };
 }
 
