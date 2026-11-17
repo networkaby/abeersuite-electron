@@ -11,7 +11,7 @@ import { readShopDraft } from "@/modules/ecommerce/lib/productAdmin";
 import type { ShopProductPatch } from "@/modules/ecommerce/lib/updateShopProduct";
 import { parkInAttention } from "@/modules/ecommerce/lib/shopAttention";
 import { arrangeFrom, checkWrittenCopy, writtenCopySchema } from "@/modules/ecommerce/lib/aiVerifiedCopy";
-import { readGivenPages, type PageSearch } from "@/modules/ecommerce/lib/aiPageReader";
+import { readGivenPages, type PageRead, type PageSearch } from "@/modules/ecommerce/lib/aiPageReader";
 import { checkFact, cmOf, gramsOf, normForCheck } from "@/modules/ecommerce/lib/aiFactCheck";
 import { PHOTO_REMOVE_REASONS, checklistFrom, isPhotoKind, type PhotoKind, type PhotoRemoveReason, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
 import { cloudinarySignature } from "@/shared/lib/cloudinary";
@@ -127,6 +127,15 @@ async function originLine(id: number): Promise<string> {
     return `Was ${STAGE_WORDS[from] ?? from}.`;
 }
 
+/** The part Part 4 last suggested ("… · next: Part 5 (touch-up …)"), from the Attention reason or the Draft notes. */
+function suggestedNext(texts: string[]): 1 | 3 | 5 | null {
+    for (const line of texts.flatMap((t) => t.split("\n"))) {
+        const m = /^Last run: Part 4 .*· next: Part (\d)/.exec(line.trim());
+        if (m) return Number(m[1]) as 1 | 3 | 5;
+    }
+    return null;
+}
+
 /** Add lines to the Draft notes ("Notes for you"), sign lines replaced. */
 async function addDraftNotes(id: number, lines: string[]) {
     const row = await prisma.invProduct.findUniqueOrThrow({ where: { id }, select: { shopDraftJson: true } });
@@ -188,6 +197,8 @@ export async function productForPrep(id: number) {
         prep: {
             /** The last part finished (0 = none). Start at the next one. */
             partDone: state?.part ?? 0,
+            /** The part Part 4 suggested last (5, 3 or 1), read back from its Last run line; null when none. */
+            next: suggestedNext([p.shopAttention ?? "", ...(draft?.notes ?? [])]),
             /** Staff changed brand / model / barcode after the search — the saved search is void; start again at Part 1. */
             identityChanged,
             /** True only when no search is saved for this identity. Part 2 refuses a second search. */
@@ -336,9 +347,141 @@ export async function savePart2(id: number, b: z.infer<typeof part2Schema>, run?
     };
 }
 
+// ── Shared by Part 3 and Part 5: sources, shipping, Model No, photos ───────────
+
+type Facts = { labelFacts: Record<string, string>; seen: Record<string, string> };
+type ProductRow = {
+    name: string; namePart: string | null; modelNo: string | null; imageUrl: string | null; galleryJson: unknown;
+    specsJson: unknown; brandId: number | null; brand: { name: string } | null; weightGrams: number | null; lengthCm: number | null; shopDraftJson: unknown;
+};
+const productSelect = {
+    name: true, namePart: true, modelNo: true, imageUrl: true, galleryJson: true, specsJson: true, brandId: true,
+    brand: { select: { name: true } }, weightGrams: true, lengthCm: true, shopDraftJson: true,
+} as const;
+
+/** "label" → the printed facts; a url → that kept page. Null when it is neither. */
+function sourceOf(src: string, facts: Facts, trusted: PageRead[]): { site: string; norm: string; maker?: boolean } | null {
+    const t = src.trim();
+    if (t.toLowerCase() === "label") return { site: "the label", norm: normForCheck([...Object.entries(facts.labelFacts).flat(), ...Object.entries(facts.seen).flat()].join(" ")) };
+    return trusted.find((x) => x.url === t) ?? null;
+}
+
+/** Shipping: fill only when empty, and say where it came from; a filled one only gets a note. */
+function applyShipping(sh: Shipping | undefined, p: ProductRow, facts: Facts, trusted: PageRead[], patch: ShopProductPatch, notes: string[]) {
+    if (!sh) return;
+    const src = sh.source.trim();
+    const pg = sourceOf(src, facts, trusted);
+    if (!pg) { notes.push(`Shipping not used: "${src}" is not the label or a kept page.`); return; }
+    const w = sh.weight && checkFact(pg.norm, "Weight", sh.weight) ? gramsOf(sh.weight) : null;
+    const d = sh.dimensions && checkFact(pg.norm, "Dimensions", sh.dimensions) ? cmOf(sh.dimensions) : null;
+    if (w && !p.weightGrams) patch.weightGrams = w;
+    else if (w && p.weightGrams && Math.abs(w - p.weightGrams) / p.weightGrams > 0.25) notes.push(`Weight: ours ${p.weightGrams} g, ${pg.site} says ${w} g — check (ours may include packing).`);
+    if (d && !p.lengthCm) [patch.lengthCm, patch.breadthCm, patch.heightCm] = d;
+    else if (d && p.lengthCm) notes.push(`Parcel size on ${pg.site}: ${d.join(" × ")} cm — ours is already filled, not changed.`);
+    if (patch.weightGrams || patch.lengthCm) {
+        notes.push(src.toLowerCase() === "label"
+            ? "Weight / size as printed on the box, not weighed by us — add wrapper and packing weight if needed."
+            : `Weight / size taken from ${pg.site}, not weighed by us — add wrapper and packing weight if needed.`);
+    }
+}
+
+/** Model No to fill: only when ours is empty, the code is really on the source, and the product is not local (unbranded) goods. */
+function modelNoToFill(m: ModelNoFix | undefined, p: ProductRow, facts: Facts, trusted: PageRead[], notes: string[]): string | null {
+    // Local (unbranded) goods carry one-off codes — their Model No is left to staff (owner, 2026-11-17).
+    if (!m || /unbranded|special|generic/i.test(p.brand?.name ?? "")) return null;
+    const src = sourceOf(m.source, facts, trusted);
+    if (!src || !src.norm.includes(normForCheck(m.value))) { notes.push(`Model No "${m.value}" not found on the label or a kept page — not filled.`); return null; }
+    if (p.modelNo?.trim()) {
+        if (normForCheck(p.modelNo) !== normForCheck(m.value)) notes.push(`Model No is "${p.modelNo}", the ${m.source.trim().toLowerCase() === "label" ? "box" : "maker"} says "${m.value}" — check.`);
+        return null;
+    }
+    return m.value;
+}
+
+/**
+ * Write the Model No. It feeds the office name: the custom part often already holds
+ * the code ("2m POR 1624") — it is taken out there so the rebuilt name shows it once
+ * (owner, 2026-11-17); a custom part that is ONLY the code is left alone (an empty
+ * one would stop the name ever being rebuilt). Then the name is rebuilt, as an inventory edit does.
+ */
+async function writeModelNo(id: number, p: ProductRow, value: string) {
+    const chunks = value.match(/[a-z]+|[0-9]+/gi) ?? [];
+    const inPart = chunks.length ? new RegExp(`(^|[^a-z0-9])${chunks.join("[\\s._-]*")}(?![a-z0-9])`, "gi") : null;
+    const stripped = p.namePart && inPart?.test(p.namePart) ? p.namePart.replace(inPart, "$1").replace(/\s{2,}/g, " ").trim() : undefined;
+    await prisma.invProduct.update({ where: { id }, data: { modelNo: value, ...(stripped && { namePart: stripped }) } });
+    if (stripped !== "") await regenerateProductNamesSafe({ ids: [id] });
+}
+
+/** Photos: sure ones applied to `patch` now (added ones copied into our storage first), the rest offered to staff. */
+async function applyPhotos(ph: PhotoPlan, p: ProductRow, trusted: PageRead[], patch: ShopProductPatch, notes: string[]) {
+    const gallery = galleryOf(p);
+    const onPage = new Map(trusted.flatMap((pg) => pg.photos.map((u) => [u, pg] as const)));
+    const gone = new Set(ph.remove.map((r) => r.url).filter((u) => gallery.includes(u)));
+    const wanted = ph.add.filter((x) => onPage.has(x.url) && !gallery.includes(x.url)).slice(0, AI_PHOTO_LIMITS.total);
+    for (const x of ph.add) if (!onPage.has(x.url)) notes.push(`Photo not on a kept page — not added: ${x.url}`);
+    // Copied into our Cloudinary first, as staff's Add does (AiPhotoPicker): the
+    // shop and product page only show our own photo hosts, and the maker's link may move.
+    const copyOf = new Map<string, string>();
+    const failed: typeof wanted = [];
+    for (const x of wanted) {
+        const ours = await copyToOurPhotos(x.url);
+        if (ours) copyOf.set(x.url, ours); else failed.push(x);
+    }
+    if (failed.length) notes.push(`${failed.length} photo(s) could not be copied to our storage — offered to add by hand instead.`);
+    const added = wanted.filter((x) => copyOf.has(x.url));
+    let next = [...gallery.filter((u) => !gone.has(u)), ...added.map((x) => copyOf.get(x.url)!)];
+    const ordered = [...new Set(ph.order.map((u) => copyOf.get(u) ?? u).filter((u) => next.includes(u)))];
+    if (ordered.length) next = [...ordered, ...next.filter((u) => !ordered.includes(u))];
+    if (gone.size || added.length || ordered.length) {
+        patch.galleryUrls = next;
+        patch.imageUrl = next[0] ?? null;
+        if (gone.size) notes.push(`Removed ${gone.size} wrong photo(s): ${ph.remove.filter((r) => gone.has(r.url)).map((r) => r.note || r.why).join("; ")}.`);
+        if (added.length) notes.push(`Added ${added.length} photo(s) from ${[...new Set(added.map((x) => onPage.get(x.url)!.site))].join(", ")} — check they show this exact model and colour.`);
+    }
+    if (added.some((x) => !onPage.get(x.url)?.maker)) notes.push("Some added photos are from a seller's page, not the maker's.");
+    const suggested: PhotoSuggestion[] = [...ph.suggest, ...failed]
+        .filter((x) => onPage.has(x.url) && !next.includes(x.url))
+        .map((x) => ({ url: x.url, site: onPage.get(x.url)!.site, kind: isPhotoKind(x.kind) ? x.kind : null }));
+    const kinds = (xs: string[]) => xs.filter(isPhotoKind) as PhotoKind[];
+    const ours = photosForAi(next);
+    const nOf = (u: string) => ours.indexOf(u) + 1;
+    const arrange = arrangeFrom({ order: [], look: ph.look.filter((x) => nOf(x.url) > 0).map((x) => ({ ...x, photo: nOf(x.url), crop: x.crop, focus: x.focus, background: x.background })) }, ours, new Set());
+    const checklist = checklistFrom(
+        kinds(ph.have), kinds(ph.must), kinds(ph.nice),
+        ph.suggestRemove.filter((r) => next.includes(r.url) && r.why in PHOTO_REMOVE_REASONS).map((r) => ({ url: r.url, why: r.why as PhotoRemoveReason, note: r.note })),
+    );
+    return { removed: gone.size, added: added.length, ordered: ordered.length > 0, suggested, arrange, checklist };
+}
+
 // ── Part 3: process from the saved pages ──────────────────────────────────────
 
 const photoPick = z.object({ url: z.string().url(), kind: z.string().optional() });
+const shippingSchema = z.object({ weight: z.string().trim().max(60).optional(), dimensions: z.string().trim().max(80).optional(), source: z.string().trim().max(500) });
+/** The maker's model / part code as printed ("label" or a kept page url) — filled only when our Model No is empty. */
+const modelNoSchema = z.object({ value: z.string().trim().min(1).max(100), source: z.string().trim().max(500) });
+const photoPlanSchema = z.object({
+    /** From the saved pages, sure: added to the gallery now. */
+    add: z.array(photoPick).max(15).default([]),
+    /** From the saved pages, not sure: shown to staff to add. */
+    suggest: z.array(photoPick).max(15).default([]),
+    /** Our photos, sure wrong: removed now. */
+    remove: z.array(removal).max(30).default([]),
+    /** Our photos, not sure: Remove buttons for staff. */
+    suggestRemove: z.array(removal).max(30).default([]),
+    /** The gallery in order (our kept photos + added ones) — applied now. */
+    order: z.array(z.string().url()).max(40).default([]),
+    look: z.array(z.object({
+        url: z.string().url(), crop: z.string().optional(), focus: z.string().optional(),
+        fixes: z.array(z.string()).default([]), rotate: z.coerce.number().catch(0).default(0),
+        background: z.string().optional(), why: z.string().trim().max(120).default(""),
+    })).max(30).default([]),
+    have: z.array(z.string()).default([]),
+    must: z.array(z.string()).default([]),
+    nice: z.array(z.string()).default([]),
+}).default({ add: [], suggest: [], remove: [], suggestRemove: [], order: [], look: [], have: [], must: [], nice: [] });
+type Shipping = z.infer<typeof shippingSchema>;
+type ModelNoFix = z.infer<typeof modelNoSchema>;
+type PhotoPlan = z.infer<typeof photoPlanSchema>;
 
 export const part3Schema = z.object({
     /** The improved copy, keys as `writing` says, with specSources ("label" or a saved page url). */
@@ -346,29 +489,9 @@ export const part3Schema = z.object({
     brandId: z.number().int().positive().optional(),
     /** The collections, main first — they REPLACE the ones set now. */
     collectionIds: z.array(z.number().int().positive()).min(1).max(10),
-    shipping: z.object({ weight: z.string().trim().max(60).optional(), dimensions: z.string().trim().max(80).optional(), source: z.string().trim().max(500) }).optional(),
-    /** The maker's model / part code as printed ("label" or a kept page url) — filled only when our Model No is empty. */
-    modelNo: z.object({ value: z.string().trim().min(1).max(100), source: z.string().trim().max(500) }).optional(),
-    photos: z.object({
-        /** From the saved pages, sure: added to the gallery now. */
-        add: z.array(photoPick).max(15).default([]),
-        /** From the saved pages, not sure: shown to staff to add. */
-        suggest: z.array(photoPick).max(15).default([]),
-        /** Our photos, sure wrong: removed now. */
-        remove: z.array(removal).max(30).default([]),
-        /** Our photos, not sure: Remove buttons for staff. */
-        suggestRemove: z.array(removal).max(30).default([]),
-        /** The gallery in order (our kept photos + added ones) — applied now. */
-        order: z.array(z.string().url()).max(40).default([]),
-        look: z.array(z.object({
-            url: z.string().url(), crop: z.string().optional(), focus: z.string().optional(),
-            fixes: z.array(z.string()).default([]), rotate: z.coerce.number().catch(0).default(0),
-            background: z.string().optional(), why: z.string().trim().max(120).default(""),
-        })).max(30).default([]),
-        have: z.array(z.string()).default([]),
-        must: z.array(z.string()).default([]),
-        nice: z.array(z.string()).default([]),
-    }).default({ add: [], suggest: [], remove: [], suggestRemove: [], order: [], look: [], have: [], must: [], nice: [] }),
+    shipping: shippingSchema.optional(),
+    modelNo: modelNoSchema.optional(),
+    photos: photoPlanSchema,
     notes: lines,
 });
 
@@ -376,10 +499,7 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
     const { state, identityChanged } = await liveState(id, run);
     if (!state?.search || state.part < 2) throw new AgentCopyError(identityChanged ? "Brand / model / barcode changed since the search — start again at Part 1." : "No saved search — Part 2 is not done.");
     const s = state.search;
-    const p = await prisma.invProduct.findUniqueOrThrow({
-        where: { id },
-        select: { name: true, namePart: true, modelNo: true, imageUrl: true, galleryJson: true, specsJson: true, brandId: true, brand: { select: { name: true } }, weightGrams: true, lengthCm: true, shopDraftJson: true },
-    });
+    const p: ProductRow = await prisma.invProduct.findUniqueOrThrow({ where: { id }, select: productSelect });
 
     // The fact check, exactly as product-copy's — but on the SAVED pages, no download.
     const letterOf = new Map(s.found.pages.map((pg, i) => [pg.url, String.fromCharCode(65 + i)]));
@@ -426,112 +546,128 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
     const cols = b.collectionIds.filter((c) => !unknown.includes(c));
     if (cols.length) patch.collectionIds = [...new Set(cols)];
 
-    // Shipping: fill only when empty, and say it came from the internet.
-    if (b.shipping) {
-        const src = b.shipping.source.trim();
-        // The label counts as a source, as in product-copy: its printed facts are the "page".
-        const pg = src.toLowerCase() === "label"
-            ? { site: "the label", norm: normForCheck([...Object.entries(s.labelFacts).flat(), ...Object.entries(s.seen).flat()].join(" ")) }
-            : s.found.pages.find((x) => x.url === src && checked.trusted.includes(x));
-        if (!pg) notes.push(`Shipping not used: "${src}" is not the label or a kept page.`);
-        else {
-            const w = b.shipping.weight && checkFact(pg.norm, "Weight", b.shipping.weight) ? gramsOf(b.shipping.weight) : null;
-            const d = b.shipping.dimensions && checkFact(pg.norm, "Dimensions", b.shipping.dimensions) ? cmOf(b.shipping.dimensions) : null;
-            if (w && !p.weightGrams) patch.weightGrams = w;
-            else if (w && p.weightGrams && Math.abs(w - p.weightGrams) / p.weightGrams > 0.25) notes.push(`Weight: ours ${p.weightGrams} g, ${pg.site} says ${w} g — check (ours may include packing).`);
-            if (d && !p.lengthCm) [patch.lengthCm, patch.breadthCm, patch.heightCm] = d;
-            else if (d && p.lengthCm) notes.push(`Parcel size on ${pg.site}: ${d.join(" × ")} cm — ours is already filled, not changed.`);
-            if (patch.weightGrams || patch.lengthCm) {
-                notes.push(src.toLowerCase() === "label"
-                    ? "Weight / size as printed on the box, not weighed by us — add wrapper and packing weight if needed."
-                    : `Weight / size taken from ${pg.site}, not weighed by us — add wrapper and packing weight if needed.`);
-            }
-        }
-    }
-
-    // Model No: only when ours is empty, and only a code really on the label / a kept page.
-    let fillModelNo: string | null = null;
-    // Local (unbranded) goods carry one-off codes — their Model No is left to staff (owner, 2026-11-17).
-    const local = /unbranded|special|generic/i.test(p.brand?.name ?? "");
-    if (b.modelNo && !local) {
-        const m = b.modelNo, src = m.source.trim();
-        const srcNorm = src.toLowerCase() === "label"
-            ? normForCheck([...Object.entries(s.labelFacts).flat(), ...Object.entries(s.seen).flat()].join(" "))
-            : s.found.pages.find((x) => x.url === src && checked.trusted.includes(x))?.norm;
-        if (!srcNorm || !srcNorm.includes(normForCheck(m.value))) notes.push(`Model No "${m.value}" not found on the label or a kept page — not filled.`);
-        else if (p.modelNo?.trim()) { if (normForCheck(p.modelNo) !== normForCheck(m.value)) notes.push(`Model No is "${p.modelNo}", the ${src === "label" ? "box" : "maker"} says "${m.value}" — check.`); }
-        else fillModelNo = m.value;
-    }
-
-    // Photos: sure ones applied now, the rest left for staff.
-    const gallery = galleryOf(p);
-    const onPage = new Map(checked.trusted.flatMap((pg) => pg.photos.map((u) => [u, pg] as const)));
-    const gone = new Set(b.photos.remove.map((r) => r.url).filter((u) => gallery.includes(u)));
-    const wanted = b.photos.add.filter((x) => onPage.has(x.url) && !gallery.includes(x.url)).slice(0, AI_PHOTO_LIMITS.total);
-    for (const x of b.photos.add) if (!onPage.has(x.url)) notes.push(`Photo not on a kept page — not added: ${x.url}`);
-    // Copied into our Cloudinary first, as staff's Add does (AiPhotoPicker): the
-    // shop and product page only show our own photo hosts, and the maker's link may move.
-    const copyOf = new Map<string, string>();
-    const failed: typeof wanted = [];
-    for (const x of wanted) {
-        const ours = await copyToOurPhotos(x.url);
-        if (ours) copyOf.set(x.url, ours); else failed.push(x);
-    }
-    if (failed.length) notes.push(`${failed.length} photo(s) could not be copied to our storage — offered to add by hand instead.`);
-    const added = wanted.filter((x) => copyOf.has(x.url));
-    let next = [...gallery.filter((u) => !gone.has(u)), ...added.map((x) => copyOf.get(x.url)!)];
-    const ordered = [...new Set(b.photos.order.map((u) => copyOf.get(u) ?? u).filter((u) => next.includes(u)))];
-    if (ordered.length) next = [...ordered, ...next.filter((u) => !ordered.includes(u))];
-    if (gone.size || added.length || ordered.length) {
-        patch.galleryUrls = next;
-        patch.imageUrl = next[0] ?? null;
-        if (gone.size) notes.push(`Removed ${gone.size} wrong photo(s): ${b.photos.remove.filter((r) => gone.has(r.url)).map((r) => r.note || r.why).join("; ")}.`);
-        if (added.length) notes.push(`Added ${added.length} photo(s) from ${[...new Set(added.map((x) => onPage.get(x.url)!.site))].join(", ")} — check they show this exact model and colour.`);
-    }
-    if (added.some((x) => !onPage.get(x.url)?.maker)) notes.push("Some added photos are from a seller's page, not the maker's.");
-    const suggested: PhotoSuggestion[] = [...b.photos.suggest, ...failed]
-        .filter((x) => onPage.has(x.url) && !next.includes(x.url))
-        .map((x) => ({ url: x.url, site: onPage.get(x.url)!.site, kind: isPhotoKind(x.kind) ? x.kind : null }));
-    const kinds = (xs: string[]) => xs.filter(isPhotoKind) as PhotoKind[];
-    const ours = photosForAi(next);
-    const nOf = (u: string) => ours.indexOf(u) + 1;
-    const arrange = arrangeFrom({ order: [], look: b.photos.look.filter((x) => nOf(x.url) > 0).map((x) => ({ ...x, photo: nOf(x.url), crop: x.crop, focus: x.focus, background: x.background })) }, ours, new Set());
+    const facts = { labelFacts: s.labelFacts, seen: s.seen };
+    applyShipping(b.shipping, p, facts, checked.trusted, patch, notes);
+    const fillModelNo = modelNoToFill(b.modelNo, p, facts, checked.trusted, notes);
+    const ph = await applyPhotos(b.photos, p, checked.trusted, patch, notes);
 
     const draft: ProductCopy = {
         ...checked.copy,
         note: `Written by Claude (product prep, from the saved search of ${s.at.slice(0, 10)}); ${checked.copy.note}`,
         notes: [...notes, SIGN(3), lastRun(3, "done → Draft")],
-        photoChecklist: checklistFrom(
-            kinds(b.photos.have), kinds(b.photos.must), kinds(b.photos.nice),
-            b.photos.suggestRemove.filter((r) => next.includes(r.url) && r.why in PHOTO_REMOVE_REASONS).map((r) => ({ url: r.url, why: r.why as PhotoRemoveReason, note: r.note })),
-        ),
-        ...(arrange && { photoArrange: arrange }),
-        photoSuggestions: suggested,
+        photoChecklist: ph.checklist,
+        ...(ph.arrange && { photoArrange: ph.arrange }),
+        photoSuggestions: ph.suggested,
     };
     if (fillModelNo) draft.notes = [...(draft.notes ?? []).filter((n) => !isRunLine(n)), `Model No filled: ${fillModelNo} (from the ${b.modelNo!.source.toLowerCase() === "label" ? "box" : "maker page"}).`, SIGN(3), lastRun(3, "done → Draft")];
     const shopStatus = await writeAsDraft(id, patch, () => ({ aiCopy: draft, notes: undefined, notesAt: undefined, kept: undefined }));
-    if (fillModelNo) {
-        // Model No feeds the office name. The custom part often already holds the
-        // code ("2m POR 1624") — it is taken out there, so the rebuilt name shows it
-        // once (owner, 2026-11-17). Then the name is rebuilt, as an inventory edit does.
-        const chunks = fillModelNo.match(/[a-z]+|[0-9]+/gi) ?? [];
-        const inPart = chunks.length ? new RegExp(`(^|[^a-z0-9])${chunks.join("[\\s._-]*")}(?![a-z0-9])`, "gi") : null;
-        const stripped = p.namePart && inPart?.test(p.namePart) ? p.namePart.replace(inPart, "$1").replace(/\s{2,}/g, " ").trim() : undefined;
-        // The custom part was ONLY the code: the name already shows it once, and an
-        // empty custom part would stop the name ever being rebuilt — leave both alone.
-        const keepName = stripped === "";
-        await prisma.invProduct.update({ where: { id }, data: { modelNo: fillModelNo, ...(stripped && { namePart: stripped }) } });
-        if (!keepName) await regenerateProductNamesSafe({ ids: [id] });
-    }
+    if (fillModelNo) await writeModelNo(id, p, fillModelNo);
     // Model No is part of the identity the search was saved for — keep it matching.
     await writeState(id, { ...state, part: 3, at: new Date().toISOString(), ...(fillModelNo && { identity: await currentIdentity(id) }) }, run);
     return {
         result: "part3" as const, shopStatus,
         kept: { specs: checked.copy.specs, highlights: checked.copy.highlights, warranty: checked.copy.warranty },
         unsure: checked.copy.unsure, flags: checked.copy.flags,
-        photos: { removed: gone.size, added: added.length, ordered: ordered.length > 0, suggested: suggested.length },
+        photos: { removed: ph.removed, added: ph.added, ordered: ph.ordered, suggested: ph.suggested.length },
         notes: draft.notes,
     };
+}
+
+// ── Part 5: touch-up (no search, no rewrite) ──────────────────────────────────
+
+export const part5Schema = z.object({
+    /** What is printed on the box — needed when the product has no saved search (done by hand); added to the saved one otherwise. */
+    labelFacts: record,
+    seen: record,
+    /** Spec rows to set — each value must be on the label or a kept saved page. */
+    specs: z.array(z.object({ label: z.string().trim().min(1).max(80), value: z.string().trim().min(1).max(500), source: z.string().trim().max(500) })).max(40).default([]),
+    /** Spec rows to drop (wrong, or the same fact twice). */
+    specClear: z.array(z.string().trim().min(1)).max(40).default([]),
+    /** Small text fixes (spelling, one wrong word) — `from` must be in the field exactly as it is now. */
+    textFixes: z.array(z.object({ field: z.enum(["title", "description"]), from: z.string().min(1).max(300), to: z.string().max(300) })).max(20).default([]),
+    modelNo: modelNoSchema.optional(),
+    shipping: shippingSchema.optional(),
+    photos: photoPlanSchema,
+    notes: lines,
+});
+
+/**
+ * Part 5 — touch-up (owner, 2026-11-17): after Part 3, or on a product staff made
+ * by hand, when only photos or small things need fixing and a full Part 3 would
+ * cost too much. No internet, no rewrite: photo order / removals / adds from the
+ * saved search, single spec rows, small text fixes, an empty Model No or weight /
+ * size — every fact from the label or a kept saved page. Moves the product to
+ * Draft with the notes and a Last run line; Part 4 checks it after.
+ */
+export async function savePart5(id: number, b: z.infer<typeof part5Schema>) {
+    const p: ProductRow & { shopSubheading: string | null; shopDescription: string | null } = await prisma.invProduct.findUniqueOrThrow({
+        where: { id }, select: { ...productSelect, shopSubheading: true, shopDescription: true },
+    }).catch(() => { throw new AgentCopyError("Product not found"); });
+    const { state } = await liveState(id);
+    const search = state?.search;
+    const facts: Facts = { labelFacts: { ...search?.labelFacts, ...b.labelFacts }, seen: { ...search?.seen, ...b.seen } };
+    const trusted = search ? search.found.pages.filter((pg) => pg.codeMatch || search.verdicts.find((v) => v.url === pg.url)?.accepted) : [];
+    const notes: string[] = [...b.notes];
+    const patch: ShopProductPatch = {};
+
+    // Spec rows: set only what the label / a kept page really says; clear what was asked.
+    let specs = specsOf(p.specsJson) ?? {};
+    const drop = new Set(b.specClear.map((k) => k.toLowerCase()));
+    if (drop.size) {
+        specs = Object.fromEntries(Object.entries(specs).filter(([k]) => !drop.has(k.trim().toLowerCase())));
+        notes.push(`Spec rows cleared: ${b.specClear.join(", ")}.`);
+    }
+    const set: string[] = [];
+    for (const r of b.specs) {
+        const src = sourceOf(r.source, facts, trusted);
+        if (!src || !(checkFact(src.norm, r.label, r.value) || src.norm.includes(normForCheck(r.value)))) { notes.push(`Spec "${r.label}: ${r.value}" not found on the label or a kept page — not set.`); continue; }
+        specs = { ...Object.fromEntries(Object.entries(specs).filter(([k]) => k.trim().toLowerCase() !== r.label.toLowerCase())), [r.label]: r.value };
+        set.push(r.label);
+    }
+    if (set.length) notes.push(`Spec rows set: ${set.join(", ")}.`);
+    if (drop.size || set.length) patch.specs = specs;
+
+    // Small text fixes — only where the exact old words are there now.
+    let title = p.shopSubheading ?? "", description = p.shopDescription ?? "";
+    for (const f of b.textFixes) {
+        const cur = f.field === "title" ? title : description;
+        if (!cur.includes(f.from)) { notes.push(`Text fix skipped — "${f.from}" is not in the ${f.field}.`); continue; }
+        if (f.field === "title") title = cur.replace(f.from, f.to); else description = cur.replace(f.from, f.to);
+        notes.push(`${f.field === "title" ? "Online name" : "Description"}: "${f.from}" → "${f.to}".`);
+    }
+    if (title !== (p.shopSubheading ?? "")) patch.shopSubheading = title;
+    if (description !== (p.shopDescription ?? "")) patch.shopDescription = description;
+
+    applyShipping(b.shipping, p, facts, trusted, patch, notes);
+    const fillModelNo = modelNoToFill(b.modelNo, p, facts, trusted, notes);
+    if (fillModelNo) notes.push(`Model No filled: ${fillModelNo} (from the ${b.modelNo!.source.trim().toLowerCase() === "label" ? "box" : "maker page"}).`);
+    const ph = await applyPhotos(b.photos, p, trusted, patch, notes);
+    if (!trusted.length && b.photos.add.length) notes.push("No saved search for this product — photos can only be added by hand.");
+
+    // Onto the product, in Draft. Part 3's AI copy keeps its text; its photo advice is refreshed.
+    const run = [SIGN(5), lastRun(5, "touch-up done → Draft")];
+    await writeAsDraft(id, patch, (info) => {
+        const ai = info?.aiCopy;
+        return {
+            notes: [...(info?.notes ?? []).filter((n) => !isRunLine(n)), ...notes, ...run].slice(-40),
+            notesAt: new Date().toISOString(),
+            kept: undefined,
+            ...(ai && {
+                aiCopy: {
+                    ...ai,
+                    notes: (ai.notes ?? []).filter((n) => !isRunLine(n)),
+                    photoChecklist: ph.checklist,
+                    ...(ph.arrange ? { photoArrange: ph.arrange } : {}),
+                    photoSuggestions: [...ph.suggested, ...(ai.photoSuggestions ?? [])].filter((x, i, all) => all.findIndex((y) => y.url === x.url) === i),
+                },
+            }),
+        };
+    });
+    if (fillModelNo) {
+        await writeModelNo(id, p, fillModelNo);
+        if (state) await writeState(id, { ...state, identity: await currentIdentity(id) });
+    }
+    return { result: "part5" as const, photos: { removed: ph.removed, added: ph.added, ordered: ph.ordered, suggested: ph.suggested.length }, specsSet: set.length, notes: [...notes, ...run] };
 }
 
 // ── Parts 1–3 in one call ─────────────────────────────────────────────────────
@@ -574,7 +710,10 @@ export const part4Schema = z.object({
     pending: lines,
     /** Smaller problems. Any line here still sends the product to Attention (owner, 2026-11-17). */
     notes: lines,
+    /** Which part to run next (owner, 2026-11-17): part5 = small fixes (touch-up), part3 = rewrite from the saved search, part1 = start again. */
+    next: z.enum(["part5", "part3", "part1"]).optional(),
 });
+const NEXT_WORDS = { part5: "Part 5 (touch-up — photos / small fixes)", part3: "Part 3 (rewrite from the saved search)", part1: "Part 1 (start again)" } as const;
 
 /**
  * Part 4: any problem at all — pending or a note — parks the product in
@@ -589,7 +728,7 @@ export async function savePart4(id: number, b: z.infer<typeof part4Schema>) {
         const reason = [
             ...b.pending.map((x) => `PENDING (Part 4) — ${x}`),
             ...b.notes.map((x) => `NOTE (Part 4) — ${x}`),
-            lastRun(4, `${problems} problem(s) → Attention`),
+            lastRun(4, `${problems} problem(s) → Attention${b.next ? ` · next: ${NEXT_WORDS[b.next]}` : ""}`),
         ];
         await parkInAttention([id], [...reason, await originLine(id)].filter(Boolean).join("\n").slice(0, 10000), "Claude", "any");
         return { result: "attention" as const, pending: b.pending.length, notes: b.notes.length };

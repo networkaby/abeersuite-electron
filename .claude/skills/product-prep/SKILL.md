@@ -53,11 +53,13 @@ Before anything else, ask the owner **both** questions in one message, unless th
 
 1. **Which mode?** — cloud · local · smart local · office (Setup above). Running in the cloud → do not ask, it is always **cloud**.
 2. **Which part?**
+   - **Follow Part 4** — each product runs the part its last Part 4 suggested (`prep.next`: 5 → Part 5, 3 → Part 3, 1 → full run from Part 1). No suggestion on a product → skip it and name it in the report.
    - **Full run** — Parts 1 → 3 in one call (the usual).
    - **Part 1 only** — clean the data and check it is enough to search; no search.
    - **Part 2 only** — the one search, saved (Part 1 must be done).
    - **Part 3 only** — write from the saved search (Part 2 must be done).
    - **Part 4** — verify; that is the **product-recheck** skill, say so and switch to it.
+   - **Part 5 · Touch-up** — photos and small fixes only, no search, no rewrite. For a product after Part 3, or one staff made by hand, when a full Part 3 would cost too much.
 
 Keep both answers for the whole run. Each product carries a **Last run** line (part, India time, result) from its previous run — read it first; it tells you what was done last and helps decide whether to run again. A part that cannot run yet for a product (its earlier part not done) → skip that product and name it in the report, never run the earlier part on your own.
 
@@ -219,6 +221,36 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
 Answer: `{ result: "part3", shopStatus, kept, unsure, flags, photos: { removed, added, ordered, suggested }, notes }`. `422` → fix as the message says and resend. The product is now in **Draft** for staff.
 
 ---
+
+## Part 5 — Touch-up (photos and small fixes)
+
+For a product that already has its copy — after Part 3, or written by staff by hand — when only small things need doing (new photos added by staff, a wrong spec row, a typo, an empty Model No or weight). **No internet search, no rewrite of the text.** Every fact must be on the label or a kept saved page (`prep.pages`). A product with no saved search: send what is printed on the box in `labelFacts` — then only the label counts and no photo can be added from a page.
+
+1. Read the product (`GET $PRODUCT_COPY_READ_URL/api/agent/prep/<id>`) and open every photo. Read the Last run line and the notes.
+2. Decide only small fixes:
+   - **Photos** — `order` (clean product front first), `remove` the ones you are sure are wrong or duplicates, `suggestRemove` the unsure ones, `add` from the saved pages only when sure, `look` for crops. Our own logo / address only matters on the main photo.
+   - **Spec rows** — `specs` to set one row (`label`, `value`, `source`: "label" or a saved page url); `specClear` for a wrong or repeated row.
+   - **Text** — `textFixes` for a spelling mistake or one wrong word: `field` (title / description), `from` exactly as it is now, `to`. Anything bigger is Part 3's job — say so instead.
+   - **Model No / weight / size** — only when empty, as in Part 3 (`modelNo`, `shipping`).
+3. Send:
+
+```bash
+curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json" \
+  "$PRODUCT_COPY_WRITE_URL/api/agent/prep/<id>/part5" -d @part5.json
+```
+
+```json
+{
+  "labelFacts": {},
+  "specs": [ { "label": "Cable Length", "value": "1.5 m", "source": "https://www.portronics.com/products/mport-4d" } ],
+  "specClear": ["Color"],
+  "textFixes": [ { "field": "title", "from": "Konect", "to": "Konnect" } ],
+  "photos": { "order": ["…/new-front.jpg", "…/2.jpg"], "remove": [ { "url": "…/7.jpg", "why": "duplicate", "note": "same as photo 2" } ] },
+  "notes": []
+}
+```
+
+Answer: `{ result: "part5", photos: { removed, added, ordered, suggested }, specsSet, notes }`. A fix the server could not confirm comes back as a note, not an error. The product moves to **Draft** with "Part 5 done" and a Last run line — then run **product-recheck** (Part 4).
 
 ## Report (always, at the end)
 

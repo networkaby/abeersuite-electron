@@ -59,6 +59,7 @@ export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
             "POST /api/agent/prep/{id}/part2",
             "POST /api/agent/prep/{id}/part3",
             "POST /api/agent/prep/{id}/part4",
+            "POST /api/agent/prep/{id}/part5",
         ],
     },
     // Its own key too (owner: "dont mix all") — read only, it can change nothing.
