@@ -41,7 +41,7 @@ git push origin main && git push production main
 6. Release notes assembled = your `RELEASE_NOTES.md`, then the auto commit log since the previous version tag, in that order
 7. Annotated git tag `v<version>` created if it does not already exist
 8. `git push origin HEAD --tags` — `main` **and** the tag to `origin` (`devloperakramul/abeersuite-electron`)
-9. A GitHub release published in **every** `GITHUB_UPDATE_REPO_N` from `.env` — or, when the version carries a `-` (`1.3.1-pre.1`), in `GITHUB_UPDATE_REPO_2` **only**, marked a GitHub prerelease — each with its own `GH_TOKEN_N` — one `electron-builder --publish always --prepackaged` run per repo, carrying installer, blockmap, `latest.yml` and the notes
+9. A GitHub release published in **every** `GITHUB_UPDATE_REPO_N` from `.env` — or, when the version carries a `-` (`1.3.1-pre.1`), in `GITHUB_UPDATE_REPO_2` **only**, marked a GitHub prerelease — each with its own `GITHUB_UPDATE_REPO_N_TOKEN` — one `electron-builder --publish always --prepackaged` run per repo, carrying installer, blockmap, `latest.yml` and the notes
 
 **You finish (2 things, still manual today):**
 
@@ -198,7 +198,7 @@ Same as `pack`, but `electron-builder` without `--dir`, so you get the NSIS inst
 
 ### `pnpm electron:release`
 1. `pnpm electron:pack` (everything above, gate included)
-2. `scripts/release-electron.ts` — reads `GITHUB_UPDATE_REPO_N` / `GH_TOKEN_N` pairs from `.env`, then runs `electron-builder --publish always --prepackaged dist-app/win-unpacked`
+2. `scripts/release-electron.ts` — reads `GITHUB_UPDATE_REPO_N` / `GITHUB_UPDATE_REPO_N_TOKEN` pairs from `.env`, then runs `electron-builder --publish always --prepackaged dist-app/win-unpacked`
 
 The `--prepackaged` part is the important design choice: it publishes the **exact tree that just passed `verify:package`**, instead of rebuilding. There is no window where an unverified build can reach the public release.
 
@@ -231,7 +231,7 @@ Use this when the release contains schema changes, new routes, new permissions, 
 pnpm install && pnpm install:git-hooks && pnpm pg:fetch
 ```
 
-`GITHUB_UPDATE_REPO_1` + `GH_TOKEN_1` (and `_2`, …) must exist in `.env` — each token a fine-grained PAT scoped to only that repo, permission *Contents: Read and write*. Counters read from `GITHUB_DOWNLOAD_UPDATE_REPO` with `GITHUB_DOWNLOAD_UPDATE_PAT_TOKEN` (*Contents: Read-only*), so at least one publish target must be that same repo, and it must be a releases-only repo, never the source. The write tokens must **never** enter `scripts/counterEnv.ts`'s `COUNTER_ENV_COPIED`; a shipped counter must not be able to create releases.
+`GITHUB_UPDATE_REPO_1` + `GITHUB_UPDATE_REPO_1_TOKEN` (and `_2`, …) must exist in `.env` — each token a fine-grained PAT scoped to only that repo, permission *Contents: Read and write*. Counters read from `GITHUB_DOWNLOAD_UPDATE_REPO` with `GITHUB_DOWNLOAD_UPDATE_PAT_TOKEN` (*Contents: Read-only*), so at least one publish target must be that same repo, and it must be a releases-only repo, never the source. The write tokens must **never** enter `scripts/counterEnv.ts`'s `COUNTER_ENV_COPIED`; a shipped counter must not be able to create releases.
 
 **Step 1 — write the code**
 
@@ -451,7 +451,7 @@ Carried over from the webapp and unchanged in spirit: `dev`, `build`, `start`, `
 
 ## 8. Release safety rules — short version
 
-1. `GH_TOKEN_N` write tokens live in the build machine's `.env` only. Never in `counterEnv.ts`'s `COUNTER_ENV_COPIED`.
+1. `GITHUB_UPDATE_REPO_N_TOKEN` write tokens live in the build machine's `.env` only. Never in `counterEnv.ts`'s `COUNTER_ENV_COPIED`.
 2. Never run `scripts/release-electron.ts` directly. It refuses without `dist-app/win-unpacked/AbeerSuite.exe`, but the point is that `electron:pack` must run first.
 3. Never bypass `verify:package`.
 4. Bump `version` on every publish, without exception.

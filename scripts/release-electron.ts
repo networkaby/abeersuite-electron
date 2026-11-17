@@ -1,7 +1,7 @@
 /**
  * Publishes an ALREADY-VERIFIED build to every repo listed in .env via
  * GITHUB_UPDATE_REPO_1, GITHUB_UPDATE_REPO_2, ... (each paired with its own
- * GH_TOKEN_1, GH_TOKEN_2, ...).
+ * GITHUB_UPDATE_REPO_1_TOKEN, GITHUB_UPDATE_REPO_2_TOKEN, ...).
  *
  * It also ensures:
  * 1. The commit is tagged with `v<version>` matching `package.json`.
@@ -47,7 +47,7 @@ const isPrerelease = /-/.test(version);
 // only ever reads process.env.GH_TOKEN (or a literal `token` in the publish
 // config, which we deliberately never write to package.json). Targets come
 // from GITHUB_UPDATE_REPO_1="owner/repo", GITHUB_UPDATE_REPO_2=..., each paired
-// with its OWN token GH_TOKEN_1, GH_TOKEN_2, ... — scanned until a gap, so
+// with its OWN token GITHUB_UPDATE_REPO_1_TOKEN, GITHUB_UPDATE_REPO_2_TOKEN, ... — scanned until a gap, so
 // adding a repo is just a new numbered pair in .env, no code change needed.
 let publishTargets: PublishTarget[] = [];
 for (let n = 1; process.env[`GITHUB_UPDATE_REPO_${n}`]; n++) {
@@ -56,11 +56,11 @@ for (let n = 1; process.env[`GITHUB_UPDATE_REPO_${n}`]; n++) {
         console.error(`[release-electron] FATAL: GITHUB_UPDATE_REPO_${n} must be "owner/repo", got "${process.env[`GITHUB_UPDATE_REPO_${n}`]}".`);
         process.exit(1);
     }
-    publishTargets.push({ provider: "github", owner, repo, private: true, releaseType: "release", tokenEnv: `GH_TOKEN_${n}`, slot: n });
+    publishTargets.push({ provider: "github", owner, repo, private: true, releaseType: "release", tokenEnv: `GITHUB_UPDATE_REPO_${n}_TOKEN`, slot: n });
 }
 
 if (publishTargets.length === 0) {
-    console.error("[release-electron] FATAL: no GITHUB_UPDATE_REPO_N vars set in .env (need at least GITHUB_UPDATE_REPO_1 + GH_TOKEN_1).");
+    console.error("[release-electron] FATAL: no GITHUB_UPDATE_REPO_N vars set in .env (need at least GITHUB_UPDATE_REPO_1 + GITHUB_UPDATE_REPO_1_TOKEN).");
     process.exit(1);
 }
 
@@ -78,7 +78,7 @@ if (isPrerelease) {
     if (testChannel.length === 0) {
         console.error(
             `[release-electron] FATAL: version ${version} is a prerelease, which publishes to the test repo only,\n` +
-            "  but no GITHUB_UPDATE_REPO_2 / GH_TOKEN_2 pair is set in .env.\n" +
+            "  but no GITHUB_UPDATE_REPO_2 / GITHUB_UPDATE_REPO_2_TOKEN pair is set in .env.\n" +
             "  Either add that pair, or release a version with no \"-\" in it to publish to every repo."
         );
         process.exit(1);
@@ -131,7 +131,7 @@ for (const target of publishTargets) {
     if (!envVar) {
         console.error(
             `[release-electron] FATAL: no token env mapped for publish target "${target.repo}".\n` +
-            "  Add a matching GITHUB_UPDATE_REPO_N / GH_TOKEN_N pair to .env."
+            "  Add a matching GITHUB_UPDATE_REPO_N / GITHUB_UPDATE_REPO_N_TOKEN pair to .env."
         );
         process.exit(1);
     }

@@ -140,7 +140,7 @@ npx tsx scripts/release-electron.ts
 
 Running the script directly is correct **here and only here**: `release` forbids it because it bypasses the `verify:package` gate, and in this flow that gate has already passed — in the owner's `pnpm electron:dist`, and again at step 0 check 6. Confirm it passed before running this. If you cannot confirm it, you are on rung B, not this step.
 
-What the script does: assembles the notes (yours, then the auto commit log since the previous tag), creates the annotated tag **`v<version>`** on `HEAD` if it does not exist, pushes it — the branch too when one is checked out, the tag alone when detached — and publishes a GitHub release to each `GITHUB_UPDATE_REPO_N` with that repo's own `GH_TOKEN_N`, carrying the installer, the blockmap, `latest.yml` and the notes. It prints whether it is doing a full release or a prerelease before it starts. **Read that line.**
+What the script does: assembles the notes (yours, then the auto commit log since the previous tag), creates the annotated tag **`v<version>`** on `HEAD` if it does not exist, pushes it — the branch too when one is checked out, the tag alone when detached — and publishes a GitHub release to each `GITHUB_UPDATE_REPO_N` with that repo's own `GITHUB_UPDATE_REPO_N_TOKEN`, carrying the installer, the blockmap, `latest.yml` and the notes. It prints whether it is doing a full release or a prerelease before it starts. **Read that line.**
 
 ## Step 6 — Level `production` (`electron:release` already pushed the release tag there before publishing)
 

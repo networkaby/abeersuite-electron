@@ -18,7 +18,7 @@ const LOG = "[build-downloader-dev]";
 fs.mkdirSync(DIST, { recursive: true });
 
 // 1. Prepare token — a read-only PAT scoped to the test repo, separate from the
-// write-scoped GH_TOKEN_2 that release-electron.ts uses to publish there.
+// write-scoped GITHUB_UPDATE_REPO_2_TOKEN that release-electron.ts uses to publish there.
 const rawToken = (process.env.GITHUB_DOWNLOAD_UPDATE_PAT_TOKEN_2 || "").trim();
 const XOR_KEY = 0x5a;
 
