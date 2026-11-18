@@ -10,7 +10,19 @@ import { InvProductDialog } from "@/modules/inventory/components/InvProductDialo
 import { Button } from "@/components/ui/button";
 import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";
 import { toast } from "sonner";
-import { SlidersHorizontal, X } from "lucide-react";
+import { ChevronRight, SlidersHorizontal, X } from "lucide-react";
+import { InvProductCombobox } from "@/modules/inventory/components/InvProductCombobox";
+import { cachedAdminProducts, fetchAdminProducts } from "@/modules/ecommerce/lib/productListCache";
+import { productStatus, type ProductStatus } from "@/modules/ecommerce/lib/productFilters";
+import { DEFAULT_SHOP_PUBLISH_RULES, type ShopPublishRules } from "@/modules/ecommerce/lib/shopQualification";
+
+// Publish rules for the Next button's stage — read once per window.
+let rulesCache: Promise<ShopPublishRules> | null = null;
+const loadRules = () =>
+    (rulesCache ??= axios
+        .get<{ rules: ShopPublishRules }>("/api/ecommerce/publish-rules")
+        .then((r) => r.data.rules)
+        .catch(() => { rulesCache = null; return DEFAULT_SHOP_PUBLISH_RULES; }));
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { useSession } from "next-auth/react";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
@@ -36,17 +48,59 @@ export default function EcommerceProductEditPage() {
 
     const [dirty, setDirty] = useState(false);
     // Close → back to the list (router.back keeps its filter / page when we came from it).
+    const canLeave = useCallback(
+        async () => !(dirty || liveName) || (await confirmAction({ title: "Leave without saving?", confirmLabel: "Leave" })),
+        [dirty, liveName],
+    );
     const close = useCallback(async () => {
-        if ((dirty || liveName) && !(await confirmAction({ title: "Leave without saving?", confirmLabel: "Leave" }))) return;
+        if (!(await canLeave())) return;
         if (window.history.length > 1) router.back();
         else router.push("/office/ecommerce/products");
-    }, [dirty, liveName, router]);
+    }, [canLeave, router]);
+
+    // Jump: open another product picked by name / SKU / barcode (the voucher picker).
+    const [pickNonce, setPickNonce] = useState(0);
+    const jumpTo = useCallback(async (to: number) => {
+        if (to === id) return;
+        if (!(await canLeave())) { setPickNonce((n) => n + 1); return; }
+        router.push(`/office/ecommerce/products/${to}`);
+    }, [id, canLeave, router]);
+
+    // Next: the following product in the stage this one had when it was opened
+    // (a Save as ready mid-run does not knock you off the Draft run). Same order
+    // as the Products list; reuses its in-memory list, reads it only if empty.
+    const [openStage, setOpenStage] = useState<{ id: number; kind: ProductStatus["kind"] } | null>(null);
+    const [nextBusy, setNextBusy] = useState(false);
+    const goNext = useCallback(async () => {
+        if (!openStage) return;
+        setNextBusy(true);
+        try {
+            const [list, rules] = await Promise.all([cachedAdminProducts() ?? fetchAdminProducts(), loadRules()]);
+            const ids = list.filter((p) => p.id === id || productStatus(p, rules).kind === openStage.kind).map((p) => p.id);
+            const others = ids.filter((x) => x !== id);
+            if (!others.length) { toast.info("No other product in this stage"); return; }
+            const at = ids.indexOf(id);
+            let to = at >= 0 ? ids[at + 1] : others[0];
+            if (to == null) { to = ids[0]; toast.info("Back to the first product in this stage"); }
+            if (!(await canLeave())) return;
+            router.push(`/office/ecommerce/products/${to}`);
+        } catch {
+            toast.error("Could not load the next product");
+        } finally {
+            setNextBusy(false);
+        }
+    }, [id, openStage, canLeave, router]);
 
     const load = useCallback(() => {
         if (!Number.isFinite(id)) return;
         axios
             .get<ShopProductAdmin>(`/api/ecommerce/products/${id}`)
-            .then((r) => setProduct(r.data))
+            .then((r) => {
+                setProduct(r.data);
+                // Stage as opened — kept for this product id only.
+                void loadRules().then((rules) =>
+                    setOpenStage((s) => (s?.id === r.data.id ? s : { id: r.data.id, kind: productStatus(r.data, rules).kind })));
+            })
             .catch(() => setProduct(null));
     }, [id]);
 
@@ -71,7 +125,7 @@ export default function EcommerceProductEditPage() {
                 <Button variant="ghost" size="sm" asChild className="shrink-0">
                     <Link href="/office/ecommerce/products">← Products</Link>
                 </Button>
-                <div className="min-w-0 flex-1">
+                <div className="flex h-9 min-w-0 flex-1 items-center rounded-md border border-input bg-background px-2">
                     <h1 className="text-2xl font-semibold tracking-tight break-words">
                         Edit product
                         <span className="ml-2 font-normal text-muted-foreground">· {liveName ?? product.name}</span>
@@ -120,6 +174,31 @@ export default function EcommerceProductEditPage() {
                 onDirtyChange={setDirty}
                 onClose={() => void close()}
                 onReload={setProduct}
+                skuSlot={
+                    <div className="flex gap-1">
+                        <InvProductCombobox
+                            value={product.id}
+                            onChange={(p) => { if (p) void jumpTo(p.id); }}
+                            placeholder="Name, SKU or barcode…"
+                            allowCreate={false}
+                            hideCost
+                            clearNonce={pickNonce}
+                            className="flex h-9 min-w-0 flex-1 items-center rounded-md border border-input bg-background px-2"
+                        />
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-9 shrink-0 px-2"
+                            disabled={!openStage || nextBusy}
+                            title={openStage ? `Next product in ${openStage.kind}` : "Next product in this stage"}
+                            onClick={() => void goNext()}
+                        >
+                            Next
+                            <ChevronRight className="size-4" />
+                        </Button>
+                    </div>
+                }
                 onSaved={(p) => {
                     setProduct(p);
                     setLiveName(null);

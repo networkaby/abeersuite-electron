@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useEffectEvent } from "react";
+import { useCallback, useEffect, useRef, useState, useEffectEvent, type ReactNode } from "react";
 import { GatedLink } from "@/shared/components/GatedLink";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
@@ -51,7 +51,10 @@ export default function ProductForm({
     onNameChange,
     onClose,
     onDirtyChange,
+    skuSlot,
 }: {
+    /** A saved product: shown in place of the locked SKU box (the edit page's jump picker + Next). */
+    skuSlot?: ReactNode;
     /** Shows a Close button in the save bar (asks first when there are unsaved changes). */
     onClose?: () => void;
     /** Told whenever the form gains / loses unsaved changes. */
@@ -626,8 +629,13 @@ export default function ProductForm({
                         />
                     </div>
                 ) : null}
-                <div className="grid grid-cols-[8rem_1fr] gap-3">
-                    <div className="grid gap-1.5">
+                <div className={`grid ${skuSlot && initial?.id ? "grid-cols-[13rem_1fr]" : "grid-cols-[8rem_1fr]"} gap-3`}>
+                    {skuSlot && initial?.id ? (
+                        <div className="grid gap-1.5">
+                            <Label title="Type a name, SKU or barcode to open another product">SKU {sku} · open another</Label>
+                            {skuSlot}
+                        </div>
+                    ) : <div className="grid gap-1.5">
                         <Label>SKU</Label>
                         <Input
                             value={sku}
@@ -636,7 +644,7 @@ export default function ProductForm({
                             className="font-mono"
                             placeholder="e.g. LAPTOP-001"
                         />
-                    </div>
+                    </div>}
                     <div className="grid gap-1.5">
                         <Label>Online display name</Label>
                         <Input
