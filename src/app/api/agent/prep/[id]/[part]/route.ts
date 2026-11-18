@@ -3,6 +3,7 @@ import type { z } from "zod";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { requireIncomingKey } from "@/modules/incoming/lib/incomingApi";
 import { AgentCopyError } from "@/modules/ecommerce/lib/agentProductCopy";
+import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { part1Schema, part2Schema, part3Schema, part4Schema, part5Schema, runParts, runSchema, savePart1, savePart2, savePart3, savePart4, savePart5 } from "@/modules/ecommerce/lib/agentProductPrep";
 
 // POST /api/agent/prep/[id]/run | part1 | part2 | part3 | part4 | part5 — product prep's four parts.
@@ -32,7 +33,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string; pa
     const { data, error } = await validateRequest(req, def.schema as z.ZodType<unknown>);
     if (error) return error;
     try {
-        return NextResponse.json(await (def.run as (id: number, b: unknown) => Promise<unknown>)(id, data));
+        const out = await (def.run as (id: number, b: unknown) => Promise<unknown>)(id, data);
+        // The AI writes from outside any browser, so nothing announces it (owner, 2026-11-18):
+        // an open product form would keep an old photo list and a staff tick would overwrite Part 4.
+        void publishChangeServer(["catalogue"]);
+        return NextResponse.json(out);
     } catch (e) {
         if (e instanceof AgentCopyError) return NextResponse.json({ error: e.message }, { status: e.message === "Product not found" ? 404 : 422 });
         return handleApiError(e, "Product prep failed");

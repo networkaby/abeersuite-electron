@@ -95,7 +95,15 @@ export default function ProductForm({
     // checked by hand. The reason shows above the save buttons (also after Save
     // as draft, until Save as ready); Flag attention parks it from here — anyone
     // who can save the product may flag it (owner, 2026-11-14).
-    const attention = initial?.shopAttention ?? null;
+    /**
+     * The stage, Attention reason and AI notes as saved now — followed live (owner,
+     * 2026-11-18) so an AI part that runs while this form is open shows here within
+     * a second or two. Only these: the fields being typed in are never touched.
+     * Null = as `initial` loaded them.
+     */
+    const [liveRow, setLiveRow] = useState<Pick<ShopProductAdmin, "shopStatus" | "shopAttention" | "shopAttentionAt" | "shopAttentionBy" | "shopDraft"> | null>(null);
+    const row = liveRow ?? initial;
+    const attention = row?.shopAttention ?? null;
     const [flagOpen, setFlagOpen] = useState(false);
     /** Reload the saved row after it was parked (Flag attention, or an AI clash) — stage and buttons read Attention. */
     const reloadRow = async () => {
@@ -251,16 +259,26 @@ export default function ProductForm({
     // The publish rules are reference data — the form fields themselves never refresh under the editor.
     useRealtimeTopics(["catalogue"], loadRules);
 
-    // Photos follow changes made elsewhere (the phone app, another office screen)
-    // — only the photo block; the fields being typed in are never touched. Paused
-    // while this page's own photo save is in flight, so it cannot undo it.
+    // Photos follow changes made elsewhere (the phone app, another office screen, an
+    // AI part) — the photo block, its checklist, the stage and the AI notes; the
+    // fields being typed in are never touched. Paused while this page's own photo
+    // save is in flight, so it cannot undo it. The checklist must follow too: a tick
+    // saves the whole list, so an old one on screen would wipe what Part 4 or another
+    // staff member changed (owner, 2026-11-18).
     const reloadGallery = useCallback(() => {
         const productId = initial?.id;
         if (!productId) return;
         const seq = gallerySeq.current;
         axios
             .get<ShopProductAdmin>(`/api/ecommerce/products/${productId}`)
-            .then((r) => { if (gallerySeq.current === seq) showServerGallery(r.data.galleryUrls ?? []); })
+            .then(({ data }) => {
+                if (gallerySeq.current === seq) showServerGallery(data.galleryUrls ?? []);
+                setPhotoChecklist(data.photoChecklist ?? data.shopDraft?.aiCopy?.photoChecklist ?? null);
+                setLiveRow({
+                    shopStatus: data.shopStatus, shopAttention: data.shopAttention, shopAttentionAt: data.shopAttentionAt,
+                    shopAttentionBy: data.shopAttentionBy, shopDraft: data.shopDraft,
+                });
+            })
             .catch(() => { /* the next signal or a reopen catches up */ });
     }, [initial?.id, showServerGallery]);
     useRealtimeTopics(["catalogue"], reloadGallery, !!initial?.id && galleryStatus !== "saving", ["InvProduct"]);
@@ -351,6 +369,7 @@ export default function ProductForm({
         // The product's own checklist (our photo AI saves it, staff ticks update it), else
         // Claude's from the draft copy — the same Remove buttons either way.
         setPhotoChecklist(initial.photoChecklist ?? initial.shopDraft?.aiCopy?.photoChecklist ?? null);
+        setLiveRow(null);
         setSelectedImage(0);
         // Loading a product's own saved gallery is not a user edit — it becomes
         // the server copy, so the autosave does not re-PATCH it right back.
@@ -455,7 +474,7 @@ export default function ProductForm({
     // Mark ready with a rule unmet is allowed — the toast says what publishing would wait for.
     const readyNote = qualified ? "" : `Marked ready — still needs ${qualification.missing.join(", ").toLowerCase()}, so publishing would wait as Pending`;
     // Stage: Unpublished → Draft → Ready → Published / Pending, one copy (owner, 2026-11-10).
-    const shopStatus = initial?.shopStatus ?? "UNPUBLISHED";
+    const shopStatus = row?.shopStatus ?? "UNPUBLISHED";
     const aiDraft: ProductCopy | null = initial?.shopDraft?.aiCopy ?? null;
     const editSig = JSON.stringify([
         subheading, description, slug, badge, specPairs, weightGrams, lengthCm, breadthCm, heightCm,
@@ -792,10 +811,10 @@ export default function ProductForm({
                     }}
                     onParked={initial?.id ? () => void reloadRow() : undefined}
                     attention={initial?.id && attention ? {
-                        text: attention, by: initial.shopAttentionBy, at: initial.shopAttentionAt, parked: shopStatus === "ATTENTION",
+                        text: attention, by: row?.shopAttentionBy ?? null, at: row?.shopAttentionAt ?? null, parked: shopStatus === "ATTENTION",
                     } : null}
-                    review={initial?.shopDraft?.notes?.length ? {
-                        notes: initial.shopDraft.notes, at: initial.shopDraft.notesAt, kept: initial.shopDraft.kept,
+                    review={row?.shopDraft?.notes?.length ? {
+                        notes: row.shopDraft.notes, at: row.shopDraft.notesAt, kept: row.shopDraft.kept,
                     } : null}
                 />
                 <div className="grid gap-2">
@@ -1021,11 +1040,6 @@ export default function ProductForm({
                             <Button type="button" onClick={() => void submit("ready")} disabled={busy}
                                 title="The work is done — Ready to publish">
                                 Save as ready
-                            </Button>
-                            {/* Half done — save and stay in Draft (owner, 2026-11-18). */}
-                            <Button type="button" variant="outline" onClick={() => void submit("save")} disabled={busy}
-                                title="Save what is done so far — stays in Draft">
-                                Save as draft
                             </Button>
                             <Button type="button" variant="ghost" onClick={() => void submit("discard")} disabled={busy}
                                 title="Leave Draft — back to the stage it came from; the edits stay">
