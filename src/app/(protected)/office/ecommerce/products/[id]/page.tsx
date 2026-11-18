@@ -63,7 +63,7 @@ export default function EcommerceProductEditPage() {
     const jumpTo = useCallback(async (to: number) => {
         if (to === id) return;
         if (!(await canLeave())) { setPickNonce((n) => n + 1); return; }
-        router.push(`/office/ecommerce/products/${to}`);
+        router.replace(`/office/ecommerce/products/${to}`);
     }, [id, canLeave, router]);
 
     // Prev / Next: the neighbouring product in the stage this one had when it was opened
@@ -86,7 +86,7 @@ export default function EcommerceProductEditPage() {
                 toast.info(step === 1 ? "Back to the first product in this stage" : "On to the last product in this stage");
             }
             if (!(await canLeave())) return;
-            router.push(`/office/ecommerce/products/${to}`);
+            router.replace(`/office/ecommerce/products/${to}`);
         } catch {
             toast.error("Could not load the product list");
         } finally {
