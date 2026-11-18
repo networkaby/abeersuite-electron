@@ -1402,6 +1402,13 @@ app.whenReady().then(async () => {
             app.exit(1);
             return;
         }
+        // The live address is now DATABASE_URL, as the office handed it — say so
+        // whether or not the local database starts below. dbTargets.ts used to learn it
+        // only from COUNTER_PC, which is set only once the replica is up, so a till
+        // whose replica failed ignored DATABASE_URL, opened a pool with no address and
+        // landed on whatever Postgres answered at localhost:5432 (v1.17.9, 2026-11-18).
+        // Inherited by the Next server through serverManager's `env: {...process.env}`.
+        process.env.OFFICE_HANDED_DB = "true";
     }
 
     sendBootProgress("Starting database…");

@@ -183,3 +183,21 @@ export function parseCounterPc(raw: string | undefined): boolean | undefined {
     if (value === "false" || value === "0") return false;
     return undefined;
 }
+
+/**
+ * "Did this process get its database settings from the office?" — the desktop app,
+ * counter or not, replica or not.
+ *
+ * Such a process holds ONE live address, `DATABASE_URL` (always the primary's), plus
+ * `REALTIME_URL` / `REALTIME_KEY`, all from `/api/counter/config`. The office itself
+ * reads `DATABASE_URL_1` / `_2` instead.
+ *
+ * Deliberately NOT `COUNTER_PC`: that means "has a working replica", is set only once
+ * the local database is up, and gates relay, release guard and sync. A till whose
+ * replica failed must still find its live address — keying the address on
+ * `COUNTER_PC` sent that till to localhost:5432 instead (v1.17.9).
+ * `OFFICE_HANDED_DB` is set by `electron/main.ts` right after the office settings load.
+ */
+export function usesOfficeHandedDb(): boolean {
+    return parseCounterPc(process.env.OFFICE_HANDED_DB) === true || parseCounterPc(process.env.COUNTER_PC) === true;
+}

@@ -41,6 +41,18 @@ function normalize(url: string | undefined): string | undefined {
 // deployment — a switch is a redeploy — so there is one client and no per-call choice.
 const PRIMARY: DbId = currentPrimary();
 const liveUrls: Partial<Record<DbId, string | undefined>> = { [PRIMARY]: normalize(dbTarget(PRIMARY)?.pooled) };
+// No address must never mean "whatever Postgres answers on this PC": `pg` with no
+// connection string falls back to localhost:5432, and on a PC with its own Postgres
+// every query then failed with a puzzling SSL error instead of saying what is missing.
+// Point the pool at an address that cannot resolve, and say so once, by name.
+const NO_LIVE_ADDRESS = "postgresql://no-live-database-address.invalid:5432/missing";
+if (!liveUrls[PRIMARY]) {
+    console.error(
+        `[prismaClient] No live database address for ${PRIMARY}: neither DATABASE_URL (desktop app, ` +
+        `handed over by the office) nor ${PRIMARY === "DB2" ? "DATABASE_URL_2" : "DATABASE_URL_1"} (office) is set. ` +
+        "Live queries will fail until it is.",
+    );
+}
 const localUrl = normalize(process.env.LOCAL_DATABASE_URL);
 
 // Local Postgres (localhost) speaks plaintext — forcing SSL there fails the
@@ -159,7 +171,7 @@ const globalForPrisma = globalThis as unknown as {
  * extra connections — it only changes which reads may be answered from the replica.
  */
 const baseLives: Partial<Record<DbId, PrismaClient>> = globalForPrisma.__prismaBases ?? {};
-baseLives[PRIMARY] ??= new PrismaClient({ adapter: new PrismaPg(createPool(liveUrls[PRIMARY])) });
+baseLives[PRIMARY] ??= new PrismaClient({ adapter: new PrismaPg(createPool(liveUrls[PRIMARY] ?? NO_LIVE_ADDRESS)) });
 
 /** The primary's base client. */
 function baseLive(): PrismaClient {

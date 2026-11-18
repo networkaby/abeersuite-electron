@@ -10,14 +10,15 @@
  *                                      nightly copy, and nothing below costs a thing.
  *
  * No fallback to the old DATABASE_URL / DIRECT_URL on the office (owner, 2026-11-17: "next
- * deploy directly read new env, old gone"). A COUNTER PC is the one exception: it is
+ * deploy directly read new env, old gone"). The DESKTOP APP is the one exception: it is
  * handed the primary's pooled URL as DATABASE_URL by `/api/counter/config`, exactly as
  * before (owner: "no changes in counter"), so there DB1 = DATABASE_URL and DB2 is absent.
+ * See `usesOfficeHandedDb()` for why that is not the same test as "is a counter".
  *
  * Pure (no Prisma, no Next) so scripts can read it too.
  */
 
-import { parseCounterPc } from "@/shared/lib/appModeCore";
+import { usesOfficeHandedDb } from "@/shared/lib/appModeCore";
 
 export type DbId = "DB1" | "DB2";
 
@@ -40,8 +41,9 @@ export function dbEnvKeys(id: DbId): { pooled: string; direct: string } {
 }
 
 function read(id: DbId): DbTarget | null {
-    if (parseCounterPc(process.env.COUNTER_PC) === true) {
-        // Counter: the one URL the office handed over — always the primary's.
+    if (usesOfficeHandedDb()) {
+        // Desktop app: the one URL the office handed over — always the primary's.
+        // Replica or not: a till whose local database failed still needs it.
         const pooled = id === "DB1" ? clean(process.env.DATABASE_URL) : undefined;
         return pooled ? { id, pooled, direct: pooled } : null;
     }

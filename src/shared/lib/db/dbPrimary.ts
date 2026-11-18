@@ -9,7 +9,7 @@
  *   NEXT_PUBLIC_DB_PRIMARY = DB1 | DB2   (unset = DB1)
  *
  * NEXT_PUBLIC_ so the browser bundle picks the same realtime project at build time.
- * A COUNTER PC holds only the primary's URL (as DATABASE_URL, handed over by
+ * The DESKTOP APP holds only the primary's URL (as DATABASE_URL, handed over by
  * `/api/counter/config`), so there this is always DB1 for Prisma; the office tells it
  * the real name as DB_PRIMARY_ID, which only realtime needs.
  *
@@ -19,7 +19,7 @@
  * counter release before every deploy (schemaGuard).
  */
 import { Pool, type PoolClient } from "pg";
-import { parseCounterPc } from "@/shared/lib/appModeCore";
+import { usesOfficeHandedDb } from "@/shared/lib/appModeCore";
 import { dbTarget, isDualDb, otherDb, type DbId, type DbTarget } from "./dbTargets";
 
 export const SWITCH_TABLE_SQL = `
@@ -44,7 +44,7 @@ export interface SwitchRow {
 
 /** The primary for this deployment. DB2 only when it is named AND configured. */
 export function currentPrimary(): DbId {
-    if (parseCounterPc(process.env.COUNTER_PC) === true) return "DB1";
+    if (usesOfficeHandedDb()) return "DB1";
     const named = process.env.NEXT_PUBLIC_DB_PRIMARY?.trim().toUpperCase();
     if (named === "DB2") {
         if (dbTarget("DB2")) return "DB2";
@@ -54,22 +54,22 @@ export function currentPrimary(): DbId {
 }
 
 /**
- * The primary for picking a REALTIME project. A counter holds one URL, so the office
+ * The primary for picking a REALTIME project. The desktop app holds one URL, so the office
  * hands it `DB_PRIMARY_ID` (`/api/counter/config`); everywhere else, `currentPrimary()`.
  */
 export function realtimePrimary(): DbId {
-    if (parseCounterPc(process.env.COUNTER_PC) === true) return process.env.DB_PRIMARY_ID?.trim() === "DB2" ? "DB2" : "DB1";
+    if (usesOfficeHandedDb()) return process.env.DB_PRIMARY_ID?.trim() === "DB2" ? "DB2" : "DB1";
     return currentPrimary();
 }
 
 /**
  * The realtime pair (Supabase URL + publishable key) that goes with a database.
- * On a counter PC: only what the office handed it (`REALTIME_URL` / `REALTIME_KEY`,
+ * In the desktop app (counter or not, replica or not): only what the office handed it (`REALTIME_URL` / `REALTIME_KEY`,
  * `/api/counter/config`) — nothing baked, so a switch on Vercel needs no rebuild.
  * Elsewhere: that database's own `NEXT_PUBLIC_SUPABASE_*_n`. Null when not set.
  */
 export function primaryRealtimePair(id: DbId = realtimePrimary()): { url: string; key: string } | null {
-    if (parseCounterPc(process.env.COUNTER_PC) === true) {
+    if (usesOfficeHandedDb()) {
         const url = process.env.REALTIME_URL?.trim();
         const key = process.env.REALTIME_KEY?.trim();
         return url && key ? { url, key } : null;
