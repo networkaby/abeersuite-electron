@@ -7,6 +7,12 @@ An update for every counter, plus the online shop's product screens in the offic
 - A counter now gets its live-update connection from the office each time it starts, instead of carrying it inside the installer. When the office moves to another database, the counter follows at its next start.
 - Counter screens no longer keep their own live connection open (chat still does); new bills and vouchers from other devices keep arriving through the counter's sync.
 - A counter build that would start without live updates is now refused, so a counter can never quietly fall back to the slow 15-minute catch-up.
+- If a counter's own database fails to start, it now finds its way back to the office database instead of showing errors.
+
+## Bills
+
+- Every printed bill (A4 and thermal) now shows the customer's address.
+- The customer's GSTIN / UIN is no longer printed on bills for now.
 
 ## Editing a shop product
 
