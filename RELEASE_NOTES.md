@@ -1,6 +1,12 @@
 # v1.17.10
 
-An office update for the online shop's product screens. Counters can take it whenever it suits — nothing on the counter changes.
+An update for every counter, plus the online shop's product screens in the office.
+
+## Counters
+
+- A counter now gets its live-update connection from the office each time it starts, instead of carrying it inside the installer. When the office moves to another database, the counter follows at its next start.
+- Counter screens no longer keep their own live connection open (chat still does); new bills and vouchers from other devices keep arriving through the counter's sync.
+- A counter build that would start without live updates is now refused, so a counter can never quietly fall back to the slow 15-minute catch-up.
 
 ## Editing a shop product
 
