@@ -1,26 +1,25 @@
-# v1.17.9
+# v1.17.10
 
-Every counter should install this update. The counter's live sync now follows whichever database the office has chosen as the main one, so counters stay in step if the office ever switches databases.
+An office update for the online shop's product screens. Counters can take it whenever it suits — nothing on the counter changes.
 
-## Database safety (office)
+## Editing a shop product
 
-- The business now keeps two databases: the main one and a **Standby** copy that is refreshed every night.
-- Settings → Backup & Restore can switch the main database to the Standby. The switch first locks the old one, refuses unless both databases answer, and rolls back if anything fails.
-- After a switch, the screen says plainly when no copy has been made yet, instead of showing "copy running".
-- Backup & Restore shows a red / green checklist of every setting the backups need, grouped by database, Vercel, GitHub and Dropbox. A nightly copy in the last 26 hours ticks the GitHub, Dropbox and cron rows for you.
-- The nightly Standby copy is more reliable: it starts from a clean database, refuses a wrong (pooled) database address up front, and cleans stray quotes or spaces from the saved address.
+- The SKU box at the top now opens any product: type its name, SKU or barcode and pick it. It still shows the SKU of the product open now.
+- **Prev** and **Next** buttons move to the neighbouring product in the same stage you opened it from, so a run of Drafts or Attention products can be worked through one after another.
+- **Close** goes straight back to the Products list, however many products you stepped through.
+- A Draft product always shows **Save as draft**, so half-done work can be saved and stays in Draft.
+- The barcode in the header falls back to the SKU when the product has no barcode saved.
+- An open product now follows changes made elsewhere within a second or two: the photo checklist, the stage, the Attention reason and the AI notes refresh by themselves. What you are typing is never touched.
 
-## Counters
+## Product photos
 
-- Live updates on the counter follow the main database, so new bills and changes keep arriving after a database switch.
-- Live updates now use Supabase's newer publishable keys.
+- The photo checklist under Product image shows how the product is packed (no box, card pack, pouch or box) and its shape.
+- Every product needs a clean photo of the item itself, without the box, as the first photo. A boxed product also needs the box front and the box back.
+- Each missing must-have photo has a **Can't add** tick, for when the photo cannot be taken (box gone, item fitted). A ticked photo no longer holds the product back.
 
-## Online shop products
+## AI product preparation
 
-- AI product preparation gets a Part 5 touch-up step; the check step suggests what to run next and can carry straight on.
-- Any problem the check finds parks the product in Attention, and every part leaves a "Last run" line on the product.
-- Attention notes say where the product's details came from. Our own logo on a photo other than the main one is no longer flagged.
-
-## Security
-
-- Updated the web framework (Next.js) to a version with a known security issue fixed.
+- The AI now checks the photos itself at every part: a missing must-have photo or a main photo that is not clean stops the first part (so better photos come in before the search), and the check part never passes a product with either.
+- The AI decides the must-have photos for each product from how the maker and good sellers show it, and a later part can correct an earlier one — taking a photo off the must list always comes with a reason, and the photo itself is kept.
+- When a must-have photo is missing, the check says who can fix it: "found on a saved page — run the touch-up" or "take it, or tick Can't add".
+- A product sent back to Attention no longer shows an old "verified" note next to the new problems.
