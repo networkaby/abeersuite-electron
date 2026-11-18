@@ -848,6 +848,9 @@ export async function savePart4(id: number, input: z.infer<typeof part4Schema>) 
             lastRun(4, `${problems} problem(s) → Attention${b.next ? ` · next: ${NEXT_WORDS[b.next]}` : ""}`),
         ];
         await parkInAttention([id], [...reason, await originLine(id)].filter(Boolean).join("\n").slice(0, 10000), "Claude", "any");
+        // The earlier result lines ("Part 4 done — verified", an old Last run) would sit
+        // beside this new one and contradict it (owner, 2026-11-18) — dropped.
+        await addDraftNotes(id, []);
         return { result: "attention" as const, pending: b.pending.length, notes: b.notes.length };
     }
     const { state } = await liveState(id).catch(() => ({ state: null }));
