@@ -1,6 +1,6 @@
 ---
 name: product-recheck
-description: Part 4 of AbeerSuite product prep — verify a shop product WITHOUT any internet search, from the saved search and the product itself, after staff acted on the notes. Checks text, specs, brand, collections, shipping, photo order and quality, the main photo, and that every earlier note was carried out; verified → noted ready for staff to Save as ready, else back to Attention with only what is pending. Works even when staff prepared the product by hand. Use when the owner says "recheck products", "verify the drafts", "did staff fix them", "part 4", or runs /product-recheck.
+description: Part 4 of AbeerSuite product prep — verify a shop product WITHOUT any internet search, from the saved search and the product itself, after staff acted on the notes. Checks text, specs, brand, collections, shipping, photo order and quality, the main photo, and that every earlier note was carried out; verified → moved to Ready (staff press Publish), else to Attention with only what is pending. Works even when staff prepared the product by hand. Use when the owner says "recheck products", "verify the drafts", "did staff fix them", "part 4", or runs /product-recheck.
 ---
 
 # Product recheck (Part 4 — verify)
@@ -35,7 +35,7 @@ Every **GET** (reading a product, a list, a photo) goes to `$PRODUCT_COPY_READ_U
 
 ## Start: ask the mode first
 
-Before anything else, ask the owner **which mode** — cloud · local · smart local · office (Setup above) — unless the request already says. Running in the cloud → do not ask, it is always **cloud**. This skill is Part 4 only — it never changes the product. For Parts 1–3, or **Part 5 (touch-up: photos and small fixes)** when your check finds only small things to fix, say so and switch to **product-prep**.
+Before anything else, ask the owner **which mode** — cloud · local · smart local · office (Setup above) — unless the request already says. Running in the cloud → do not ask, it is always **cloud**. This skill is Part 4 only — it never changes the product's data; it only moves it: verified → **Ready** (never Published directly yet), any problem → **Attention**. When the owner says where a verified product should go, send `then` (`same` · `draft` · `ready` · `waiting`). For Parts 1–3, or **Part 5 (touch-up: photos and small fixes)** when your check finds only small things to fix, say so and switch to **product-prep**.
 
 ## 1. Pick
 
@@ -112,7 +112,7 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
   "$PRODUCT_COPY_WRITE_URL/api/agent/prep/<id>/part4" -d '{ "pending": ["Photo 4 (another hub) still in the gallery — press Remove"], "notes": [], "photoCheck": { "box": "carton", "shape": "4-port USB hub", "tags": [ { "url": "…/1.jpg", "kind": "front" }, { "url": "…/2.jpg", "kind": "box_back" } ], "must": ["front", "ports", "box_front", "box_back"], "nice": [], "mainClean": true } }'
 ```
 
-- `pending: []` **and** `notes: []` → `{ result: "verified" }`: it stays in Draft with "Part 4 done — verified, ready to Save as ready". **You never press Save as ready.**
+- `pending: []` **and** `notes: []` → `{ result: "verified", shopStatus }`: the server moves it to **Ready** with "Part 4 done — verified, moved to Ready — press Publish". Staff publish; never Published directly yet (owner, 2026-11-19).
 - Always send **`photoCheck`** (see "The photo list"). The server puts a missing must or an unclean main photo in pending on its own — the product is **never verified** with them (next: Part 5). A `drop` is not a problem: it goes to staff as a note.
   ```json
   "photoCheck": { "box": "carton", "shape": "palm-size gaming mouse", "tags": [ { "url": "…/1.jpg", "kind": "front" } ], "must": ["front", "left", "box_front", "box_back"], "nice": ["in_use"], "mainClean": false, "mainWhy": "held in hand, shop logo on it" }
@@ -129,5 +129,5 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
 |---|---|---|
 | SKU · name | verified / attention | the main ones |
 
-> **Verified**: open the Draft, read the last note, press **Save as ready**, publish when the time is right.
+> **Verified**: now in **Ready** — read the last note, press **Publish** when the time is right.
 > **Attention**: fix the PENDING lines, then run **product-recheck** again.

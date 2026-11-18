@@ -14,8 +14,9 @@ it shop-ready in parts, and **never writes from bad data**:
 |---|---|---|---|
 | **1 Prepare seed** | Read everything; remove what is wrong; add nothing. Then: is what is left enough to search? | Attention | sign `Part 1 done` |
 | **2 Search** | The **one** internet search for this product; the pages are saved | — (no good page = go on from the label) | sign `Part 2 done` |
-| **3 Process** | Everything from the saved pages — no new search | — (problems are notes) | Draft, sign `Part 3 done` |
-| **4 Verify** | separate skill: **product-recheck** | | |
+| **3 Process** | Everything from the saved pages — no new search | anything for staff → Attention | Draft, sign `Part 3 done` |
+| **4 Verify** | separate skill: **product-recheck** | any problem → Attention | Ready |
+| **5 Touch-up** | Photos and small fixes only — no search, no rewrite | anything for staff → Attention | Draft, sign `Part 5 done` |
 
 **Major** = it would spoil the next part. **Minor** = a note; the loop goes on.
 Staff fix what Attention says and run this skill again — it starts at the next part.
@@ -23,8 +24,24 @@ Staff fix what Attention says and run this skill again — it starts at the next
 Rules above all:
 - **No information is better than false information.**
 - **One search per product.** The search API is limited (about 1000 a month). Never search again for a product that has saved pages — Part 3 and Part 4 use them. The server refuses a second search.
-- Never publish, never Save as ready, never change the **group** (GST — note it), never create brands / collections.
+- Never publish (a verified product goes to Ready only through Part 4), never change the **group** (GST — note it), never create brands / collections.
 - This skill and product-copy are separate. Do not mix their endpoints.
+
+## Where each part leaves the product (owner, 2026-11-19)
+
+**Anything only a human can do → Attention, from any stage (Published too).** Every part sends its problems in two lists: **`staff`** (a human must act — create a brand, fix the group, take a photo, check the real unit) and **`notes`** (information only — what you did, where a fact came from). Any `staff` line, or a server-found one (a must photo missing, an unclean main photo), parks the product in Attention; notes never block.
+
+| Part | Fine → | Needs staff → |
+|---|---|---|
+| **1** clean seed | stays where it is (a full run goes on to Part 2) | Attention — "fix it, then press Start AI" (back to Waiting) |
+| **2** search | stays where it is — nothing found is fine too, go on to Part 3 | only a **technical failure** (search tool down, error): send `"failed": "<why>"` → Attention, the one search is not used up |
+| **3** process | **Draft** | Attention — "fix it, then run Part 4" |
+| **4** verify (product-recheck) | **Ready** (staff press Publish — never Published directly yet) | Attention |
+| **5** touch-up | **Draft** | Attention — "fix it, then run Part 4" |
+
+**The owner's instruction wins.** When the owner says where a success should go ("keep it in Waiting", "leave it in Draft") send **`then`**: `same` · `waiting` · `draft` · `ready` · `attention`. Problems for staff still go to Attention.
+
+Staff's loop: an Unpublished product gets its seed photos and details, staff press **Start AI** → **Waiting**; the next run picks Waiting products up from Part 1.
 
 ## Setup — run mode (where to read, where to write)
 
@@ -187,7 +204,7 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
 }
 ```
 
-`why` is one of `photoRemoveReasons`. Answer: `{ result: "part1" | "attention", removed, notes, findOnline }`.
+`why` is one of `photoRemoveReasons`. Answer: `{ result: "part1" | "attention", removed, notes, findOnline }`. Fine → the product stays where it is (send `then` only when the owner says).
 - `attention` → stop this product (staff fix, then run again).
 - `part1` → go on to Part 2 now.
 
@@ -210,7 +227,9 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
   "$PRODUCT_COPY_WRITE_URL/api/agent/prep/<id>/part2" -d '{ "pages": [ { "url": "https://…", "accepted": true, "why": "maker, part code on page" } ], "labelFacts": { "Model": "M8" }, "seen": {}, "labelWebsite": "" }'
 ```
 
-Answer: `{ result: "part2" | "no-good-page", read, dropped }`. The server saves the pages (text + photos) for Part 3 and Part 4. Either way **go on to Part 3 now** (read the product again to get the saved pages).
+**The search itself failed** (tool down, quota, error) — not "found nothing" → send only `{ "failed": "<what went wrong>" }`: the product goes to Attention and the one search is not used up.
+
+Answer: `{ result: "part2" | "no-good-page" | "attention", read, dropped }`. The server saves the pages (text + photos) for Part 3 and Part 4. Either way **go on to Part 3 now** (read the product again to get the saved pages).
 - `no-good-page` → searching again gains nothing without better seed. Part 3 works from the label and photos only; your own knowledge may shape the wording, never a fact (the server drops any fact not on the label or a kept page). Part 4 flags it if that is not enough — staff then improve the seed, or publish by hand.
 - Found nothing at all? Send `"pages": []` — it still counts as the one search.
 - `422 Already searched` → never retry; use the saved pages. Only when the owner asks to run Part 2 again, send `"again": true` (it replaces the saved search).
@@ -234,7 +253,7 @@ Read the product again (`GET /api/agent/prep/<id>`); work only from `prep.pages`
    - Fill the missing must photos (`photoList.findOnline`) from the saved pages when you are **sure** they are this exact model.
    - Primary photo with any logo, watermark or text → do not put it first; a maker's clean product photo is usually the best photo 1. **Our own shop logo / address on any other photo is fine — never flag it** (owner, 2026-11-17); someone else's watermark is always a problem.
    - **`photoCheck`** — the photo list **after** your changes (see "The photo list"): tag the page photos you add by their page url; refine must / optional from how the saved pages show the product. Still missing → the server adds a note; the product still goes to Draft.
-7. **Mistake check → `notes`** — product-copy §8's list, one problem per line (name, model no. / barcode to copy in, group, photos, price plainly off …).
+7. **Mistake check** — product-copy §8's list, one problem per line (name, model no. / barcode to copy in, group, photos, price plainly off …). **Sort every line**: a human must act → **`staff`** (create a brand, fix the group, check the real unit, take a photo not found online); information only → **`notes`**. Any `staff` line sends the product to **Attention** instead of Draft.
 
 ```bash
 curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json" \
@@ -263,7 +282,7 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
 }
 ```
 
-Answer: `{ result: "part3", shopStatus, kept, unsure, flags, photos: { removed, added, ordered, suggested }, notes }`. `422` → fix as the message says and resend. The product is now in **Draft** for staff.
+Answer: `{ result: "part3" | "attention", shopStatus, staff, kept, unsure, flags, photos: { removed, added, ordered, suggested }, notes }`. `422` → fix as the message says and resend. Nothing for staff → **Draft**; anything for staff (yours, a brand not in the list, a must photo still missing, an unclean main photo) → **Attention**.
 
 ---
 
@@ -296,7 +315,10 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
 }
 ```
 
-Answer: `{ result: "part5", photos: { removed, added, ordered, suggested }, specsSet, notes }`. A fix the server could not confirm comes back as a note, not an error. The product moves to **Draft** with "Part 5 done" and a Last run line — then run **product-recheck** (Part 4).
+- **`fixed`** — the open problems in the Attention reason now (the `PENDING` / `STOPPED` / `NOTE` lines) that you fixed, **copied exactly as written**. Every other one stays open; the server never guesses. Photo lines (main photo, must photo missing) it checks again itself.
+- **`staff`** — anything new only a human can do.
+
+Answer: `{ result: "part5" | "attention", photos: { removed, added, ordered, suggested }, specsSet, staff, notes }`. A fix the server could not confirm comes back as a note, not an error. Nothing left for staff → **Draft** with "Part 5 done" and a Last run line — then run **product-recheck** (Part 4). Anything left → **Attention** with only what is still open.
 
 ## Report (always, at the end)
 

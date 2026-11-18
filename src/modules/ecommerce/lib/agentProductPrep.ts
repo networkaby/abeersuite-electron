@@ -7,8 +7,9 @@ import { AI_PHOTO_LIMITS } from "@/shared/lib/constants/ai";
 import { COMPATIBLE_SPEC } from "@/shared/lib/shop/compatibility";
 import { getR2Text, isR2Configured, messagesBucket, putR2 } from "@/shared/lib/storage/r2";
 import type { ProductCopy } from "@/modules/ecommerce/lib/aiProductCopy";
-import { readShopDraft } from "@/modules/ecommerce/lib/productAdmin";
-import type { ShopProductPatch } from "@/modules/ecommerce/lib/updateShopProduct";
+import { readShopDraft, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
+import { updateShopProduct, type ShopProductPatch } from "@/modules/ecommerce/lib/updateShopProduct";
+import { startAi } from "@/modules/ecommerce/lib/shopWaiting";
 import { parkInAttention } from "@/modules/ecommerce/lib/shopAttention";
 import { arrangeFrom, checkWrittenCopy, writtenCopySchema } from "@/modules/ecommerce/lib/aiVerifiedCopy";
 import { readGivenPages, type PageRead, type PageSearch } from "@/modules/ecommerce/lib/aiPageReader";
@@ -16,7 +17,7 @@ import { checkFact, cmOf, gramsOf, normForCheck } from "@/modules/ecommerce/lib/
 import { BOX_TYPES, BOX_TYPE_KEYS, PHOTO_KINDS, PHOTO_REMOVE_REASONS, isEnough, isPhotoKind, missingMust, photoFloor, photoKindLabel, readPhotoChecklist, type BoxType, type PhotoChecklist, type PhotoChecklistItem, type PhotoKind, type PhotoRemoval, type PhotoRemoveReason, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
 import { cloudinarySignature } from "@/shared/lib/cloudinary";
 import { regenerateProductNamesSafe } from "@/modules/inventory/lib/regenerateNames";
-import { AgentCopyError, pickableMasters, productForAgent, specsOf, writeAsDraft } from "@/modules/ecommerce/lib/agentProductCopy";
+import { AgentCopyError, pickableMasters, productForAgent, specsOf } from "@/modules/ecommerce/lib/agentProductCopy";
 
 /**
  * Product prep — Claude's four-part loop (owner, 2026-11-16), separate from
@@ -47,6 +48,68 @@ const LAST_RUN = /^Last run: /;
 const lastRun = (part: number, result: string) =>
     `Last run: Part ${part} · ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" })} · ${result}`;
 const isRunLine = (n: string) => /^Part \d done/.test(n) || LAST_RUN.test(n);
+
+// ── Where a part leaves the product (owner, 2026-11-19) ───────────────────────
+//
+//   Part 1   ok → stays where it is · problem → Attention ("fix, then Start AI")
+//   Part 2   ok or nothing found → stays · technical failure → Attention
+//   Part 3   done → Draft · anything only staff can do → Attention
+//   Part 4   verified → Ready · any problem → Attention
+//   Part 5   done → Draft · anything only staff can do → Attention
+//
+// A success's stage can be overridden per run (`then`) — the owner's instruction
+// wins over the skill. Anything a human must do always goes to Attention, from any
+// stage, Published too. Part 4 → Ready, never straight to Published, until the AI
+// has earned that trust (owner, 2026-11-19).
+
+export const THEN_STAGES = ["same", "waiting", "draft", "ready", "attention"] as const;
+type Then = (typeof THEN_STAGES)[number];
+const thenSchema = z.enum(THEN_STAGES).optional();
+/** What staff do after fixing, written at the end of every Attention reason. */
+const AFTER_FIX = {
+    start: "Fix it, then press Start AI — it goes back to Waiting and runs from Part 1.",
+    recheck: "Fix it, then run Part 4 (product-recheck).",
+} as const;
+/** "PENDING (Part 4) — x" → "x": one open problem, whichever part wrote it. */
+const OPEN_LINE = /^(PENDING|STOPPED|NOTE) \(Part \d\) — /;
+const openText = (l: string) => l.trim().replace(OPEN_LINE, "").trim();
+
+/**
+ * Save a part's changes and leave the product at `to`. Draft / Attention go
+ * through Draft (the stage before is remembered), Ready through Save as ready,
+ * "same" changes no stage. `extra` adds to the saved draft notes / AI copy.
+ */
+async function leaveAt(id: number, to: Then, patch: ShopProductPatch, extra?: (info: ShopDraft | null) => Partial<ShopDraft>, reason?: string) {
+    const draft = to === "draft" || to === "attention" ? ("save" as const) : to === "ready" ? ("ready" as const) : undefined;
+    if (draft || Object.keys(patch).length) {
+        const saved = await updateShopProduct(id, { ...patch, ...(draft && { draft }) });
+        if (saved.response) {
+            const err = (await saved.response.json().catch(() => null)) as { error?: string } | null;
+            throw new AgentCopyError(err?.error ?? "Could not save the product");
+        }
+    }
+    if (extra) {
+        const row = await prisma.invProduct.findUniqueOrThrow({ where: { id }, select: { shopDraftJson: true } });
+        const info = readShopDraft(row.shopDraftJson);
+        await prisma.invProduct.update({ where: { id }, data: { shopDraftJson: { ...info, ...extra(info) } as never } });
+    }
+    if (to === "attention") await parkInAttention([id], (reason ?? "Needs staff — see the notes.").slice(0, 10000), "Claude", "any");
+    // Draft with nothing left for staff: the old Attention reason is done with.
+    else if (to === "draft") await prisma.invProduct.update({ where: { id }, data: { shopAttention: null, shopAttentionAt: null, shopAttentionBy: null } });
+    else if (to === "waiting") await startAi([id]);
+    return (await prisma.invProduct.findUniqueOrThrow({ where: { id }, select: { shopStatus: true } })).shopStatus;
+}
+
+/** An Attention reason: the open problems, what to do after, the Last run line and where it came from. */
+async function attentionReason(id: number, part: number, open: string[], after: string, extra: string[] = []) {
+    return [
+        ...open.map((x) => `PENDING (Part ${part}) — ${x}`),
+        ...extra,
+        after,
+        lastRun(part, `${open.length} for staff → Attention`),
+        await originLine(id),
+    ].filter(Boolean).join("\n");
+}
 
 type Identity = { brand: string; model: string; barcodes: string[] };
 const identityKey = (i: Identity) => [i.brand, i.model, ...[...i.barcodes].sort()].map((x) => x.trim().toLowerCase()).join("|");
@@ -345,6 +408,8 @@ export const part1Schema = z.object({
     need: z.string().trim().max(300).default(""),
     /** The photo list — a must photo missing (not ticked "Can't add") or a main photo that is not clean stops Part 1, for better seed. */
     photos: photoCheckSchema,
+    /** Where to leave the product when Part 1 is fine — the owner's instruction; default: where it is. */
+    then: thenSchema,
 });
 
 export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?: RunCtx) {
@@ -380,18 +445,20 @@ export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?
     const list = await photoListOf(1, id, b.photos, patch.galleryUrls ?? gallery);
     patch.photoChecklist = list.checklist;
     const stop = b.major.length > 0 || !b.enough || list.lines.length > 0;
-    await writeAsDraft(id, patch, () => ({}));
     if (stop) {
         const reason = [
             ...b.major.map((m) => `STOPPED (Part 1) — ${m}`),
             ...list.lines.map((m) => `STOPPED (Part 1) — ${m}`),
-            ...(!b.enough ? [`STOPPED (Part 1) — not enough to search${b.need ? `: ${b.need}` : ""}. Add it, then run product prep again.`] : []),
+            ...(!b.enough ? [`STOPPED (Part 1) — not enough to search${b.need ? `: ${b.need}` : ""}.`] : []),
             ...done, ...unsure, ...b.notes,
+            AFTER_FIX.start,
             lastRun(1, "stopped → Attention"),
+            await originLine(id),
         ];
-        await parkInAttention([id], [...reason, await originLine(id)].filter(Boolean).join("\n").slice(0, 10000), "Claude", "any");
+        await leaveAt(id, "attention", patch, undefined, reason.filter(Boolean).join("\n"));
         return { result: "attention" as const, removed: gone.size, notes: reason.length };
     }
+    await leaveAt(id, b.then ?? "same", patch);
     // A search saved for this same identity is kept (one search per lifecycle).
     const { state: prev } = await liveState(id, run);
     await writeState(id, { ...(prev?.search && { search: prev.search }), part: prev?.search ? Math.max(prev.part, 1) as PrepState["part"] : 1, at: new Date().toISOString(), identity: await currentIdentity(id) }, run);
@@ -415,20 +482,43 @@ export const part2Schema = z.object({
     labelWebsite: z.string().trim().max(200).default(""),
     /** Only when the owner asks to run Part 2 again: replaces the saved search. */
     again: z.boolean().default(false),
+    /** The search itself failed (tool down, error) — not "found nothing". The product goes to Attention, nothing is saved. */
+    failed: z.string().trim().min(3).max(300).optional(),
+    /** Where to leave the product after a good search — the owner's instruction; default: where it is. */
+    then: thenSchema,
 });
+
+/** Part 2 could not search at all → Attention; the one search is not used up. */
+async function searchFailed(id: number, why: string) {
+    const reason = [
+        `STOPPED (Part 2) — the search failed: ${why}. Nothing was saved, the one search is not used up.`,
+        "Run Part 2 again later.",
+        lastRun(2, "search failed → Attention"),
+        await originLine(id),
+    ];
+    await leaveAt(id, "attention", {}, undefined, reason.filter(Boolean).join("\n"));
+    return { result: "attention" as const, failed: why };
+}
 
 export async function savePart2(id: number, b: z.infer<typeof part2Schema>, run?: RunCtx) {
     const { state, identityChanged } = await liveState(id, run);
     if (!state || state.part < 1) throw new AgentCopyError(identityChanged ? "Brand / model / barcode changed since Part 1 — run Part 1 again first." : "Part 1 is not done for this product — run it first.");
     if (state.search && !b.again) throw new AgentCopyError(`Already searched on ${state.search.at.slice(0, 10)} — one search per product. Use the saved pages (Part 3); send "again": true only when the owner asks.`);
+    if (b.failed) return searchFailed(id, b.failed);
     const p = await prisma.invProduct.findUniqueOrThrow({ where: { id }, select: { name: true } });
     const identity = await currentIdentity(id);
-    const found: PageSearch = !b.pages.length ? { pages: [], dropped: [], searchNote: "The search found no usable page" } : await readGivenPages({
-        urls: b.pages.map((x) => x.url),
-        brand: identity.brand || p.name.split(/\s+/)[0] || "",
-        labelSite: b.labelWebsite,
-        codes: [...identity.barcodes, ...(identity.model ? [identity.model] : [])],
-    });
+    let found: PageSearch;
+    try {
+        found = !b.pages.length ? { pages: [], dropped: [], searchNote: "The search found no usable page" } : await readGivenPages({
+            urls: b.pages.map((x) => x.url),
+            brand: identity.brand || p.name.split(/\s+/)[0] || "",
+            labelSite: b.labelWebsite,
+            codes: [...identity.barcodes, ...(identity.model ? [identity.model] : [])],
+        });
+    } catch (e) {
+        // Reading the pages broke on our side — a technical failure, not "nothing found".
+        return searchFailed(id, `reading the pages broke (${e instanceof Error ? e.message.slice(0, 120) : "error"})`);
+    }
     const verdicts = b.pages.map((x) => ({ url: x.url, accepted: x.accepted, why: x.why }));
     const accepted = found.pages.filter((pg) => pg.codeMatch || verdicts.find((v) => v.url === pg.url)?.accepted);
     const next: PrepState = {
@@ -447,6 +537,7 @@ export async function savePart2(id: number, b: z.infer<typeof part2Schema>, run?
         SIGN(2),
         lastRun(2, accepted.length ? `${accepted.length} page(s) kept` : "no good page — label only"),
     ]);
+    if (b.then && b.then !== "same") await leaveAt(id, b.then, {});
     return {
         result: accepted.length ? ("part2" as const) : ("no-good-page" as const),
         read: found.pages.map((pg) => ({ url: pg.url, site: pg.site, maker: pg.maker, codeMatch: pg.codeMatch, accepted: accepted.includes(pg) })),
@@ -596,7 +687,12 @@ export const part3Schema = z.object({
     photos: photoPlanSchema,
     /** The photo list after your changes — tags may name the page photos you add. */
     photoCheck: photoCheckSchema,
+    /** Information only (what you did, where a fact came from) — never blocks. */
     notes: lines,
+    /** What only staff can do (create a brand, fix the group, check the real unit) — any line → Attention. */
+    staff: lines,
+    /** Where to leave the product when nothing is left for staff — the owner's instruction; default: Draft. */
+    then: thenSchema,
 });
 
 export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?: RunCtx) {
@@ -639,9 +735,10 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
 
     // Brand: from the list only; not in it → a note, no stop (Part 4 checks it again).
     const masters = await pickableMasters();
+    const staff: string[] = [...b.staff];
     if (b.brandId) {
         const br = masters.brands.find((x) => x.id === b.brandId);
-        if (!br) notes.push(`Brand id ${b.brandId} is not an active brand — not set. Create the brand, then set it.`);
+        if (!br) staff.push(`Brand id ${b.brandId} is not an active brand — not set. Create the brand, then set it.`);
         else if (p.brandId !== br.id) { patch.brandId = br.id; notes.push(`Brand set to "${br.name}"${p.brand?.name ? ` (was "${p.brand.name}")` : ""}.`); }
     }
     // Collections: set fresh (replace), main first.
@@ -656,23 +753,30 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
     const ph = await applyPhotos(b.photos, p, checked.trusted, patch, notes);
     const list = await photoListOf(3, id, b.photoCheck, ph.gallery, ph.remove, ph.alias);
     patch.photoChecklist = list.checklist;
-    notes.push(...list.dropNotes, ...list.lines);
+    notes.push(...list.dropNotes);
+    staff.push(...list.lines);
+    const open = [...new Set(staff)];
+    const runLine = lastRun(3, open.length ? `${open.length} for staff → Attention` : "done → Draft");
 
     const draft: ProductCopy = {
         ...checked.copy,
         note: `Written by Claude (product prep, from the saved search of ${s.at.slice(0, 10)}); ${checked.copy.note}`,
-        notes: [...notes, SIGN(3), lastRun(3, "done → Draft")],
+        notes: [...notes, SIGN(3), runLine],
         photoChecklist: list.checklist,
         ...(ph.arrange && { photoArrange: ph.arrange }),
         photoSuggestions: ph.suggested,
     };
-    if (fillModelNo) draft.notes = [...(draft.notes ?? []).filter((n) => !isRunLine(n)), `Model No filled: ${fillModelNo} (from the ${b.modelNo!.source.toLowerCase() === "label" ? "box" : "maker page"}).`, SIGN(3), lastRun(3, "done → Draft")];
-    const shopStatus = await writeAsDraft(id, patch, () => ({ aiCopy: draft, notes: undefined, notesAt: undefined, kept: undefined }));
+    if (fillModelNo) draft.notes = [...(draft.notes ?? []).filter((n) => !isRunLine(n)), `Model No filled: ${fillModelNo} (from the ${b.modelNo!.source.toLowerCase() === "label" ? "box" : "maker page"}).`, SIGN(3), runLine];
+    const shopStatus = await leaveAt(
+        id, open.length ? "attention" : b.then ?? "draft", patch,
+        () => ({ aiCopy: draft, notes: undefined, notesAt: undefined, kept: undefined }),
+        open.length ? await attentionReason(id, 3, open, AFTER_FIX.recheck) : undefined,
+    );
     if (fillModelNo) await writeModelNo(id, p, fillModelNo);
     // Model No is part of the identity the search was saved for — keep it matching.
     await writeState(id, { ...state, part: 3, at: new Date().toISOString(), ...(fillModelNo && { identity: await currentIdentity(id) }) }, run);
     return {
-        result: "part3" as const, shopStatus,
+        result: open.length ? ("attention" as const) : ("part3" as const), shopStatus, staff: open,
         kept: { specs: checked.copy.specs, highlights: checked.copy.highlights, warranty: checked.copy.warranty },
         unsure: checked.copy.unsure, flags: checked.copy.flags,
         photos: { removed: ph.removed, added: ph.added, ordered: ph.ordered, suggested: ph.suggested.length },
@@ -696,8 +800,18 @@ export const part5Schema = z.object({
     shipping: shippingSchema.optional(),
     photos: photoPlanSchema,
     photoCheck: photoCheckSchema,
+    /** Information only — never blocks. */
     notes: lines,
+    /** What only staff can do — any line → Attention. */
+    staff: lines,
+    /** The open problems in the Attention reason now that you FIXED, copied as they are written. Every other one stays open. */
+    fixed: z.array(z.string().trim().min(1)).max(40).default([]),
+    /** Where to leave the product when nothing is left for staff — the owner's instruction; default: Draft. */
+    then: thenSchema,
 });
+
+/** The server's own photo lines: worked out fresh by every part, never carried over. */
+const SERVER_PHOTO_LINE = /^(Main photo |No photo at all|Must photo missing)/;
 
 /**
  * Part 5 — touch-up (owner, 2026-11-17): after Part 3, or on a product staff made
@@ -705,11 +819,12 @@ export const part5Schema = z.object({
  * cost too much. No internet, no rewrite: photo order / removals / adds from the
  * saved search, single spec rows, small text fixes, an empty Model No or weight /
  * size — every fact from the label or a kept saved page. Moves the product to
- * Draft with the notes and a Last run line; Part 4 checks it after.
+ * Draft with the notes and a Last run line — or to Attention when anything is
+ * left that only staff can do; Part 4 checks it after.
  */
 export async function savePart5(id: number, b: z.infer<typeof part5Schema>) {
-    const p: ProductRow & { shopSubheading: string | null; shopDescription: string | null } = await prisma.invProduct.findUniqueOrThrow({
-        where: { id }, select: { ...productSelect, shopSubheading: true, shopDescription: true },
+    const p: ProductRow & { shopSubheading: string | null; shopDescription: string | null; shopAttention: string | null } = await prisma.invProduct.findUniqueOrThrow({
+        where: { id }, select: { ...productSelect, shopSubheading: true, shopDescription: true, shopAttention: true },
     }).catch(() => { throw new AgentCopyError("Product not found"); });
     const { state } = await liveState(id);
     const search = state?.search;
@@ -753,11 +868,20 @@ export async function savePart5(id: number, b: z.infer<typeof part5Schema>) {
     if (!trusted.length && b.photos.add.length) notes.push("No saved search for this product — photos can only be added by hand.");
     const list = await photoListOf(5, id, b.photoCheck, ph.gallery, ph.remove, ph.alias);
     patch.photoChecklist = list.checklist;
-    notes.push(...list.dropNotes, ...list.lines);
+    notes.push(...list.dropNotes);
 
-    // Onto the product, in Draft. Part 3's AI copy keeps its text; its photo advice is refreshed.
-    const run = [SIGN(5), lastRun(5, "touch-up done → Draft")];
-    await writeAsDraft(id, patch, (info) => {
+    // What is still open for staff (owner, 2026-11-19): the problems in the Attention
+    // reason now, minus the ones Claude says it fixed (by their exact text — no word
+    // guessing), minus the server's photo lines (worked out fresh above), plus new ones.
+    const fixed = new Set(b.fixed.map(openText));
+    const carried = (p.shopAttention ?? "").split("\n")
+        .filter((l) => OPEN_LINE.test(l.trim()))
+        .map(openText)
+        .filter((l) => !SERVER_PHOTO_LINE.test(l) && !fixed.has(l));
+    const open = [...new Set([...list.lines, ...carried, ...b.staff])];
+    const run = [SIGN(5), lastRun(5, open.length ? `${open.length} for staff → Attention` : "touch-up done → Draft")];
+
+    await leaveAt(id, open.length ? "attention" : b.then ?? "draft", patch, (info) => {
         const ai = info?.aiCopy;
         return {
             notes: [...(info?.notes ?? []).filter((n) => !isRunLine(n)), ...notes, ...run].slice(-40),
@@ -773,12 +897,16 @@ export async function savePart5(id: number, b: z.infer<typeof part5Schema>) {
                 },
             }),
         };
-    });
+    }, open.length ? await attentionReason(id, 5, open, AFTER_FIX.recheck, list.dropNotes) : undefined);
     if (fillModelNo) {
         await writeModelNo(id, p, fillModelNo);
         if (state) await writeState(id, { ...state, identity: await currentIdentity(id) });
     }
-    return { result: "part5" as const, photos: { removed: ph.removed, added: ph.added, ordered: ph.ordered, suggested: ph.suggested.length }, specsSet: set.length, notes: [...notes, ...run] };
+    return {
+        result: open.length ? ("attention" as const) : ("part5" as const),
+        photos: { removed: ph.removed, added: ph.added, ordered: ph.ordered, suggested: ph.suggested.length },
+        specsSet: set.length, staff: open, notes: [...notes, ...run],
+    };
 }
 
 // ── Parts 1–3 in one call ─────────────────────────────────────────────────────
@@ -804,6 +932,7 @@ export async function runParts(id: number, b: z.infer<typeof runSchema>) {
         return { result: "attention" as const, stoppedAt: 1, part1: p1 };
     }
     const p2 = b.part2 ? await savePart2(id, b.part2, run) : null;
+    if (p2?.result === "attention") return { result: "attention" as const, stoppedAt: 2, part1: p1, part2: p2 };
     if (!b.part2 && !run.state?.search) throw new AgentCopyError("No saved search for this product — send part2 (the search) in the run.");
     try {
         const p3 = await savePart3(id, b.part3, run);
@@ -831,6 +960,8 @@ export const part4Schema = z.object({
      * Part 5 adds it; not → staff take it or tick "Can't add".
      */
     onPages: z.array(z.object({ kind: z.string(), url: z.string().url() })).max(20).default([]),
+    /** Where to leave a verified product — the owner's instruction; default: Ready (never Published yet). */
+    then: thenSchema,
 });
 const NEXT_WORDS = { part5: "Part 5 (touch-up — photos / small fixes)", part3: "Part 3 (rewrite from the saved search)", part1: "Part 1 (start again)" } as const;
 
@@ -877,6 +1008,12 @@ export async function savePart4(id: number, input: z.infer<typeof part4Schema>) 
     }
     const { state } = await liveState(id).catch(() => ({ state: null }));
     if (state) await writeState(id, { ...state, part: 4, at: new Date().toISOString() });
-    await addDraftNotes(id, [...list.dropNotes, "Part 4 done — verified, ready to Save as ready.", lastRun(4, "verified, no problems")]);
-    return { result: "verified" as const };
+    // Verified → Ready (owner, 2026-11-19); staff press Publish. Straight to Published
+    // only once the AI has earned that trust.
+    const to = input.then ?? "ready";
+    const shopStatus = await leaveAt(id, to, {}, (info) => ({
+        notes: [...(info?.notes ?? []).filter((n) => !isRunLine(n)), ...list.dropNotes, `Part 4 done — verified${to === "ready" ? ", moved to Ready — press Publish." : "."}`, lastRun(4, `verified → ${to === "same" ? "stage kept" : to}`)].slice(-40),
+        notesAt: new Date().toISOString(),
+    }));
+    return { result: "verified" as const, shopStatus };
 }
