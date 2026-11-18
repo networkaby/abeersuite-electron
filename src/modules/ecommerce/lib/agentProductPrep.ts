@@ -255,6 +255,13 @@ const photoCheckSchema = z.object({
     /** Photo 1 is the product itself, sharp, without the box, with no logo, watermark or text on it (ours too). */
     mainClean: z.boolean(),
     mainWhy: z.string().trim().max(200).default(""),
+    /**
+     * Parts 3, 4 and 5 only (owner, 2026-11-18): they know the product better than
+     * Part 1 did, so they may take an earlier must photo off the must list, each
+     * with a reason. It becomes optional — the photo itself, if we have it, stays.
+     * The fixed floor can never be dropped.
+     */
+    drop: z.array(z.object({ kind: z.string(), why: z.string().trim().min(5).max(200) })).max(20).default([]),
 });
 type PhotoCheck = z.infer<typeof photoCheckSchema>;
 
@@ -264,22 +271,26 @@ const PRODUCT_KINDS = new Set<string>(Object.entries(PHOTO_KINDS).filter(([, v])
  * The product's photo list from a part's check, against `gallery` (the photos as
  * saved after this part). `alias` maps a page photo url to its copy in our storage.
  */
-async function photoListOf(id: number, c: PhotoCheck, gallery: string[], remove: PhotoRemoval[] = [], alias = new Map<string, string>()) {
+async function photoListOf(part: 1 | 3 | 4 | 5, id: number, c: PhotoCheck, gallery: string[], remove: PhotoRemoval[] = [], alias = new Map<string, string>()) {
     const row = await prisma.invProduct.findUnique({ where: { id }, select: { photoChecklistJson: true } });
     const prev = readPhotoChecklist(row?.photoChecklistJson);
     const kinds = (xs: string[]) => xs.filter(isPhotoKind) as PhotoKind[];
     const tagOf = new Map(c.tags.map((t) => [alias.get(t.url) ?? t.url, t.kind]));
     const have = new Set(kinds(gallery.map((u) => tagOf.get(u) ?? "")));
-    const must = new Set<PhotoKind>([...photoFloor(c.box), ...kinds(c.must), ...(prev?.items.filter((i) => i.must).map((i) => i.kind) ?? [])]);
+    const floor = new Set<PhotoKind>(photoFloor(c.box));
+    // Part 1 knows least — it only adds. A later part's drop wins over an earlier must, never over the floor.
+    const drops = part === 1 ? [] : c.drop.filter((d) => isPhotoKind(d.kind) && !floor.has(d.kind as PhotoKind));
+    const dropped = new Set(drops.map((d) => d.kind as PhotoKind));
+    const must = new Set<PhotoKind>([...floor, ...kinds(c.must), ...(prev?.items.filter((i) => i.must).map((i) => i.kind) ?? [])].filter((k) => !dropped.has(k)));
     const prevOf = new Map(prev?.items.map((i) => [i.kind, i]) ?? []);
     const order = [...have, ...must, ...kinds(c.nice), ...(prev?.items.map((i) => i.kind) ?? [])];
-    const items: PhotoChecklistItem[] = [...new Set(order)].map((kind) => ({
-        kind,
+    const items: PhotoChecklistItem[] = [...new Set([...order, ...dropped])].map((kind) => {
         // Staff's own tick that the gallery has it stays.
-        done: have.has(kind) || prevOf.get(kind)?.done === true,
-        must: must.has(kind),
-        ...(prevOf.get(kind)?.waived && { waived: true }),
-    }));
+        const done = have.has(kind) || prevOf.get(kind)?.done === true;
+        // "Can't add" only means something on a must photo still missing — cleared once it is dropped or there.
+        const waived = prevOf.get(kind)?.waived && must.has(kind) && !done;
+        return { kind, done, must: must.has(kind), ...(waived && { waived: true }) };
+    });
     const checklist: PhotoChecklist = { items, enough: isEnough(items), at: new Date().toISOString(), remove, box: c.box, ...(c.shape && { shape: c.shape }) };
     const main = gallery[0];
     const mainKind = main ? tagOf.get(main) : undefined;
@@ -295,7 +306,8 @@ async function photoListOf(id: number, c: PhotoCheck, gallery: string[], remove:
         ...(mainProblem ? [mainProblem] : []),
         ...(missing.length ? [`Must photo missing: ${missing.map(photoKindLabel).join(", ")} — add it, or tick "Can't add" under Product image.`] : []),
     ];
-    return { checklist, missing, mainProblem, lines };
+    const dropNotes = drops.map((d) => `Photo "${photoKindLabel(d.kind as PhotoKind)}" no longer a must (Part ${part}): ${d.why}${have.has(d.kind as PhotoKind) ? " — the photo we have stays." : ""}`);
+    return { checklist, missing, mainProblem, lines, dropNotes };
 }
 
 /** What the next search should look for: must photos missing, ticked "Can't add" or not. */
@@ -365,7 +377,7 @@ export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?
         .filter((r) => gallery.includes(r.url) && !gone.has(r.url))
         .map((r) => `Check photo ${gallery.indexOf(r.url) + 1}: ${r.note || r.why} — remove it if it is wrong.`);
 
-    const list = await photoListOf(id, b.photos, patch.galleryUrls ?? gallery);
+    const list = await photoListOf(1, id, b.photos, patch.galleryUrls ?? gallery);
     patch.photoChecklist = list.checklist;
     const stop = b.major.length > 0 || !b.enough || list.lines.length > 0;
     await writeAsDraft(id, patch, () => ({}));
@@ -639,9 +651,9 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
     applyShipping(b.shipping, p, facts, checked.trusted, patch, notes);
     const fillModelNo = modelNoToFill(b.modelNo, p, facts, checked.trusted, notes);
     const ph = await applyPhotos(b.photos, p, checked.trusted, patch, notes);
-    const list = await photoListOf(id, b.photoCheck, ph.gallery, ph.remove, ph.alias);
+    const list = await photoListOf(3, id, b.photoCheck, ph.gallery, ph.remove, ph.alias);
     patch.photoChecklist = list.checklist;
-    notes.push(...list.lines);
+    notes.push(...list.dropNotes, ...list.lines);
 
     const draft: ProductCopy = {
         ...checked.copy,
@@ -736,9 +748,9 @@ export async function savePart5(id: number, b: z.infer<typeof part5Schema>) {
     if (fillModelNo) notes.push(`Model No filled: ${fillModelNo} (from the ${b.modelNo!.source.trim().toLowerCase() === "label" ? "box" : "maker page"}).`);
     const ph = await applyPhotos(b.photos, p, trusted, patch, notes);
     if (!trusted.length && b.photos.add.length) notes.push("No saved search for this product — photos can only be added by hand.");
-    const list = await photoListOf(id, b.photoCheck, ph.gallery, ph.remove, ph.alias);
+    const list = await photoListOf(5, id, b.photoCheck, ph.gallery, ph.remove, ph.alias);
     patch.photoChecklist = list.checklist;
-    notes.push(...list.lines);
+    notes.push(...list.dropNotes, ...list.lines);
 
     // Onto the product, in Draft. Part 3's AI copy keeps its text; its photo advice is refreshed.
     const run = [SIGN(5), lastRun(5, "touch-up done → Draft")];
@@ -823,7 +835,7 @@ export async function savePart4(id: number, input: z.infer<typeof part4Schema>) 
     if (!row) throw new AgentCopyError("Product not found");
     // Photos are checked here, not taken on the AI's word (owner, 2026-11-18: a
     // one-photo product with our logo on the main photo passed).
-    const list = await photoListOf(id, input.photoCheck, galleryOf(row));
+    const list = await photoListOf(4, id, input.photoCheck, galleryOf(row));
     // The list itself is saved (not the product) so staff see the must rows and can tick "Can't add".
     await prisma.invProduct.update({ where: { id }, data: { photoChecklistJson: list.checklist } });
     const b = { ...input, pending: [...list.lines, ...input.pending], next: input.next ?? (list.lines.length ? ("part5" as const) : undefined) };
@@ -832,6 +844,7 @@ export async function savePart4(id: number, input: z.infer<typeof part4Schema>) 
         const reason = [
             ...b.pending.map((x) => `PENDING (Part 4) — ${x}`),
             ...b.notes.map((x) => `NOTE (Part 4) — ${x}`),
+            ...list.dropNotes,
             lastRun(4, `${problems} problem(s) → Attention${b.next ? ` · next: ${NEXT_WORDS[b.next]}` : ""}`),
         ];
         await parkInAttention([id], [...reason, await originLine(id)].filter(Boolean).join("\n").slice(0, 10000), "Claude", "any");
@@ -839,6 +852,6 @@ export async function savePart4(id: number, input: z.infer<typeof part4Schema>) 
     }
     const { state } = await liveState(id).catch(() => ({ state: null }));
     if (state) await writeState(id, { ...state, part: 4, at: new Date().toISOString() });
-    await addDraftNotes(id, ["Part 4 done — verified, ready to Save as ready.", lastRun(4, "verified, no problems")]);
+    await addDraftNotes(id, [...list.dropNotes, "Part 4 done — verified, ready to Save as ready.", lastRun(4, "verified, no problems")]);
     return { result: "verified" as const };
 }

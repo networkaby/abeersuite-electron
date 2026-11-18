@@ -140,6 +140,17 @@ The server keeps the list on the product (staff see it under Product image), **n
 - Staff tick **"Can't add"** when a photo just cannot be taken (box gone, item fitted) → it stops blocking; `photoList.findOnline` lists it, and **Part 2 looks for it online** (the maker's or a seller's photo of that view), Part 3 adds it when sure.
 - Part 3 / Part 5: still missing → a note. Part 4: still missing, not ticked, or main not clean → **pending, never verified**.
 
+**Later parts correct Part 1** (owner, 2026-11-18). Part 1 sees only our photos and data, so it only adds musts. Parts 3, 4 and 5 know the product (the search, the maker's pages) — keep, add, or **drop** its must photos, each drop with a reason:
+
+```json
+"drop": [ { "kind": "bottom", "why": "maker and Amazon show no underside for GM46 — plain base, nothing to show" } ]
+```
+
+- A dropped photo becomes **optional**: staff need not upload it. The reason goes to staff as a note.
+- **Dropping is never a reason to remove the photo.** Other sellers not showing a view does not mean we cannot. If staff already added it, look at it: keep it unless it is ugly, low quality or adds nothing (then `remove` / `suggestRemove` with the usual reason).
+- The fixed floor (clean product photo; box front + back when boxed) can never be dropped. Part 1's drops are ignored.
+- Staff's "Can't add" tick is cleared by the server once that photo is dropped or is in the gallery — it only means something on a must photo still missing.
+
 ## Part 1 — Prepare the seed (remove only, add nothing)
 
 1. **Read everything**: name (the custom part is usually the most reliable), brand, group, collections, SKU, barcodes, model no., specs, title, description, shipping, warranty — and **open every photo**. Never use your own memory of the product.

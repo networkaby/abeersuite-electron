@@ -50,6 +50,47 @@ curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$PRODUCT_COPY_READ_URL/api/agent
 Use: the product fields, every photo (open each — `GET /api/agent/products/<id>/photos/<n>` if blocked), `draftNotes`, `processNotes`, `attention`, and `prep.pages` / `prep.labelFacts` (the saved search — the only outside source allowed).
 `prep.identityChanged: true` → staff changed brand / model / barcode after the search: **pending** "Identity changed after the search — run product prep from Part 1".
 
+## The photo list (send it as `photoCheck`)
+
+The server checks the photos itself (owner, 2026-11-18 — a one-photo product with our logo on the main photo got through once). Each part (Part 4 too) sends what **you see now**:
+
+```json
+{
+  "box": "carton",
+  "shape": "palm-size gaming mouse",
+  "tags": [ { "url": "…/1.jpg", "kind": "front" }, { "url": "…/2.jpg", "kind": "box_back" } ],
+  "must": ["front", "left", "top", "box_front", "box_back"],
+  "nice": ["in_use", "size", "working"],
+  "mainClean": false,
+  "mainWhy": "held in hand, our shop logo across the top"
+}
+```
+
+- **`box`** — how it is packed: `loose` (no box), `card` (blister / card pack), `pouch`, `carton`. Read it from the photos. The **fixed floor** the server adds on its own: a clean product photo without the box (`front`), and for any boxed product the **box front and box back** (the back carries the model and specs).
+- **`shape`** — the product's shape / size in a few words.
+- **`must` / `nice`** — **your own list for this product**, not a fixed table: think how the maker and good sellers (Amazon.in, Flipkart, the maker's site) show this kind of item. A mouse: top, side, underside with the sensor. A router: front, back ports, the stand. A cable: both ends close-up, coiled length. A monitor: front, back with ports, the stand, side profile. A small part (screw, fuse): front and a size photo is often enough. Only what a buyer really needs is `must`; the rest is `nice`.
+- **`tags`** — every gallery photo with the kind it shows (`photoKinds` keys; in Part 3 / 5 a page photo you add counts by its page url).
+- **`mainClean`** — photo 1 is the product itself, sharp, **without the box**, with no logo, watermark or text on it (ours too). In a hand, on a shelf, in the box → `false`, with `mainWhy`.
+
+The server keeps the list on the product (staff see it under Product image), **never drops a must an earlier part set**, and works out what is missing:
+- A **must** photo missing and **not ticked "Can't add"** by staff, or a main photo that is not clean → **Part 1 stops** (Attention: "Must photo missing: … — add it, or tick Can't add"). That gets us better seed before the search.
+- A missing **optional** photo never stops anything.
+- Staff tick **"Can't add"** when a photo just cannot be taken (box gone, item fitted) → it stops blocking; `photoList.findOnline` lists it, and **Part 2 looks for it online** (the maker's or a seller's photo of that view), Part 3 adds it when sure.
+- Part 3 / Part 5: still missing → a note. Part 4: still missing, not ticked, or main not clean → **pending, never verified**.
+
+**Later parts correct Part 1** (owner, 2026-11-18). Part 1 sees only our photos and data, so it only adds musts. Parts 3, 4 and 5 know the product (the search, the maker's pages) — keep, add, or **drop** its must photos, each drop with a reason:
+
+```json
+"drop": [ { "kind": "bottom", "why": "maker and Amazon show no underside for GM46 — plain base, nothing to show" } ]
+```
+
+- A dropped photo becomes **optional**: staff need not upload it. The reason goes to staff as a note.
+- **Dropping is never a reason to remove the photo.** Other sellers not showing a view does not mean we cannot. If staff already added it, look at it: keep it unless it is ugly, low quality or adds nothing (then `remove` / `suggestRemove` with the usual reason).
+- The fixed floor (clean product photo; box front + back when boxed) can never be dropped. Part 1's drops are ignored.
+- Staff's "Can't add" tick is cleared by the server once that photo is dropped or is in the gallery — it only means something on a must photo still missing.
+
+> You know the product better than Part 1 did — keep, add, or drop its must photos, each drop with a reason.
+
 ## 3. Check
 
 | Area | Pending when |
@@ -72,7 +113,7 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
 ```
 
 - `pending: []` **and** `notes: []` → `{ result: "verified" }`: it stays in Draft with "Part 4 done — verified, ready to Save as ready". **You never press Save as ready.**
-- Always send **`photoCheck`** — what you see now: `box` (loose / card / pouch / carton), `shape`, a `tags` row for every gallery photo (`photoKinds` keys), your `must` / `nice` for this product (how the maker and good sellers show it), and `mainClean` (photo 1 is the product itself, no box, no logo or text — ours too) with `mainWhy`. The server adds the fixed floor (clean product photo; box front + back when boxed), keeps every must an earlier part set, honours staff's "Can't add" ticks, and puts a missing must or an unclean main photo in pending on its own — the product is **never verified** with them (next: Part 5).
+- Always send **`photoCheck`** (see "The photo list"). The server puts a missing must or an unclean main photo in pending on its own — the product is **never verified** with them (next: Part 5). A `drop` is not a problem: it goes to staff as a note.
   ```json
   "photoCheck": { "box": "carton", "shape": "palm-size gaming mouse", "tags": [ { "url": "…/1.jpg", "kind": "front" } ], "must": ["front", "left", "box_front", "box_back"], "nice": ["in_use"], "mainClean": false, "mainWhy": "held in hand, shop logo on it" }
   ```
