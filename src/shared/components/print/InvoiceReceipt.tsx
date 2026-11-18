@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { voucherDisplayNo } from "@/shared/lib/accountancy/uvNo";
 import { notFound } from "next/navigation";
-import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
+import { readPartyAddress, readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 import { readSettlement } from "@/shared/lib/accountancy/settlement";
 import PrintToolbar from "@/shared/components/print/PrintToolbar";
 import ReceiptPreview from "@/shared/components/print/ReceiptPreview";
@@ -74,8 +74,8 @@ export default async function InvoiceReceipt({
             where:  { id: voucherRow.universalVoucher.partyAccountId },
             select: {
                 id: true, name: true,
-                person:  { select: { name: true, gstin: true, phones: { take: 1, orderBy: [{ isPrimary: "desc" as const }] } } },
-                company: { select: { name: true, gstin: true, phones: { take: 1, orderBy: [{ isPrimary: "desc" as const }] } } },
+                person:  { select: { name: true, gstin: true, address: true, phones: { take: 1, orderBy: [{ isPrimary: "desc" as const }] } } },
+                company: { select: { name: true, gstin: true, address: true, phones: { take: 1, orderBy: [{ isPrimary: "desc" as const }] } } },
             },
         })
         : null;
@@ -92,7 +92,9 @@ export default async function InvoiceReceipt({
     const owner = voucher.account?.person ?? voucher.account?.company ?? null;
     const partyName  = owner?.name ?? voucher.account?.name ?? readPartyName(voucher.partyJson) ?? "Walk-in";
     const partyPhone = owner?.phones[0]?.phone ?? null;
-    const partyGstin = owner?.gstin ?? null;   // B2B tax invoice prints the buyer GSTIN
+    const partyGstin = owner?.gstin ?? null;   // carried; printing gated by PRINT_PARTY_GSTIN
+    // Saved customer address, else the address typed on the bill itself.
+    const partyAddress = owner?.address?.trim() || readPartyAddress(voucher.partyJson)?.trim() || null;
 
     // Customer receipt shows the clean product name, with the line's note
     // (serial no. / colour the cashier typed) as its own field under it.
@@ -265,6 +267,7 @@ export default async function InvoiceReceipt({
         date:       voucher.universalVoucher!.date.toISOString().slice(0, 10),   // 5D-10: date on spine
         partyName,
         partyPhone,
+        partyAddress,
         partyGstin,
         lines: voucher.lines.map((l, i) => {
             const lad = ladder?.lines[i];
@@ -326,6 +329,8 @@ export default async function InvoiceReceipt({
         invoiceNumber:  voucherDisplayNo(voucher.universalVoucher?.voucherNo, voucher.universalVoucherId),
         date:           voucher.universalVoucher!.date.toISOString(),   // 5D-10: date on spine
         customerName:   partyName,
+        customerPhone:  partyPhone,
+        customerAddress: partyAddress,
         customerGstin:  partyGstin,
         // Thermal-resolved template rides along so the bridge has the shop's
         // current config (logo/header/GSTIN toggles) on every job.

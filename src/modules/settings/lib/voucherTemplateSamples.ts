@@ -285,6 +285,7 @@ function kindSample(kind: VoucherTemplateKind): ThermalReceiptSample {
             return {
                 reference: "SV/26-27/0017", date: today,
                 partyName: "Acme Traders", partyPhone: null,
+                partyAddress: "12 Station Road\nGuwahati, Assam 781001",
                 partyGstin: "18ABCDE1234F1Z5",
                 partyState: "Assam, Code : 18",
                 paymentTerms: "Credit — 30 days",
@@ -326,6 +327,7 @@ function kindSample(kind: VoucherTemplateKind): ThermalReceiptSample {
             return {
                 reference: "POS/26-27/0042", date: today,
                 partyName: "Rahul Das", partyPhone: null, partyGstin: null,
+                partyAddress: "Ward No. 5, Abhayapuri\nBongaigaon, Assam 783384",
                 lines: [
                     { description: "Logitech B100 USB Mouse", quantity: 2, amount: 700,  mrp: 800,  barcode: 700 },
                     { description: "HP Laptop 14s Charger",   quantity: 1, amount: 1600, mrp: 1800, barcode: 1600, note: "SN 5CG1234XYZ" },

@@ -509,8 +509,12 @@ function newSlipPrinter(width, opts) {
 
 // ── POS receipt builder ───────────────────────────────────────────────────────
 
+// Customer GSTIN is not printed for now — mirror of PRINT_PARTY_GSTIN in
+// src/shared/lib/print/voucherTemplateDefaults.ts. Flip both together.
+const PRINT_PARTY_GSTIN = false;
+
 async function buildPosBuffer(data, opts) {
-    const { invoiceNumber, date, customerName, customerPhone, customerGstin, lines, subtotal, discountPct, discountAmount, tax, total, receipts, balanceDue, balanceBefore, balanceAfter, branchAddress, grossAtTag, discounts, charges, savings, hsnSummary, taxTotal, template: tpl } = data;
+    const { invoiceNumber, date, customerName, customerPhone, customerAddress, customerGstin, lines, subtotal, discountPct, discountAmount, tax, total, receipts, balanceDue, balanceBefore, balanceAfter, branchAddress, grossAtTag, discounts, charges, savings, hsnSummary, taxTotal, template: tpl } = data;
 
     // Thermal-resolved POS print template (header/address/toggles/terms/footer).
     // Sent by PosScreen (via /api/pos/sale → posTemplate) and by the invoice
@@ -551,7 +555,12 @@ async function buildPosBuffer(data, opts) {
         { text: String(customerName || "Walk-in"), align: "RIGHT", width: 0.6 },
     ]);
     if (customerPhone) { printer.alignRight(); printer.println(String(customerPhone)); printer.alignLeft(); }
-    if (customerGstin) {
+    if (customerAddress && String(customerAddress).trim()) {
+        printer.alignRight();
+        for (const ln of String(customerAddress).split(/\r?\n/)) if (ln.trim()) printer.println(ln.trim());
+        printer.alignLeft();
+    }
+    if (PRINT_PARTY_GSTIN && customerGstin) {
         printer.tableCustom([
             { text: "GSTIN:",               align: "LEFT",  width: 0.4 },
             { text: String(customerGstin),  align: "RIGHT", width: 0.6 },

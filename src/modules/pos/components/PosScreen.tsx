@@ -521,6 +521,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                         date: today,
                         customerName: snapshot?.party.name ?? "Walk-in",
                         customerPhone: snapshot?.party.phone ?? null,
+                        customerAddress: snapshot?.party.address ?? null,
                         customerGstin: snapshot?.party.gstin ?? null,
                         // Resolved POS print template → the relay renders the
                         // header/address/toggles/terms/footer + ladder so the

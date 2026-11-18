@@ -17,7 +17,7 @@
  * <html>/<body> from the root layout, not a standalone document.
  */
 
-import { isSupplierPartyKind, type VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
+import { isSupplierPartyKind, PRINT_PARTY_GSTIN, type VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
 import { QrSvg } from "@/shared/components/print/QrSvg";
 import SetDocumentTitle from "@/shared/components/print/SetDocumentTitle";
 import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";
@@ -132,7 +132,10 @@ export interface ThermalReceiptSample {
     date:      string;          // ISO date or display date
     partyName: string | null;   // "Walk-in" if null
     partyPhone:string | null;
-    lines:     ThermalReceiptLine[];
+    /// Customer's saved address (free text, may be multi-line). Printed under
+    /// the name on every bill; absent for walk-in.
+    partyAddress?: string | null;
+    lines:    ThermalReceiptLine[];
     subtotal:  number | null;   // null hides the subtotal row
     taxAmount: number | null;   // null hides the tax row
     total:     number | null;   // null hides the total row
@@ -350,6 +353,9 @@ function MoneyThermalMiddle({ template, sample }: { template: VoucherTemplateDef
                     <span>{sample.partyPhone}</span>
                 </div>
             )}
+            {sample.partyAddress && (
+                <div className="small" style={{ textAlign: "right", whiteSpace: "pre-line" }}>{sample.partyAddress}</div>
+            )}
             {modes.length === 1 && (
                 <div className="row">
                     <span>By:</span>
@@ -431,7 +437,10 @@ function DefaultThermalMiddle({ template, sample }: { template: VoucherTemplateD
                     <span>{sample.partyPhone}</span>
                 </div>
             )}
-            {sample.partyGstin && (
+            {sample.partyAddress && (
+                <div className="small" style={{ textAlign: "right", whiteSpace: "pre-line" }}>{sample.partyAddress}</div>
+            )}
+            {PRINT_PARTY_GSTIN && sample.partyGstin && (
                 <div className="row">
                     <span>GSTIN:</span>
                     <span>{sample.partyGstin}</span>

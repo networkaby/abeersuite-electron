@@ -20,7 +20,7 @@
  *   8. Terms + bank block + signature + footer line + barcode.
  */
 
-import { isSupplierPartyKind, type VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
+import { isSupplierPartyKind, PRINT_PARTY_GSTIN, type VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
 import { rupeesInWords } from "@/shared/lib/format/numberToWords";
 import { formatAmount } from "@/shared/lib/format/moneyInr";
 import type { ThermalReceiptSample } from "@/shared/components/print/ThermalReceiptPreview";
@@ -84,11 +84,12 @@ function DefaultA4Middle({ template, sample, page }: A4ChromeProps & { page?: Pa
                 <div className="meta-card">
                     <div className="label">{isSupplierPartyKind(template.kind) ? "Supplier" : "Bill To"}</div>
                     <div className="bold">{sample.partyName ?? "Walk-in"}</div>
+                    {sample.partyAddress && <div className="small muted" style={{ whiteSpace: "pre-line" }}>{sample.partyAddress}</div>}
                     {sample.partyPhone && <div className="small muted">{sample.partyPhone}</div>}
                     {/* Buyer GSTIN + state are mandatory on a B2B tax invoice and
                         are what justify the CGST+SGST vs IGST split. Absent for a
                         walk-in, where both rows simply don't print. */}
-                    {sample.partyGstin && <div className="small muted">GSTIN/UIN : {sample.partyGstin}</div>}
+                    {PRINT_PARTY_GSTIN && sample.partyGstin && <div className="small muted">GSTIN/UIN : {sample.partyGstin}</div>}
                     {sample.partyState && <div className="small muted">State Name : {sample.partyState}</div>}
                 </div>
                 <div className="meta-card">

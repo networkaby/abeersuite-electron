@@ -548,6 +548,12 @@ const SUPPLIER_PARTY_KINDS: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTe
     "DEBIT_NOTE",
 ]);
 
+/** Owner's call (2026-11-18): the customer's GSTIN/UIN is not printed in the
+ *  bill's party box for now. The data still flows to every print, so turning
+ *  this back on is the only change needed. The ESC/POS relay has its own copy
+ *  (hardware-bridge/thermal.js, PRINT_PARTY_GSTIN). Shop's own GSTIN unaffected. */
+export const PRINT_PARTY_GSTIN = false;
+
 /** True when the voucher's party is a supplier (purchase-side document). */
 export function isSupplierPartyKind(kind: string): boolean {
     return isVoucherTemplateKind(kind) && SUPPLIER_PARTY_KINDS.has(kind);
