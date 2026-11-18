@@ -1022,6 +1022,11 @@ export default function ProductForm({
                                 title="The work is done — Ready to publish">
                                 Save as ready
                             </Button>
+                            {/* Half done — save and stay in Draft (owner, 2026-11-18). */}
+                            <Button type="button" variant="outline" onClick={() => void submit("save")} disabled={busy}
+                                title="Save what is done so far — stays in Draft">
+                                Save as draft
+                            </Button>
                             <Button type="button" variant="ghost" onClick={() => void submit("discard")} disabled={busy}
                                 title="Leave Draft — back to the stage it came from; the edits stay">
                                 Discard draft
