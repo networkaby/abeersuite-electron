@@ -65,6 +65,7 @@ import { topicsForApiPath, type Topic } from "./topics";
 import { writeCache, readCache, subscribeToCache } from "@/shared/lib/browser/pollCache";
 import { isTabLeader, onBecomeLeader } from "./tabLeader";
 import { CHANGE_CHANNEL_NAME as CHANNEL_NAME, CHANGE_EVENT_NAME as EVENT_NAME } from "./channel";
+import { ensureSyncAppliedBridge } from "./syncApplied";
 
 /** What travels on the wire: which buckets moved, and when. Nothing else. */
 export type ChangeSignal = { topics: Topic[]; at: string };
@@ -129,7 +130,8 @@ if (typeof window !== "undefined") {
  * every caller is deliberate: the leader tab keeping a listener live, or a
  * publish that must go out right now regardless of leadership.
  */
-function connect(): Promise<ReturnType<typeof supabase.channel>> {
+function connect(): Promise<ReturnType<typeof supabase.channel> | null> {
+    if (replicaOnly()) return Promise.resolve(null);
     if (joining) return joining;
     joining = realtimeReady.then(() => new Promise<ReturnType<typeof supabase.channel>>((resolve) => {
         const ch = supabase
@@ -203,6 +205,7 @@ function flush() {
     void (async () => {
         try {
             const ch = await connect(); // any tab may publish, leader or not
+            if (!ch) return; // a replica-reading counter: the outbox flusher announces
             await ch.send({
                 type:    "broadcast",
                 event:   EVENT_NAME,
@@ -260,6 +263,16 @@ let readsGoLocal = false;
 
 export function setReadsGoLocal(local: boolean) {
     readsGoLocal = local;
+    // A counter reading its replica hears only `sync:applied`; a socket opened before
+    // the status answered is dropped (owner, 2026-11-18: screens need no Supabase,
+    // chat aside — the worker and the outbox flusher own realtime on a counter).
+    if (replicaOnly()) disconnect();
+    else if (wantsLive && !channel && !joining) void connect();
+}
+
+/** This window reads its replica and gets the worker's own "rows are in" event. */
+function replicaOnly(): boolean {
+    return readsGoLocal && ensureSyncAppliedBridge();
 }
 
 export function getReadsGoLocal(): boolean {

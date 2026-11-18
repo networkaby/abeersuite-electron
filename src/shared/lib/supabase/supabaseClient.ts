@@ -35,20 +35,29 @@ const PAIRS: Record<RtId, { url?: string; key?: string }> = {
 const hasDb2 = !!(PAIRS.DB2.url && PAIRS.DB2.key);
 let chosen: RtId = "DB1";
 const clients: Partial<Record<RtId, SupabaseClient>> = {};
+// A counter's own pair, handed over by the office at start (never the bundle's baked one).
+let handed: { url: string; key: string } | null = null;
+let handedClient: SupabaseClient | null = null;
 
 function client(): SupabaseClient {
+    if (handed) return (handedClient ??= createClient(handed.url, handed.key));
     const id = chosen === "DB2" && hasDb2 ? "DB2" : "DB1";
     return (clients[id] ??= createClient(PAIRS[id].url!, PAIRS[id].key!));
 }
 
+/** A counter window (Electron shell) — it asks its local server for the office's pair. */
+const isCounterWindow = () =>
+    typeof window !== "undefined" && !!(window as { electronAPI?: unknown }).electronAPI;
+
 /** Resolves once this page knows the primary's project. Never rejects (DB1 on any error). */
 export const realtimeReady: Promise<void> =
-    typeof window === "undefined" || !hasDb2
+    typeof window === "undefined" || (!hasDb2 && !isCounterWindow())
         ? Promise.resolve()
         : fetch("/api/realtime/project", { cache: "no-store" })
-              .then((r) => (r.ok ? (r.json() as Promise<{ primary?: string }>) : null))
+              .then((r) => (r.ok ? (r.json() as Promise<{ primary?: string; url?: string; key?: string }>) : null))
               .then((j) => {
                   if (j?.primary === "DB2") chosen = "DB2";
+                  if (j?.url && j?.key) handed = { url: j.url, key: j.key };
               })
               .catch(() => {});
 

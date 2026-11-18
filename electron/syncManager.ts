@@ -94,17 +94,11 @@ function writeConfig(syncUrl: string): string | null {
     const config = {
         sourceUrl,
         localUrl: syncUrl,
-        // The primary's realtime project (DB_PRIMARY_ID from the office, read at start). A switch while the counter runs
-        // leaves the worker on the old project — its 10-minute timer still syncs.
-        ...(process.env.DB_PRIMARY_ID?.trim() === "DB2" && process.env.NEXT_PUBLIC_SUPABASE_URL_2
-            ? {
-                  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL_2,
-                  supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY_2 || undefined,
-              }
-            : {
-                  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL_1 || undefined,
-                  supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY_1 || undefined,
-              }),
+        // The primary's realtime pair, handed over by the office at start (REALTIME_URL /
+        // REALTIME_KEY, /api/counter/config) — never baked. A switch while the counter runs
+        // leaves the worker on the old project until its next start; its timer still syncs.
+        supabaseUrl: process.env.REALTIME_URL?.trim() || undefined,
+        supabaseAnonKey: process.env.REALTIME_KEY?.trim() || undefined,
         ...(registryPath ? { registryPath } : {}),
     };
 

@@ -66,9 +66,13 @@ async function officeAnswers(origin: string, secret: string): Promise<string | n
         });
         if (!res.ok) return `the office answered HTTP ${res.status}`;
         const body = (await res.json()) as Record<string, unknown>;
-        return typeof body.DATABASE_URL === "string" && body.DATABASE_URL
-            ? null
-            : "the office answered without DATABASE_URL";
+        if (!(typeof body.DATABASE_URL === "string" && body.DATABASE_URL)) return "the office answered without DATABASE_URL";
+        // The realtime pair comes only from the office — without it every till is
+        // timer-only and other devices' vouchers reach its Day Book at the 15-minute pull.
+        if (!(typeof body.REALTIME_URL === "string" && body.REALTIME_URL && typeof body.REALTIME_KEY === "string" && body.REALTIME_KEY)) {
+            return "the office answered without REALTIME_URL / REALTIME_KEY (deploy d_office with this change first)";
+        }
+        return null;
     } catch (err) {
         return `the office could not be reached (${err instanceof Error ? err.message : String(err)})`;
     }

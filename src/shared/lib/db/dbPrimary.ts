@@ -62,6 +62,24 @@ export function realtimePrimary(): DbId {
     return currentPrimary();
 }
 
+/**
+ * The realtime pair (Supabase URL + publishable key) that goes with a database.
+ * On a counter PC: only what the office handed it (`REALTIME_URL` / `REALTIME_KEY`,
+ * `/api/counter/config`) — nothing baked, so a switch on Vercel needs no rebuild.
+ * Elsewhere: that database's own `NEXT_PUBLIC_SUPABASE_*_n`. Null when not set.
+ */
+export function primaryRealtimePair(id: DbId = realtimePrimary()): { url: string; key: string } | null {
+    if (parseCounterPc(process.env.COUNTER_PC) === true) {
+        const url = process.env.REALTIME_URL?.trim();
+        const key = process.env.REALTIME_KEY?.trim();
+        return url && key ? { url, key } : null;
+    }
+    const n = id === "DB2" ? "2" : "1";
+    const url = process.env[`NEXT_PUBLIC_SUPABASE_URL_${n}`]?.trim();
+    const key = process.env[`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY_${n}`]?.trim();
+    return url && key ? { url, key } : null;
+}
+
 /** Primary and standby targets. Standby is null with one database. */
 export async function primaryAndStaging(): Promise<{ primary: DbTarget; staging: DbTarget | null }> {
     const id = currentPrimary();

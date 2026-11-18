@@ -64,16 +64,10 @@ export const COUNTER_ENV_COPIED: readonly string[] = [
     // The office origin that answers it. Optional when WRITE_API_URL is set.
     "COUNTER_CONFIG_URL",
 
-    // ── Realtime nudges ──────────────────────────────────────────────────────
-    // Next inlines NEXT_PUBLIC_* into the bundles at build time, so the browser half
-    // already has these. They are copied for the server half in
-    // shared/lib/realtime/serverPublish.ts, which reads process.env at runtime.
-    // DB1 / DB2 realtime projects — the counter uses the primary's, named by
-    // DB_PRIMARY_ID from /api/counter/config (src/shared/lib/supabase/supabaseClient.ts).
-    "NEXT_PUBLIC_SUPABASE_URL_1",
-    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY_1",
-    "NEXT_PUBLIC_SUPABASE_URL_2",
-    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY_2",
+    // ── Realtime ─────────────────────────────────────────────────────────────
+    // None baked (owner, 2026-11-18): the office hands the primary's pair at every start
+    // (REALTIME_URL / REALTIME_KEY, /api/counter/config), like DATABASE_URL, so a DB
+    // switch on Vercel needs no rebuild. generate-counter-env checks the office sends it.
 
     // ── Staff login ──────────────────────────────────────────────────────────
     // Absent, the domain allowlist fails closed and every sign-in is refused with
@@ -126,11 +120,6 @@ export function counterEnvCopiedFor(mode: AppMode): readonly string[] {
 export const COUNTER_ENV_REQUIRED: readonly string[] = [
     "COUNTER_INSTALL_SECRET",
     "INTERNAL_STAFF_EMAIL_DOMAINS",
-    // DB1's realtime pair. Absent, the till runs "timer only": other devices' vouchers
-    // reach its Day Book only at the 15-minute pull (1.17.10 test build, 2026-11-18).
-    // DB2's pair stays optional until a second database is in use.
-    "NEXT_PUBLIC_SUPABASE_URL_1",
-    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY_1",
 ];
 
 /** Where a till asks for its database settings: `COUNTER_CONFIG_URL`, else the v_live

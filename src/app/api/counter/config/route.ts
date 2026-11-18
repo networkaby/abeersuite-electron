@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { primaryAndStaging } from "@/shared/lib/db/dbPrimary";
+import { primaryAndStaging, primaryRealtimePair } from "@/shared/lib/db/dbPrimary";
 import {
     AI_ENV_NAME,
     COUNTER_CONFIG_NEVER,
@@ -71,5 +71,12 @@ export async function POST(req: Request) {
     // Which realtime project (NEXT_PUBLIC_SUPABASE_*_1 / _2, baked into the counter
     // build) goes with that database — shared/lib/db/dbPrimary.ts realtimePrimary().
     body.DB_PRIMARY_ID = primary.id;
+    // The primary's realtime pair, read from Vercel's env at every start — never baked
+    // into the installer (owner, 2026-11-18). Publishable key: public by design.
+    const rt = primaryRealtimePair(primary.id);
+    if (rt) {
+        body.REALTIME_URL = rt.url;
+        body.REALTIME_KEY = rt.key;
+    }
     return NextResponse.json(body, { headers: { "Cache-Control": "no-store" } });
 }
