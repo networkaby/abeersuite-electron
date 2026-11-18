@@ -396,7 +396,10 @@ export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?
     const { state: prev } = await liveState(id, run);
     await writeState(id, { ...(prev?.search && { search: prev.search }), part: prev?.search ? Math.max(prev.part, 1) as PrepState["part"] : 1, at: new Date().toISOString(), identity: await currentIdentity(id) }, run);
     const find = photosToFind(list.checklist);
-    await addDraftNotes(id, [...done, ...unsure, ...b.notes, ...(find.length ? [`Can't add (staff): ${find.join(", ")} — the search looks for them online.`] : []), SIGN(1), lastRun(1, "done")]);
+    const findNote = !find.length ? [] : prev?.search
+        ? [`Can't add (staff): ${find.join(", ")} — already searched once, so they stay missing unless they are on a saved page or the owner asks for a new search.`]
+        : [`Can't add (staff): ${find.join(", ")} — the search looks for them online.`];
+    await addDraftNotes(id, [...done, ...unsure, ...b.notes, ...findNote, SIGN(1), lastRun(1, "done")]);
     return { result: "part1" as const, removed: gone.size, notes: done.length + unsure.length + b.notes.length, findOnline: find };
 }
 
@@ -822,6 +825,12 @@ export const part4Schema = z.object({
     next: z.enum(["part5", "part3", "part1"]).optional(),
     /** The photo list as you see it now — the server checks the must photos and the main photo itself. */
     photoCheck: photoCheckSchema,
+    /**
+     * Missing must photos you found among the saved pages' photos (owner, 2026-11-18):
+     * Part 4 changes no photo itself — it says who can fix each gap. On a saved page →
+     * Part 5 adds it; not → staff take it or tick "Can't add".
+     */
+    onPages: z.array(z.object({ kind: z.string(), url: z.string().url() })).max(20).default([]),
 });
 const NEXT_WORDS = { part5: "Part 5 (touch-up — photos / small fixes)", part3: "Part 3 (rewrite from the saved search)", part1: "Part 1 (start again)" } as const;
 
@@ -838,7 +847,20 @@ export async function savePart4(id: number, input: z.infer<typeof part4Schema>) 
     const list = await photoListOf(4, id, input.photoCheck, galleryOf(row));
     // The list itself is saved (not the product) so staff see the must rows and can tick "Can't add".
     await prisma.invProduct.update({ where: { id }, data: { photoChecklistJson: list.checklist } });
-    const b = { ...input, pending: [...list.lines, ...input.pending], next: input.next ?? (list.lines.length ? ("part5" as const) : undefined) };
+    // Who fixes each missing must photo: a photo really on a kept saved page → Part 5; else staff.
+    const { state: saved } = await liveState(id).catch(() => ({ state: null }));
+    const search = saved?.search;
+    const kept = search ? search.found.pages.filter((pg) => pg.codeMatch || search.verdicts.find((v) => v.url === pg.url)?.accepted) : [];
+    const siteOf = new Map(kept.flatMap((pg) => pg.photos.map((u) => [u, pg.site] as const)));
+    const where = new Map(input.onPages.filter((x) => isPhotoKind(x.kind) && siteOf.has(x.url)).map((x) => [x.kind as PhotoKind, siteOf.get(x.url)!]));
+    const onPage = list.missing.filter((k) => where.has(k));
+    const byStaff = list.missing.filter((k) => !where.has(k));
+    const photoLines = [
+        ...(list.mainProblem ? [list.mainProblem] : []),
+        ...(onPage.length ? [`Must photo missing, found on a saved page — run Part 5 to add it: ${onPage.map((k) => `${photoKindLabel(k)} (${where.get(k)})`).join(", ")}.`] : []),
+        ...(byStaff.length ? [`Must photo missing, not on any saved page — take it, or tick "Can't add" under Product image: ${byStaff.map(photoKindLabel).join(", ")}.`] : []),
+    ];
+    const b = { ...input, pending: [...photoLines, ...input.pending], next: input.next ?? (photoLines.length ? ("part5" as const) : undefined) };
     const problems = b.pending.length + b.notes.length;
     if (problems) {
         const reason = [
