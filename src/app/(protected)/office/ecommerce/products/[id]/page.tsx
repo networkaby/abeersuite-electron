@@ -10,7 +10,7 @@ import { InvProductDialog } from "@/modules/inventory/components/InvProductDialo
 import { Button } from "@/components/ui/button";
 import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";
 import { toast } from "sonner";
-import { ChevronRight, SlidersHorizontal, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, SlidersHorizontal, X } from "lucide-react";
 import { InvProductCombobox } from "@/modules/inventory/components/InvProductCombobox";
 import { cachedAdminProducts, fetchAdminProducts } from "@/modules/ecommerce/lib/productListCache";
 import { productStatus, type ProductStatus } from "@/modules/ecommerce/lib/productFilters";
@@ -66,12 +66,12 @@ export default function EcommerceProductEditPage() {
         router.push(`/office/ecommerce/products/${to}`);
     }, [id, canLeave, router]);
 
-    // Next: the following product in the stage this one had when it was opened
+    // Prev / Next: the neighbouring product in the stage this one had when it was opened
     // (a Save as ready mid-run does not knock you off the Draft run). Same order
     // as the Products list; reuses its in-memory list, reads it only if empty.
     const [openStage, setOpenStage] = useState<{ id: number; kind: ProductStatus["kind"] } | null>(null);
     const [nextBusy, setNextBusy] = useState(false);
-    const goNext = useCallback(async () => {
+    const go = useCallback(async (step: 1 | -1) => {
         if (!openStage) return;
         setNextBusy(true);
         try {
@@ -80,12 +80,15 @@ export default function EcommerceProductEditPage() {
             const others = ids.filter((x) => x !== id);
             if (!others.length) { toast.info("No other product in this stage"); return; }
             const at = ids.indexOf(id);
-            let to = at >= 0 ? ids[at + 1] : others[0];
-            if (to == null) { to = ids[0]; toast.info("Back to the first product in this stage"); }
+            let to = at >= 0 ? ids[at + step] : others[0];
+            if (to == null) {
+                to = step === 1 ? ids[0] : ids[ids.length - 1];
+                toast.info(step === 1 ? "Back to the first product in this stage" : "On to the last product in this stage");
+            }
             if (!(await canLeave())) return;
             router.push(`/office/ecommerce/products/${to}`);
         } catch {
-            toast.error("Could not load the next product");
+            toast.error("Could not load the product list");
         } finally {
             setNextBusy(false);
         }
@@ -116,15 +119,43 @@ export default function EcommerceProductEditPage() {
         return <p className="text-muted-foreground">Loading…</p>;
     }
 
-    // Main barcode first, else the first scannable code.
-    const barcode = (product.codes.find((c) => c.kind.toUpperCase() === "BARCODE") ?? product.codes[0])?.value ?? null;
+    // Main barcode first, else the first scannable code, else the SKU.
+    const barcode = (product.codes.find((c) => c.kind.toUpperCase() === "BARCODE") ?? product.codes[0])?.value || product.sku || null;
 
     return (
         <div className="space-y-6">
             <div className="flex items-start gap-3">
-                <Button variant="ghost" size="sm" asChild className="shrink-0">
-                    <Link href="/office/ecommerce/products">← Products</Link>
-                </Button>
+                <div className="flex shrink-0 flex-col items-start gap-1">
+                    <Button variant="ghost" size="sm" asChild>
+                        <Link href="/office/ecommerce/products">← Products</Link>
+                    </Button>
+                    <div className="flex gap-0.5">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            disabled={!openStage || nextBusy}
+                            title={openStage ? `Previous product in ${openStage.kind}` : "Previous product in this stage"}
+                            onClick={() => void go(-1)}
+                        >
+                            <ChevronLeft className="size-4" />
+                            Prev
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            disabled={!openStage || nextBusy}
+                            title={openStage ? `Next product in ${openStage.kind}` : "Next product in this stage"}
+                            onClick={() => void go(1)}
+                        >
+                            Next
+                            <ChevronRight className="size-4" />
+                        </Button>
+                    </div>
+                </div>
                 <div className="flex h-9 min-w-0 flex-1 items-center rounded-md border border-input bg-background px-2">
                     <h1 className="text-2xl font-semibold tracking-tight break-words">
                         Edit product
@@ -175,29 +206,16 @@ export default function EcommerceProductEditPage() {
                 onClose={() => void close()}
                 onReload={setProduct}
                 skuSlot={
-                    <div className="flex gap-1">
-                        <InvProductCombobox
-                            value={product.id}
-                            onChange={(p) => { if (p) void jumpTo(p.id); }}
-                            placeholder="Name, SKU or barcode…"
-                            allowCreate={false}
-                            hideCost
-                            clearNonce={pickNonce}
-                            className="flex h-9 min-w-0 flex-1 items-center rounded-md border border-input bg-background px-2"
-                        />
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-9 shrink-0 px-2"
-                            disabled={!openStage || nextBusy}
-                            title={openStage ? `Next product in ${openStage.kind}` : "Next product in this stage"}
-                            onClick={() => void goNext()}
-                        >
-                            Next
-                            <ChevronRight className="size-4" />
-                        </Button>
-                    </div>
+                    <InvProductCombobox
+                        value={product.id}
+                        onChange={(p) => { if (p) void jumpTo(p.id); }}
+                        placeholder="Name, SKU or barcode…"
+                        allowCreate={false}
+                        hideCost
+                        clearNonce={pickNonce}
+                        showSku
+                        className="flex h-9 min-w-0 items-center rounded-md border border-input bg-background px-2 font-mono"
+                    />
                 }
                 onSaved={(p) => {
                     setProduct(p);

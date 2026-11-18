@@ -53,7 +53,7 @@ export default function ProductForm({
     onDirtyChange,
     skuSlot,
 }: {
-    /** A saved product: shown in place of the locked SKU box (the edit page's jump picker + Next). */
+    /** A saved product: shown in place of the locked SKU box (the edit page's jump picker). */
     skuSlot?: ReactNode;
     /** Shows a Close button in the save bar (asks first when there are unsaved changes). */
     onClose?: () => void;
@@ -629,10 +629,10 @@ export default function ProductForm({
                         />
                     </div>
                 ) : null}
-                <div className={`grid ${skuSlot && initial?.id ? "grid-cols-[13rem_1fr]" : "grid-cols-[8rem_1fr]"} gap-3`}>
+                <div className="grid grid-cols-[8rem_1fr] gap-3">
                     {skuSlot && initial?.id ? (
                         <div className="grid gap-1.5">
-                            <Label title="Type a name, SKU or barcode to open another product">SKU {sku} · open another</Label>
+                            <Label title="Type a name, SKU or barcode to open another product">SKU</Label>
                             {skuSlot}
                         </div>
                     ) : <div className="grid gap-1.5">

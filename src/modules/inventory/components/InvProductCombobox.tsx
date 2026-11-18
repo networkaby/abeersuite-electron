@@ -83,6 +83,8 @@ type Props = {
      * sitting over a blank row. Any increase clears the text.
      */
     clearNonce?: number;
+    /** Show the picked product's SKU in the box instead of its name (the edit page's jump box). */
+    showSku?: boolean;
 };
 
 const formatINR = (paise: number | null) => (paise != null ? formatRupeesFromPaise(paise) : "—");
@@ -125,7 +127,7 @@ const PLACEMENT: DropdownPlacement = {
     },
 };
 
-export function InvProductCombobox({ value, onChange, placeholder = "Search item…", className = "", autoFocus = false, allowCreate = true, clearNonce = 0, excludeIds, hideCost = false }: Props) {
+export function InvProductCombobox({ value, onChange, placeholder = "Search item…", className = "", autoFocus = false, allowCreate = true, clearNonce = 0, excludeIds, hideCost = false, showSku = false }: Props) {
     // Shared IndexedDB-backed catalogue — same array every picker on the page
     // reads, kept fresh by delta sync + realtime (see useProductCatalog).
     const { products: catalogProducts, loading } = useProductCatalog<ProductOption>();
@@ -149,7 +151,7 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
     // Null while the picked product is not in the catalogue yet: typing stays.
     // Keyed on the name, so a catalogue re-read leaves typing alone.
     const selectedProduct = products.find((p) => p.id === value);
-    const syncTo = selectedProduct ? selectedProduct.name : !value ? "" : null;
+    const syncTo = selectedProduct ? (showSku ? selectedProduct.sku : selectedProduct.name) : !value ? "" : null;
     const [query, setQuery] = useState(syncTo ?? "");
     if (useValueChange(syncTo) && syncTo !== null) setQuery(syncTo);
     // The box shows the picked product's name the moment it is picked, before
