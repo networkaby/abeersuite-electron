@@ -102,7 +102,8 @@ async function leaveAt(id: number, to: Then, patch: ShopProductPatch, extra?: (i
 /** An Attention reason: the open problems, what to do after, the Last run line and where it came from. */
 async function attentionReason(id: number, part: number, open: string[], after: string, extra: string[] = []) {
     return [
-        ...open.map((x) => `PENDING (Part ${part}) — ${x}`),
+        // A problem carried from an earlier part keeps that part's tag.
+        ...open.map((x) => (OPEN_LINE.test(x) ? x : `PENDING (Part ${part}) — ${x}`)),
         ...extra,
         after,
         lastRun(part, `${open.length} for staff → Attention`),
@@ -206,9 +207,16 @@ function suggestedNext(texts: string[]): 1 | 3 | 5 | null {
 const PART_TAG = /^Part (\d) · /;
 const partOf = (n: string) => Number((PART_TAG.exec(n) ?? /^Part (\d) done/.exec(n))?.[1] ?? 0);
 function partNotes(old: string[], part: number, lines: string[], result: string): string[] {
-    const others = old.filter((n) => !LAST_RUN.test(n) && !/^Part \d done/.test(n) && partOf(n) !== part);
+    // Attention-reason lines (an open problem, "Was Published …", "Fix it, then …") belong to
+    // the reason, not the notes — Save as ready copies them in; they would read as still open.
+    const reasonLine = (n: string) => OPEN_LINE.test(n) || /^Was (Published|Ready|Unpublished)/.test(n) || (Object.values(AFTER_FIX) as string[]).includes(n);
+    // Part 4's verdict is about the product as it was — any later part's change makes it old.
+    const others = old.filter((n) => !LAST_RUN.test(n) && !/^Part \d done/.test(n) && !reasonLine(n) && partOf(n) !== part && (part === 4 || partOf(n) !== 4));
     const mine = [...new Set(lines.map((l) => l.trim()).filter(Boolean))].map((l) => (PART_TAG.test(l) ? l : `Part ${part} · ${l}`));
-    const all = [...new Set([...others, ...mine])].sort((a, b) => partOf(a) - partOf(b));
+    // The same point written by another part shows once — the newest wording wins.
+    const text = (n: string) => n.replace(PART_TAG, "");
+    const fresh = new Set(mine.map(text));
+    const all = [...new Set([...others.filter((n) => !fresh.has(text(n))), ...mine])].sort((a, b) => partOf(a) - partOf(b));
     return [lastRun(part, result), ...all].slice(0, 60);
 }
 /** The AI copy's notes without an old Last run line (only one shows, on the Draft notes). */
@@ -389,7 +397,7 @@ async function photoListOf(part: 1 | 3 | 4 | 5, id: number, c: PhotoCheck, galle
         ...(mainBlock ? [mainBlock] : []),
         ...(missing.length ? [`Must photo missing: ${missing.map(photoKindLabel).join(", ")} — add it, or tick "Can't add" under Product image.`] : []),
     ];
-    const dropNotes = drops.map((d) => `Photo "${photoKindLabel(d.kind as PhotoKind)}" no longer a must (Part ${part}): ${d.why}${have.has(d.kind as PhotoKind) ? " — the photo we have stays." : ""}`);
+    const dropNotes = drops.map((d) => `Photo "${photoKindLabel(d.kind as PhotoKind)}" no longer a must: ${d.why}${have.has(d.kind as PhotoKind) ? " — the photo we have stays." : ""}`);
     if (mainWaived) dropNotes.push(`Main photo is not clean${c.mainWhy ? ` (${c.mainWhy})` : ""} — staff ticked "Can't do", so it does not block.`);
     return { checklist, missing, mainProblem: mainBlock, lines, dropNotes };
 }
@@ -896,9 +904,8 @@ export async function savePart5(id: number, b: z.infer<typeof part5Schema>) {
     // guessing), minus the server's photo lines (worked out fresh above), plus new ones.
     const fixed = new Set(b.fixed.map(openText));
     const carried = (p.shopAttention ?? "").split("\n")
-        .filter((l) => OPEN_LINE.test(l.trim()))
-        .map(openText)
-        .filter((l) => !SERVER_PHOTO_LINE.test(l) && !fixed.has(l));
+        .map((l) => l.trim())
+        .filter((l) => OPEN_LINE.test(l) && !SERVER_PHOTO_LINE.test(openText(l)) && !fixed.has(openText(l)));
     const open = [...new Set([...list.lines, ...carried, ...b.staff])];
     const runResult = open.length ? `${open.length} for staff → Attention` : "touch-up done → Draft";
 
@@ -918,7 +925,7 @@ export async function savePart5(id: number, b: z.infer<typeof part5Schema>) {
                 },
             }),
         };
-    }, open.length ? await attentionReason(id, 5, open, AFTER_FIX.recheck, list.dropNotes) : undefined);
+    }, open.length ? await attentionReason(id, 5, open, AFTER_FIX.recheck) : undefined);
     if (fillModelNo) {
         await writeModelNo(id, p, fillModelNo);
         if (state) await writeState(id, { ...state, identity: await currentIdentity(id) });

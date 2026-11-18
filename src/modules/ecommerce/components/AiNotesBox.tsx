@@ -30,12 +30,12 @@ function grouped(lines: string[]) {
     return { lastRun, groups: [...groups.entries()].sort(([a], [b]) => a - b) };
 }
 
-function NoteList({ lines }: { lines: string[] }) {
+function NoteList({ lines, hideRun }: { lines: string[]; hideRun?: boolean }) {
     const { lastRun, groups } = grouped(lines);
     const titled = groups.some(([k]) => k > 0);
     return (
         <div className="space-y-1">
-            {lastRun && <p className="opacity-80">{lastRun}</p>}
+            {lastRun && !hideRun && <p className="opacity-80">{lastRun}</p>}
             {groups.map(([k, items]) => (
                 <div key={k}>
                     {titled && <p className="mt-1 text-[11px] font-medium uppercase opacity-70">{PART_TITLES[k] ?? "Earlier"}</p>}
@@ -48,6 +48,8 @@ function NoteList({ lines }: { lines: string[] }) {
 
 export function AiNotesBox({ attention, review, copy }: AiNotesBoxProps) {
     const hasCopy = !!copy && (copy.notes.length > 0 || copy.flags.length > 0);
+    // The Attention reason carries its own Last run line — shown once.
+    const runShown = !!attention?.text.includes("Last run: ");
     if (!attention && !review?.notes.length && !hasCopy) return null;
     return (
         <div className="space-y-2 rounded-md border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200">
@@ -69,7 +71,7 @@ export function AiNotesBox({ attention, review, copy }: AiNotesBoxProps) {
             {review && review.notes.length > 0 && (
                 <div>
                     <p className="font-medium">{review.kept ? "Last AI review" : "Claude review"}{when(review.at)}</p>
-                    <NoteList lines={review.notes} />
+                    <NoteList lines={review.notes} hideRun={runShown} />
                     <p className="mt-1 opacity-80">
                         {review.kept
                             ? "Kept after publishing — improve when you can. The next AI review replaces them."
@@ -83,7 +85,7 @@ export function AiNotesBox({ attention, review, copy }: AiNotesBoxProps) {
                     {copy!.flags.length > 0 && (
                         <ul className="ml-4 list-disc text-orange-800 dark:text-orange-300">{copy!.flags.map((f) => <li key={f}>{f}</li>)}</ul>
                     )}
-                    <NoteList lines={copy!.notes} />
+                    <NoteList lines={copy!.notes} hideRun={runShown} />
                 </div>
             )}
         </div>
