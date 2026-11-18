@@ -12,11 +12,11 @@ it shop-ready in parts, and **never writes from bad data**:
 
 | Part | Does | Major problem → | Pass → |
 |---|---|---|---|
-| **1 Prepare seed** | Read everything; remove what is wrong; add nothing. Then: is what is left enough to search? | Attention | sign `Part 1 done` |
-| **2 Search** | The **one** internet search for this product; the pages are saved | — (no good page = go on from the label) | sign `Part 2 done` |
-| **3 Process** | Everything from the saved pages — no new search | anything for staff → Attention | Draft, sign `Part 3 done` |
+| **1 Prepare seed** | Read everything; remove what is wrong; add nothing. Then: is what is left enough to search? | Attention | stage kept, Last run line |
+| **2 Search** | The **one** internet search for this product; the pages are saved | technical failure → Attention (no good page = go on from the label) | stage kept, Last run line |
+| **3 Process** | Everything from the saved pages — no new search | anything for staff → Attention | Draft |
 | **4 Verify** | separate skill: **product-recheck** | any problem → Attention | Ready |
-| **5 Touch-up** | Photos and small fixes only — no search, no rewrite | anything for staff → Attention | Draft, sign `Part 5 done` |
+| **5 Touch-up** | Photos and small fixes only — no search, no rewrite | anything for staff → Attention | Draft |
 
 **Major** = it would spoil the next part. **Minor** = a note; the loop goes on.
 Staff fix what Attention says and run this skill again — it starts at the next part.
@@ -59,7 +59,7 @@ Every **GET** (reading a product, a list, a photo) goes to `$PRODUCT_COPY_READ_U
 
 - **Key from `.env.local`, else `.env`**: the line `PRODUCT_COPY_API_KEY=` — `.env.local` first, then `.env`; neither has it → use the key above. Read it into the variable only, never echo it.
 - Before the first product, check both URLs answer (`GET $PRODUCT_COPY_READ_URL/api/agent/products?limit=1` and the same on `$PRODUCT_COPY_WRITE_URL`). One not answering → stop and say which (dev server or counter app not running).
-- **Mode 3 runs on live data.** The counter app on `:786` holds a copy of **live**, so for mode 3 the dev server on `:3000` points at the **live** database too (owner, 2026-11-17: saves Vercel CPU — the writes run on this computer). Writes then change live products. If the reads and writes clearly disagree (a product, its photos, its Part done sign), the dev server is on another database — stop and say so.
+- **Mode 3 runs on live data.** The counter app on `:786` holds a copy of **live**, so for mode 3 the dev server on `:3000` points at the **live** database too (owner, 2026-11-17: saves Vercel CPU — the writes run on this computer). Writes then change live products. If the reads and writes clearly disagree (a product, its photos, its Last run line), the dev server is on another database — stop and say so.
 - Modes 3 and 4 read from the counter app's replica, which can lag the office by a little: if a read looks older than what you just wrote, read that one product again from `$PRODUCT_COPY_WRITE_URL`.
 - `401` → wrong key or the card is off for that server — stop and tell the owner.
 - Why: reading from `localhost:786` keeps reads off Supabase egress and Vercel CPU; only the writes go to the server that owns them.
@@ -151,6 +151,9 @@ The server checks the photos itself (owner, 2026-11-18 — a one-photo product w
 - **`tags`** — every gallery photo with the kind it shows (`photoKinds` keys; in Part 3 / 5 a page photo you add counts by its page url).
 - **`mainClean`** — photo 1 is the product itself, sharp, **without the box**, with no logo, watermark or text on it (ours too). In a hand, on a shelf, in the box → `false`, with `mainWhy`.
 
+**Our own stamp is never a problem except on the main photo** (owner, 2026-11-19). Our stamp = the **"NETWORK service" logo**, **our shop address** (Kalaparisad Market, Abhayapuri) and **our barcode / price label** stuck on a box. On every photo **except photo 1**: never a note, never a `staff` line, never a reason to remove or suggest removing, never called a "watermark" or poor quality. On photo 1 it only makes `mainClean: false`. Someone else's logo or watermark is always a problem. When no clean main photo can be had (every box in stock already carries our label), staff tick **"Can't do"** on the main-photo row — the server then stops blocking on it.
+
+
 The server keeps the list on the product (staff see it under Product image), **never drops a must an earlier part set**, and works out what is missing:
 - A **must** photo missing and **not ticked "Can't add"** by staff, or a main photo that is not clean → **Part 1 stops** (Attention: "Must photo missing: … — add it, or tick Can't add"). That gets us better seed before the search.
 - A missing **optional** photo never stops anything.
@@ -168,12 +171,20 @@ The server keeps the list on the product (staff see it under Product image), **n
 - The fixed floor (clean product photo; box front + back when boxed) can never be dropped. Part 1's drops are ignored.
 - Staff's "Can't add" tick is cleared by the server once that photo is dropped or is in the gallery — it only means something on a must photo still missing.
 
+## Writing notes (every part)
+
+The server tags each line with its part ("Part 3 · …") and **a part that runs again replaces its own earlier lines** — so write the full set each run, never "as before".
+- **One point per line, about 20 words.** Say **what, where, what to do**: "Photo 3 shows the 2-port model — remove it", not "Some photos may be wrong".
+- **`staff`** = a human must act. **`notes`** = information staff gain from (where a fact came from, what you changed). Nothing else.
+- **No "OK" / "no problem" / "looks good" lines**, no repeating what the server writes itself (photo list lines, Model No filled, weight source, Last run).
+- Our own stamp on a non-main photo is never a note (see "The photo list").
+
 ## Part 1 — Prepare the seed (remove only, add nothing)
 
 1. **Read everything**: name (the custom part is usually the most reliable), brand, group, collections, SKU, barcodes, model no., specs, title, description, shipping, warranty — and **open every photo**. Never use your own memory of the product.
 2. **Find what is wrong**:
    - **Self-contradiction**: fields disagree with each other or with what is *printed* on the item / box (brand, model, capacity, wattage, size, count). Unbranded / Premium Unbranded with a small printed name is **not** a conflict.
-   - **Wrong photos**: another product, old box version, someone else's watermark.
+   - **Wrong photos**: another product, old box version, someone else's watermark (our own stamp is not one).
    - **Poor photos**: blurry, dark, low resolution, bad angle, duplicates.
    - **Wrong text**: a wrong spec row, our support period written as the maker's warranty, a wrong weight / size, a description of another product.
 3. **Decide what is sure**:
@@ -318,7 +329,7 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
 - **`fixed`** — the open problems in the Attention reason now (the `PENDING` / `STOPPED` / `NOTE` lines) that you fixed, **copied exactly as written**. Every other one stays open; the server never guesses. Photo lines (main photo, must photo missing) it checks again itself.
 - **`staff`** — anything new only a human can do.
 
-Answer: `{ result: "part5" | "attention", photos: { removed, added, ordered, suggested }, specsSet, staff, notes }`. A fix the server could not confirm comes back as a note, not an error. Nothing left for staff → **Draft** with "Part 5 done" and a Last run line — then run **product-recheck** (Part 4). Anything left → **Attention** with only what is still open.
+Answer: `{ result: "part5" | "attention", photos: { removed, added, ordered, suggested }, specsSet, staff, notes }`. A fix the server could not confirm comes back as a note, not an error. Nothing left for staff → **Draft** with a Last run line — then run **product-recheck** (Part 4). Anything left → **Attention** with only what is still open.
 
 ## Report (always, at the end)
 

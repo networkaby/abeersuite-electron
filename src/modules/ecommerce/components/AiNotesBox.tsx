@@ -12,6 +12,40 @@ export type AiNotesBoxProps = {
 
 const when = (at?: string | Date | null) => (at ? ` · ${formatDate(at)}` : "");
 
+/** Product prep tags each note with its part (owner, 2026-11-19); shown grouped, Part 1 → 5. */
+const PART_TITLES: Record<number, string> = {
+    1: "Part 1 · Clean seed", 2: "Part 2 · Search", 3: "Part 3 · Copy written", 4: "Part 4 · Check", 5: "Part 5 · Touch-up",
+};
+const TAG = /^Part (\d) · /;
+function grouped(lines: string[]) {
+    const lastRun = lines.find((n) => n.startsWith("Last run: "));
+    const groups = new Map<number, string[]>();
+    for (const n of lines) {
+        // The old "Part 3 done" signs say nothing the headings do not.
+        if (n === lastRun || /^Part \d done$/.test(n)) continue;
+        const m = TAG.exec(n);
+        const key = m ? Number(m[1]) : 0;
+        groups.set(key, [...(groups.get(key) ?? []), m ? n.slice(m[0].length) : n]);
+    }
+    return { lastRun, groups: [...groups.entries()].sort(([a], [b]) => a - b) };
+}
+
+function NoteList({ lines }: { lines: string[] }) {
+    const { lastRun, groups } = grouped(lines);
+    const titled = groups.some(([k]) => k > 0);
+    return (
+        <div className="space-y-1">
+            {lastRun && <p className="opacity-80">{lastRun}</p>}
+            {groups.map(([k, items]) => (
+                <div key={k}>
+                    {titled && <p className="mt-1 text-[11px] font-medium uppercase opacity-70">{PART_TITLES[k] ?? "Earlier"}</p>}
+                    <ul className="ml-4 list-disc space-y-0.5">{items.map((n) => <li key={n}>{n}</li>)}</ul>
+                </div>
+            ))}
+        </div>
+    );
+}
+
 export function AiNotesBox({ attention, review, copy }: AiNotesBoxProps) {
     const hasCopy = !!copy && (copy.notes.length > 0 || copy.flags.length > 0);
     if (!attention && !review?.notes.length && !hasCopy) return null;
@@ -35,7 +69,7 @@ export function AiNotesBox({ attention, review, copy }: AiNotesBoxProps) {
             {review && review.notes.length > 0 && (
                 <div>
                     <p className="font-medium">{review.kept ? "Last AI review" : "Claude review"}{when(review.at)}</p>
-                    <ul className="ml-4 list-disc space-y-0.5">{review.notes.map((n) => <li key={n}>{n}</li>)}</ul>
+                    <NoteList lines={review.notes} />
                     <p className="mt-1 opacity-80">
                         {review.kept
                             ? "Kept after publishing — improve when you can. The next AI review replaces them."
@@ -49,7 +83,7 @@ export function AiNotesBox({ attention, review, copy }: AiNotesBoxProps) {
                     {copy!.flags.length > 0 && (
                         <ul className="ml-4 list-disc text-orange-800 dark:text-orange-300">{copy!.flags.map((f) => <li key={f}>{f}</li>)}</ul>
                     )}
-                    <ul className="ml-4 list-disc space-y-0.5">{copy!.notes.map((n) => <li key={n}>{n}</li>)}</ul>
+                    <NoteList lines={copy!.notes} />
                 </div>
             )}
         </div>

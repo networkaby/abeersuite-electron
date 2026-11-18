@@ -50,6 +50,8 @@ export const shopProductPatchSchema = z.object({
         remove: z.array(z.object({ url: z.string().url(), why: z.enum(["duplicate", "irrelevant", "quality"]), note: z.string().max(200) })).max(30).default([]),
         box: z.enum(BOX_TYPE_KEYS as [string, ...string[]]).optional(),
         shape: z.string().max(120).optional(),
+        mainClean: z.boolean().optional(),
+        mainWaived: z.boolean().optional(),
     }).nullable().optional(),
     stock: z.coerce.number().int().min(0).optional().nullable(),
     lowStockThreshold: z.coerce.number().int().min(0).optional(),

@@ -128,13 +128,15 @@ export function AiPhotoPicker({
 }
 
 /** The rows under Product image in Shop readiness, by group; must rows in bold. Staff tick a kind once the gallery has it. */
-export function PhotoChecklistRows({ checklist, gallery, onToggle, onWaive, onRemove }: {
+export function PhotoChecklistRows({ checklist, gallery, onToggle, onWaive, onWaiveMain, onRemove }: {
     checklist: PhotoChecklist;
     /** The form's current gallery — advice about a photo no longer there is not shown. */
     gallery: string[];
     onToggle: (kind: PhotoKind) => void;
     /** "Can't add" on a missing must photo (owner, 2026-11-18): it stops blocking the AI parts; the search looks for it online instead. */
     onWaive: (kind: PhotoKind) => void;
+    /** "Can't do" on the clean main photo — e.g. every box already carries our price label. */
+    onWaiveMain: () => void;
     onRemove: (url: string) => void;
 }) {
     const removals = checklist.remove.filter((r) => gallery.includes(r.url));
@@ -147,6 +149,17 @@ export function PhotoChecklistRows({ checklist, gallery, onToggle, onWaive, onRe
                 <p className="text-muted-foreground text-[11px]">
                     {[checklist.box && BOX_TYPES[checklist.box], checklist.shape].filter(Boolean).join(" · ")}
                 </p>
+            )}
+            {checklist.mainClean === false && (
+                <div className="flex items-center gap-2 text-xs">
+                    <span className={`font-medium ${checklist.mainWaived ? "text-muted-foreground" : "text-amber-700 dark:text-amber-400"}`}>
+                        Main photo is not a clean product photo{checklist.mainWaived ? "" : " · must"}
+                    </span>
+                    <label className="text-muted-foreground ml-auto flex items-center gap-1" title="No clean photo can be taken (e.g. every box already has our price label) — the AI stops asking for it">
+                        <Checkbox checked={!!checklist.mainWaived} onCheckedChange={onWaiveMain} />
+                        Can&apos;t do
+                    </label>
+                </div>
             )}
             {removals.length > 0 && (
                 <div>

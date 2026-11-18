@@ -38,7 +38,6 @@ import { AgentCopyError, pickableMasters, productForAgent, specsOf } from "@/mod
 
 const galleryOf = (p: { galleryJson: unknown; imageUrl: string | null }) => productGalleryUrls(p.galleryJson as never, p.imageUrl);
 const keyOf = (id: number) => `ai-prep/${id}.json`;
-const SIGN = (n: number) => `Part ${n} done`;
 /**
  * One "Last run" line per product (owner, 2026-11-17): which part ran, when (India
  * time) and what came of it — staff and the owner decide from it whether to run
@@ -199,13 +198,28 @@ function suggestedNext(texts: string[]): 1 | 3 | 5 | null {
     return null;
 }
 
-/** Add lines to the Draft notes ("Notes for you"), sign lines replaced. */
-async function addDraftNotes(id: number, lines: string[]) {
+/**
+ * Notes carry their part (owner, 2026-11-19): "Part 1 · Removed 1 wrong photo …".
+ * A part that runs again REPLACES its own earlier lines — never a second copy —
+ * and the other parts' lines stay. One Last run line on top, then Part 1 → 5.
+ */
+const PART_TAG = /^Part (\d) · /;
+const partOf = (n: string) => Number((PART_TAG.exec(n) ?? /^Part (\d) done/.exec(n))?.[1] ?? 0);
+function partNotes(old: string[], part: number, lines: string[], result: string): string[] {
+    const others = old.filter((n) => !LAST_RUN.test(n) && !/^Part \d done/.test(n) && partOf(n) !== part);
+    const mine = [...new Set(lines.map((l) => l.trim()).filter(Boolean))].map((l) => (PART_TAG.test(l) ? l : `Part ${part} · ${l}`));
+    const all = [...new Set([...others, ...mine])].sort((a, b) => partOf(a) - partOf(b));
+    return [lastRun(part, result), ...all].slice(0, 60);
+}
+/** The AI copy's notes without an old Last run line (only one shows, on the Draft notes). */
+const aiCopyWithoutRun = (info: ShopDraft | null) => info?.aiCopy && { aiCopy: { ...info.aiCopy, notes: (info.aiCopy.notes ?? []).filter((n) => !isRunLine(n)) } };
+
+/** Write a part's notes onto the Draft notes ("Notes for you"), replacing its earlier ones. */
+async function addDraftNotes(id: number, part: number, lines: string[], result: string) {
     const row = await prisma.invProduct.findUniqueOrThrow({ where: { id }, select: { shopDraftJson: true } });
-    const info = readShopDraft(row.shopDraftJson) ?? {};
-    const old = (info.notes ?? []).filter((n) => !isRunLine(n));
-    const notes = [...new Set([...old, ...lines])].slice(-40);
-    await prisma.invProduct.update({ where: { id }, data: { shopDraftJson: { ...info, notes, notesAt: new Date().toISOString(), kept: undefined } as never } });
+    const info = readShopDraft(row.shopDraftJson);
+    const notes = partNotes(info?.notes ?? [], part, lines, result);
+    await prisma.invProduct.update({ where: { id }, data: { shopDraftJson: { ...info, ...aiCopyWithoutRun(info), notes, notesAt: new Date().toISOString(), kept: undefined } as never } });
 }
 
 /** Copy a page photo into our Cloudinary (shop/products) — Cloudinary fetches the URL itself. Null when it fails. */
@@ -354,7 +368,6 @@ async function photoListOf(part: 1 | 3 | 4 | 5, id: number, c: PhotoCheck, galle
         const waived = prevOf.get(kind)?.waived && must.has(kind) && !done;
         return { kind, done, must: must.has(kind), ...(waived && { waived: true }) };
     });
-    const checklist: PhotoChecklist = { items, enough: isEnough(items), at: new Date().toISOString(), remove, box: c.box, ...(c.shape && { shape: c.shape }) };
     const main = gallery[0];
     const mainKind = main ? tagOf.get(main) : undefined;
     const mainProblem = !main
@@ -364,13 +377,21 @@ async function photoListOf(part: 1 | 3 | 4 | 5, id: number, c: PhotoCheck, galle
             : mainKind && !PRODUCT_KINDS.has(mainKind)
                 ? "Main photo shows the box or a scene, not the product itself — put a clean product photo first."
                 : null;
+    // Staff's "Can't do" on the clean main photo stops it blocking; a clean main photo clears the tick.
+    const mainWaived = !!mainProblem && prev?.mainWaived === true;
+    const mainBlock = mainWaived ? null : mainProblem;
+    const checklist: PhotoChecklist = {
+        items, enough: isEnough(items), at: new Date().toISOString(), remove, box: c.box, ...(c.shape && { shape: c.shape }),
+        mainClean: !mainProblem, ...(mainWaived && { mainWaived: true }),
+    };
     const missing = missingMust(checklist);
     const lines = [
-        ...(mainProblem ? [mainProblem] : []),
+        ...(mainBlock ? [mainBlock] : []),
         ...(missing.length ? [`Must photo missing: ${missing.map(photoKindLabel).join(", ")} — add it, or tick "Can't add" under Product image.`] : []),
     ];
     const dropNotes = drops.map((d) => `Photo "${photoKindLabel(d.kind as PhotoKind)}" no longer a must (Part ${part}): ${d.why}${have.has(d.kind as PhotoKind) ? " — the photo we have stays." : ""}`);
-    return { checklist, missing, mainProblem, lines, dropNotes };
+    if (mainWaived) dropNotes.push(`Main photo is not clean${c.mainWhy ? ` (${c.mainWhy})` : ""} — staff ticked "Can't do", so it does not block.`);
+    return { checklist, missing, mainProblem: mainBlock, lines, dropNotes };
 }
 
 /** What the next search should look for: must photos missing, ticked "Can't add" or not. */
@@ -466,7 +487,7 @@ export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?
     const findNote = !find.length ? [] : prev?.search
         ? [`Can't add (staff): ${find.join(", ")} — already searched once, so they stay missing unless they are on a saved page or the owner asks for a new search.`]
         : [`Can't add (staff): ${find.join(", ")} — the search looks for them online.`];
-    await addDraftNotes(id, [...done, ...unsure, ...b.notes, ...findNote, SIGN(1), lastRun(1, "done")]);
+    await addDraftNotes(id, 1, [...done, ...unsure, ...b.notes, ...findNote], "done");
     return { result: "part1" as const, removed: gone.size, notes: done.length + unsure.length + b.notes.length, findOnline: find };
 }
 
@@ -530,13 +551,11 @@ export async function savePart2(id: number, b: z.infer<typeof part2Schema>, run?
         search: { at: new Date().toISOString(), found, verdicts, labelFacts: b.labelFacts, seen: b.seen, labelWebsite: b.labelWebsite },
     };
     await writeState(id, next, run);
-    await addDraftNotes(id, [
+    await addDraftNotes(id, 2, [
         accepted.length
             ? `Searched once: ${accepted.length} page(s) kept (${accepted.map((pg) => pg.site).join(", ")}).`
             : "Searched once: no maker or seller page matched — the copy is from the label and photos only.",
-        SIGN(2),
-        lastRun(2, accepted.length ? `${accepted.length} page(s) kept` : "no good page — label only"),
-    ]);
+    ], accepted.length ? `${accepted.length} page(s) kept` : "no good page — label only");
     if (b.then && b.then !== "same") await leaveAt(id, b.then, {});
     return {
         result: accepted.length ? ("part2" as const) : ("no-good-page" as const),
@@ -721,8 +740,10 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
 
     // Part 1 / Part 2 notes sit in the Draft notes, which this save replaces —
     // carried over (signs left out) so staff still see what Part 1 found.
-    const earlier = (readShopDraft(p.shopDraftJson)?.notes ?? []).filter((n) => !isRunLine(n));
-    const notes = [...earlier, ...b.notes];
+    // The Draft notes (Parts 1, 2, 4, 5) move into the AI copy, which this save
+    // replaces; this part's own earlier lines are replaced, never doubled.
+    const earlier = readShopDraft(p.shopDraftJson)?.notes ?? [];
+    const notes = [...b.notes];
     const patch: ShopProductPatch = { shopDescription: checked.copy.shopDescription, shopSubheading: checked.copy.title };
 
     // Specs: improved rows replace ours with the same label; our other rows stay.
@@ -756,17 +777,17 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
     notes.push(...list.dropNotes);
     staff.push(...list.lines);
     const open = [...new Set(staff)];
-    const runLine = lastRun(3, open.length ? `${open.length} for staff → Attention` : "done → Draft");
+    const runResult = open.length ? `${open.length} for staff → Attention` : "done → Draft";
 
     const draft: ProductCopy = {
         ...checked.copy,
         note: `Written by Claude (product prep, from the saved search of ${s.at.slice(0, 10)}); ${checked.copy.note}`,
-        notes: [...notes, SIGN(3), runLine],
+        notes: partNotes(earlier, 3, notes, runResult),
         photoChecklist: list.checklist,
         ...(ph.arrange && { photoArrange: ph.arrange }),
         photoSuggestions: ph.suggested,
     };
-    if (fillModelNo) draft.notes = [...(draft.notes ?? []).filter((n) => !isRunLine(n)), `Model No filled: ${fillModelNo} (from the ${b.modelNo!.source.toLowerCase() === "label" ? "box" : "maker page"}).`, SIGN(3), runLine];
+    if (fillModelNo) draft.notes = partNotes(earlier, 3, [...notes, `Model No filled: ${fillModelNo} (from the ${b.modelNo!.source.toLowerCase() === "label" ? "box" : "maker page"}).`], runResult);
     const shopStatus = await leaveAt(
         id, open.length ? "attention" : b.then ?? "draft", patch,
         () => ({ aiCopy: draft, notes: undefined, notesAt: undefined, kept: undefined }),
@@ -879,12 +900,12 @@ export async function savePart5(id: number, b: z.infer<typeof part5Schema>) {
         .map(openText)
         .filter((l) => !SERVER_PHOTO_LINE.test(l) && !fixed.has(l));
     const open = [...new Set([...list.lines, ...carried, ...b.staff])];
-    const run = [SIGN(5), lastRun(5, open.length ? `${open.length} for staff → Attention` : "touch-up done → Draft")];
+    const runResult = open.length ? `${open.length} for staff → Attention` : "touch-up done → Draft";
 
     await leaveAt(id, open.length ? "attention" : b.then ?? "draft", patch, (info) => {
         const ai = info?.aiCopy;
         return {
-            notes: [...(info?.notes ?? []).filter((n) => !isRunLine(n)), ...notes, ...run].slice(-40),
+            notes: partNotes(info?.notes ?? [], 5, notes, runResult),
             notesAt: new Date().toISOString(),
             kept: undefined,
             ...(ai && {
@@ -905,7 +926,7 @@ export async function savePart5(id: number, b: z.infer<typeof part5Schema>) {
     return {
         result: open.length ? ("attention" as const) : ("part5" as const),
         photos: { removed: ph.removed, added: ph.added, ordered: ph.ordered, suggested: ph.suggested.length },
-        specsSet: set.length, staff: open, notes: [...notes, ...run],
+        specsSet: set.length, staff: open, notes,
     };
 }
 
@@ -1003,7 +1024,7 @@ export async function savePart4(id: number, input: z.infer<typeof part4Schema>) 
         await parkInAttention([id], [...reason, await originLine(id)].filter(Boolean).join("\n").slice(0, 10000), "Claude", "any");
         // The earlier result lines ("Part 4 done — verified", an old Last run) would sit
         // beside this new one and contradict it (owner, 2026-11-18) — dropped.
-        await addDraftNotes(id, []);
+        await addDraftNotes(id, 4, [], `${problems} problem(s) → Attention`);
         return { result: "attention" as const, pending: b.pending.length, notes: b.notes.length };
     }
     const { state } = await liveState(id).catch(() => ({ state: null }));
@@ -1012,7 +1033,8 @@ export async function savePart4(id: number, input: z.infer<typeof part4Schema>) 
     // only once the AI has earned that trust.
     const to = input.then ?? "ready";
     const shopStatus = await leaveAt(id, to, {}, (info) => ({
-        notes: [...(info?.notes ?? []).filter((n) => !isRunLine(n)), ...list.dropNotes, `Part 4 done — verified${to === "ready" ? ", moved to Ready — press Publish." : "."}`, lastRun(4, `verified → ${to === "same" ? "stage kept" : to}`)].slice(-40),
+        ...aiCopyWithoutRun(info),
+        notes: partNotes(info?.notes ?? [], 4, [...list.dropNotes, `Verified${to === "ready" ? " — moved to Ready, press Publish." : "."}`], `verified → ${to === "same" ? "stage kept" : to}`),
         notesAt: new Date().toISOString(),
     }));
     return { result: "verified" as const, shopStatus };

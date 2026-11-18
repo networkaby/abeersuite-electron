@@ -76,6 +76,14 @@ export type PhotoChecklist = {
     /** Set by product prep: the packing, and the AI's word on the product's shape / size. */
     box?: BoxType;
     shape?: string;
+    /** Product prep's last word on photo 1: the product itself, no box, no logo or text. */
+    mainClean?: boolean;
+    /**
+     * Staff ticked "Can't do" on the clean main photo (owner, 2026-11-19): e.g. every
+     * box in stock already carries our barcode / price label, so no clean one can be
+     * taken. It stops blocking; cleared once the main photo is clean.
+     */
+    mainWaived?: boolean;
 };
 
 /**
@@ -132,5 +140,7 @@ export function readPhotoChecklist(raw: unknown): PhotoChecklist | null {
         items, enough: isEnough(items), at: typeof r.at === "string" ? r.at : "", remove,
         ...(isBoxType(r.box) && { box: r.box }),
         ...(typeof r.shape === "string" && r.shape && { shape: r.shape }),
+        ...(typeof r.mainClean === "boolean" && { mainClean: r.mainClean }),
+        ...(r.mainWaived === true && { mainWaived: true }),
     };
 }
