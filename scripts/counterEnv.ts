@@ -126,6 +126,11 @@ export function counterEnvCopiedFor(mode: AppMode): readonly string[] {
 export const COUNTER_ENV_REQUIRED: readonly string[] = [
     "COUNTER_INSTALL_SECRET",
     "INTERNAL_STAFF_EMAIL_DOMAINS",
+    // DB1's realtime pair. Absent, the till runs "timer only": other devices' vouchers
+    // reach its Day Book only at the 15-minute pull (1.17.10 test build, 2026-11-18).
+    // DB2's pair stays optional until a second database is in use.
+    "NEXT_PUBLIC_SUPABASE_URL_1",
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY_1",
 ];
 
 /** Where a till asks for its database settings: `COUNTER_CONFIG_URL`, else the v_live
