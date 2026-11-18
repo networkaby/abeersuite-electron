@@ -7,7 +7,7 @@ description: Carry out a full AbeerSuite release end to end — merge dev into m
 
 **"Do a release" is one instruction for this whole list, not for one command.** Do not stop after `pnpm electron:release` and hand the rest back. Every step below, in order, every time. If a line is skipped, it was not a release.
 
-Sources of truth: `AGENTS.md` §8 and `docs/commands.md` §0 (the convention) and §9 (how counters take the update). This skill is the runbook; those two files are the law.
+Sources of truth: `AGENTS.md` §9 and `docs/commands.md` §0 (the convention) and §9 (how counters take the update). This skill is the runbook; those two files are the law.
 
 ## Ground rules
 
@@ -273,10 +273,11 @@ Handing a step back is **not** stopping the release: do everything either side o
 ## Related files
 
 - `.claude/skills/publish/SKILL.md` — the sibling runbook for a build the owner already made and tested: no merge, no bump, no build, any commit. The notes rules in step 3 are shared, and it points here for them.
-- `AGENTS.md` §8 — the release clause the owner holds you to.
+- `AGENTS.md` §9 — the release clause the owner holds you to.
 - `docs/commands.md` §0 — the full convention; §9 — the update tiers.
 - `scripts/release-electron.ts` — tagging, notes assembly, multi-repo publish, `RELEASE_ONLY_REPO`.
 - `scripts/verify-package.ts` — the gate, and what each failure means.
 - `package.json` — `version`, `electron:pack`, `electron:release`, `verify:package`.
 - `electron/updateManager.ts` — how a counter compares itself with the minimum and decides when to install.
 - `RELEASE_NOTES.md` — the hand-written half; rewrite it every time.
+- `.claude/skills/dist/SKILL.md` — the same preparation stopped before GitHub: local commit, `pnpm electron:dist`, a local `dist-v<version>` marker for `publish` to upload later.
