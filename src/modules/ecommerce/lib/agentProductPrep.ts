@@ -13,7 +13,7 @@ import { parkInAttention } from "@/modules/ecommerce/lib/shopAttention";
 import { arrangeFrom, checkWrittenCopy, writtenCopySchema } from "@/modules/ecommerce/lib/aiVerifiedCopy";
 import { readGivenPages, type PageRead, type PageSearch } from "@/modules/ecommerce/lib/aiPageReader";
 import { checkFact, cmOf, gramsOf, normForCheck } from "@/modules/ecommerce/lib/aiFactCheck";
-import { PHOTO_REMOVE_REASONS, checklistFrom, isPhotoKind, type PhotoKind, type PhotoRemoveReason, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
+import { BOX_TYPES, BOX_TYPE_KEYS, PHOTO_KINDS, PHOTO_REMOVE_REASONS, isEnough, isPhotoKind, missingMust, photoFloor, photoKindLabel, readPhotoChecklist, type BoxType, type PhotoChecklist, type PhotoChecklistItem, type PhotoKind, type PhotoRemoval, type PhotoRemoveReason, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
 import { cloudinarySignature } from "@/shared/lib/cloudinary";
 import { regenerateProductNamesSafe } from "@/modules/inventory/lib/regenerateNames";
 import { AgentCopyError, pickableMasters, productForAgent, specsOf, writeAsDraft } from "@/modules/ecommerce/lib/agentProductCopy";
@@ -173,7 +173,7 @@ export async function productForPrep(id: number) {
     const p = await prisma.invProduct.findUniqueOrThrow({
         where: { id },
         select: {
-            shopSubheading: true, shopAttention: true, shopDraftJson: true,
+            shopSubheading: true, shopAttention: true, shopDraftJson: true, photoChecklistJson: true,
             weightGrams: true, lengthCm: true, breadthCm: true, heightCm: true,
             group: { select: { name: true } },
         },
@@ -214,7 +214,93 @@ export async function productForPrep(id: number) {
             seen: search?.seen ?? {},
             labelWebsite: search?.labelWebsite ?? "",
         },
+        /** The product's photo list (owner, 2026-11-18): packing, shape, must / optional kinds, staff's "Can't add" ticks. */
+        photoList: (() => {
+            const c = readPhotoChecklist(p.photoChecklistJson);
+            return {
+                box: c?.box ?? null,
+                boxTypes: BOX_TYPES,
+                shape: c?.shape ?? "",
+                items: c?.items ?? [],
+                /** Must photos missing and not ticked — Part 1 stops on them. */
+                missing: missingMust(c),
+                /** Must photos missing that the next search should look for online ("Can't add" ones included). */
+                findOnline: photosToFind(c),
+            };
+        })(),
     };
+}
+
+// ── The photo list (owner, 2026-11-18) ───────────────────────────────────────
+
+/**
+ * Every part sends what it sees in the photos: the packing, the product's shape /
+ * size, which photo shows what, and whether the main photo is a clean product
+ * photo. The must / optional kinds are the AI's own for THIS product — from how
+ * the maker and good sellers show it, not a fixed table — on top of a fixed
+ * floor (photoFloor: a clean product photo without the box; box front + back
+ * when boxed). The server keeps the list on the product, never drops a must an
+ * earlier part set, honours staff's "Can't add" ticks, and works out what is
+ * missing itself — the AI's word alone never passes a gallery.
+ */
+const photoCheckSchema = z.object({
+    box: z.enum(BOX_TYPE_KEYS as [BoxType, ...BoxType[]]),
+    /** The product's shape / size in a few words ("palm-size mouse", "1.5 m cable", "27-inch monitor"). */
+    shape: z.string().trim().max(120).default(""),
+    /** Each gallery photo (url as in our gallery, or a page photo you add) and the kind it shows. */
+    tags: z.array(z.object({ url: z.string().url(), kind: z.string() })).max(60).default([]),
+    /** Must / optional kinds for this product (photoKinds keys). */
+    must: z.array(z.string()).default([]),
+    nice: z.array(z.string()).default([]),
+    /** Photo 1 is the product itself, sharp, without the box, with no logo, watermark or text on it (ours too). */
+    mainClean: z.boolean(),
+    mainWhy: z.string().trim().max(200).default(""),
+});
+type PhotoCheck = z.infer<typeof photoCheckSchema>;
+
+const PRODUCT_KINDS = new Set<string>(Object.entries(PHOTO_KINDS).filter(([, v]) => v.group === "product").map(([k]) => k));
+
+/**
+ * The product's photo list from a part's check, against `gallery` (the photos as
+ * saved after this part). `alias` maps a page photo url to its copy in our storage.
+ */
+async function photoListOf(id: number, c: PhotoCheck, gallery: string[], remove: PhotoRemoval[] = [], alias = new Map<string, string>()) {
+    const row = await prisma.invProduct.findUnique({ where: { id }, select: { photoChecklistJson: true } });
+    const prev = readPhotoChecklist(row?.photoChecklistJson);
+    const kinds = (xs: string[]) => xs.filter(isPhotoKind) as PhotoKind[];
+    const tagOf = new Map(c.tags.map((t) => [alias.get(t.url) ?? t.url, t.kind]));
+    const have = new Set(kinds(gallery.map((u) => tagOf.get(u) ?? "")));
+    const must = new Set<PhotoKind>([...photoFloor(c.box), ...kinds(c.must), ...(prev?.items.filter((i) => i.must).map((i) => i.kind) ?? [])]);
+    const prevOf = new Map(prev?.items.map((i) => [i.kind, i]) ?? []);
+    const order = [...have, ...must, ...kinds(c.nice), ...(prev?.items.map((i) => i.kind) ?? [])];
+    const items: PhotoChecklistItem[] = [...new Set(order)].map((kind) => ({
+        kind,
+        // Staff's own tick that the gallery has it stays.
+        done: have.has(kind) || prevOf.get(kind)?.done === true,
+        must: must.has(kind),
+        ...(prevOf.get(kind)?.waived && { waived: true }),
+    }));
+    const checklist: PhotoChecklist = { items, enough: isEnough(items), at: new Date().toISOString(), remove, box: c.box, ...(c.shape && { shape: c.shape }) };
+    const main = gallery[0];
+    const mainKind = main ? tagOf.get(main) : undefined;
+    const mainProblem = !main
+        ? "No photo at all — add a clean photo of the product itself."
+        : !c.mainClean
+            ? `Main photo is not a clean product photo${c.mainWhy ? ` (${c.mainWhy})` : ""} — put a clean photo of the product (no box, no logo or text) first.`
+            : mainKind && !PRODUCT_KINDS.has(mainKind)
+                ? "Main photo shows the box or a scene, not the product itself — put a clean product photo first."
+                : null;
+    const missing = missingMust(checklist);
+    const lines = [
+        ...(mainProblem ? [mainProblem] : []),
+        ...(missing.length ? [`Must photo missing: ${missing.map(photoKindLabel).join(", ")} — add it, or tick "Can't add" under Product image.`] : []),
+    ];
+    return { checklist, missing, mainProblem, lines };
+}
+
+/** What the next search should look for: must photos missing, ticked "Can't add" or not. */
+function photosToFind(c: PhotoChecklist | null) {
+    return c?.items.filter((i) => i.must && !i.done).map((i) => photoKindLabel(i.kind)) ?? [];
 }
 
 // ── Part 1: prepare the seed (remove wrong data only) ─────────────────────────
@@ -245,6 +331,8 @@ export const part1Schema = z.object({
     enough: z.boolean(),
     /** When not enough: what staff must add ("a box / label photo", "the model no."). */
     need: z.string().trim().max(300).default(""),
+    /** The photo list — a must photo missing (not ticked "Can't add") or a main photo that is not clean stops Part 1, for better seed. */
+    photos: photoCheckSchema,
 });
 
 export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?: RunCtx) {
@@ -277,11 +365,14 @@ export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?
         .filter((r) => gallery.includes(r.url) && !gone.has(r.url))
         .map((r) => `Check photo ${gallery.indexOf(r.url) + 1}: ${r.note || r.why} — remove it if it is wrong.`);
 
-    const stop = b.major.length > 0 || !b.enough;
+    const list = await photoListOf(id, b.photos, patch.galleryUrls ?? gallery);
+    patch.photoChecklist = list.checklist;
+    const stop = b.major.length > 0 || !b.enough || list.lines.length > 0;
     await writeAsDraft(id, patch, () => ({}));
     if (stop) {
         const reason = [
             ...b.major.map((m) => `STOPPED (Part 1) — ${m}`),
+            ...list.lines.map((m) => `STOPPED (Part 1) — ${m}`),
             ...(!b.enough ? [`STOPPED (Part 1) — not enough to search${b.need ? `: ${b.need}` : ""}. Add it, then run product prep again.`] : []),
             ...done, ...unsure, ...b.notes,
             lastRun(1, "stopped → Attention"),
@@ -292,8 +383,9 @@ export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?
     // A search saved for this same identity is kept (one search per lifecycle).
     const { state: prev } = await liveState(id, run);
     await writeState(id, { ...(prev?.search && { search: prev.search }), part: prev?.search ? Math.max(prev.part, 1) as PrepState["part"] : 1, at: new Date().toISOString(), identity: await currentIdentity(id) }, run);
-    await addDraftNotes(id, [...done, ...unsure, ...b.notes, SIGN(1), lastRun(1, "done")]);
-    return { result: "part1" as const, removed: gone.size, notes: done.length + unsure.length + b.notes.length };
+    const find = photosToFind(list.checklist);
+    await addDraftNotes(id, [...done, ...unsure, ...b.notes, ...(find.length ? [`Can't add (staff): ${find.join(", ")} — the search looks for them online.`] : []), SIGN(1), lastRun(1, "done")]);
+    return { result: "part1" as const, removed: gone.size, notes: done.length + unsure.length + b.notes.length, findOnline: find };
 }
 
 // ── Part 2: the one search, saved ─────────────────────────────────────────────
@@ -344,6 +436,8 @@ export async function savePart2(id: number, b: z.infer<typeof part2Schema>, run?
         result: accepted.length ? ("part2" as const) : ("no-good-page" as const),
         read: found.pages.map((pg) => ({ url: pg.url, site: pg.site, maker: pg.maker, codeMatch: pg.codeMatch, accepted: accepted.includes(pg) })),
         dropped: found.dropped,
+        /** Must photos still missing — Part 3 adds them from the kept pages when sure. */
+        findOnline: photosToFind(readPhotoChecklist((await prisma.invProduct.findUnique({ where: { id }, select: { photoChecklistJson: true } }))?.photoChecklistJson)),
     };
 }
 
@@ -442,15 +536,11 @@ async function applyPhotos(ph: PhotoPlan, p: ProductRow, trusted: PageRead[], pa
     const suggested: PhotoSuggestion[] = [...ph.suggest, ...failed]
         .filter((x) => onPage.has(x.url) && !next.includes(x.url))
         .map((x) => ({ url: x.url, site: onPage.get(x.url)!.site, kind: isPhotoKind(x.kind) ? x.kind : null }));
-    const kinds = (xs: string[]) => xs.filter(isPhotoKind) as PhotoKind[];
     const ours = photosForAi(next);
     const nOf = (u: string) => ours.indexOf(u) + 1;
     const arrange = arrangeFrom({ order: [], look: ph.look.filter((x) => nOf(x.url) > 0).map((x) => ({ ...x, photo: nOf(x.url), crop: x.crop, focus: x.focus, background: x.background })) }, ours, new Set());
-    const checklist = checklistFrom(
-        kinds(ph.have), kinds(ph.must), kinds(ph.nice),
-        ph.suggestRemove.filter((r) => next.includes(r.url) && r.why in PHOTO_REMOVE_REASONS).map((r) => ({ url: r.url, why: r.why as PhotoRemoveReason, note: r.note })),
-    );
-    return { removed: gone.size, added: added.length, ordered: ordered.length > 0, suggested, arrange, checklist };
+    const remove = ph.suggestRemove.filter((r) => next.includes(r.url) && r.why in PHOTO_REMOVE_REASONS).map((r) => ({ url: r.url, why: r.why as PhotoRemoveReason, note: r.note }));
+    return { removed: gone.size, added: added.length, ordered: ordered.length > 0, suggested, arrange, gallery: next, remove, alias: copyOf };
 }
 
 // ── Part 3: process from the saved pages ──────────────────────────────────────
@@ -475,10 +565,7 @@ const photoPlanSchema = z.object({
         fixes: z.array(z.string()).default([]), rotate: z.coerce.number().catch(0).default(0),
         background: z.string().optional(), why: z.string().trim().max(120).default(""),
     })).max(30).default([]),
-    have: z.array(z.string()).default([]),
-    must: z.array(z.string()).default([]),
-    nice: z.array(z.string()).default([]),
-}).default({ add: [], suggest: [], remove: [], suggestRemove: [], order: [], look: [], have: [], must: [], nice: [] });
+}).default({ add: [], suggest: [], remove: [], suggestRemove: [], order: [], look: [] });
 type Shipping = z.infer<typeof shippingSchema>;
 type ModelNoFix = z.infer<typeof modelNoSchema>;
 type PhotoPlan = z.infer<typeof photoPlanSchema>;
@@ -492,6 +579,8 @@ export const part3Schema = z.object({
     shipping: shippingSchema.optional(),
     modelNo: modelNoSchema.optional(),
     photos: photoPlanSchema,
+    /** The photo list after your changes — tags may name the page photos you add. */
+    photoCheck: photoCheckSchema,
     notes: lines,
 });
 
@@ -550,12 +639,15 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
     applyShipping(b.shipping, p, facts, checked.trusted, patch, notes);
     const fillModelNo = modelNoToFill(b.modelNo, p, facts, checked.trusted, notes);
     const ph = await applyPhotos(b.photos, p, checked.trusted, patch, notes);
+    const list = await photoListOf(id, b.photoCheck, ph.gallery, ph.remove, ph.alias);
+    patch.photoChecklist = list.checklist;
+    notes.push(...list.lines);
 
     const draft: ProductCopy = {
         ...checked.copy,
         note: `Written by Claude (product prep, from the saved search of ${s.at.slice(0, 10)}); ${checked.copy.note}`,
         notes: [...notes, SIGN(3), lastRun(3, "done → Draft")],
-        photoChecklist: ph.checklist,
+        photoChecklist: list.checklist,
         ...(ph.arrange && { photoArrange: ph.arrange }),
         photoSuggestions: ph.suggested,
     };
@@ -588,6 +680,7 @@ export const part5Schema = z.object({
     modelNo: modelNoSchema.optional(),
     shipping: shippingSchema.optional(),
     photos: photoPlanSchema,
+    photoCheck: photoCheckSchema,
     notes: lines,
 });
 
@@ -643,6 +736,9 @@ export async function savePart5(id: number, b: z.infer<typeof part5Schema>) {
     if (fillModelNo) notes.push(`Model No filled: ${fillModelNo} (from the ${b.modelNo!.source.trim().toLowerCase() === "label" ? "box" : "maker page"}).`);
     const ph = await applyPhotos(b.photos, p, trusted, patch, notes);
     if (!trusted.length && b.photos.add.length) notes.push("No saved search for this product — photos can only be added by hand.");
+    const list = await photoListOf(id, b.photoCheck, ph.gallery, ph.remove, ph.alias);
+    patch.photoChecklist = list.checklist;
+    notes.push(...list.lines);
 
     // Onto the product, in Draft. Part 3's AI copy keeps its text; its photo advice is refreshed.
     const run = [SIGN(5), lastRun(5, "touch-up done → Draft")];
@@ -656,7 +752,7 @@ export async function savePart5(id: number, b: z.infer<typeof part5Schema>) {
                 aiCopy: {
                     ...ai,
                     notes: (ai.notes ?? []).filter((n) => !isRunLine(n)),
-                    photoChecklist: ph.checklist,
+                    photoChecklist: list.checklist,
                     ...(ph.arrange ? { photoArrange: ph.arrange } : {}),
                     photoSuggestions: [...ph.suggested, ...(ai.photoSuggestions ?? [])].filter((x, i, all) => all.findIndex((y) => y.url === x.url) === i),
                 },
@@ -712,6 +808,8 @@ export const part4Schema = z.object({
     notes: lines,
     /** Which part to run next (owner, 2026-11-17): part5 = small fixes (touch-up), part3 = rewrite from the saved search, part1 = start again. */
     next: z.enum(["part5", "part3", "part1"]).optional(),
+    /** The photo list as you see it now — the server checks the must photos and the main photo itself. */
+    photoCheck: photoCheckSchema,
 });
 const NEXT_WORDS = { part5: "Part 5 (touch-up — photos / small fixes)", part3: "Part 3 (rewrite from the saved search)", part1: "Part 1 (start again)" } as const;
 
@@ -720,9 +818,15 @@ const NEXT_WORDS = { part5: "Part 5 (touch-up — photos / small fixes)", part3:
  * Attention with every line, even a Published one (owner, 2026-11-17: off the
  * shop is fine). Only a product with nothing found is verified.
  */
-export async function savePart4(id: number, b: z.infer<typeof part4Schema>) {
-    const exists = await prisma.invProduct.findUnique({ where: { id }, select: { id: true } });
-    if (!exists) throw new AgentCopyError("Product not found");
+export async function savePart4(id: number, input: z.infer<typeof part4Schema>) {
+    const row = await prisma.invProduct.findUnique({ where: { id }, select: { imageUrl: true, galleryJson: true } });
+    if (!row) throw new AgentCopyError("Product not found");
+    // Photos are checked here, not taken on the AI's word (owner, 2026-11-18: a
+    // one-photo product with our logo on the main photo passed).
+    const list = await photoListOf(id, input.photoCheck, galleryOf(row));
+    // The list itself is saved (not the product) so staff see the must rows and can tick "Can't add".
+    await prisma.invProduct.update({ where: { id }, data: { photoChecklistJson: list.checklist } });
+    const b = { ...input, pending: [...list.lines, ...input.pending], next: input.next ?? (list.lines.length ? ("part5" as const) : undefined) };
     const problems = b.pending.length + b.notes.length;
     if (problems) {
         const reason = [

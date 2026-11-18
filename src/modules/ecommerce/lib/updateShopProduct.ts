@@ -11,7 +11,7 @@ import { invProductToAdmin, keptReviewNotes, readShopDraft, type ShopDraft, type
 import { nextShopStatus, resolveShopListing, SHOP_STATUSES } from "@/modules/ecommerce/lib/shopListing";
 import type { ShopStatus } from "@/generated/prisma/enums";
 import { loadVariantAttrGaps } from "@/modules/ecommerce/lib/applyPublished";
-import { PHOTO_KIND_KEYS } from "@/modules/ecommerce/lib/photoChecklist";
+import { BOX_TYPE_KEYS, PHOTO_KIND_KEYS } from "@/modules/ecommerce/lib/photoChecklist";
 import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
 import { mergeGallery } from "@/modules/ecommerce/lib/mergeGallery";
 import { collectionsExist, setProductCollections, syncMainCollections } from "@/modules/inventory/lib/productCollections";
@@ -44,10 +44,12 @@ export const shopProductPatchSchema = z.object({
     specs: z.record(z.string(), z.string()).optional(),
     // Photo checklist under Product image (photoChecklist.ts); null clears it.
     photoChecklist: z.object({
-        items: z.array(z.object({ kind: z.enum(PHOTO_KIND_KEYS as [string, ...string[]]), done: z.boolean(), must: z.boolean().default(false) })).max(PHOTO_KIND_KEYS.length),
+        items: z.array(z.object({ kind: z.enum(PHOTO_KIND_KEYS as [string, ...string[]]), done: z.boolean(), must: z.boolean().default(false), waived: z.boolean().optional() })).max(PHOTO_KIND_KEYS.length),
         enough: z.boolean(),
         at: z.string().max(40),
         remove: z.array(z.object({ url: z.string().url(), why: z.enum(["duplicate", "irrelevant", "quality"]), note: z.string().max(200) })).max(30).default([]),
+        box: z.enum(BOX_TYPE_KEYS as [string, ...string[]]).optional(),
+        shape: z.string().max(120).optional(),
     }).nullable().optional(),
     stock: z.coerce.number().int().min(0).optional().nullable(),
     lowStockThreshold: z.coerce.number().int().min(0).optional(),

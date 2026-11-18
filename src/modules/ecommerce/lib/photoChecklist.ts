@@ -47,14 +47,36 @@ const OLD_KINDS: Record<string, PhotoKind> = { side: "left", label: "box_back" }
  * One row under Product image. `done` = the gallery has this kind (AI saw it, or
  * staff ticked it). `must` = needed to judge the product; the rest add feel.
  */
-export type PhotoChecklistItem = { kind: PhotoKind; done: boolean; must: boolean };
+export type PhotoChecklistItem = {
+    kind: PhotoKind; done: boolean; must: boolean;
+    /** Staff ticked "Can't add" on a must photo (owner, 2026-11-18): it stops blocking, and the search looks for it online instead. */
+    waived?: boolean;
+};
+
+/**
+ * How the product is packed (owner, 2026-11-18) — it says which box photos are
+ * a must. The AI reads it from the photos; the rest of the list is the AI's own,
+ * per product, from how the maker and good sellers show it.
+ */
+export const BOX_TYPES = { loose: "No box (loose)", card: "Blister / card pack", pouch: "Pouch / bag", carton: "Box / carton" } as const;
+export type BoxType = keyof typeof BOX_TYPES;
+export const BOX_TYPE_KEYS = Object.keys(BOX_TYPES) as BoxType[];
+const isBoxType = (v: unknown): v is BoxType => typeof v === "string" && v in BOX_TYPES;
+
+/** The fixed floor under the AI's list: a clean product photo without the box, always; a boxed product also needs the box front and back. */
+export const photoFloor = (box: BoxType | undefined): PhotoKind[] => ["front", ...(box && box !== "loose" ? (["box_front", "box_back"] as const) : [])];
 export const PHOTO_REMOVE_REASONS = { duplicate: "Almost the same as another photo", irrelevant: "Not this product", quality: "Poor quality" } as const;
 export type PhotoRemoveReason = keyof typeof PHOTO_REMOVE_REASONS;
 /** A gallery photo the AI says to remove — by URL, so reordering keeps it right. Staff decide. */
 export type PhotoRemoval = { url: string; why: PhotoRemoveReason; note: string };
 
 /** `enough` = every must row is done (worked out, not the AI's word). */
-export type PhotoChecklist = { items: PhotoChecklistItem[]; enough: boolean; at: string; remove: PhotoRemoval[] };
+export type PhotoChecklist = {
+    items: PhotoChecklistItem[]; enough: boolean; at: string; remove: PhotoRemoval[];
+    /** Set by product prep: the packing, and the AI's word on the product's shape / size. */
+    box?: BoxType;
+    shape?: string;
+};
 
 /**
  * Photo AI's arrangement of our gallery — staff apply it or not, nothing is
@@ -66,7 +88,9 @@ export type PhotoArrange = { order: string[]; looks: { url: string; next: string
 /** A web photo from a page Verified kept, with the kind the AI says it shows. */
 export type PhotoSuggestion = { url: string; site: string; kind: PhotoKind | null };
 
-export const isEnough = (items: PhotoChecklistItem[]) => items.every((i) => i.done || !i.must);
+export const isEnough = (items: PhotoChecklistItem[]) => items.every((i) => i.done || !i.must || i.waived);
+/** Must photos neither in the gallery nor ticked "Can't add". */
+export const missingMust = (c: PhotoChecklist | null) => c?.items.filter((i) => i.must && !i.done && !i.waived).map((i) => i.kind) ?? [];
 
 /** AI answer → checklist: what we have is done, what we miss is open (must first); nothing else is listed. */
 export function checklistFrom(have: PhotoKind[], must: PhotoKind[], nice: PhotoKind[], remove: PhotoRemoval[] = []): PhotoChecklist {
@@ -96,7 +120,7 @@ export function readPhotoChecklist(raw: unknown): PhotoChecklist | null {
         if (!kind || seen.has(kind)) return [];
         seen.add(kind);
         // A first-menu row has no `must`; its gallery verdict stands in.
-        return [{ kind, done: o.done === true, must: typeof o.must === "boolean" ? o.must : r.enough !== true }];
+        return [{ kind, done: o.done === true, must: typeof o.must === "boolean" ? o.must : r.enough !== true, ...(o.waived === true && { waived: true }) }];
     });
     const remove = (Array.isArray(r.remove) ? r.remove : []).flatMap((x): PhotoRemoval[] => {
         const o = (x ?? {}) as Record<string, unknown>;
@@ -104,5 +128,9 @@ export function readPhotoChecklist(raw: unknown): PhotoChecklist | null {
             ? [{ url: o.url, why: o.why as PhotoRemoveReason, note: typeof o.note === "string" ? o.note : "" }]
             : [];
     });
-    return { items, enough: isEnough(items), at: typeof r.at === "string" ? r.at : "", remove };
+    return {
+        items, enough: isEnough(items), at: typeof r.at === "string" ? r.at : "", remove,
+        ...(isBoxType(r.box) && { box: r.box }),
+        ...(typeof r.shape === "string" && r.shape && { shape: r.shape }),
+    };
 }

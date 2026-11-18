@@ -112,6 +112,34 @@ Use the single-part endpoints (`/part1`, `/part2`, `/part3`) only to **restart p
 
 ---
 
+## The photo list (every part sends `photos` / `photoCheck`)
+
+The server checks the photos itself (owner, 2026-11-18 — a one-photo product with our logo on the main photo got through once). Each part sends what **you see now**:
+
+```json
+{
+  "box": "carton",
+  "shape": "palm-size gaming mouse",
+  "tags": [ { "url": "…/1.jpg", "kind": "front" }, { "url": "…/2.jpg", "kind": "box_back" } ],
+  "must": ["front", "left", "top", "box_front", "box_back"],
+  "nice": ["in_use", "size", "working"],
+  "mainClean": false,
+  "mainWhy": "held in hand, our shop logo across the top"
+}
+```
+
+- **`box`** — how it is packed: `loose` (no box), `card` (blister / card pack), `pouch`, `carton`. Read it from the photos. The **fixed floor** the server adds on its own: a clean product photo without the box (`front`), and for any boxed product the **box front and box back** (the back carries the model and specs).
+- **`shape`** — the product's shape / size in a few words.
+- **`must` / `nice`** — **your own list for this product**, not a fixed table: think how the maker and good sellers (Amazon.in, Flipkart, the maker's site) show this kind of item. A mouse: top, side, underside with the sensor. A router: front, back ports, the stand. A cable: both ends close-up, coiled length. A monitor: front, back with ports, the stand, side profile. A small part (screw, fuse): front and a size photo is often enough. Only what a buyer really needs is `must`; the rest is `nice`.
+- **`tags`** — every gallery photo with the kind it shows (`photoKinds` keys; in Part 3 / 5 a page photo you add counts by its page url).
+- **`mainClean`** — photo 1 is the product itself, sharp, **without the box**, with no logo, watermark or text on it (ours too). In a hand, on a shelf, in the box → `false`, with `mainWhy`.
+
+The server keeps the list on the product (staff see it under Product image), **never drops a must an earlier part set**, and works out what is missing:
+- A **must** photo missing and **not ticked "Can't add"** by staff, or a main photo that is not clean → **Part 1 stops** (Attention: "Must photo missing: … — add it, or tick Can't add"). That gets us better seed before the search.
+- A missing **optional** photo never stops anything.
+- Staff tick **"Can't add"** when a photo just cannot be taken (box gone, item fitted) → it stops blocking; `photoList.findOnline` lists it, and **Part 2 looks for it online** (the maker's or a seller's photo of that view), Part 3 adds it when sure.
+- Part 3 / Part 5: still missing → a note. Part 4: still missing, not ticked, or main not clean → **pending, never verified**.
+
 ## Part 1 — Prepare the seed (remove only, add nothing)
 
 1. **Read everything**: name (the custom part is usually the most reliable), brand, group, collections, SKU, barcodes, model no., specs, title, description, shipping, warranty — and **open every photo**. Never use your own memory of the product.
@@ -128,6 +156,7 @@ Use the single-part endpoints (`/part1`, `/part2`, `/part3`) only to **restart p
    - **Major** (`major`): photos show two different products and you cannot tell which is ours; the custom part and the photos point to different products.
    - Everything else is a minor `notes` line.
 5. **Enough to search?** After the clean-up, is there a brand + model, a part code, a barcode, or clear box wording to search with? No → `enough: false` and `need` = what staff must add ("a box / label photo", "the model no. printed on the back").
+6. **Photo list** → `photos` (see "The photo list" above): packing, shape, your must / optional list for this product, a tag for each photo left after the clean-up, and whether photo 1 is clean. A must photo missing (not ticked "Can't add") or an unclean main photo stops Part 1 — that is on purpose.
 
 ```bash
 curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json" \
@@ -142,17 +171,20 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
   "major": [],
   "notes": ["Model No is empty — sticker prints HS-SSD-E1000.", "Group looks wrong — should be SSD (GST!)"],
   "enough": true,
-  "need": ""
+  "need": "",
+  "photos": { "box": "carton", "shape": "4-port USB hub", "tags": [ { "url": "…/1.jpg", "kind": "front" }, { "url": "…/2.jpg", "kind": "box_front" }, { "url": "…/4.jpg", "kind": "box_back" } ], "must": ["front", "ports", "box_front", "box_back"], "nice": ["in_use", "size"], "mainClean": true }
 }
 ```
 
-`why` is one of `photoRemoveReasons`. Answer: `{ result: "part1" | "attention", removed, notes }`.
+`why` is one of `photoRemoveReasons`. Answer: `{ result: "part1" | "attention", removed, notes, findOnline }`.
 - `attention` → stop this product (staff fix, then run again).
 - `part1` → go on to Part 2 now.
 
 ## Part 2 — The one search
 
 Search **once**, with the cleaned data only: brand + exact model / part code (India first). **Maker's site first**, then Amazon.in, Flipkart, Reliance Digital, Croma. At most 8 pages. Blogs and other shops are refused.
+
+**Missing photos too** — `photoList.findOnline` (and Part 1's `findOnline`) names the must photos we do not have, including the ones staff ticked "Can't add". Prefer pages that show those views (the maker's gallery, an Amazon.in listing with the box back), so Part 3 can add them. Look also at how those pages show the product — it is what your must / optional list in Part 3 should follow.
 
 Accept / reject each page exactly as product-copy step 3:
 - Our code / barcode on the page → same product: accept.
@@ -188,8 +220,9 @@ Read the product again (`GET /api/agent/prep/<id>`); work only from `prep.pages`
    - `remove` / `suggestRemove`: same as Part 1 for anything still wrong.
    - `order`: the whole gallery as you want it (our kept photos + added ones) — a clean product front first, then sides / close-ups, then box, then feel photos. Applied now.
    - `look`: crops / fixes from `photoLookOptions` (staff press Use / Undo).
-   - `have` / `must` / `nice`: photo kinds (`photoKinds` keys).
-   - Primary photo with any logo, watermark or text → do not put it first; note "Pick a clean primary photo". **Our own shop logo / address on any other photo is fine — never flag it** (owner, 2026-11-17); someone else's watermark is always a problem.
+   - Fill the missing must photos (`photoList.findOnline`) from the saved pages when you are **sure** they are this exact model.
+   - Primary photo with any logo, watermark or text → do not put it first; a maker's clean product photo is usually the best photo 1. **Our own shop logo / address on any other photo is fine — never flag it** (owner, 2026-11-17); someone else's watermark is always a problem.
+   - **`photoCheck`** — the photo list **after** your changes (see "The photo list"): tag the page photos you add by their page url; refine must / optional from how the saved pages show the product. Still missing → the server adds a note; the product still goes to Draft.
 7. **Mistake check → `notes`** — product-copy §8's list, one problem per line (name, model no. / barcode to copy in, group, photos, price plainly off …).
 
 ```bash
@@ -212,8 +245,9 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
     "add": [ { "url": "https://www.portronics.com/cdn/…/M8_-_1.png", "kind": "front" } ],
     "suggest": [], "remove": [], "suggestRemove": [],
     "order": ["https://www.portronics.com/cdn/…/M8_-_1.png", "…/2.jpg", "…/1.jpg"],
-    "look": [], "have": ["box_front"], "must": ["ports"], "nice": ["in_use"]
+    "look": []
   },
+  "photoCheck": { "box": "carton", "shape": "8-in-1 USB-C hub", "tags": [ { "url": "https://www.portronics.com/cdn/…/M8_-_1.png", "kind": "front" }, { "url": "…/2.jpg", "kind": "box_front" }, { "url": "…/1.jpg", "kind": "box_back" } ], "must": ["front", "ports", "box_front", "box_back"], "nice": ["in_use"], "mainClean": true },
   "notes": ["Name could read better: \"8-in1 HUB-C\" → \"8-in-1 USB-C Hub\""]
 }
 ```
@@ -246,6 +280,7 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
   "specClear": ["Color"],
   "textFixes": [ { "field": "title", "from": "Konect", "to": "Konnect" } ],
   "photos": { "order": ["…/new-front.jpg", "…/2.jpg"], "remove": [ { "url": "…/7.jpg", "why": "duplicate", "note": "same as photo 2" } ] },
+  "photoCheck": { "box": "card", "shape": "1.5 m USB-C cable", "tags": [ { "url": "…/new-front.jpg", "kind": "front" }, { "url": "…/2.jpg", "kind": "box_back" } ], "must": ["front", "ports", "box_front", "box_back"], "nice": ["size"], "mainClean": true },
   "notes": []
 }
 ```

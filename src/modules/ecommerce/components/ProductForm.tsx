@@ -1152,6 +1152,10 @@ export default function ProductForm({
                                         checklist={photoChecklist}
                                         gallery={galleryUrls}
                                         onToggle={(k) => tickPhotoKinds([k], true)}
+                                        onWaive={(k) => {
+                                            const items = photoChecklist.items.map((i) => (i.kind === k ? { ...i, waived: !i.waived } : i));
+                                            savePhotoChecklist({ ...photoChecklist, items, enough: isEnough(items) });
+                                        }}
                                         onRemove={(url) => {
                                             // Same as the gallery's Delete; the gallery autosaves.
                                             setGalleryUrls((g) => g.filter((u) => u !== url));

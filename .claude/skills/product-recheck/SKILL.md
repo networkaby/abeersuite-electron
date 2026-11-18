@@ -60,7 +60,7 @@ Use: the product fields, every photo (open each — `GET /api/agent/products/<id
 | **Collections** | None, or plainly wrong for who buys it |
 | **Group** | Plainly wrong (GST) — always pending until staff fix it |
 | **Shipping** | Weight or size empty |
-| **Photos** | Main photo not a clean product front, or has a logo / watermark / text (our own too); another product's photo; someone else's watermark on any photo; blurry / dark; duplicates; a `must` photo kind still missing. Our own logo / address on a **non-main** photo is fine — never flag it |
+| **Photos** | Main photo not a clean product photo without the box, or has a logo / watermark / text (our own too); another product's photo; someone else's watermark on any photo; blurry / dark; duplicates; a `must` photo kind still missing (`photoList.missing`). Our own logo / address on a **non-main** photo is fine — never flag it. Send **`photoCheck`** (below) — the server checks the must photos and the main photo itself |
 
 **Pending** = would be wrong or embarrassing on the shop. Smaller things (wording could be nicer, a nice-to-have photo) go in `notes`. **Any line in either sends the product to Attention** (owner, 2026-11-17) — a Published product too; going off the shop is accepted. So write a line only for a real problem; nothing found → send both empty.
 
@@ -68,10 +68,14 @@ Use: the product fields, every photo (open each — `GET /api/agent/products/<id
 
 ```bash
 curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json" \
-  "$PRODUCT_COPY_WRITE_URL/api/agent/prep/<id>/part4" -d '{ "pending": ["Photo 4 (another hub) still in the gallery — press Remove"], "notes": [] }'
+  "$PRODUCT_COPY_WRITE_URL/api/agent/prep/<id>/part4" -d '{ "pending": ["Photo 4 (another hub) still in the gallery — press Remove"], "notes": [], "photoCheck": { "box": "carton", "shape": "4-port USB hub", "tags": [ { "url": "…/1.jpg", "kind": "front" }, { "url": "…/2.jpg", "kind": "box_back" } ], "must": ["front", "ports", "box_front", "box_back"], "nice": [], "mainClean": true } }'
 ```
 
 - `pending: []` **and** `notes: []` → `{ result: "verified" }`: it stays in Draft with "Part 4 done — verified, ready to Save as ready". **You never press Save as ready.**
+- Always send **`photoCheck`** — what you see now: `box` (loose / card / pouch / carton), `shape`, a `tags` row for every gallery photo (`photoKinds` keys), your `must` / `nice` for this product (how the maker and good sellers show it), and `mainClean` (photo 1 is the product itself, no box, no logo or text — ours too) with `mainWhy`. The server adds the fixed floor (clean product photo; box front + back when boxed), keeps every must an earlier part set, honours staff's "Can't add" ticks, and puts a missing must or an unclean main photo in pending on its own — the product is **never verified** with them (next: Part 5).
+  ```json
+  "photoCheck": { "box": "carton", "shape": "palm-size gaming mouse", "tags": [ { "url": "…/1.jpg", "kind": "front" } ], "must": ["front", "left", "box_front", "box_back"], "nice": ["in_use"], "mainClean": false, "mainWhy": "held in hand, shop logo on it" }
+  ```
 - With any problem, also send **`next`** — the part to run after staff look: `"part5"` when only small things are wrong (photo order or removals, one spec row, a typo, an empty Model No / weight), `"part3"` when the text needs rewriting from the saved search, `"part1"` when the product itself is in doubt (wrong photos of another item, data badly wrong). It shows on the Last run line.
 - **Products made before the skills existed** start here: Part 4 is the cheapest first look (no search, no change); its `next` tells the owner whether Part 5 or a full run is needed.
 - Any line in `pending` or `notes` → `{ result: "attention" }`: parked in Attention with every line (PENDING first, then NOTE), plus a line the server adds saying where it came from ("Was Published (live on the shop) before this check — if the fix is small, publish it again") so staff can put a live product back. Staff fix, then run product-recheck again (not product-prep — unless a line says so).

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { uploadImageToCloudinary } from "@/shared/lib/uploadToCloudinary";
 import { IMAGE_FIXES, PAD_BACKGROUNDS, cloudinaryThumb, readAdjust, withoutAdjust } from "@/shared/lib/cloudinaryImage";
-import { PHOTO_GROUPS, PHOTO_KINDS, PHOTO_REMOVE_REASONS, photoKindLabel, type PhotoArrange, type PhotoChecklist, type PhotoGroup, type PhotoKind, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
+import { BOX_TYPES, PHOTO_GROUPS, PHOTO_KINDS, PHOTO_REMOVE_REASONS, photoKindLabel, type PhotoArrange, type PhotoChecklist, type PhotoGroup, type PhotoKind, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
 
 // Verified's photo suggestions (owner, 2026-10-22): shown while the draft is
 // open, never added on their own. A gallery the AI calls enough keeps them
@@ -128,11 +128,13 @@ export function AiPhotoPicker({
 }
 
 /** The rows under Product image in Shop readiness, by group; must rows in bold. Staff tick a kind once the gallery has it. */
-export function PhotoChecklistRows({ checklist, gallery, onToggle, onRemove }: {
+export function PhotoChecklistRows({ checklist, gallery, onToggle, onWaive, onRemove }: {
     checklist: PhotoChecklist;
     /** The form's current gallery — advice about a photo no longer there is not shown. */
     gallery: string[];
     onToggle: (kind: PhotoKind) => void;
+    /** "Can't add" on a missing must photo (owner, 2026-11-18): it stops blocking the AI parts; the search looks for it online instead. */
+    onWaive: (kind: PhotoKind) => void;
     onRemove: (url: string) => void;
 }) {
     const removals = checklist.remove.filter((r) => gallery.includes(r.url));
@@ -141,6 +143,11 @@ export function PhotoChecklistRows({ checklist, gallery, onToggle, onRemove }: {
         .filter((x) => x.items.length);
     return (
         <div className="ml-6 space-y-2">
+            {(checklist.box || checklist.shape) && (
+                <p className="text-muted-foreground text-[11px]">
+                    {[checklist.box && BOX_TYPES[checklist.box], checklist.shape].filter(Boolean).join(" · ")}
+                </p>
+            )}
             {removals.length > 0 && (
                 <div>
                     <p className="text-[11px] font-medium uppercase text-amber-700 dark:text-amber-400">AI suggests removing</p>
@@ -168,8 +175,14 @@ export function PhotoChecklistRows({ checklist, gallery, onToggle, onRemove }: {
                                 <Checkbox id={`photo-${i.kind}`} checked={i.done} onCheckedChange={() => onToggle(i.kind)} />
                                 <label htmlFor={`photo-${i.kind}`} className={`${i.must ? "font-medium" : ""} ${i.done ? "" : "text-muted-foreground"}`}>
                                     {photoKindLabel(i.kind)}
-                                    {i.must && !i.done ? <span className="ml-1 text-amber-700 dark:text-amber-400">· must</span> : null}
+                                    {i.must && !i.done && !i.waived ? <span className="ml-1 text-amber-700 dark:text-amber-400">· must</span> : null}
                                 </label>
+                                {i.must && !i.done && (
+                                    <label className="text-muted-foreground ml-auto flex items-center gap-1" title="This photo cannot be taken — the AI stops asking for it and looks for it online">
+                                        <Checkbox checked={!!i.waived} onCheckedChange={() => onWaive(i.kind)} />
+                                        Can&apos;t add
+                                    </label>
+                                )}
                             </li>
                         ))}
                     </ul>
