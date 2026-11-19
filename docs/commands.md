@@ -40,7 +40,7 @@ git push origin main && git push production main
 5. `pnpm electron:pack` — full build + `electron-builder --dir` + `verify:package` gate
 6. Release notes assembled = your `RELEASE_NOTES.md`, then the auto commit log since the previous version tag, in that order
 7. Annotated git tag `v<version>` created if it does not already exist
-8. `git push origin HEAD --tags` — `main` **and** the tag to `origin` (`devloperakramul/abeersuite-electron`)
+8. `git push origin HEAD refs/tags/v<version>` — `main` **and** the release tag to `origin` (`devloperakramul/abeersuite-electron`)
 9. A GitHub release published in **every** `GITHUB_UPDATE_REPO_N` from `.env` — or, when the version carries a `-` (`1.3.1-pre.1`), in `GITHUB_UPDATE_REPO_2` **only**, marked a GitHub prerelease — each with its own `GITHUB_UPDATE_REPO_N_TOKEN` — one `electron-builder --publish always --prepackaged` run per repo, carrying installer, blockmap, `latest.yml` and the notes
 
 **You finish (2 things, still manual today):**
@@ -48,7 +48,7 @@ git push origin main && git push production main
 10. **Push the tag to `production` too** — `scripts/release-electron.ts` pushes `origin` only, and both source remotes must carry the released commit and its tag (`origin` = `devloperakramul/abeersuite-electron`, `production` = `akramuljakir/abeersuite-electron`), otherwise the two accounts disagree about what `v<version>` is:
 
 ```bash
-git push production main --tags
+git push production main refs/tags/v<version>
 ```
 
 11. **Bring `dev` back level with `main`**, so the next day's work starts from the released tree:
@@ -316,7 +316,7 @@ Check the release on GitHub: installer, `latest.yml`, and the blockmap must all 
 `electron:release` pushed `main` and the tag to `origin` only, so finish the convention (§0):
 
 ```bash
-git push production main --tags
+git push production main refs/tags/v<version>
 git checkout dev && git merge --ff-only main && git push origin dev
 ```
 
@@ -342,7 +342,7 @@ For a colour change, a label fix, a spacing tweak, a copy edit — **no schema, 
 7. `git push origin main && git push production main`
 8. `pnpm electron:release`
 9. Check the installer, blockmap and `latest.yml` on every release repo
-10. `git push production main --tags` (levels `main` and older tags — `electron:release` already pushed the release tag to every release repo before publishing), then level `dev`, and fast-forward `d_office` / `d_shop` when Vercel needs it — the owner pushes those (§0)
+10. `git push production main refs/tags/v<version>` (levels `main` and the release tag, never `--tags` — `electron:release` already pushed the release tag to every release repo before publishing), then level `dev`, and fast-forward `d_office` / `d_shop` when Vercel needs it — the owner pushes those (§0)
 
 **What is skipped, and why it is safe:**
 

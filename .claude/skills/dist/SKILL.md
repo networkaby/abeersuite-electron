@@ -15,7 +15,7 @@ Sources of truth: `AGENTS.md` §9 and `docs/commands.md` §0 / §9. The `release
 
 - **Nothing goes to GitHub.** No `git push` of any branch or tag. Not to `origin`, not to `production`.
 - **Never create `v<version>`.** That tag means "shipped": `release` and `publish` stop on it, and `scripts/release-electron.ts` would treat it as the real release tag. The only tag `dist` makes is the local marker `dist-v<version>`.
-- **The marker is never pushed.** `release-electron.ts` runs `git push origin HEAD --tags`, which pushes **every** local tag — so `publish` deletes the marker before it runs the script. Never leave that to chance.
+- **The marker is never pushed.** `release-electron.ts` pushes only `v<version>`, so the marker stays local; `publish` still deletes it once used, and `release` deletes every marker (a release supersedes skipped test builds).
 - **`main` only**, like `release`. The marker pins the commit, so `main` may move on afterwards without harm.
 - **A `-` in the version still decides the channel** — but only at publish time. `dist` itself publishes nothing.
 
@@ -103,5 +103,5 @@ Stop and ask on a non-fast-forward merge or a failing `verify:package`.
 
 - `.claude/skills/release/SKILL.md` — notes rules, urgency tiers, lock-clearing block.
 - `.claude/skills/publish/SKILL.md` — uploads a dist build; reads and deletes the marker.
-- `scripts/release-electron.ts` — pushes `--tags`, hence the marker must be gone before it runs.
+- `scripts/release-electron.ts` — pushes only the release tag, never `--tags`.
 - `scripts/verify-package.ts` — the gate.

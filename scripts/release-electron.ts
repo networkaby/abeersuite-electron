@@ -274,7 +274,8 @@ try {
 
     if (branch) {
         console.log(`[release-electron] Pushing ${branch} and tag ${tagName} to origin...`);
-        execSync(`git push origin HEAD --tags`, { stdio: "inherit" });
+        // Only the release tag — never `--tags`, which would also push local `dist-v*` test-build markers.
+        execSync(`git push origin HEAD refs/tags/${tagName}`, { stdio: "inherit" });
     } else {
         console.log(
             `[release-electron] Detached HEAD — pushing tag ${tagName} to origin only. ` +

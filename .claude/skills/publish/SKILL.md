@@ -45,7 +45,7 @@ node -p "require('./package.json').version" && git tag -l && git log --oneline -
 1. **Commit:** `HEAD` must be the marker's commit (`git rev-parse dist-v<version>^{commit}`). If `main` has moved on, check out that commit (detached is fine — this skill publishes any commit) and say so. Never publish a later commit under a dist build's installer.
 2. **Package:** the `sha512:` in the marker's message (`git tag -l --format='%(contents)' dist-v<version>`) must equal the top-level `sha512:` in `dist-app/latest.yml`, and the installer file it names must be present. Mismatch → the pack was rebuilt or overwritten since the owner tested it; stop and say so (rung B territory — it needs a fresh `dist` and a fresh test).
 3. Both match → checks 1–6 below still run, and pass as a reused pack.
-4. **Delete the marker before step 5**: `git tag -d dist-v<version>`. `release-electron.ts` runs `git push origin HEAD --tags`, which would push the marker to GitHub. Delete it once checks pass, before the push gate.
+4. **Delete the marker before step 5**: `git tag -d dist-v<version>`. It is spent once this build goes out; delete it once checks pass, before the push gate.
 
 No marker → carry on as below.
 
@@ -102,7 +102,7 @@ Full build. The owner's earlier test no longer covers this binary, so **stop and
 **Rewritten from scratch for this version.** Not appended to, not left from last time.
 
 ```bash
-git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:"%h %s"
+git log $(git describe --tags --match "v*" --abbrev=0)..HEAD --pretty=format:"%h %s"
 ```
 
 The full rules — customer-readable plain Indian English, one `##` heading per area the user notices, `# v<version>` as the first line, calling out a schema change and its publish-then-migrate ordering, and the urgency tiers — live in **`.claude/skills/release/SKILL.md` step 3**. They are identical here; read them there rather than keeping a second copy that will drift.
@@ -154,7 +154,7 @@ What the script does: assembles the notes (yours, then the auto commit log since
 ## Step 6 — Level `production` (`electron:release` already pushed the release tag there before publishing)
 
 ```bash
-git push production <branch> --tags
+git push production <branch> refs/tags/v<version>
 ```
 
 Detached: `git push production v<version>`.

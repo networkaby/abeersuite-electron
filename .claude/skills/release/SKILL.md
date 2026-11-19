@@ -13,6 +13,7 @@ Sources of truth: `AGENTS.md` §9 and `docs/commands.md` §0 (the convention) an
 
 - **`/release urgent` = no questions.** The owner has already decided: `minimumCounterVersion` is raised to this version, the `.env` variant is taken as it is (state `APP_MODE` / `LANDING_PAGE` in the report), and the notes are written and committed without waiting. Run the whole list straight through. Failures (non-fast-forward, `verify:package`, publish) still stop.
 
+- **`dist-v*` tags are not release material.** They are local markers for `dist` test builds (`.claude/skills/dist/SKILL.md`). `release` never reuses their installer, never builds on them, never pushes them — it always builds fresh with `pnpm electron:release`. A release supersedes every test build made before it (one that was tested and dropped, or skipped straight past), so preflight deletes them.
 - **`main` only.** Never release from `dev`, `d_office`, or a detached HEAD. The tag the script mints points at `HEAD`, so releasing off `dev` puts `v<version>` on a commit `main` does not contain and the two remotes stop agreeing about what that version is.
 - **Two source remotes, both must end level.** `origin` = `devloperakramul/abeersuite-electron`, `production` = `akramuljakir/abeersuite-electron`.
 - **Release is the one exception to "never push".** Steps 5, 7 and 8 are pushes the owner asked for by saying the word "release". The `d_office` / `d_shop` pushes in step 9 are **not** — the owner runs those; the agent only reminds. Everything else in this repo still stops at the commit.
@@ -33,6 +34,13 @@ git status --porcelain && git branch --show-current && git log --oneline -1
 
 - Working tree clean? Uncommitted work must be resolved or stashed first — ask the owner, never discard.
 - `.env` present with `GITHUB_UPDATE_REPO_1` + `GITHUB_UPDATE_REPO_1_TOKEN` (the script scans `_1`, `_2`, … until a gap; a repo with no matching token is fatal).
+- **Clear `dist-v*` markers** — skipped or abandoned test builds; this release supersedes them. Local only, nothing on GitHub to undo:
+
+  ```bash
+  git tag -l "dist-v*" && git tag -l "dist-v*" | xargs -r git tag -d
+  ```
+
+  Name them in the report. One for a version **above** the one you are releasing means a test build is ahead of this release — stop and ask instead of deleting.
 - **Ask the owner to confirm the build variant** — `APP_MODE` and `LANDING_PAGE` in `.env` decide which product this installer is. Do not guess.
 
 **Stop anything that can lock the build, before step 6 — not after it fails.** `electron-builder` unpacks Electron into `dist-app/win-unpacked.tmp` and renames it to `dist-app/win-unpacked`. A leftover `AbeerSuite.exe` (an earlier smoke test still open) or `electron.exe` (a `pnpm dev` / `pnpm electron:dev` session still running) holds those files open and turns that rename into `EPERM: operation not permitted, rename 'win-unpacked.tmp' -> 'win-unpacked'` — a real failure, unlike the transient antivirus one covered by the EPERM-resumable memory. A dev server left on port `786` (`electron:dev`) or `3000` (`pnpm dev`) can just as easily clash with the fresh `.next` output the same pack step writes.
@@ -88,7 +96,7 @@ Patch (`5.0.3` → `5.0.4`) for fixes; minor for new capability; ask the owner w
 Rewritten from scratch for this version. Not appended to, not left from last time.
 
 ```bash
-git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:"%h %s"
+git log $(git describe --tags --match "v*" --abbrev=0)..HEAD --pretty=format:"%h %s"
 ```
 
 Read the actual diffs behind those commits — subject lines are not enough to know what a shopkeeper will notice.
@@ -147,17 +155,17 @@ One command owns all of this — never do any part of it by hand:
 - `pnpm electron:pack` → `electron:build` + `electron-builder --dir` + the **`verify:package` gate** (counter env keys, standalone `server.js` and its dependency closure, resource size, replica payload / `local-schema.sql`).
 - Assembles the release notes: your `RELEASE_NOTES.md`, then the auto commit log since the previous version tag, in that order.
 - Creates the annotated git tag **`v<version>`** if it does not already exist.
-- `git push origin HEAD --tags` — `main` **and** the tag to `origin`.
+- `git push origin HEAD refs/tags/v<version>` — `main` **and** only the release tag to `origin` (never `--tags`: local `dist-v*` markers must not leave the machine).
 - **Publishes a GitHub release.** A normal version goes to **every** `GITHUB_UPDATE_REPO_N`, each with its own `GITHUB_UPDATE_REPO_N_TOKEN` — one `electron-builder --publish always --prepackaged` run per repo, carrying the installer, the blockmap, `latest.yml` and the notes. A version with a `-` in it goes to **repo 2 only**, marked a prerelease; the script says which it is doing before it starts, so read that line.
 
 **No smoke-test pause.** Never stop to ask the owner to test. If the release needs a
 check the gate cannot make, do it yourself before or after the pack, then let
 `pnpm electron:release` run straight from pack to publish.
 
-### 7. Level `main` and older tags on `production` (the release tag is already there — `electron:release` pushed it before publishing)
+### 7. Level `main` and the release tag on `production` (the release tag is already there — `electron:release` pushed it before publishing)
 
 ```bash
-git push production main --tags
+git push production main refs/tags/v<version>
 ```
 
 The script pushes `origin` only. Both source remotes must carry the released commit **and** its tag, or the two accounts disagree about what `v<version>` is.
