@@ -29,6 +29,30 @@ export type ShopDraft = {
 export type PrepRun = { skill: "product-prep" | "product-recheck"; part: string; at: string; from: ShopStatus; to: ShopStatus };
 export type PrepProblem = { text: string; level: "stop" | "fix"; part: number; at: string; asideBy?: string; asideAt?: string };
 
+export type RowProblem = { text: string; level: "stop" | "fix"; aside?: boolean };
+
+/**
+ * An Attention reason split for display (owner, 2026-11-20: "highlight proper way"):
+ * the "PENDING / STOPPED / NOTE (Part n) — x" lines are the problems; everything
+ * else (what to do after, the Last run line, where it came from) is the small print.
+ */
+export function splitAttention(text: string | null | undefined): { problems: RowProblem[]; rest: string[] } {
+    const problems: RowProblem[] = [];
+    const rest: string[] = [];
+    for (const line of (text ?? "").split("\n").map((l) => l.trim()).filter(Boolean)) {
+        const m = /^(PENDING|STOPPED|NOTE) \(Part \d\) — (.*)$/.exec(line);
+        if (m) problems.push({ text: m[2].trim(), level: m[1] === "NOTE" ? "fix" : "stop" });
+        else rest.push(line);
+    }
+    return { problems: [...problems.filter((p) => p.level === "stop"), ...problems.filter((p) => p.level === "fix")], rest };
+}
+
+/** A row's problems: the saved list when the product has one, else read from its Attention reason. */
+export function rowProblems(info: ShopDraft | null, attention: string | null): RowProblem[] {
+    if (info?.problems?.length) return info.problems.map((p) => ({ text: p.text, level: p.level, ...(p.asideAt && { aside: true }) }));
+    return splitAttention(attention).problems;
+}
+
 const isRun = (x: unknown): x is PrepRun => !!x && typeof x === "object" && typeof (x as PrepRun).at === "string" && typeof (x as PrepRun).part === "string";
 const isProblem = (x: unknown): x is PrepProblem => !!x && typeof x === "object" && typeof (x as PrepProblem).text === "string";
 
@@ -98,6 +122,8 @@ export type ShopProductAdmin = ShopProductPublic & {
     shopDraft?: ShopDraft | null;
     /** A problem staff set aside ("can't fix now") — the list's "Set aside" tab. List rows only. */
     hasAsideProblems?: boolean;
+    /** The open and set-aside problems, red first — shown in the list's Shop status (owner, 2026-11-20). List rows only. */
+    problems?: RowProblem[];
     /** Per-product override: accept orders even at zero stock (backorder). */
     allowBackorder: boolean;
     unitId: number;

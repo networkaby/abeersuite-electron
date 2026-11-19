@@ -9,7 +9,7 @@ import { LinkContextMenu, useLinkContextMenu } from "@/shared/components/LinkCon
 import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { toast } from "sonner";
-import type { ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
+import { splitAttention, type RowProblem, type ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { DEFAULT_SHOP_PUBLISH_RULES, recheckMessage, type RecheckResult, type ShopPublishRules } from "@/modules/ecommerce/lib/shopQualification";
 import { extractApiError } from "@/shared/lib/api";
 import {
@@ -94,17 +94,48 @@ function loadSavedView(): Partial<SavedView> {
     }
 }
 
-function StatusBadge({ status, attention }: { status: ProductStatus; attention?: string | null }) {
-    return status.kind === "attention" ? (
-        <span className="inline-flex flex-col items-start gap-0.5">
-            <Badge variant="outline" className="gap-1 border-orange-200 bg-orange-50 text-orange-700" title={`Parked — ${attention ?? ""}`}>
-                <AlertTriangle className="size-3" /> Attention
-            </Badge>
-            {attention ? (
-                <span className="line-clamp-2 max-w-[180px] whitespace-pre-line text-[11px] leading-tight text-orange-700">{attention}</span>
-            ) : null}
+/**
+ * The problems under a stage, the one staff must fix first on top (owner, 2026-11-20:
+ * "highlight proper way"). Red = stop, amber = should fix, grey = set aside ("can't
+ * fix now") — set-aside ones show on every stage, Published too.
+ */
+function ProblemLines({ problems, full }: { problems: RowProblem[]; full?: boolean }) {
+    const open = problems.filter((p) => !p.aside);
+    const aside = problems.filter((p) => p.aside);
+    const shown = full ? open : open.slice(0, 1);
+    const tone = (p: RowProblem) => (p.level === "stop" ? "text-red-700 dark:text-red-400" : "text-amber-700 dark:text-amber-400");
+    return (
+        <span className={`flex flex-col gap-0.5 whitespace-normal ${full ? "" : "w-[230px]"} text-[11px] leading-snug`}>
+            {shown.map((p, i) => (
+                <span key={p.text} className={`${tone(p)} ${full ? "" : "line-clamp-3"} font-medium`} title={p.text}>
+                    {full || open.length > 1 ? `${i + 1}. ` : ""}{p.text}
+                </span>
+            ))}
+            {!full && open.length > 1 && <span className="text-muted-foreground">+{open.length - 1} more problem{open.length > 2 ? "s" : ""}</span>}
+            {aside.length > 0 && (full
+                ? aside.map((p) => <span key={p.text} className="text-muted-foreground">Set aside (can&apos;t fix now): {p.text}</span>)
+                : <span className="text-muted-foreground" title={aside.map((p) => p.text).join("\n")}>{aside.length} set aside — can&apos;t fix now</span>)}
         </span>
-    ) : status.kind === "live" ? (
+    );
+}
+
+function StatusBadge({ status, attention, problems }: { status: ProductStatus; attention?: string | null; problems?: RowProblem[] }) {
+    const list = problems ?? (status.kind === "attention" ? splitAttention(attention).problems : []);
+    const badge = status.kind === "attention" ? (
+        <Badge variant="outline" className="gap-1 border-orange-200 bg-orange-50 text-orange-700">
+            <AlertTriangle className="size-3" /> Attention
+        </Badge>
+    ) : <StageBadge status={status} />;
+    return list.length ? (
+        <span className="inline-flex flex-col items-start gap-0.5">
+            {badge}
+            <ProblemLines problems={list} />
+        </span>
+    ) : badge;
+}
+
+function StageBadge({ status }: { status: ProductStatus }) {
+    return status.kind === "attention" ? null : status.kind === "live" ? (
         <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50 text-emerald-700">
             <CheckCircle2 className="size-3" /> Published
         </Badge>
@@ -642,7 +673,7 @@ export default function EcommerceProductsPage() {
                                             {p.groupName ?? "—"}
                                         </TableCell>
                                         <TableCell>
-                                            <StatusBadge status={status} attention={p.shopAttention} />
+                                            <StatusBadge status={status} attention={p.shopAttention} problems={p.problems} />
                                         </TableCell>
                                         <TableCell className="text-right tabular-nums">
                                             {shopPricePaise ? formatRupeesFromPaise(shopPricePaise) : "—"}
@@ -752,7 +783,9 @@ export default function EcommerceProductsPage() {
                                                         label="Shop status"
                                                         value={
                                                             status.kind === "attention"
-                                                                ? `Attention — parked${p.shopAttentionBy ? ` by ${p.shopAttentionBy}` : ""}${p.shopAttentionAt ? ` on ${formatDate(p.shopAttentionAt)}` : ""}: ${p.shopAttention ?? "—"}. Off the shop; check it, then Save as draft or Save as ready.`
+                                                                ? <AttentionDetail p={p} />
+                                                                : p.problems?.length
+                                                                ? <span className="flex flex-col gap-1"><span>{STAGE_LINE[status.kind] ?? ""}</span><ProblemLines problems={p.problems} full /></span>
                                                                 : status.kind === "waiting"
                                                                 ? "Waiting — shortlisted for the AI run, not in the shop. The run moves it to Draft (or Attention); Remove puts it back."
                                                                 : status.kind === "draft"
@@ -845,7 +878,33 @@ function Detail({ label, value }: { label: string; value: ReactNode }) {
     return (
         <div>
             <p className="text-muted-foreground text-xs">{label}</p>
-            <p className="mt-0.5">{value}</p>
+            <div className="mt-0.5">{value}</div>
         </div>
+    );
+}
+
+/** A short stage line above set-aside problems on a product that is not in Attention. */
+const STAGE_LINE: Partial<Record<ProductStatus["kind"], string>> = {
+    live: "Published — live on the storefront", ready: "Ready — waiting to be published", draft: "Draft — being worked on, not in the shop",
+    pending: "Pending — waits for a publish rule", unpublished: "Unpublished", waiting: "Waiting — shortlisted for the AI run",
+};
+
+/** Attention, expanded: who parked it, the problems (numbered, coloured), then the small print. */
+function AttentionDetail({ p }: { p: ShopProductAdmin }) {
+    const { problems, rest } = splitAttention(p.shopAttention);
+    const list = p.problems ?? problems;
+    return (
+        <span className="flex flex-col gap-1">
+            <span className="font-medium text-orange-700 dark:text-orange-400">
+                Attention — parked{p.shopAttentionBy ? ` by ${p.shopAttentionBy}` : ""}{p.shopAttentionAt ? ` on ${formatDate(p.shopAttentionAt)}` : ""}
+            </span>
+            {list.length ? <ProblemLines problems={list} full /> : <span>{p.shopAttention ?? "—"}</span>}
+            {rest.length > 0 && (
+                <span className="flex flex-col text-[11px] text-muted-foreground">
+                    {rest.map((l) => <span key={l}>{l.replace(/\.\.$/, ".")}</span>)}
+                </span>
+            )}
+            <span className="text-[11px] text-muted-foreground">Off the shop — fix it, then Save as draft or Save as ready.</span>
+        </span>
     );
 }

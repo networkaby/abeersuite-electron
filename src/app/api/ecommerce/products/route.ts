@@ -3,7 +3,7 @@ import { shopSlugClash } from "@/shared/lib/shop/shopSlug";
 import { syncMainCollections } from "@/modules/inventory/lib/productCollections";
 import { NextResponse } from "next/server";
 import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
-import { invProductToAdmin } from "@/modules/ecommerce/lib/productAdmin";
+import { invProductToAdmin, readShopDraft, rowProblems } from "@/modules/ecommerce/lib/productAdmin";
 import { nextShopStatus, resolveShopListing, SHOP_STATUSES } from "@/modules/ecommerce/lib/shopListing";
 import { loadVariantAttrGaps } from "@/modules/ecommerce/lib/applyPublished";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
@@ -83,9 +83,22 @@ export async function GET(req: Request) {
         // list can say "Pending — needs Colour".
         const gaps = await loadVariantAttrGaps(products.filter((p) => p.variantFamilyId != null).map((p) => p.id));
         // The "Set aside" tab (owner, 2026-11-20): ids only — the notes stay off the list.
-        const aside = new Set((await prisma.invProduct.findMany({ where: { shopDraftJson: { path: ["asideCount"], gt: 0 } }, select: { id: true } })).map((r) => r.id));
+        // Problems for the Shop status cell (owner, 2026-11-20): only rows in Attention or
+        // with a set-aside problem read their notes — the rest of the list never does.
+        const withProblems = await prisma.invProduct.findMany({
+            where: { OR: [{ shopStatus: "ATTENTION" }, { shopDraftJson: { path: ["asideCount"], gt: 0 } }] },
+            select: { id: true, shopAttention: true, shopDraftJson: true },
+        });
+        const problemsOf = new Map(withProblems.map((r) => [r.id, rowProblems(readShopDraft(r.shopDraftJson), r.shopAttention)]));
         return NextResponse.json(
-            products.map((p) => ({ ...invProductToAdmin(p, bands), variantAttrGaps: gaps.get(p.id) ?? [], ...(aside.has(p.id) && { hasAsideProblems: true }) }))
+            products.map((p) => {
+                const problems = problemsOf.get(p.id) ?? [];
+                return {
+                    ...invProductToAdmin(p, bands), variantAttrGaps: gaps.get(p.id) ?? [],
+                    ...(problems.length && { problems }),
+                    ...(problems.some((x) => x.aside) && { hasAsideProblems: true }),
+                };
+            })
         );
     } catch (e) {
         return handleApiError(e, "Failed to list products");
