@@ -13,7 +13,7 @@ Sources of truth: `AGENTS.md` §9 and `docs/commands.md` §0 (the convention) an
 
 - **`/release urgent` = no questions.** The owner has already decided: `minimumCounterVersion` is raised to this version, the `.env` variant is taken as it is (state `APP_MODE` / `LANDING_PAGE` in the report), and the notes are written and committed without waiting. Run the whole list straight through. Failures (non-fast-forward, `verify:package`, publish) still stop.
 
-- **`dist-v*` tags are not release material.** They are local markers for `dist` test builds (`.claude/skills/dist/SKILL.md`). `release` never reuses their installer, never builds on them, never pushes them — it always builds fresh with `pnpm electron:release`. A release supersedes every test build made before it (one that was tested and dropped, or skipped straight past), so preflight deletes them.
+- **`dist-v*` tags are not release material.** They are local markers for `dist` test builds (`.claude/skills/dist/SKILL.md`). `release` never reuses their installer, never builds on them, never pushes, moves or deletes them — it always builds fresh with `pnpm electron:release`, exactly as before `dist` existed. They belong to `publish`, which reads them to know what a `dist` run left for it. A `dist` that was never published is simply ignored here.
 - **`main` only.** Never release from `dev`, `d_office`, or a detached HEAD. The tag the script mints points at `HEAD`, so releasing off `dev` puts `v<version>` on a commit `main` does not contain and the two remotes stop agreeing about what that version is.
 - **Two source remotes, both must end level.** `origin` = `devloperakramul/abeersuite-electron`, `production` = `akramuljakir/abeersuite-electron`.
 - **Release is the one exception to "never push".** Steps 5, 7 and 8 are pushes the owner asked for by saying the word "release". The `d_office` / `d_shop` pushes in step 9 are **not** — the owner runs those; the agent only reminds. Everything else in this repo still stops at the commit.
@@ -34,13 +34,6 @@ git status --porcelain && git branch --show-current && git log --oneline -1
 
 - Working tree clean? Uncommitted work must be resolved or stashed first — ask the owner, never discard.
 - `.env` present with `GITHUB_UPDATE_REPO_1` + `GITHUB_UPDATE_REPO_1_TOKEN` (the script scans `_1`, `_2`, … until a gap; a repo with no matching token is fatal).
-- **Clear `dist-v*` markers** — skipped or abandoned test builds; this release supersedes them. Local only, nothing on GitHub to undo:
-
-  ```bash
-  git tag -l "dist-v*" && git tag -l "dist-v*" | xargs -r git tag -d
-  ```
-
-  Name them in the report. One for a version **above** the one you are releasing means a test build is ahead of this release — stop and ask instead of deleting.
 - **Ask the owner to confirm the build variant** — `APP_MODE` and `LANDING_PAGE` in `.env` decide which product this installer is. Do not guess.
 
 **Stop anything that can lock the build, before step 6 — not after it fails.** `electron-builder` unpacks Electron into `dist-app/win-unpacked.tmp` and renames it to `dist-app/win-unpacked`. A leftover `AbeerSuite.exe` (an earlier smoke test still open) or `electron.exe` (a `pnpm dev` / `pnpm electron:dev` session still running) holds those files open and turns that rename into `EPERM: operation not permitted, rename 'win-unpacked.tmp' -> 'win-unpacked'` — a real failure, unlike the transient antivirus one covered by the EPERM-resumable memory. A dev server left on port `786` (`electron:dev`) or `3000` (`pnpm dev`) can just as easily clash with the fresh `.next` output the same pack step writes.
