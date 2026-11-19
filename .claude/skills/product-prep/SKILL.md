@@ -331,7 +331,7 @@ curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" -o "$PE/p<n>.jpg" "$PRODUCT_COPY_
 (cd "$PE" && node photo-edit.mjs blank  p<n>.jpg p<n>-edit.jpg 0.44,0.47,0.06,0.02)   # x,y,w,h as fractions of the photo
 ```
 
-For `blank`, crop round the cover first and look, so the box covers the whole marker (and any digit stub it left) but no other text. **Look at every `-edit.jpg` before sending it**: ragged edge, part of the product missing, a label damaged, a grey block → do not send; keep the original. Then:
+For `blank`, cover the **whole MRP amount** — from just after "Rs." / "₹" to just before "(inclusive …" — marker, digits and any stub alike, in one generous box; keep the "Rs." and the brackets. Crop round that line first to place the box. **Look at every `-edit.jpg` before sending it**: ragged edge, part of the product missing, a label damaged, a grey block → do not send; keep the original. Then:
 
 ```bash
 curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -F "edit=cutout" -F "file=@$PE/p<n>-edit.jpg;type=image/jpeg" \
