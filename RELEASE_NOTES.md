@@ -1,6 +1,12 @@
 # v1.17.11
 
-An update for the office and online shop product preparation workflow.
+An update for the office, database operations, and online shop product preparation workflow.
+
+## Database & Standby Operations
+
+- **Copy into standby now**: Added an on-demand button in Office Settings to dispatch an immediate backup copy into the standby database without waiting for the nightly cron schedule.
+- **Reliable read-only locking**: Setting a database to read-only now terminates existing connection pool sessions so locks apply cleanly without stale connections blocking standby copies.
+- **Accurate lock verification**: Database lock comparison ignores background telemetry timestamps on API keys, ensuring clean verification between primary and standby.
 
 ## AI Product Preparation & Photos
 
