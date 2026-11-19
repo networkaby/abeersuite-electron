@@ -2,6 +2,12 @@
 
 An update for the office, database operations, and online shop product preparation workflow.
 
+## Online Shop & Products List
+
+- **Immediate problem visibility**: The Products list now displays the primary open issue directly under the stage badge in red or amber, making it obvious at a glance why a product is in Attention.
+- **Set aside known problems**: Added a "can't fix now" option for problems in the AI notes box, allowing staff to set aside issues that cannot be solved immediately without holding back product progress.
+- **Streamlined AI photo improvements (Part 5)**: Photo preparation can now run independently for products that already have descriptions, improving main photo cut-outs and removing sticker prices without searching the web.
+
 ## Database & Standby Operations
 
 - **Copy into standby now**: Added an on-demand button in Office Settings to dispatch an immediate backup copy into the standby database without waiting for the nightly cron schedule.
