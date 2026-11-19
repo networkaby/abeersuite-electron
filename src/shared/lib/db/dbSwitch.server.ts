@@ -41,6 +41,22 @@ async function writeTx<T>(id: DbId, fn: (c: PoolClient) => Promise<T>): Promise<
 const setReadOnlySql = (on: boolean) =>
     `DO $$ BEGIN EXECUTE format('ALTER DATABASE %I SET default_transaction_read_only = ${on ? "on" : "off"}', current_database()); END $$`;
 
+/**
+ * `ALTER DATABASE … SET default_transaction_read_only` reaches only NEW server sessions,
+ * and Supabase's pooler keeps old ones: a lock left pooled sessions WRITABLE (a sale
+ * could land after the compare) and an unlock left them READ-ONLY (saves kept failing).
+ * So after the change, end this role's other sessions; the pooler and the app's pools
+ * reconnect with the new setting. A request mid-query at that moment fails once.
+ */
+const END_OTHER_SESSIONS_SQL = `SELECT count(pg_terminate_backend(pid))::int AS n FROM pg_stat_activity
+    WHERE datname = current_database() AND pid <> pg_backend_pid()
+      AND usename = current_user AND backend_type = 'client backend'`;
+
+async function setReadOnly(id: DbId, on: boolean): Promise<void> {
+    await writeTx(id, (c) => c.query(setReadOnlySql(on)));
+    await withDb(id, (c) => c.query(END_OTHER_SESSIONS_SQL));
+}
+
 async function ensureRow(c: PoolClient, primary: DbId): Promise<void> {
     await c.query(SWITCH_TABLE_SQL);
     await c.query(
@@ -220,7 +236,7 @@ export async function lockForSwitch(): Promise<{ locked: DbId; next: DbId }> {
 
     // Read-only FIRST, then compare: a save made between the two would otherwise slip in
     // after the check. If they differ, the lock is undone and nothing has changed.
-    await writeTx(from, (c) => c.query(setReadOnlySql(true)));
+    await setReadOnly(from, true);
     await withDb(from, (c) =>
         c.query(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity
                  WHERE datname = current_database() AND usename = current_user AND pid <> pg_backend_pid()`),
@@ -247,7 +263,7 @@ export async function lockForSwitch(): Promise<{ locked: DbId; next: DbId }> {
 /** Undo the lock: the primary is writable again. */
 export async function unlockPrimary(): Promise<DbId> {
     const id = currentPrimary();
-    await writeTx(id, (c) => c.query(setReadOnlySql(false)));
+    await setReadOnly(id, false);
     console.info(`[dbSwitch] ${id} unlocked`);
     return id;
 }

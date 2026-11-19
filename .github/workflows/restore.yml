@@ -114,7 +114,9 @@ jobs:
           echo "WAS_READ_ONLY=$RO" >> "$GITHUB_ENV"
           if [ "$RO" = "on" ]; then
             "$PSQL" "$DIRECT_DATABASE_URL" -v ON_ERROR_STOP=1 -q -c \
-              "BEGIN READ WRITE; DO \$\$ BEGIN EXECUTE format('ALTER DATABASE %I SET default_transaction_read_only = off', current_database()); END \$\$; COMMIT;"
+              "BEGIN READ WRITE; DO \$\$ BEGIN EXECUTE format('ALTER DATABASE %I SET default_transaction_read_only = off', current_database()); END \$\$; COMMIT; SELECT count(pg_terminate_backend(pid)) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid() AND usename = current_user AND backend_type = 'client backend';" >/dev/null
+            # Ending the other sessions makes the pooler open fresh ones that see "off"
+            # (old pooled sessions stay read-only - the 2026-11-20 copy failure).
             echo "$TARGET_DB is the read-only standby - opened for the restore"
           fi
 
@@ -147,7 +149,7 @@ jobs:
         if: always() && env.WAS_READ_ONLY == 'on'
         run: |
           /usr/lib/postgresql/17/bin/psql "$DIRECT_DATABASE_URL" -v ON_ERROR_STOP=1 -q -c \
-            "BEGIN READ WRITE; DO \$\$ BEGIN EXECUTE format('ALTER DATABASE %I SET default_transaction_read_only = on', current_database()); END \$\$; COMMIT;" \
+            "BEGIN READ WRITE; DO \$\$ BEGIN EXECUTE format('ALTER DATABASE %I SET default_transaction_read_only = on', current_database()); END \$\$; COMMIT; SELECT count(pg_terminate_backend(pid)) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid() AND usename = current_user AND backend_type = 'client backend';" \
             || echo "WARNING: could not set $TARGET_DB back to read-only"
 
       - name: Append run to Dropbox log

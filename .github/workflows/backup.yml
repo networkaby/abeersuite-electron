@@ -240,8 +240,12 @@ jobs:
           PSQL=/usr/lib/postgresql/17/bin/psql
           ro() {
             "$PSQL" "$STANDBY_DB_URL" -v ON_ERROR_STOP=1 -q -c \
-              "BEGIN READ WRITE; DO \$\$ BEGIN EXECUTE format('ALTER DATABASE %I SET default_transaction_read_only = $1', current_database()); END \$\$; COMMIT;"
+              "BEGIN READ WRITE; DO \$\$ BEGIN EXECUTE format('ALTER DATABASE %I SET default_transaction_read_only = $1', current_database()); END \$\$; COMMIT; SELECT count(pg_terminate_backend(pid)) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid() AND usename = current_user AND backend_type = 'client backend';" >/dev/null
           }
+          # The setting reaches only NEW server sessions, and Supabase's pooler (even on
+          # 5432, user postgres.<ref>) hands out old ones: 2026-11-20 every CREATE of the
+          # copy ran "in a read-only transaction". So ro() also ends this role's other
+          # sessions on the standby - nobody else uses it - and the pooler opens fresh ones.
           ro off
           trap 'ro on || echo "WARNING: could not set the standby back to read-only"' EXIT
           # The standby is an exact mirror, so start it from an empty public schema rather
