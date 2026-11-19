@@ -113,6 +113,7 @@ The server tags each line with its part ("Part 3 · …") and **a part that runs
 | **Group** | Plainly wrong (GST) — always pending until staff fix it |
 | **Shipping** | Weight or size empty |
 | **Photos** | Main photo not a clean product photo without the box, or has a logo / watermark / text (our own too); another product's photo; someone else's watermark on any photo; blurry / dark; duplicates; a `must` photo kind still missing (`photoList.missing`). Our own logo / address on a **non-main** photo is fine — never flag it. Send **`photoCheck`** (below) — the server checks the must photos and the main photo itself |
+| **Photo edits** | A photo cut out or blanked by Part 3 / 5 (their `notes`: "Photo n cut out … (original: …)") with a ragged edge, a part of the product missing, a label or text damaged, a visible grey block → pending "Photo n edit is bad — restore the original" (Part 5 restores it, see product-prep "Photo edits"). A no-meaning background still left on a photo with lots of empty space → a `note` for Part 5. Never flag a meaningful or designed background (in hand, in our shop, RGB on black), and never a blanked MRP that looks clean |
 
 **Pending** = would be wrong or embarrassing on the shop. Smaller things (wording could be nicer, a nice-to-have photo) go in `notes`. **Any line in either sends the product to Attention** (owner, 2026-11-17) — a Published product too; going off the shop is accepted. So write a line only for a real problem; nothing found → send both empty.
 

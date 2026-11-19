@@ -16,6 +16,7 @@ import { readGivenPages, type PageRead, type PageSearch } from "@/modules/ecomme
 import { checkFact, cmOf, gramsOf, normForCheck } from "@/modules/ecommerce/lib/aiFactCheck";
 import { BOX_TYPES, BOX_TYPE_KEYS, PHOTO_KINDS, PHOTO_REMOVE_REASONS, isEnough, isPhotoKind, missingMust, photoFloor, photoKindLabel, readPhotoChecklist, type BoxType, type PhotoChecklist, type PhotoChecklistItem, type PhotoKind, type PhotoRemoval, type PhotoRemoveReason, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
 import { cloudinarySignature } from "@/shared/lib/cloudinary";
+import { isCloudinaryUrl } from "@/shared/lib/cloudinaryImage";
 import { regenerateProductNamesSafe } from "@/modules/inventory/lib/regenerateNames";
 import { AgentCopyError, pickableMasters, productForAgent, specsOf } from "@/modules/ecommerce/lib/agentProductCopy";
 
@@ -230,12 +231,12 @@ async function addDraftNotes(id: number, part: number, lines: string[], result: 
     await prisma.invProduct.update({ where: { id }, data: { shopDraftJson: { ...info, ...aiCopyWithoutRun(info), notes, notesAt: new Date().toISOString(), kept: undefined } as never } });
 }
 
-/** Copy a page photo into our Cloudinary (shop/products) — Cloudinary fetches the URL itself. Null when it fails. */
-async function copyToOurPhotos(url: string): Promise<string | null> {
+/** Copy a page photo (a URL Cloudinary fetches itself) or an edited photo's bytes into our Cloudinary (shop/products). Null when it fails. */
+async function copyToOurPhotos(file: string | Blob): Promise<string | null> {
     const sig = await cloudinarySignature("shop/products");
     if (!sig) return null;
     const form = new FormData();
-    form.append("file", url);
+    form.append("file", file);
     form.append("api_key", sig.apiKey);
     form.append("timestamp", String(sig.timestamp));
     form.append("signature", sig.signature);
@@ -247,6 +248,35 @@ async function copyToOurPhotos(url: string): Promise<string | null> {
     } catch {
         return null;
     }
+}
+
+// ── Edited photo (cut-out / blanked MRP) ──────────────────────────────────────
+
+export const PHOTO_EDITS = { cutout: "cut out onto white", blank: "covered MRP blanked" } as const;
+export type PhotoEdit = keyof typeof PHOTO_EDITS;
+const EDIT_MAX_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Put an edited copy of photo n (1-based, as GET /api/agent/products/[id]/photos/[n])
+ * in that photo's place (owner, 2026-11-19). The edit runs on Claude's side
+ * (scripts/photo/*, free ISNet model); the original stays in our Cloudinary,
+ * never deleted, and its link comes back so the part's notes can name it.
+ */
+export async function replacePhotoWithEdit(id: number, n: number, file: Blob | null, edit: PhotoEdit | "restore", restoreUrl?: string) {
+    if (edit === "restore") {
+        // Undo a bad edit: only a photo already in our own Cloudinary shop folder (the original the edit answered with).
+        if (!restoreUrl || !isCloudinaryUrl(restoreUrl) || !restoreUrl.includes("/shop/products/")) throw new AgentCopyError("restore needs the original's link from our photo storage");
+    } else if (!file || !file.type.startsWith("image/") || file.size === 0 || file.size > EDIT_MAX_BYTES) throw new AgentCopyError("Send one JPG / PNG / WebP image up to 10 MB");
+    const p = await prisma.invProduct.findUnique({ where: { id }, select: { imageUrl: true, galleryJson: true } });
+    if (!p) throw new AgentCopyError("Product not found");
+    const gallery = galleryOf(p);
+    const original = photosForAi(gallery)[n - 1];
+    if (!original) throw new AgentCopyError(`No photo ${n} — the product has fewer photos`);
+    const url = edit === "restore" ? restoreUrl! : await copyToOurPhotos(file!);
+    if (!url) throw new AgentCopyError("Could not store the edited photo — Cloudinary is not set up or refused it");
+    const next = gallery.map((u) => (u === original ? url : u));
+    await updateShopProduct(id, { galleryUrls: next, galleryBase: gallery, imageUrl: next[0] ?? null });
+    return { photo: n, url, original, edit: edit === "restore" ? "original restored" : PHOTO_EDITS[edit] };
 }
 
 // ── Read ──────────────────────────────────────────────────────────────────────

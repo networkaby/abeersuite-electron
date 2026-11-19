@@ -261,6 +261,7 @@ Read the product again (`GET /api/agent/prep/<id>`); work only from `prep.pages`
    - `remove` / `suggestRemove`: same as Part 1 for anything still wrong.
    - `order`: the whole gallery as you want it (our kept photos + added ones) — a clean product front first, then sides / close-ups, then box, then feel photos. Applied now.
    - `look`: crops / fixes from `photoLookOptions` (staff press Use / Undo).
+   - **Edits first** — pick and improve the main photo, cut out no-meaning backgrounds, blank a covered MRP: see "Photo edits" below. Then read the product again for the new links.
    - Fill the missing must photos (`photoList.findOnline`) from the saved pages when you are **sure** they are this exact model.
    - Primary photo with any logo, watermark or text → do not put it first; a maker's clean product photo is usually the best photo 1. **Our own shop logo / address on any other photo is fine — never flag it** (owner, 2026-11-17); someone else's watermark is always a problem.
    - **`photoCheck`** — the photo list **after** your changes (see "The photo list"): tag the page photos you add by their page url; refine must / optional from how the saved pages show the product. Still missing → the server adds a note; the product still goes to Draft.
@@ -297,13 +298,57 @@ Answer: `{ result: "part3" | "attention", shopStatus, staff, kept, unsure, flags
 
 ---
 
+## Photo edits — cut-out and covered MRP (Parts 3 and 5; owner, 2026-11-19)
+
+We improve **our own photos**; we never regenerate them. Free tool: `photo-edit.mjs` next to this file (ISNet model, ~6 s a photo). Never invent or redraw text, MRP, barcode or any product detail.
+
+**Do the edits first, then send the part** — an edit changes the photo's link, so read the product again before you write `order` / `photoCheck`.
+
+**Main photo (photo 1):** pick the **best** photo of the product — straight-on, sharp, whole product, readable — then improve it: cut it to white if its background is not already clean white. No good candidate → a `staff` line "Reshoot the main photo: <why>".
+
+**Every other photo — decide by its background:**
+
+| Background | Example | Do |
+|---|---|---|
+| No meaning — plain wall, grey sheet, empty table — with lots of empty space round the product | a blister pack on a grey sheet, a cable coil on a table | **cutout** |
+| Meaningful, real — on a desk, in a hand, in use, in our shop | the combo in our shop with our banner | leave it; `look` fixes only (brightness, crop, straighten) |
+| Designed / cinematic — keyboard flying in the sky, RGB glow on black, a maker's ad with headings | | leave it |
+| Meaningful but poor — dark, blurry, messy, product cut off | | `staff`: reshoot, with the reason |
+| See-through — product in a clear plastic bag or window pack | | **never cut** (the bag comes out ragged); leave it, or `staff` reshoot outside the bag |
+
+Our own stamp (banner, address, our price sticker) stays on every photo except the main one — never cut a photo just to remove it.
+
+**Covered MRP:** MRP **intentionally covered** on the pack (marker, scribble, half scratched off) → **blank** only that covered part, so the line reads as if nothing was printed. MRP printed and clearly visible → leave it. **Our own sticker (MRP + Offer Price) always stays.** No note or `staff` line needed after a blank.
+
+**How:**
+
+```bash
+PE="$SCRATCH/photo-edit"   # once per session
+mkdir -p "$PE" && cp .claude/skills/product-prep/photo-edit.mjs "$PE/" && (cd "$PE" && npm init -y >/dev/null && npm i @huggingface/transformers@3.7.2 sharp@0.34.3)
+
+curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" -o "$PE/p<n>.jpg" "$PRODUCT_COPY_READ_URL/api/agent/products/<id>/photos/<n>"
+(cd "$PE" && node photo-edit.mjs cutout p<n>.jpg p<n>-edit.jpg)
+(cd "$PE" && node photo-edit.mjs blank  p<n>.jpg p<n>-edit.jpg 0.44,0.47,0.06,0.02)   # x,y,w,h as fractions of the photo
+```
+
+For `blank`, crop round the cover first and look, so the box covers the whole marker (and any digit stub it left) but no other text. **Look at every `-edit.jpg` before sending it**: ragged edge, part of the product missing, a label damaged, a grey block → do not send; keep the original. Then:
+
+```bash
+curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -F "edit=cutout" -F "file=@$PE/p<n>-edit.jpg;type=image/jpeg" \
+  "$PRODUCT_COPY_WRITE_URL/api/agent/products/<id>/photos/<n>"
+```
+
+Answer `{ photo, url, original, edit }` — the edited photo takes photo n's place; the original stays in our storage. Put one line in the part's `notes`: "Photo 2 cut out onto white (original: <original>)". A bad edit found later → `-F edit=restore -F restore=<original>` (no file) puts it back.
+
+---
+
 ## Part 5 — Touch-up (photos and small fixes)
 
 For a product that already has its copy — after Part 3, or written by staff by hand — when only small things need doing (new photos added by staff, a wrong spec row, a typo, an empty Model No or weight). **No internet search, no rewrite of the text.** Every fact must be on the label or a kept saved page (`prep.pages`). A product with no saved search: send what is printed on the box in `labelFacts` — then only the label counts and no photo can be added from a page.
 
 1. Read the product (`GET $PRODUCT_COPY_READ_URL/api/agent/prep/<id>`) and open every photo. Read the Last run line and the notes.
 2. Decide only small fixes:
-   - **Photos** — `order` (clean product front first), `remove` the ones you are sure are wrong or duplicates, `suggestRemove` the unsure ones, `add` from the saved pages only when sure, `look` for crops. Our own logo / address only matters on the main photo.
+   - **Photos** — `order` (clean product front first), `remove` the ones you are sure are wrong or duplicates, `suggestRemove` the unsure ones, `add` from the saved pages only when sure, `look` for crops, cut-out / covered-MRP edits ("Photo edits" above, before you send). Our own logo / address only matters on the main photo.
    - **Spec rows** — `specs` to set one row (`label`, `value`, `source`: "label" or a saved page url); `specClear` for a wrong or repeated row.
    - **Text** — `textFixes` for a spelling mistake or one wrong word: `field` (title / description), `from` exactly as it is now, `to`. Anything bigger is Part 3's job — say so instead.
    - **Model No / weight / size** — only when empty, as in Part 3 (`modelNo`, `shipping`).
