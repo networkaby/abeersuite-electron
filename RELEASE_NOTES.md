@@ -35,3 +35,6 @@ An update for every counter, plus the online shop's product screens in the offic
 - The AI decides the must-have photos for each product from how the maker and good sellers show it, and a later part can correct an earlier one — taking a photo off the must list always comes with a reason, and the photo itself is kept.
 - When a must-have photo is missing, the check says who can fix it: "found on a saved page — run the touch-up" or "take it, or tick Can't add".
 - A product sent back to Attention no longer shows an old "verified" note next to the new problems.
+- Each part now labels its own notes, and running a part again replaces its old notes instead of adding duplicates; the same point shows only once.
+- A product that needs staff now always goes to Attention; a checked product moves to Ready for staff to publish.
+- Our own logo, address or price label is no longer flagged on photos other than the main one.
