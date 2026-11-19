@@ -75,6 +75,28 @@ export interface DbSwitchStatus {
     locked: boolean;
     /** Why "Lock for switch" would refuse right now, or null when it may be tried. */
     lockBlocked: string | null;
+    /** Why "Copy into standby now" would be refused (or fail in backup.yml), or null. */
+    copyBlocked: string | null;
+}
+
+/** Why a copy into the standby cannot start now, or null. Pure apart from `now`. */
+export function copyStartProblem(row: SwitchRow | null, standby: DbInfo | undefined, now = new Date()): string | null {
+    if (!standby) return "Only one database is set up (no DATABASE_URL_2).";
+    if (!standby.reachable) return `${standby.id} is not answering.`;
+    // backup.yml refuses to copy into a writable database (it may be in use) - say so
+    // here instead of letting the run fail with a bare "Copy failed".
+    if (standby.readOnly !== true) {
+        return `${standby.id} is writable, so the copy refuses to overwrite it. In ${standby.id}'s Supabase SQL Editor run: ALTER DATABASE postgres SET default_transaction_read_only = on;`;
+    }
+    const startedAt = row?.copy_started_at ? new Date(row.copy_started_at) : null;
+    const endedAt = Math.max(
+        row?.copied_at ? new Date(row.copied_at).getTime() : 0,
+        row?.copy_failed_at ? new Date(row.copy_failed_at).getTime() : 0,
+    );
+    if (startedAt && startedAt.getTime() > endedAt && now.getTime() - startedAt.getTime() < COPY_STALE_MS) {
+        return "A copy into the standby is running right now. Wait for it to finish.";
+    }
+    return null;
 }
 
 async function probe(id: DbId): Promise<{ reachable: boolean; readOnly: boolean | null }> {
@@ -96,7 +118,11 @@ export function copyProblem(row: SwitchRow | null, standby: DbId, now = new Date
     if (row.copy_into !== standby) return `No copy into ${standby} yet since the switch. Tonight's copy will do it.`;
     const copiedAt = new Date(row.copied_at);
     const startedAt = row.copy_started_at ? new Date(row.copy_started_at) : null;
-    if (startedAt && startedAt > copiedAt && now.getTime() - startedAt.getTime() < COPY_STALE_MS) {
+    // A run that already reported FAILED is over, not running (it used to read as
+    // "running" for two hours after a failure).
+    const failedAt = row.copy_failed_at ? new Date(row.copy_failed_at) : null;
+    const ended = failedAt && failedAt > copiedAt ? failedAt : copiedAt;
+    if (startedAt && startedAt > ended && now.getTime() - startedAt.getTime() < COPY_STALE_MS) {
         return "A copy into the standby is running right now. Wait for it to finish.";
     }
     if (row.copy_failed_at && new Date(row.copy_failed_at) > copiedAt) {
@@ -136,6 +162,7 @@ export async function dbSwitchStatus(): Promise<DbSwitchStatus> {
         },
         locked,
         lockBlocked: !dual ? "Only one database is set up (no DATABASE_URL_2)." : locked ? null : copyProblem(row, staging!),
+        copyBlocked: copyStartProblem(row, infos.find((d) => d.id === staging)),
     };
 }
 

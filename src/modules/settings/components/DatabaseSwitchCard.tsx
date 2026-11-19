@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Database, RefreshCw, ArrowLeftRight } from "lucide-react";
+import { Database, RefreshCw, ArrowLeftRight, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
@@ -35,6 +35,7 @@ interface Status {
     copy: { startedAt: string | null; copiedAt: string | null; failedAt: string | null; into: string | null; file: string | null };
     locked: boolean;
     lockBlocked: string | null;
+    copyBlocked: string | null;
     checklist: EnvRow[];
 }
 /** Mirrors EnvRow in shared/lib/db/envChecklist.server.ts. */
@@ -168,8 +169,16 @@ export function DatabaseSwitchCard() {
         );
     }
 
-    async function post(action: "lock" | "unlock") {
+    async function post(action: "lock" | "unlock" | "copy") {
         if (!status) return;
+        if (action === "copy") {
+            const ok = await confirmAction({
+                title: `Copy ${status.primary} into ${status.staging} now?`,
+                body: `Everything in ${status.staging} is replaced with a fresh copy of ${status.primary} (also saved to Dropbox). ${status.primary} keeps working. Takes about 10 minutes; press refresh afterwards.`,
+                confirmLabel: "Start copy",
+            });
+            if (!ok) return;
+        }
         if (action === "lock") {
             if (typed !== "LOCK") return;
             const ok = await confirmAction({
@@ -188,7 +197,13 @@ export function DatabaseSwitchCard() {
             });
             const json = (await res.json().catch(() => null)) as { error?: string; status?: Status } | null;
             if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`);
-            toast.success(action === "lock" ? `${status.primary} is locked. Now change the Vercel setting and redeploy.` : `${status.primary} is writable again.`);
+            toast.success(
+                action === "lock"
+                    ? `${status.primary} is locked. Now change the Vercel setting and redeploy.`
+                    : action === "copy"
+                      ? `Copy into ${status.staging} started. About 10 minutes; press refresh to see it finish.`
+                      : `${status.primary} is writable again.`,
+            );
             if (json?.status) setStatus(json.status);
             setTyped("");
         } catch (err) {
@@ -246,6 +261,18 @@ export function DatabaseSwitchCard() {
                     {copy.into ? <span className="text-muted-foreground"> (into {copy.into})</span> : null}
                 </p>
                 {copyFailed && <p className="text-destructive">Copy failed at {when(copy.failedAt)}.</p>}
+                {status.copyBlocked && <p className="text-amber-600">{status.copyBlocked}</p>}
+                <div className="pt-1">
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void post("copy")}
+                        disabled={!!status.copyBlocked || switching}
+                    >
+                        <Copy className="mr-1.5 size-3.5" />
+                        Copy into {status.staging} now
+                    </Button>
+                </div>
                 <p className="text-muted-foreground">Live updates on this page use {realtimeProject()}&apos;s realtime project.</p>
             </div>
 

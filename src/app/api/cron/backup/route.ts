@@ -1,11 +1,7 @@
-import { backupWorkflowFile, triggerWorkflow } from "@/shared/lib/backup/githubDispatch";
-import { makeBackupFileName } from "@/shared/lib/backup/dropbox";
-import { projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
 import { backupAvailability } from "@/shared/lib/backup/availability";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { requireIncomingKey } from "@/modules/incoming/lib/incomingApi";
-import { primaryAndStaging } from "@/shared/lib/db/dbPrimary";
-import { markCopyFinished, markCopyStarted } from "@/shared/lib/db/dbSwitch.server";
+import { dispatchBackupWithCopy } from "@/shared/lib/backup/standbyCopy.server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,33 +48,17 @@ export async function GET(req: Request) {
     }
 
     // Vercel Cron calls this directly, so there is no browser Host header to read.
+    // The run dumps the primary (a LABEL, never an address: backup.yml picks the
+    // DIRECT_DATABASE_URL_1 / _2 secret) and copies it into the standby; a finished copy
+    // is what "Lock for switch" needs. Shared with the "Copy into standby now" button.
     const domain = process.env.VERCEL_URL?.trim() ?? "";
-    const inputs: Record<string, string> = { source: "cron", domain };
-
-    // ── Which database: a LABEL, never an address ───────────────────────────────
-    // Addresses live only in the GitHub secrets DIRECT_DATABASE_URL_1 / _2 (owner,
-    // 2026-11-17). backup.yml picks the secret for this label (NEXT_PUBLIC_DB_PRIMARY)
-    // and refuses to copy into a database that is not read-only, so a wrong label can
-    // never overwrite the live one.
-    const { primary, staging } = await primaryAndStaging();
-    inputs.source_db = primary.id;
-    inputs.file_name = makeBackupFileName({ domain, projectRef: projectRefFromDbUrl(primary.direct), source: "cron" });
-
-    // ── Nightly copy into the standby (DB1 / DB2 only) ──────────────────────────
-    // The same run restores this dump into the standby and reports to
-    // /api/cron/db-copied. A finished copy is what "Lock for switch" needs.
-    if (staging) {
-        inputs.standby_db = staging.id;
-        await markCopyStarted(staging.id, inputs.file_name);
-    }
-
+    let result: Awaited<ReturnType<typeof dispatchBackupWithCopy>>;
     try {
-        await triggerWorkflow(await backupWorkflowFile(), inputs);
+        result = await dispatchBackupWithCopy({ source: "cron", domain });
     } catch (err) {
-        if (staging) await markCopyFinished(staging.id, false).catch(() => {});
         console.error("[cron/backup] 500: workflow dispatch failed:", (err as Error).message);
         return Response.json({ error: (err as Error).message }, { status: 500 });
     }
 
-    return Response.json({ ok: true, fileName: inputs.file_name ?? null, triggeredAt: new Date().toISOString() });
+    return Response.json({ ok: true, fileName: result.fileName, triggeredAt: new Date().toISOString() });
 }
