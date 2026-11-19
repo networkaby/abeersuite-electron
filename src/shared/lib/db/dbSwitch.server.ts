@@ -187,6 +187,15 @@ export async function dbSwitchStatus(): Promise<DbSwitchStatus> {
 const qi = (name: string) => `"${name.replace(/"/g, '""')}"`;
 
 /** Every public table's row count and latest updatedAt, in one round trip. */
+/**
+ * Tables compared by ROW COUNT only. Their `updatedAt` moves on bookkeeping touches,
+ * not data: IncomingApi stamps lastUsedAt whenever a cron / webhook key is used, and
+ * the copy's own report to /api/cron/db-copied does that right after the dump, so a
+ * full compare could never pass (2026-11-20). Losing a "last used" time in a switch
+ * is harmless; the keys themselves change only from Settings.
+ */
+const COUNT_ONLY_TABLES = new Set(["IncomingApi"]);
+
 async function fingerprint(id: DbId): Promise<Map<string, string>> {
     return withDb(id, async (c) => {
         const tables = await c.query<{ table_name: string; has_updated: boolean }>(`
@@ -200,7 +209,7 @@ async function fingerprint(id: DbId): Promise<Map<string, string>> {
         const out = new Map<string, string>();
         if (tables.rows.length === 0) return out;
         const cols = tables.rows.map((t, i) =>
-            `(SELECT count(*)::text${t.has_updated ? ` || '|' || coalesce(max(${qi("updatedAt")})::text, '-')` : ""} FROM ${qi(t.table_name)}) AS c${i}`,
+            `(SELECT count(*)::text${t.has_updated && !COUNT_ONLY_TABLES.has(t.table_name) ? ` || '|' || coalesce(max(${qi("updatedAt")})::text, '-')` : ""} FROM ${qi(t.table_name)}) AS c${i}`,
         );
         const r = await c.query<Record<string, string>>(`SELECT ${cols.join(", ")}`);
         tables.rows.forEach((t, i) => out.set(t.table_name, r.rows[0][`c${i}`]));
