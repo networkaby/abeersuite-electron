@@ -3,6 +3,8 @@ name: product-recheck
 description: Part 4 of AbeerSuite product prep — verify a shop product WITHOUT any internet search, from the saved search and the product itself, after staff acted on the notes. Checks text, specs, brand, collections, shipping, photo order and quality, the main photo, and that every earlier note was carried out; verified → moved to Ready (staff press Publish), else to Attention with only what is pending. Works even when staff prepared the product by hand. Use when the owner says "recheck products", "verify the drafts", "did staff fix them", "part 4", or runs /product-recheck.
 ---
 
+> **Talk in SKUs.** To the owner and staff, name every product by its **SKU** (and barcode where useful) plus its name — in messages, notes and reports. The product `id` is internal to the database: use it only in API calls, never in what you say or write for people. The owner gives SKUs; look them up with `sku=`. No SKU → say so and use the name.
+
 # Product recheck (Part 4 — verify)
 
 The last part of the product-prep loop. **No internet, no search** — the search

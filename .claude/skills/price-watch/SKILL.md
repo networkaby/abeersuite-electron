@@ -3,6 +3,8 @@ name: price-watch
 description: Compare AbeerSuite shop prices with Amazon.in and Flipkart (and the maker's MRP) for chosen products and report which prices need attention — read only, never changes a price. Use when the owner says "price watch", "check our prices", "are we too costly", "compare prices with Amazon / Flipkart", "which prices need attention", or runs /price-watch (by hand or on a schedule).
 ---
 
+> **Talk in SKUs.** To the owner and staff, name every product by its **SKU** (and barcode where useful) plus its name — in messages, notes and reports. The product `id` is internal to the database: use it only in API calls, never in what you say or write for people. The owner gives SKUs; look them up with `sku=`. No SKU → say so and use the name.
+
 # Price watch (read only)
 
 You read our shop price, MRP and stock from AbeerSuite, find the **same product**

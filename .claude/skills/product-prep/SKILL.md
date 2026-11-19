@@ -1,7 +1,9 @@
 ---
 name: product-prep
-description: Prepare AbeerSuite shop products as Claude in a loop of parts — Part 1 cleans our own data (removes wrong photos / fields, adds nothing) and checks it is enough to search, Part 2 does the ONE internet search and saves it, Part 3 writes everything from the saved pages (copy, brand, collections, shipping, photos added / removed / ordered) and moves the product to Draft. A major problem stops a part and parks the product in Attention for staff; the next run starts where the last one stopped. Use when the owner says "prep products", "product prep", "run the prep loop", "prepare product 722 step by step", or runs /product-prep. Not product-copy (one-shot) and not product-recheck (Part 4, verify).
+description: Prepare AbeerSuite shop products as Claude in a loop of parts — Part 1 cleans our own data (removes wrong photos / fields, adds nothing) and checks it is enough to search, Part 2 does the ONE internet search and saves it, Part 3 writes everything from the saved pages (copy, brand, collections, shipping, photos added / removed / ordered) and moves the product to Draft. A major problem stops a part and parks the product in Attention for staff; the next run starts where the last one stopped. Use when the owner says "prep products", "product prep", "run the prep loop", "prepare SKU 107102 step by step", or runs /product-prep. Not product-copy (one-shot) and not product-recheck (Part 4, verify).
 ---
+
+> **Talk in SKUs.** To the owner and staff, name every product by its **SKU** (and barcode where useful) plus its name — in messages, notes and reports. The product `id` is internal to the database: use it only in API calls, never in what you say or write for people. The owner gives SKUs; look them up with `sku=`. No SKU → say so and use the name.
 
 # Product prep (the loop)
 
@@ -88,7 +90,7 @@ Keep both answers for the whole run. Each product carries a **Last run** line (p
 curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$PRODUCT_COPY_READ_URL/api/agent/products?stage=waiting&need=all&limit=20"
 ```
 
-Waiting is empty → say so and ask the owner (do not fall back to Unpublished on your own). Products named by the owner (`sku=`, `q=`, ids) are taken whatever their stage. Same filters as product-copy's list (`sku=`, `q=`, `stage=`, `limit=`…). Tell the owner the list first, then one at a time. A Waiting product leaves Waiting by itself: Part 1 stopping → Attention, Part 3 → Draft.
+Waiting is empty → say so and ask the owner (do not fall back to Unpublished on your own). Products named by the owner (`sku=`, `q=`) are taken whatever their stage. Same filters as product-copy's list (`sku=`, `q=`, `stage=`, `limit=`…). Tell the owner the list first, then one at a time. A Waiting product leaves Waiting by itself: Part 1 stopping → Attention, Part 3 → Draft.
 
 Read each product:
 
