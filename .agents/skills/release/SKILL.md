@@ -7,12 +7,13 @@ description: Carry out a full AbeerSuite release end to end — merge dev into m
 
 **"Do a release" is one instruction for this whole list, not for one command.** Do not stop after `pnpm electron:release` and hand the rest back. Every step below, in order, every time. If a line is skipped, it was not a release.
 
-Sources of truth: `AGENTS.md` §8 and `docs/commands.md` §0 (the convention) and §9 (how counters take the update). This skill is the runbook; those two files are the law.
+Sources of truth: `AGENTS.md` §9 and `docs/commands.md` §0 (the convention) and §9 (how counters take the update). This skill is the runbook; those two files are the law.
 
 ## Ground rules
 
 - **`/release urgent` = no questions.** The owner has already decided: `minimumCounterVersion` is raised to this version, the `.env` variant is taken as it is (state `APP_MODE` / `LANDING_PAGE` in the report), and the notes are written and committed without waiting. Run the whole list straight through. Failures (non-fast-forward, `verify:package`, publish) still stop.
 
+- **`dist-v*` tags are not release material.** They are local markers for `dist` test builds (`.claude/skills/dist/SKILL.md`). `release` never reuses their installer, never builds on them, never pushes, moves or deletes them — it always builds fresh with `pnpm electron:release`, exactly as before `dist` existed. They belong to `publish`, which reads them to know what a `dist` run left for it. A `dist` that was never published is simply ignored here.
 - **`main` only.** Never release from `dev`, `d_office`, or a detached HEAD. The tag the script mints points at `HEAD`, so releasing off `dev` puts `v<version>` on a commit `main` does not contain and the two remotes stop agreeing about what that version is.
 - **Two source remotes, both must end level.** `origin` = `devloperakramul/abeersuite-electron`, `production` = `akramuljakir/abeersuite-electron`.
 - **Release is the one exception to "never push".** Steps 5, 7 and 8 are pushes the owner asked for by saying the word "release". The `d_office` / `d_shop` pushes in step 9 are **not** — the owner runs those; the agent only reminds. Everything else in this repo still stops at the commit.
@@ -88,7 +89,7 @@ Patch (`5.0.3` → `5.0.4`) for fixes; minor for new capability; ask the owner w
 Rewritten from scratch for this version. Not appended to, not left from last time.
 
 ```bash
-git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:"%h %s"
+git log $(git describe --tags --match "v*" --abbrev=0)..HEAD --pretty=format:"%h %s"
 ```
 
 Read the actual diffs behind those commits — subject lines are not enough to know what a shopkeeper will notice.
@@ -147,17 +148,17 @@ One command owns all of this — never do any part of it by hand:
 - `pnpm electron:pack` → `electron:build` + `electron-builder --dir` + the **`verify:package` gate** (counter env keys, standalone `server.js` and its dependency closure, resource size, replica payload / `local-schema.sql`).
 - Assembles the release notes: your `RELEASE_NOTES.md`, then the auto commit log since the previous version tag, in that order.
 - Creates the annotated git tag **`v<version>`** if it does not already exist.
-- `git push origin HEAD --tags` — `main` **and** the tag to `origin`.
+- `git push origin HEAD refs/tags/v<version>` — `main` **and** only the release tag to `origin` (never `--tags`: local `dist-v*` markers must not leave the machine).
 - **Publishes a GitHub release.** A normal version goes to **every** `GITHUB_UPDATE_REPO_N`, each with its own `GITHUB_UPDATE_REPO_N_TOKEN` — one `electron-builder --publish always --prepackaged` run per repo, carrying the installer, the blockmap, `latest.yml` and the notes. A version with a `-` in it goes to **repo 2 only**, marked a prerelease; the script says which it is doing before it starts, so read that line.
 
 **No smoke-test pause.** Never stop to ask the owner to test. If the release needs a
 check the gate cannot make, do it yourself before or after the pack, then let
 `pnpm electron:release` run straight from pack to publish.
 
-### 7. Level `main` and older tags on `production` (the release tag is already there — `electron:release` pushed it before publishing)
+### 7. Level `main` and the release tag on `production` (the release tag is already there — `electron:release` pushed it before publishing)
 
 ```bash
-git push production main --tags
+git push production main refs/tags/v<version>
 ```
 
 The script pushes `origin` only. Both source remotes must carry the released commit **and** its tag, or the two accounts disagree about what `v<version>` is.
@@ -273,10 +274,11 @@ Handing a step back is **not** stopping the release: do everything either side o
 ## Related files
 
 - `.claude/skills/publish/SKILL.md` — the sibling runbook for a build the owner already made and tested: no merge, no bump, no build, any commit. The notes rules in step 3 are shared, and it points here for them.
-- `AGENTS.md` §8 — the release clause the owner holds you to.
+- `AGENTS.md` §9 — the release clause the owner holds you to.
 - `docs/commands.md` §0 — the full convention; §9 — the update tiers.
 - `scripts/release-electron.ts` — tagging, notes assembly, multi-repo publish, `RELEASE_ONLY_REPO`.
 - `scripts/verify-package.ts` — the gate, and what each failure means.
 - `package.json` — `version`, `electron:pack`, `electron:release`, `verify:package`.
 - `electron/updateManager.ts` — how a counter compares itself with the minimum and decides when to install.
 - `RELEASE_NOTES.md` — the hand-written half; rewrite it every time.
+- `.claude/skills/dist/SKILL.md` — the same preparation stopped before GitHub: local commit, `pnpm electron:dist`, a local `dist-v<version>` marker for `publish` to upload later.

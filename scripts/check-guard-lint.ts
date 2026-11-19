@@ -42,6 +42,8 @@ const EXCLUDED_OFFICE_ROUTES = new Set([
     "src/app/api/counter/config/route.ts",
     // Staff forgot-password: nobody is signed in yet by definition; sends and code guesses are throttled per address.
     "src/app/api/staff/password-reset/route.ts",
+    // Public realtime project pair for supabaseClient.ts (DB1 / DB2 toggle + publishable key on counter PCs)
+    "src/app/api/realtime/project/route.ts",
 ]);
 
 const GUARD_PATTERNS = [

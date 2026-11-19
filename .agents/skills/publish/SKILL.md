@@ -40,6 +40,15 @@ Read, do not assume. `dist-app/` is a graveyard: it keeps every past `AbeerSuite
 node -p "require('./package.json').version" && git tag -l && git log --oneline -1 && git status --porcelain && ls -l dist-app/
 ```
 
+**A `dist` build first — look for the marker.** `git tag -l "dist-v<version>"`. If it exists, the build came from the `dist` skill and the marker is the authority:
+
+1. **Commit:** `HEAD` must be the marker's commit (`git rev-parse dist-v<version>^{commit}`). If `main` has moved on, check out that commit (detached is fine — this skill publishes any commit) and say so. Never publish a later commit under a dist build's installer.
+2. **Package:** the `sha512:` in the marker's message (`git tag -l --format='%(contents)' dist-v<version>`) must equal the top-level `sha512:` in `dist-app/latest.yml`, and the installer file it names must be present. Mismatch → the pack was rebuilt or overwritten since the owner tested it; stop and say so (rung B territory — it needs a fresh `dist` and a fresh test).
+3. Both match → checks 1–6 below still run, and pass as a reused pack.
+4. **Delete the marker before step 5**: `git tag -d dist-v<version>`. It is spent once this build goes out; delete it once checks pass, before the push gate.
+
+No marker → carry on as below.
+
 The pack may be reused **only if all six pass**:
 
 | # | Check | How |
@@ -93,7 +102,7 @@ Full build. The owner's earlier test no longer covers this binary, so **stop and
 **Rewritten from scratch for this version.** Not appended to, not left from last time.
 
 ```bash
-git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:"%h %s"
+git log $(git describe --tags --match "v*" --abbrev=0)..HEAD --pretty=format:"%h %s"
 ```
 
 The full rules — customer-readable plain Indian English, one `##` heading per area the user notices, `# v<version>` as the first line, calling out a schema change and its publish-then-migrate ordering, and the urgency tiers — live in **`.claude/skills/release/SKILL.md` step 3**. They are identical here; read them there rather than keeping a second copy that will drift.
@@ -145,7 +154,7 @@ What the script does: assembles the notes (yours, then the auto commit log since
 ## Step 6 — Level `production` (`electron:release` already pushed the release tag there before publishing)
 
 ```bash
-git push production <branch> --tags
+git push production <branch> refs/tags/v<version>
 ```
 
 Detached: `git push production v<version>`.
@@ -192,6 +201,7 @@ Handing a step back is not stopping the publish: do everything either side of it
 ## Related files
 
 - `.claude/skills/release/SKILL.md` — the sibling runbook; the notes rules and urgency tiers live there.
+- `.claude/skills/dist/SKILL.md` — makes the test build and the `dist-v<version>` marker this skill reads in step 0.
 - `AGENTS.md` §9 — the release clause the owner holds you to.
 - `docs/commands.md` §0 — the convention; §9 — the update tiers.
 - `scripts/release-electron.ts` — tagging, the detached-HEAD branch skip, notes assembly, multi-repo publish, `RELEASE_ONLY_REPO`.
