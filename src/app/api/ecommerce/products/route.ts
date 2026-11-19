@@ -82,8 +82,10 @@ export async function GET(req: Request) {
         // Variant rule: what each product still lacks that a sibling has, so the
         // list can say "Pending — needs Colour".
         const gaps = await loadVariantAttrGaps(products.filter((p) => p.variantFamilyId != null).map((p) => p.id));
+        // The "Set aside" tab (owner, 2026-11-20): ids only — the notes stay off the list.
+        const aside = new Set((await prisma.invProduct.findMany({ where: { shopDraftJson: { path: ["asideCount"], gt: 0 } }, select: { id: true } })).map((r) => r.id));
         return NextResponse.json(
-            products.map((p) => ({ ...invProductToAdmin(p, bands), variantAttrGaps: gaps.get(p.id) ?? [] }))
+            products.map((p) => ({ ...invProductToAdmin(p, bands), variantAttrGaps: gaps.get(p.id) ?? [], ...(aside.has(p.id) && { hasAsideProblems: true }) }))
         );
     } catch (e) {
         return handleApiError(e, "Failed to list products");

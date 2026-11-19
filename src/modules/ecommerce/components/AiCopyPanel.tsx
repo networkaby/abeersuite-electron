@@ -96,6 +96,7 @@ export default function AiCopyPanel({
     onGallery,
     attention,
     review,
+    prep,
 }: {
     /** Claude's (Cowork) copy, already written onto the product — shown for its notes and photo advice. */
     savedDraft?: ProductCopy | null;
@@ -131,6 +132,7 @@ export default function AiCopyPanel({
     /** Attention reason and Claude's review notes — shown in the one AI notes box with the copy run's notes. */
     attention?: AiNotesBoxProps["attention"];
     review?: AiNotesBoxProps["review"];
+    prep?: AiNotesBoxProps["prep"];
 }) {
     const [flow, setFlow] = useCopyFlow();
     const [premium, setPremium] = usePremiumAi();
@@ -232,6 +234,7 @@ export default function AiCopyPanel({
             <AiNotesBox
                 attention={attention}
                 review={review}
+                prep={prep}
                 copy={draft ? { source: fromSaved ? "Claude copy" : "In-app AI", notes: draft.notes ?? [], flags: draft.flags } : null}
             />
             <div className="flex flex-wrap items-center justify-between gap-3">

@@ -7,7 +7,8 @@ import { AI_PHOTO_LIMITS } from "@/shared/lib/constants/ai";
 import { COMPATIBLE_SPEC } from "@/shared/lib/shop/compatibility";
 import { getR2Text, isR2Configured, messagesBucket, putR2 } from "@/shared/lib/storage/r2";
 import type { ProductCopy } from "@/modules/ecommerce/lib/aiProductCopy";
-import { readShopDraft, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
+import { readShopDraft, type PrepProblem, type PrepRun, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
+import type { ShopStatus } from "@/generated/prisma/enums";
 import { updateShopProduct, type ShopProductPatch } from "@/modules/ecommerce/lib/updateShopProduct";
 import { startAi } from "@/modules/ecommerce/lib/shopWaiting";
 import { parkInAttention } from "@/modules/ecommerce/lib/shopAttention";
@@ -75,6 +76,48 @@ const AFTER_FIX = {
 /** "PENDING (Part 4) — x" → "x": one open problem, whichever part wrote it. */
 const OPEN_LINE = /^(PENDING|STOPPED|NOTE) \(Part \d\) — /;
 const openText = (l: string) => l.trim().replace(OPEN_LINE, "").trim();
+/** One problem, however a part worded its tag or spacing — set-aside and repeats match on this. */
+export const problemKey = (l: string) => openText(l).toLowerCase().replace(/\s+/g, " ").replace(/[.\s]+$/, "");
+
+/** The problems staff set aside ("can't fix now"): a part never raises them again, so they never block. */
+async function asideKeys(id: number): Promise<Set<string>> {
+    const r = await prisma.invProduct.findUnique({ where: { id }, select: { shopDraftJson: true } });
+    return new Set((readShopDraft(r?.shopDraftJson)?.problems ?? []).filter((p) => p.asideAt).map((p) => problemKey(p.text)));
+}
+const notAside = (aside: Set<string>) => (l: string) => !aside.has(problemKey(l));
+
+/**
+ * After every prep call (owner, 2026-11-20): one run record (skill, part, from →
+ * to stage; last 5 kept) and the open problems rebuilt from the Attention reason
+ * the run left — red = STOPPED / PENDING, yellow = NOTE. Set-aside problems stay
+ * as they are; anything no longer in the reason was fixed and goes.
+ */
+export async function recordRun(id: number, skill: PrepRun["skill"], part: string, from: ShopStatus) {
+    const r = await prisma.invProduct.findUnique({ where: { id }, select: { shopStatus: true, shopAttention: true, shopDraftJson: true } });
+    if (!r) return;
+    const info = readShopDraft(r.shopDraftJson);
+    const now = new Date().toISOString();
+    const aside = (info?.problems ?? []).filter((p) => p.asideAt);
+    const known = new Map((info?.problems ?? []).map((p) => [problemKey(p.text), p]));
+    const seen = new Set(aside.map((p) => problemKey(p.text)));
+    const open: PrepProblem[] = [];
+    if (r.shopStatus === "ATTENTION") {
+        for (const line of (r.shopAttention ?? "").split("\n").map((l) => l.trim())) {
+            const m = /^(PENDING|STOPPED|NOTE) \(Part (\d)\) — /.exec(line);
+            if (!m) continue;
+            const key = problemKey(line);
+            if (seen.has(key)) continue;
+            seen.add(key);
+            open.push({ text: openText(line), level: m[1] === "NOTE" ? "fix" : "stop", part: Number(m[2]), at: known.get(key)?.at ?? now });
+        }
+    }
+    const problems = [...open.filter((p) => p.level === "stop"), ...open.filter((p) => p.level === "fix"), ...aside];
+    const runs = [...(info?.runs ?? []), { skill, part, at: now, from, to: r.shopStatus }].slice(-5);
+    await prisma.invProduct.update({
+        where: { id },
+        data: { shopDraftJson: { ...info, runs, problems: problems.length ? problems : undefined, asideCount: aside.length || undefined } as never },
+    });
+}
 
 /**
  * Save a part's changes and leave the product at `to`. Draft / Attention go
@@ -324,11 +367,12 @@ export async function productForPrep(id: number) {
         where: { id },
         select: {
             shopSubheading: true, shopAttention: true, shopDraftJson: true, photoChecklistJson: true,
-            weightGrams: true, lengthCm: true, breadthCm: true, heightCm: true,
+            weightGrams: true, lengthCm: true, breadthCm: true, heightCm: true, updatedAt: true,
             group: { select: { name: true } },
         },
     });
     const draft = readShopDraft(p.shopDraftJson);
+    const lastRunAt = draft?.runs?.at(-1)?.at;
     const { state, identityChanged } = await liveState(id);
     const search = state?.search;
     return {
@@ -345,6 +389,16 @@ export async function productForPrep(id: number) {
         /** Notes from the last Part 3 (aiCopy). */
         processNotes: draft?.aiCopy?.notes ?? [],
         prep: {
+            /** The last 5 runs: { skill, part, at, from, to } — oldest first. */
+            runs: draft?.runs ?? [],
+            /**
+             * Staff (or anyone) changed the product after the last run (owner, 2026-11-20).
+             * false + a run of the same part → skip it unless the owner says "redo".
+             * The run itself saves the row a moment after its record, hence the margin.
+             */
+            changedSinceRun: lastRunAt ? p.updatedAt.getTime() > Date.parse(lastRunAt) + 30_000 : true,
+            /** What staff must solve: { text, level: stop | fix, part, asideAt? }. Set-aside ones never block — skip them. */
+            problems: draft?.problems ?? [],
             /** The last part finished (0 = none). Start at the next one. */
             partDone: state?.part ?? 0,
             /** The part Part 4 suggested last (5, 3 or 1), read back from its Last run line; null when none. */
@@ -553,10 +607,12 @@ export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?
     const list = await photoListOf(1, id, b.photos, patch.galleryUrls ?? gallery);
     patch.photoChecklist = list.checklist;
     const searchStop = !photosNext && !b.enough;
-    const photoStop = photosNext ? [] : list.lines;
-    if (b.major.length > 0 || searchStop || photoStop.length > 0) {
+    const aside = notAside(await asideKeys(id));
+    const photoStop = (photosNext ? [] : list.lines).filter(aside);
+    const major = b.major.filter(aside);
+    if (major.length > 0 || searchStop || photoStop.length > 0) {
         const reason = [
-            ...b.major.map((m) => `STOPPED (Part 1) — ${m}`),
+            ...major.map((m) => `STOPPED (Part 1) — ${m}`),
             ...photoStop.map((m) => `STOPPED (Part 1) — ${m}`),
             ...(searchStop ? [`STOPPED (Part 1) — not enough to search${b.need ? `: ${b.need}` : ""}.`] : []),
             ...done, ...unsure, ...b.notes,
@@ -866,7 +922,7 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
     patch.photoChecklist = list.checklist;
     notes.push(...list.dropNotes);
     staff.push(...list.lines);
-    const open = [...new Set(staff)];
+    const open = [...new Set(staff)].filter(notAside(await asideKeys(id)));
     const runResult = open.length ? `${open.length} for staff → Attention` : `done → ${THEN_WORDS[b.then ?? "draft"]}`;
 
     const draft: ProductCopy = {
@@ -948,7 +1004,7 @@ export async function savePart5(id: number, b: z.infer<typeof part5Schema>, run?
     const carried = (p.shopAttention ?? "").split("\n")
         .map((l) => l.trim())
         .filter((l) => OPEN_LINE.test(l) && !SERVER_PHOTO_LINE.test(openText(l)) && !fixed.has(openText(l)));
-    const open = [...new Set([...list.lines, ...carried, ...b.staff])];
+    const open = [...new Set([...list.lines, ...carried, ...b.staff])].filter(notAside(await asideKeys(id)));
     const runResult = open.length ? `${open.length} for staff → Attention` : `photos done → ${THEN_WORDS[b.then ?? "draft"]}`;
 
     await leaveAt(id, open.length ? "attention" : b.then ?? "draft", patch, (info) => {
@@ -1073,7 +1129,8 @@ export async function savePart4(id: number, input: z.infer<typeof part4Schema>) 
         ...(onPage.length ? [`Must photo missing, found on a saved page — run Part 5 to add it: ${onPage.map((k) => `${photoKindLabel(k)} (${where.get(k)})`).join(", ")}.`] : []),
         ...(byStaff.length ? [`Must photo missing, not on any saved page — take it, or tick "Can't add" under Product image: ${byStaff.map(photoKindLabel).join(", ")}.`] : []),
     ];
-    const b = { ...input, pending: [...photoLines, ...input.pending], next: input.next ?? (photoLines.length ? ("part5" as const) : undefined) };
+    const aside = notAside(await asideKeys(id));
+    const b = { ...input, pending: [...photoLines, ...input.pending].filter(aside), notes: input.notes.filter(aside), next: input.next ?? (photoLines.length ? ("part5" as const) : undefined) };
     const problems = b.pending.length + b.notes.length;
     if (problems) {
         const reason = [
@@ -1099,4 +1156,32 @@ export async function savePart4(id: number, input: z.infer<typeof part4Schema>) 
         notesAt: new Date().toISOString(),
     }));
     return { result: "verified" as const, shopStatus };
+}
+
+// ── Staff: "can't fix now" (owner, 2026-11-20) ────────────────────────────────
+
+/**
+ * Set a problem aside, or bring it back. Aside: it leaves the Attention reason
+ * (so it no longer reads as open) and no part raises it again, but it stays on
+ * the product with who and when — the products list's "Set aside" tab finds it.
+ * Back: it is open again; the next run raises it if it is still true.
+ */
+export async function setProblemAside(id: number, text: string, aside: boolean, by: string) {
+    const r = await prisma.invProduct.findUnique({ where: { id }, select: { shopAttention: true, shopDraftJson: true } });
+    if (!r) throw new AgentCopyError("Product not found");
+    const info = readShopDraft(r.shopDraftJson);
+    const key = problemKey(text);
+    const list = info?.problems ?? [];
+    if (!list.some((p) => problemKey(p.text) === key)) throw new AgentCopyError("That problem is not on the product any more — reload.");
+    const now = new Date().toISOString();
+    const problems = list.map((p) => problemKey(p.text) !== key ? p : aside ? { ...p, asideBy: by, asideAt: now } : { ...p, asideBy: undefined, asideAt: undefined });
+    const asideCount = problems.filter((p) => p.asideAt).length;
+    const attention = aside && r.shopAttention
+        ? r.shopAttention.split("\n").filter((l) => !(OPEN_LINE.test(l.trim()) && problemKey(l) === key)).join("\n")
+        : r.shopAttention;
+    await prisma.invProduct.update({
+        where: { id },
+        data: { shopDraftJson: { ...info, problems, asideCount: asideCount || undefined } as never, shopAttention: attention },
+    });
+    return { problems };
 }

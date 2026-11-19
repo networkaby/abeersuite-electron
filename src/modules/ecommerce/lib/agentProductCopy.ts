@@ -7,7 +7,7 @@ import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
 import { photosForAi } from "@/shared/lib/shop/photoMark";
 import { AI_PHOTO_LIMITS } from "@/shared/lib/constants/ai";
 import { OUTPUT_KEYS, type ProductCopy } from "@/modules/ecommerce/lib/aiProductCopy";
-import { readShopDraft, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
+import { prepHistory, readShopDraft, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
 import { updateShopProduct, type ShopProductPatch } from "@/modules/ecommerce/lib/updateShopProduct";
 import { parkInAttention } from "@/modules/ecommerce/lib/shopAttention";
 import { PHOTO_LOOK_OPTIONS, arrangeFrom, checkWrittenCopy, writtenCopySchema } from "@/modules/ecommerce/lib/aiVerifiedCopy";
@@ -524,7 +524,7 @@ export async function addReviewNotes(id: number, b: z.infer<typeof notesSchema>)
     const info = readShopDraft(row?.shopDraftJson);
     if (info?.kept) {
         const { stageBefore, aiCopy } = info;
-        await prisma.invProduct.update({ where: { id }, data: { shopDraftJson: { ...(stageBefore && { stageBefore }), ...(aiCopy && { aiCopy }) } as unknown as Prisma.InputJsonValue } });
+        await prisma.invProduct.update({ where: { id }, data: { shopDraftJson: { ...(stageBefore && { stageBefore }), ...(aiCopy && { aiCopy }), ...prepHistory(info) } as unknown as Prisma.InputJsonValue } });
     }
     return { notes: notes.length };
 }

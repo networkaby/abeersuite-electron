@@ -18,11 +18,32 @@ export type ShopDraft = {
     notesAt?: string;
     /** Notes kept after the product left Draft / Attention (owner, 2026-11-12) — shown until the next AI review replaces them. */
     kept?: boolean;
+    /** Product prep's last 5 runs (owner, 2026-11-20) — the skills skip a part that already ran with nothing changed since. */
+    runs?: PrepRun[];
+    /** What staff must solve, red (stop) first. Set-aside ones ("can't fix now") stay, findable later. */
+    problems?: PrepProblem[];
+    /** How many problems are set aside — the products list's "Set aside" tab reads only this. */
+    asideCount?: number;
 };
+
+export type PrepRun = { skill: "product-prep" | "product-recheck"; part: string; at: string; from: ShopStatus; to: ShopStatus };
+export type PrepProblem = { text: string; level: "stop" | "fix"; part: number; at: string; asideBy?: string; asideAt?: string };
+
+const isRun = (x: unknown): x is PrepRun => !!x && typeof x === "object" && typeof (x as PrepRun).at === "string" && typeof (x as PrepRun).part === "string";
+const isProblem = (x: unknown): x is PrepProblem => !!x && typeof x === "object" && typeof (x as PrepProblem).text === "string";
+
+/** Runs and set-aside problems outlive Ready / Discard — they are the product's history, not the draft's. */
+export function prepHistory(info: ShopDraft | null): Pick<ShopDraft, "runs" | "problems" | "asideCount"> {
+    const aside = (info?.problems ?? []).filter((p) => p.asideAt);
+    return { ...(info?.runs?.length && { runs: info.runs }), ...(aside.length && { problems: aside, asideCount: aside.length }) };
+}
 
 export function readShopDraft(raw: unknown): ShopDraft | null {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-    const r = raw as { stageBefore?: unknown; aiCopy?: unknown; notes?: unknown; notesAt?: unknown; kept?: unknown };
+    const r = raw as { stageBefore?: unknown; aiCopy?: unknown; notes?: unknown; notesAt?: unknown; kept?: unknown; runs?: unknown; problems?: unknown };
+    const runs = Array.isArray(r.runs) ? r.runs.filter(isRun) : [];
+    const problems = Array.isArray(r.problems) ? r.problems.filter(isProblem) : [];
+    const aside = problems.filter((p) => p.asideAt).length;
     const notes = Array.isArray(r.notes) ? r.notes.filter((x): x is string => typeof x === "string") : [];
     const stages: unknown[] = ["UNPUBLISHED", "READY", "PUBLISHED"]; // never a work stage (Draft / Attention / Waiting)
     return {
@@ -31,6 +52,9 @@ export function readShopDraft(raw: unknown): ShopDraft | null {
         ...(notes.length ? { notes } : {}),
         ...(notes.length && typeof r.notesAt === "string" ? { notesAt: r.notesAt } : {}),
         ...(notes.length && r.kept === true ? { kept: true } : {}),
+        ...(runs.length ? { runs } : {}),
+        ...(problems.length ? { problems } : {}),
+        ...(aside ? { asideCount: aside } : {}),
     };
 }
 
@@ -46,8 +70,9 @@ export function keptReviewNotes(info: ShopDraft | null, attention: string | null
         ...(info?.aiCopy?.notes ?? []),
         ...(info?.aiCopy?.flags ?? []),
     ])].slice(0, 40);
-    if (!notes.length) return null;
-    return { notes, notesAt: info?.notesAt ?? at?.toISOString(), kept: true };
+    const history = prepHistory(info);
+    if (!notes.length) return Object.keys(history).length ? history : null;
+    return { notes, notesAt: info?.notesAt ?? at?.toISOString(), kept: true, ...history };
 }
 import { invProductToPublic, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { barcodeTagPaise, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
@@ -71,6 +96,8 @@ export type ShopProductAdmin = ShopProductPublic & {
     shopAttentionBy: string | null;
     /** Stage-before + Claude's notes — only the product's own page gets it (withShopDraft). */
     shopDraft?: ShopDraft | null;
+    /** A problem staff set aside ("can't fix now") — the list's "Set aside" tab. List rows only. */
+    hasAsideProblems?: boolean;
     /** Per-product override: accept orders even at zero stock (backorder). */
     allowBackorder: boolean;
     unitId: number;

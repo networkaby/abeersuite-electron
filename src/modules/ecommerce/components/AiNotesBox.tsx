@@ -1,6 +1,11 @@
 "use client";
 
+import { useState } from "react";
+import axios from "axios";
+import { toast } from "sonner";
 import { formatDate } from "@/shared/lib/format/formatDate";
+import { extractApiError } from "@/shared/lib/api";
+import type { PrepProblem, PrepRun } from "@/modules/ecommerce/lib/productAdmin";
 
 /** One place for every AI note on a product (owner, 2026-11-12): the Attention reason,
  *  Claude's review notes (kept, dated, after publishing) and the latest copy run's notes. */
@@ -8,7 +13,63 @@ export type AiNotesBoxProps = {
     attention?: { text: string; by?: string | null; at?: string | Date | null; parked: boolean } | null;
     review?: { notes: string[]; at?: string | null; kept?: boolean } | null;
     copy?: { source: string; notes: string[]; flags: string[] } | null;
+    /** Product prep's runs and open problems (owner, 2026-11-20) — when there are any, the box shows only these. */
+    prep?: { productId: number; runs: PrepRun[]; problems: PrepProblem[]; onChanged: () => void } | null;
 };
+
+const STAGE: Record<string, string> = { UNPUBLISHED: "Unpublished", WAITING: "Waiting", DRAFT: "Draft", ATTENTION: "Attention", READY: "Ready", PUBLISHED: "Published" };
+
+/** Only what must be solved, and which skill ran when (owner, 2026-11-20). */
+function PrepNotes({ productId, runs, problems, onChanged }: NonNullable<AiNotesBoxProps["prep"]>) {
+    const [busy, setBusy] = useState<string | null>(null);
+    const tick = async (p: PrepProblem, aside: boolean) => {
+        setBusy(p.text);
+        try {
+            await axios.post(`/api/ecommerce/products/${productId}/problems`, { text: p.text, aside });
+            onChanged();
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not save the tick"));
+        } finally {
+            setBusy(null);
+        }
+    };
+    return (
+        <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3 text-xs">
+            <p className="text-sm font-medium">AI notes</p>
+            {runs.length > 0 && (
+                <ul className="space-y-0.5 text-muted-foreground">
+                    {runs.map((r) => (
+                        <li key={r.at}>{r.skill} part {r.part} · {formatDate(r.at)} · {STAGE[r.from] ?? r.from} → {STAGE[r.to] ?? r.to}</li>
+                    ))}
+                </ul>
+            )}
+            {problems.length > 0 && (
+                <div>
+                    <p className="font-medium">Open problems</p>
+                    <ol className="mt-1 space-y-1">
+                        {problems.map((p, i) => {
+                            const aside = !!p.asideAt;
+                            const tone = aside ? "text-muted-foreground line-through decoration-1" : p.level === "stop" ? "text-red-700 dark:text-red-400" : "text-amber-700 dark:text-amber-400";
+                            return (
+                                <li key={p.text} className="flex items-start justify-between gap-3">
+                                    <span className={tone}>
+                                        <span className={`mr-1.5 inline-block size-2 rounded-full ${aside ? "bg-muted-foreground/50" : p.level === "stop" ? "bg-red-600" : "bg-amber-500"}`} />
+                                        {i + 1}. {p.text}
+                                        {aside && <span className="ml-1 no-underline">(set aside{p.asideBy ? ` by ${p.asideBy}` : ""}{p.asideAt ? ` · ${formatDate(p.asideAt)}` : ""})</span>}
+                                    </span>
+                                    <label className="flex shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap text-muted-foreground">
+                                        <input type="checkbox" checked={aside} disabled={busy === p.text} onChange={(e) => void tick(p, e.target.checked)} />
+                                        can&apos;t fix now
+                                    </label>
+                                </li>
+                            );
+                        })}
+                    </ol>
+                </div>
+            )}
+        </div>
+    );
+}
 
 const when = (at?: string | Date | null) => (at ? ` · ${formatDate(at)}` : "");
 
@@ -46,7 +107,8 @@ function NoteList({ lines, hideRun }: { lines: string[]; hideRun?: boolean }) {
     );
 }
 
-export function AiNotesBox({ attention, review, copy }: AiNotesBoxProps) {
+export function AiNotesBox({ attention, review, copy, prep }: AiNotesBoxProps) {
+    if (prep && (prep.runs.length || prep.problems.length)) return <PrepNotes {...prep} />;
     const hasCopy = !!copy && (copy.notes.length > 0 || copy.flags.length > 0);
     // The Attention reason carries its own Last run line — shown once.
     const runShown = !!attention?.text.includes("Last run: ");

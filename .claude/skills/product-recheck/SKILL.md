@@ -51,6 +51,8 @@ curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$PRODUCT_COPY_READ_URL/api/agent
 
 Use: the product fields, every photo (open each — `GET /api/agent/products/<id>/photos/<n>` if blocked), `draftNotes`, `processNotes`, `attention`, and `prep.pages` / `prep.labelFacts` (the saved search — the only outside source allowed).
 `prep.identityChanged: true` → staff changed brand / model / barcode after the search: **pending** "Identity changed after the search — run product prep from Part 1".
+`prep.runs` (last 5 runs, `{ skill, part, at, from, to }`) and `prep.changedSinceRun` (owner, 2026-11-20): the last run was a product-recheck and `changedSinceRun: false` → **skip** ("verified / checked on <date>, nothing changed since") unless the owner said **"redo"** or named the SKU.
+`prep.problems` with `asideAt` = staff ticked **"can't fix now"**: never write it again in `pending` / `notes` — it is set aside on purpose and must not block Ready.
 
 ## The photo list (send it as `photoCheck`)
 

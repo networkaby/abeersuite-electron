@@ -816,6 +816,9 @@ export default function ProductForm({
                     review={row?.shopDraft?.notes?.length ? {
                         notes: row.shopDraft.notes, at: row.shopDraft.notesAt, kept: row.shopDraft.kept,
                     } : null}
+                    prep={initial?.id ? {
+                        productId: initial.id, runs: row?.shopDraft?.runs ?? [], problems: row?.shopDraft?.problems ?? [], onChanged: () => void reloadRow(),
+                    } : null}
                 />
                 <div className="grid gap-2">
                     <Label>Description</Label>

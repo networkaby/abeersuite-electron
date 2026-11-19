@@ -80,7 +80,7 @@ Before anything else, ask the owner **both** questions in one message, unless th
    - **Part 4** — verify; that is the **product-recheck** skill, say so and switch to it.
    - **Part 5 · Photos** — Parts 1 + 5 even when there is no description (owner's call). Add **"redo"** to treat photos an earlier Part 5 already did (made before the edit tool existed).
 
-Keep both answers for the whole run. Each product carries a **Last run** line (part, India time, result) from its previous run — read it first; it tells you what was done last and helps decide whether to run again. A part that cannot run yet for a product (its earlier part not done) → skip that product and name it in the report, never run the earlier part on your own.
+Keep both answers for the whole run. Each product carries its run records (`prep.runs`, below) — read them first; they say what ran last and whether running again would do anything. A part that cannot run yet for a product (its earlier part not done) → skip that product and name it in the report, never run the earlier part on your own.
 
 ## 0. Pick products and find where each one stands
 
@@ -100,7 +100,11 @@ curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$PRODUCT_COPY_READ_URL/api/agent
 
 Answer = product-copy's read (`name, brand, modelNo, barcodes, typedSpecs, photos, writing, masters …`) **plus**
 `title` (online name), `group`, `shipping`, `attention` (Attention reason now), `draftNotes`, `processNotes`, and
-`prep: { partDone, path, photosDoneAt, photoStatus, next, identityChanged, searchAllowed, searchedAt, pages, dropped, labelFacts, seen, labelWebsite }`.
+`prep: { runs, changedSinceRun, problems, partDone, path, photosDoneAt, photoStatus, next, identityChanged, searchAllowed, searchedAt, pages, dropped, labelFacts, seen, labelWebsite }`.
+
+**Run records first — never run the same thing twice for nothing** (owner, 2026-11-20). `prep.runs` = the last 5 runs (`{ skill, part, at, from, to }`, oldest first); the server writes one after every call — you never send it. `prep.changedSinceRun: false` and the last run is the same path you are about to run (`"1+5"`, `"1+2+3"`, `"1+3"`) → **skip the product** ("already ran on <date>, nothing changed since"), unless the owner said **"redo"** or named this SKU. `changedSinceRun: true` (staff saved it after the run) → go on.
+
+**Set-aside problems** (owner, 2026-11-20): `prep.problems` = what staff must solve (`level`: `stop` red, `fix` yellow). One with `asideAt` was ticked **"can't fix now"** by staff — never write it again in `staff`, never stop on it; the server drops it anyway. It stays on the product for later; the products list's **Set aside** tab finds them.
 
 **`prep.path` decides first** (owner, 2026-11-20): `"part1+part5"` (a description is there — written by staff before this loop, or by an earlier Part 3) → **Parts 1 + 5**, whatever `partDone` says. `"part1+part2+part3"` (no description) → the steps below.
 

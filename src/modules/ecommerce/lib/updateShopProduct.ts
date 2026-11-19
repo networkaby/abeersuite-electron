@@ -7,7 +7,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError, prismaUniqueError } from "@/shared/lib/api";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
-import { invProductToAdmin, keptReviewNotes, readShopDraft, type ShopDraft, type ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
+import { invProductToAdmin, keptReviewNotes, prepHistory, readShopDraft, type ShopDraft, type ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { nextShopStatus, resolveShopListing, SHOP_STATUSES } from "@/modules/ecommerce/lib/shopListing";
 import type { ShopStatus } from "@/generated/prisma/enums";
 import { loadVariantAttrGaps } from "@/modules/ecommerce/lib/applyPublished";
@@ -183,7 +183,8 @@ export async function updateShopProduct(
         } else if (b.draft === "ready" || b.draft === "discard") {
             status = b.draft === "ready" ? "READY" : inWork ? info?.stageBefore ?? "UNPUBLISHED" : existing.shopStatus;
             // Ready keeps the AI's notes (dated) until the next review; Discard drops them.
-            data.shopDraftJson = b.draft === "ready" ? keepNotes() : Prisma.DbNull;
+            const history = prepHistory(info);
+            data.shopDraftJson = b.draft === "ready" ? keepNotes() : Object.keys(history).length ? (history as unknown as Prisma.InputJsonValue) : Prisma.DbNull;
             data.shopDraftAt = null;
         } else if (b.shopStatus && b.shopStatus !== "DRAFT" && existing.shopStatus === "DRAFT") {
             // Leaving Draft by a stage button (Mark ready / Publish / Unpublish).
