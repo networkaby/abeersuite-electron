@@ -55,7 +55,7 @@ const isRunLine = (n: string) => /^Part \d done/.test(n) || LAST_RUN.test(n);
 //   Part 2   ok or nothing found → stays · technical failure → Attention
 //   Part 3   done → Draft · anything only staff can do → Attention
 //   Part 4   verified → Ready · any problem → Attention
-//   Part 5   done → Draft · anything only staff can do → Attention
+//   Part 5   photos (with Part 1) done → Draft · anything only staff can do → Attention
 //
 // A success's stage can be overridden per run (`then`) — the owner's instruction
 // wins over the skill. Anything a human must do always goes to Attention, from any
@@ -65,6 +65,8 @@ const isRunLine = (n: string) => /^Part \d done/.test(n) || LAST_RUN.test(n);
 export const THEN_STAGES = ["same", "waiting", "draft", "ready", "attention"] as const;
 type Then = (typeof THEN_STAGES)[number];
 const thenSchema = z.enum(THEN_STAGES).optional();
+/** Where a successful part left the product, for its Last run line ("same" = where it was, Published too). */
+const THEN_WORDS: Record<Then, string> = { same: "stage kept", waiting: "Waiting", draft: "Draft", ready: "Ready", attention: "Attention" };
 /** What staff do after fixing, written at the end of every Attention reason. */
 const AFTER_FIX = {
     start: "Fix it, then press Start AI — it goes back to Waiting and runs from Part 1.",
@@ -117,7 +119,8 @@ const identityKey = (i: Identity) => [i.brand, i.model, ...[...i.barcodes].sort(
 
 /** What is saved in R2 for one product. */
 type PrepState = {
-    part: 1 | 2 | 3 | 4;
+    /** 0 = no part run yet — only photo edits recorded. */
+    part: 0 | 1 | 2 | 3 | 4;
     at: string;
     identity: Identity;
     search?: {
@@ -129,6 +132,19 @@ type PrepState = {
         seen: Record<string, string>;
         labelWebsite: string;
     };
+    /**
+     * The gallery as Part 5 left it (owner, 2026-11-20): those photos had their
+     * treatment (edits, order), so the next Part 5 works only on photos added
+     * after — an edited or newly added photo has a new link. "Redo" ignores it.
+     */
+    photosDone?: { at: string; urls: string[] };
+    /**
+     * Every photo edit still in use (owner, 2026-11-20): the edited link, the real
+     * original (an edit of an edit keeps the first one) and what was done. Part 5
+     * writes its "Photo n … (original: …)" lines from here on every run, so a
+     * later run never loses the way back to the original.
+     */
+    edits?: { url: string; original: string; edit: string; at: string }[];
 };
 
 function requireR2() {
@@ -191,7 +207,7 @@ async function originLine(id: number): Promise<string> {
     return `Was ${STAGE_WORDS[from] ?? from}.`;
 }
 
-/** The part Part 4 last suggested ("… · next: Part 5 (touch-up …)"), from the Attention reason or the Draft notes. */
+/** The part Part 4 last suggested ("… · next: Part 5 (photos …)"), from the Attention reason or the Draft notes. */
 function suggestedNext(texts: string[]): 1 | 3 | 5 | null {
     for (const line of texts.flatMap((t) => t.split("\n"))) {
         const m = /^Last run: Part 4 .*· next: Part (\d)/.exec(line.trim());
@@ -276,7 +292,26 @@ export async function replacePhotoWithEdit(id: number, n: number, file: Blob | n
     if (!url) throw new AgentCopyError("Could not store the edited photo — Cloudinary is not set up or refused it");
     const next = gallery.map((u) => (u === original ? url : u));
     await updateShopProduct(id, { galleryUrls: next, galleryBase: gallery, imageUrl: next[0] ?? null });
+    await recordEdit(id, original, url, edit);
     return { photo: n, url, original, edit: edit === "restore" ? "original restored" : PHOTO_EDITS[edit] };
+}
+
+/** Keep the edit record in the saved state: an edit of an edit keeps the first original; a restore drops the record. */
+async function recordEdit(id: number, replaced: string, url: string, edit: PhotoEdit | "restore") {
+    if (!isR2Configured()) return;
+    const s: PrepState = (await readState(id)) ?? { part: 0, at: new Date().toISOString(), identity: await currentIdentity(id) };
+    const was = s.edits?.find((e) => e.url === replaced);
+    const rest = (s.edits ?? []).filter((e) => e.url !== replaced);
+    const edits = edit === "restore" ? rest : [...rest, { url, original: was?.original ?? replaced, edit: was ? `${was.edit}, then ${PHOTO_EDITS[edit]}` : PHOTO_EDITS[edit], at: new Date().toISOString() }];
+    await writeState(id, { ...s, edits });
+}
+
+/** "Photo 2: cut out onto white (original: …)" for every edit still in the gallery, numbered as `photos`. */
+function editLines(state: PrepState | null, gallery: string[]) {
+    const ours = photosForAi(gallery);
+    return (state?.edits ?? []).filter((e) => ours.includes(e.url))
+        .sort((a, b) => ours.indexOf(a.url) - ours.indexOf(b.url))
+        .map((e) => `Photo ${ours.indexOf(e.url) + 1}: ${e.edit} (original: ${e.original})`);
 }
 
 // ── Read ──────────────────────────────────────────────────────────────────────
@@ -314,6 +349,14 @@ export async function productForPrep(id: number) {
             partDone: state?.part ?? 0,
             /** The part Part 4 suggested last (5, 3 or 1), read back from its Last run line; null when none. */
             next: suggestedNext([p.shopAttention ?? "", ...(draft?.notes ?? [])]),
+            /** Description empty → never written: Parts 1 + 2 + 3. Written (by hand or a part) → Parts 1 + 5 (photos). */
+            path: (base.currentDescription ?? "").trim() ? ("part1+part5" as const) : ("part1+part2+part3" as const),
+            /** When Part 5 last treated the photos; null = never. */
+            photosDoneAt: state?.photosDone?.at ?? null,
+            /** `photos` in the same order: done = treated by an earlier Part 5, new = added or changed since (treat these; "redo" = all). */
+            /** Photo edits still in the gallery and their originals — restore with edit=restore + that original. */
+            edits: editLines(state, base.photos),
+            photoStatus: base.photos.map((url, i) => ({ n: i + 1, url, status: state?.photosDone?.urls.includes(url) ? ("done" as const) : ("new" as const) })),
             /** Staff changed brand / model / barcode after the search — the saved search is void; start again at Part 1. */
             identityChanged,
             /** True only when no search is saved for this identity. Part 2 refuses a second search. */
@@ -471,7 +514,13 @@ export const part1Schema = z.object({
     then: thenSchema,
 });
 
-export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?: RunCtx) {
+/**
+ * `photosNext`: Part 1 runs with Part 5 in one call (owner, 2026-11-20) — no
+ * search follows, and Part 5 fixes the main photo and the must photos itself, so
+ * "not enough to search" and the photo list do not stop Part 1; only a real
+ * problem (`major`) does.
+ */
+export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?: RunCtx, photosNext = false) {
     requireR2();
     const p = await prisma.invProduct.findUnique({ where: { id }, select: { imageUrl: true, galleryJson: true, specsJson: true } });
     if (!p) throw new AgentCopyError("Product not found");
@@ -503,12 +552,13 @@ export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?
 
     const list = await photoListOf(1, id, b.photos, patch.galleryUrls ?? gallery);
     patch.photoChecklist = list.checklist;
-    const stop = b.major.length > 0 || !b.enough || list.lines.length > 0;
-    if (stop) {
+    const searchStop = !photosNext && !b.enough;
+    const photoStop = photosNext ? [] : list.lines;
+    if (b.major.length > 0 || searchStop || photoStop.length > 0) {
         const reason = [
             ...b.major.map((m) => `STOPPED (Part 1) — ${m}`),
-            ...list.lines.map((m) => `STOPPED (Part 1) — ${m}`),
-            ...(!b.enough ? [`STOPPED (Part 1) — not enough to search${b.need ? `: ${b.need}` : ""}.`] : []),
+            ...photoStop.map((m) => `STOPPED (Part 1) — ${m}`),
+            ...(searchStop ? [`STOPPED (Part 1) — not enough to search${b.need ? `: ${b.need}` : ""}.`] : []),
             ...done, ...unsure, ...b.notes,
             AFTER_FIX.start,
             lastRun(1, "stopped → Attention"),
@@ -520,9 +570,9 @@ export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?
     await leaveAt(id, b.then ?? "same", patch);
     // A search saved for this same identity is kept (one search per lifecycle).
     const { state: prev } = await liveState(id, run);
-    await writeState(id, { ...(prev?.search && { search: prev.search }), part: prev?.search ? Math.max(prev.part, 1) as PrepState["part"] : 1, at: new Date().toISOString(), identity: await currentIdentity(id) }, run);
+    await writeState(id, { ...(prev?.search && { search: prev.search }), ...(prev?.photosDone && { photosDone: prev.photosDone }), ...(prev?.edits && { edits: prev.edits }), part: prev?.search ? Math.max(prev.part, 1) as PrepState["part"] : 1, at: new Date().toISOString(), identity: await currentIdentity(id) }, run);
     const find = photosToFind(list.checklist);
-    const findNote = !find.length ? [] : prev?.search
+    const findNote = !find.length || photosNext ? [] : prev?.search
         ? [`Can't add (staff): ${find.join(", ")} — already searched once, so they stay missing unless they are on a saved page or the owner asks for a new search.`]
         : [`Can't add (staff): ${find.join(", ")} — the search looks for them online.`];
     await addDraftNotes(id, 1, [...done, ...unsure, ...b.notes, ...findNote], "done");
@@ -587,6 +637,8 @@ export async function savePart2(id: number, b: z.infer<typeof part2Schema>, run?
         at: new Date().toISOString(),
         identity,
         search: { at: new Date().toISOString(), found, verdicts, labelFacts: b.labelFacts, seen: b.seen, labelWebsite: b.labelWebsite },
+        ...(state.photosDone && { photosDone: state.photosDone }),
+        ...(state.edits && { edits: state.edits }),
     };
     await writeState(id, next, run);
     await addDraftNotes(id, 2, [
@@ -815,7 +867,7 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
     notes.push(...list.dropNotes);
     staff.push(...list.lines);
     const open = [...new Set(staff)];
-    const runResult = open.length ? `${open.length} for staff → Attention` : "done → Draft";
+    const runResult = open.length ? `${open.length} for staff → Attention` : `done → ${THEN_WORDS[b.then ?? "draft"]}`;
 
     const draft: ProductCopy = {
         ...checked.copy,
@@ -843,91 +895,51 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
     };
 }
 
-// ── Part 5: touch-up (no search, no rewrite) ──────────────────────────────────
+// ── Part 5: photos (with Part 1, no search, no text) ───────────────────────────────────────────────────────────
 
 export const part5Schema = z.object({
-    /** What is printed on the box — needed when the product has no saved search (done by hand); added to the saved one otherwise. */
-    labelFacts: record,
-    seen: record,
-    /** Spec rows to set — each value must be on the label or a kept saved page. */
-    specs: z.array(z.object({ label: z.string().trim().min(1).max(80), value: z.string().trim().min(1).max(500), source: z.string().trim().max(500) })).max(40).default([]),
-    /** Spec rows to drop (wrong, or the same fact twice). */
-    specClear: z.array(z.string().trim().min(1)).max(40).default([]),
-    /** Small text fixes (spelling, one wrong word) — `from` must be in the field exactly as it is now. */
-    textFixes: z.array(z.object({ field: z.enum(["title", "description"]), from: z.string().min(1).max(300), to: z.string().max(300) })).max(20).default([]),
-    modelNo: modelNoSchema.optional(),
-    shipping: shippingSchema.optional(),
     photos: photoPlanSchema,
     photoCheck: photoCheckSchema,
-    /** Information only — never blocks. */
+    /** Information only — never blocks. One line per photo: what was done, or why it was left. */
     notes: lines,
-    /** What only staff can do — any line → Attention. */
+    /** What only staff can do (a reshoot, a revised-MRP sticker) — any line → Attention. */
     staff: lines,
     /** The open problems in the Attention reason now that you FIXED, copied as they are written. Every other one stays open. */
     fixed: z.array(z.string().trim().min(1)).max(40).default([]),
     /** Where to leave the product when nothing is left for staff — the owner's instruction; default: Draft. */
     then: thenSchema,
-});
+}).strict();
 
 /** The server's own photo lines: worked out fresh by every part, never carried over. */
 const SERVER_PHOTO_LINE = /^(Main photo |No photo at all|Must photo missing)/;
 
 /**
- * Part 5 — touch-up (owner, 2026-11-17): after Part 3, or on a product staff made
- * by hand, when only photos or small things need fixing and a full Part 3 would
- * cost too much. No internet, no rewrite: photo order / removals / adds from the
- * saved search, single spec rows, small text fixes, an empty Model No or weight /
- * size — every fact from the label or a kept saved page. Moves the product to
- * Draft with the notes and a Last run line — or to Attention when anything is
- * left that only staff can do; Part 4 checks it after.
+ * Part 5 — photos (owner, 2026-11-20; was "touch-up" 2026-11-17): for a product
+ * that already has its text — written by staff before the loop existed, or by an
+ * earlier Part 3 — always run with Part 1 in one call (/run { part1, part5 }).
+ * Photos only: no search, no text, specs or names. The edits (cut-out, covered
+ * MRP) are put in before the call through /api/agent/products/[id]/photos/[n];
+ * here come the removals, adds / suggestions from the saved search, order and
+ * the photo list. The gallery it leaves is remembered (photosDone) so the next
+ * Part 5 works only on photos added after. → Draft, or Attention when anything
+ * is left only staff can do; Part 4 checks it after.
  */
-export async function savePart5(id: number, b: z.infer<typeof part5Schema>) {
-    const p: ProductRow & { shopSubheading: string | null; shopDescription: string | null; shopAttention: string | null } = await prisma.invProduct.findUniqueOrThrow({
-        where: { id }, select: { ...productSelect, shopSubheading: true, shopDescription: true, shopAttention: true },
+export async function savePart5(id: number, b: z.infer<typeof part5Schema>, run?: RunCtx) {
+    const p: ProductRow & { shopAttention: string | null } = await prisma.invProduct.findUniqueOrThrow({
+        where: { id }, select: { ...productSelect, shopAttention: true },
     }).catch(() => { throw new AgentCopyError("Product not found"); });
-    const { state } = await liveState(id);
-    const search = state?.search;
-    const facts: Facts = { labelFacts: { ...search?.labelFacts, ...b.labelFacts }, seen: { ...search?.seen, ...b.seen } };
+    const { state, identityChanged } = await liveState(id, run);
+    if (!state || state.part < 1) throw new AgentCopyError(identityChanged ? "Brand / model / barcode changed — send part1 and part5 together to /run." : "Part 1 is not done for this product — send part1 and part5 together to /run.");
+    const search = state.search;
     const trusted = search ? search.found.pages.filter((pg) => pg.codeMatch || search.verdicts.find((v) => v.url === pg.url)?.accepted) : [];
     const notes: string[] = [...b.notes];
     const patch: ShopProductPatch = {};
 
-    // Spec rows: set only what the label / a kept page really says; clear what was asked.
-    let specs = specsOf(p.specsJson) ?? {};
-    const drop = new Set(b.specClear.map((k) => k.toLowerCase()));
-    if (drop.size) {
-        specs = Object.fromEntries(Object.entries(specs).filter(([k]) => !drop.has(k.trim().toLowerCase())));
-        notes.push(`Spec rows cleared: ${b.specClear.join(", ")}.`);
-    }
-    const set: string[] = [];
-    for (const r of b.specs) {
-        const src = sourceOf(r.source, facts, trusted);
-        if (!src || !(checkFact(src.norm, r.label, r.value) || src.norm.includes(normForCheck(r.value)))) { notes.push(`Spec "${r.label}: ${r.value}" not found on the label or a kept page — not set.`); continue; }
-        specs = { ...Object.fromEntries(Object.entries(specs).filter(([k]) => k.trim().toLowerCase() !== r.label.toLowerCase())), [r.label]: r.value };
-        set.push(r.label);
-    }
-    if (set.length) notes.push(`Spec rows set: ${set.join(", ")}.`);
-    if (drop.size || set.length) patch.specs = specs;
-
-    // Small text fixes — only where the exact old words are there now.
-    let title = p.shopSubheading ?? "", description = p.shopDescription ?? "";
-    for (const f of b.textFixes) {
-        const cur = f.field === "title" ? title : description;
-        if (!cur.includes(f.from)) { notes.push(`Text fix skipped — "${f.from}" is not in the ${f.field}.`); continue; }
-        if (f.field === "title") title = cur.replace(f.from, f.to); else description = cur.replace(f.from, f.to);
-        notes.push(`${f.field === "title" ? "Online name" : "Description"}: "${f.from}" → "${f.to}".`);
-    }
-    if (title !== (p.shopSubheading ?? "")) patch.shopSubheading = title;
-    if (description !== (p.shopDescription ?? "")) patch.shopDescription = description;
-
-    applyShipping(b.shipping, p, facts, trusted, patch, notes);
-    const fillModelNo = modelNoToFill(b.modelNo, p, facts, trusted, notes);
-    if (fillModelNo) notes.push(`Model No filled: ${fillModelNo} (from the ${b.modelNo!.source.trim().toLowerCase() === "label" ? "box" : "maker page"}).`);
     const ph = await applyPhotos(b.photos, p, trusted, patch, notes);
-    if (!trusted.length && b.photos.add.length) notes.push("No saved search for this product — photos can only be added by hand.");
+    if (!trusted.length && (b.photos.add.length || b.photos.suggest.length)) notes.push("No saved search for this product — photos can only be added by hand.");
     const list = await photoListOf(5, id, b.photoCheck, ph.gallery, ph.remove, ph.alias);
     patch.photoChecklist = list.checklist;
-    notes.push(...list.dropNotes);
+    notes.push(...list.dropNotes, ...editLines(state, ph.gallery));
 
     // What is still open for staff (owner, 2026-11-19): the problems in the Attention
     // reason now, minus the ones Claude says it fixed (by their exact text — no word
@@ -937,12 +949,15 @@ export async function savePart5(id: number, b: z.infer<typeof part5Schema>) {
         .map((l) => l.trim())
         .filter((l) => OPEN_LINE.test(l) && !SERVER_PHOTO_LINE.test(openText(l)) && !fixed.has(openText(l)));
     const open = [...new Set([...list.lines, ...carried, ...b.staff])];
-    const runResult = open.length ? `${open.length} for staff → Attention` : "touch-up done → Draft";
+    const runResult = open.length ? `${open.length} for staff → Attention` : `photos done → ${THEN_WORDS[b.then ?? "draft"]}`;
 
     await leaveAt(id, open.length ? "attention" : b.then ?? "draft", patch, (info) => {
         const ai = info?.aiCopy;
+        // Staff's Add buttons live on the AI copy; a product written by hand has none,
+        // so its photo offers go in the notes instead of being lost.
+        const offers = ai ? [] : ph.suggested.map((x) => `Photo to add${x.kind ? ` (${photoKindLabel(x.kind)})` : ""}, found on ${x.site} — add it if it is this exact model: ${x.url}`);
         return {
-            notes: partNotes(info?.notes ?? [], 5, notes, runResult),
+            notes: partNotes(info?.notes ?? [], 5, [...notes, ...offers], runResult),
             notesAt: new Date().toISOString(),
             kept: undefined,
             ...(ai && {
@@ -956,44 +971,53 @@ export async function savePart5(id: number, b: z.infer<typeof part5Schema>) {
             }),
         };
     }, open.length ? await attentionReason(id, 5, open, AFTER_FIX.recheck) : undefined);
-    if (fillModelNo) {
-        await writeModelNo(id, p, fillModelNo);
-        if (state) await writeState(id, { ...state, identity: await currentIdentity(id) });
-    }
+    await writeState(id, { ...state, photosDone: { at: new Date().toISOString(), urls: ph.gallery } }, run);
     return {
         result: open.length ? ("attention" as const) : ("part5" as const),
         photos: { removed: ph.removed, added: ph.added, ordered: ph.ordered, suggested: ph.suggested.length },
-        specsSet: set.length, staff: open, notes,
+        staff: open, notes,
     };
 }
 
-// ── Parts 1–3 in one call ─────────────────────────────────────────────────────
+// ── One call: Part 1 + 2 + 3, or Part 1 + 5 ───────────────────────────────────
 
 export const runSchema = z.object({
     part1: part1Schema,
     /** The one search. Left out when the product already has a saved search (rerun). */
     part2: part2Schema.optional(),
-    part3: part3Schema,
-});
+    /** No description yet: Part 1 → 2 → 3. */
+    part3: part3Schema.optional(),
+    /** Description already there (owner, 2026-11-20): Part 1 → 5, photos only, no search. */
+    part5: part5Schema.optional(),
+})
+    .refine((x) => !!x.part3 !== !!x.part5, "Send part3 (with part2 when there is no saved search) or part5 — one of them")
+    .refine((x) => !(x.part5 && x.part2), "Part 5 takes no search — send part1 + part5");
 
 /**
- * A run with no stop is one call, like product-copy: Part 1 → Part 2 → Part 3,
- * R2 read once and written once. A major problem in Part 1 ends it there
- * (Attention, the cleaned data and notes kept); the parts' own endpoints stay
- * for a run that restarts at a given part.
+ * A run with no stop is one call, like product-copy: Part 1 → (2 →) 3, or
+ * Part 1 → 5 — R2 read once and written once. A major problem in Part 1 ends it
+ * there (Attention, the cleaned data and notes kept); the parts' own endpoints
+ * stay for a run that restarts at a given part.
  */
 export async function runParts(id: number, b: z.infer<typeof runSchema>) {
     const run: RunCtx = await liveState(id);
-    const p1 = await savePart1(id, b.part1, run);
+    const p1 = await savePart1(id, b.part1, run, !!b.part5);
     if (p1.result === "attention") {
         // Part 1 stopped: the saved state did not change, nothing to write.
         return { result: "attention" as const, stoppedAt: 1, part1: p1 };
+    }
+    if (b.part5) {
+        try {
+            return { ...(await savePart5(id, b.part5, run)), part1: p1 };
+        } finally {
+            if (run.state) await writeState(id, run.state);
+        }
     }
     const p2 = b.part2 ? await savePart2(id, b.part2, run) : null;
     if (p2?.result === "attention") return { result: "attention" as const, stoppedAt: 2, part1: p1, part2: p2 };
     if (!b.part2 && !run.state?.search) throw new AgentCopyError("No saved search for this product — send part2 (the search) in the run.");
     try {
-        const p3 = await savePart3(id, b.part3, run);
+        const p3 = await savePart3(id, b.part3!, run);
         return { ...p3, part1: p1, part2: p2 };
     } finally {
         // The search is never lost, even when Part 3 is refused (422) — the next run reuses it.
@@ -1008,7 +1032,7 @@ export const part4Schema = z.object({
     pending: lines,
     /** Smaller problems. Any line here still sends the product to Attention (owner, 2026-11-17). */
     notes: lines,
-    /** Which part to run next (owner, 2026-11-17): part5 = small fixes (touch-up), part3 = rewrite from the saved search, part1 = start again. */
+    /** Which part to run next (owner, 2026-11-17): part5 = photos only (run with Part 1), part3 = text wrong — rewrite from the saved search, part1 = start again. */
     next: z.enum(["part5", "part3", "part1"]).optional(),
     /** The photo list as you see it now — the server checks the must photos and the main photo itself. */
     photoCheck: photoCheckSchema,
@@ -1021,7 +1045,7 @@ export const part4Schema = z.object({
     /** Where to leave a verified product — the owner's instruction; default: Ready (never Published yet). */
     then: thenSchema,
 });
-const NEXT_WORDS = { part5: "Part 5 (touch-up — photos / small fixes)", part3: "Part 3 (rewrite from the saved search)", part1: "Part 1 (start again)" } as const;
+const NEXT_WORDS = { part5: "Part 5 (photos — with Part 1, no search)", part3: "Part 3 (rewrite from the saved search)", part1: "Part 1 (start again)" } as const;
 
 /**
  * Part 4: any problem at all — pending or a note — parks the product in

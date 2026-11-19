@@ -14,7 +14,7 @@ const when = (at?: string | Date | null) => (at ? ` · ${formatDate(at)}` : "");
 
 /** Product prep tags each note with its part (owner, 2026-11-19); shown grouped, Part 1 → 5. */
 const PART_TITLES: Record<number, string> = {
-    1: "Part 1 · Clean seed", 2: "Part 2 · Search", 3: "Part 3 · Copy written", 4: "Part 4 · Check", 5: "Part 5 · Touch-up",
+    1: "Part 1 · Clean seed", 2: "Part 2 · Search", 3: "Part 3 · Copy written", 4: "Part 4 · Check", 5: "Part 5 · Photos",
 };
 const TAG = /^Part (\d) · /;
 function grouped(lines: string[]) {

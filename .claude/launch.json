@@ -15,6 +15,13 @@
       "port": 3000
     },
     {
+      "//": "Dev server beside the owner's production build (start-production.bat holds 3000 with `next start`). Same .env, so same database.",
+      "name": "Next.js Dev Server (3001)",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["next", "dev", "-p", "3001"],
+      "port": 3001
+    },
+    {
       "//": "HTTPS dev server — Facebook's JS SDK (WhatsApp Embedded Signup) refuses plain http.",
       "name": "Next.js Dev Server (HTTPS)",
       "runtimeExecutable": "npx",

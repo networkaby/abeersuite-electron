@@ -17,9 +17,9 @@ const PARTS = {
     part2: { schema: part2Schema, run: savePart2 },
     part3: { schema: part3Schema, run: savePart3 },
     part4: { schema: part4Schema, run: savePart4 },
-    // Touch-up: photos and small fixes, no search, no rewrite.
+    // Photos only (no search, no text) — normally sent with Part 1 through run.
     part5: { schema: part5Schema, run: savePart5 },
-    // Parts 1–3 in one call — the usual run; the parts above restart a run part-way.
+    // One call: Parts 1–3 (no description yet) or Parts 1 + 5 (photos) — the usual run.
     run: { schema: runSchema, run: runParts },
 } as const;
 
