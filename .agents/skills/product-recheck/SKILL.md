@@ -3,6 +3,8 @@ name: product-recheck
 description: Part 4 of AbeerSuite product prep — verify a shop product WITHOUT any internet search, from the saved search and the product itself, after staff acted on the notes. Checks text, specs, brand, collections, shipping, photo order and quality, the main photo, and that every earlier note was carried out; verified → moved to Ready (staff press Publish), else to Attention with only what is pending. Works even when staff prepared the product by hand. Use when the owner says "recheck products", "verify the drafts", "did staff fix them", "part 4", or runs /product-recheck.
 ---
 
+> **Talk in SKUs.** To the owner and staff, name every product by its **SKU** (and barcode where useful) plus its name — in messages, notes and reports. The product `id` is internal to the database: use it only in API calls, never in what you say or write for people. The owner gives SKUs; look them up with `sku=`. No SKU → say so and use the name.
+
 # Product recheck (Part 4 — verify)
 
 The last part of the product-prep loop. **No internet, no search** — the search
@@ -35,7 +37,7 @@ Every **GET** (reading a product, a list, a photo) goes to `$PRODUCT_COPY_READ_U
 
 ## Start: ask the mode first
 
-Before anything else, ask the owner **which mode** — cloud · local · smart local · office (Setup above) — unless the request already says. Running in the cloud → do not ask, it is always **cloud**. This skill is Part 4 only — it never changes the product's data; it only moves it: verified → **Ready** (never Published directly yet), any problem → **Attention**. When the owner says where a verified product should go, send `then` (`same` · `draft` · `ready` · `waiting`). For Parts 1–3, or **Part 5 (touch-up: photos and small fixes)** when your check finds only small things to fix, say so and switch to **product-prep**.
+Before anything else, ask the owner **which mode** — cloud · local · smart local · office (Setup above) — unless the request already says. Running in the cloud → do not ask, it is always **cloud**. This skill is Part 4 only — it never changes the product's data; it only moves it: verified → **Ready** (never Published directly yet), any problem → **Attention**. When the owner says where a verified product should go, send `then` (`same` · `draft` · `ready` · `waiting`). For Parts 1–3, or **Part 5 (photos — runs with Part 1, no search, no text)** when only the photos need work, say so and switch to **product-prep**.
 
 ## 1. Pick
 
@@ -49,6 +51,8 @@ curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$PRODUCT_COPY_READ_URL/api/agent
 
 Use: the product fields, every photo (open each — `GET /api/agent/products/<id>/photos/<n>` if blocked), `draftNotes`, `processNotes`, `attention`, and `prep.pages` / `prep.labelFacts` (the saved search — the only outside source allowed).
 `prep.identityChanged: true` → staff changed brand / model / barcode after the search: **pending** "Identity changed after the search — run product prep from Part 1".
+`prep.runs` (last 5 runs, `{ skill, part, at, from, to }`) and `prep.changedSinceRun` (owner, 2026-11-20): the last run was a product-recheck and `changedSinceRun: false` → **skip** ("verified / checked on <date>, nothing changed since") unless the owner said **"redo"** or named the SKU.
+`prep.problems` with `asideAt` = staff ticked **"can't fix now"**: never write it again in `pending` / `notes` — it is set aside on purpose and must not block Ready.
 
 ## The photo list (send it as `photoCheck`)
 
@@ -113,7 +117,7 @@ The server tags each line with its part ("Part 3 · …") and **a part that runs
 | **Group** | Plainly wrong (GST) — always pending until staff fix it |
 | **Shipping** | Weight or size empty |
 | **Photos** | Main photo not a clean product photo without the box, or has a logo / watermark / text (our own too); another product's photo; someone else's watermark on any photo; blurry / dark; duplicates; a `must` photo kind still missing (`photoList.missing`). Our own logo / address on a **non-main** photo is fine — never flag it. Send **`photoCheck`** (below) — the server checks the must photos and the main photo itself |
-| **Photo edits** | A photo cut out or blanked by Part 3 / 5 (their `notes`: "Photo n cut out … (original: …)") with a ragged edge, a part of the product missing, a label or text damaged, a visible grey block → pending "Photo n edit is bad — restore the original" (Part 5 restores it, see product-prep "Photo edits"). A no-meaning background still left on a photo with lots of empty space → a `note` for Part 5. Never flag a meaningful or designed background (in hand, in our shop, RGB on black), and never a blanked MRP that looks clean |
+| **Photo edits** | A photo cut out or blanked by Part 3 / 5 (`prep.edits`, and the Part 5 notes: "Photo n: cut out onto white (original: …)") with a ragged edge, a part of the product missing, a label or text damaged, a visible grey block → pending "Photo n edit is bad — restore the original" (Part 5 restores it, see product-prep `photos.md`). A no-meaning background still left on a photo with lots of empty space → a `note` for Part 5. Never flag a meaningful or designed background (in hand, in our shop, RGB on black), and never a blanked MRP that looks clean |
 
 **Pending** = would be wrong or embarrassing on the shop. Smaller things (wording could be nicer, a nice-to-have photo) go in `notes`. **Any line in either sends the product to Attention** (owner, 2026-11-17) — a Published product too; going off the shop is accepted. So write a line only for a real problem; nothing found → send both empty.
 
@@ -130,7 +134,7 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
   "photoCheck": { "box": "carton", "shape": "palm-size gaming mouse", "tags": [ { "url": "…/1.jpg", "kind": "front" } ], "must": ["front", "left", "box_front", "box_back"], "nice": ["in_use"], "mainClean": false, "mainWhy": "held in hand, shop logo on it" }
   ```
 - **You change no photo.** For each must photo still missing, look in the saved pages' photos (`prep.pages[].photos`). Found → send it in **`onPages`** (`[{ "kind": "box_back", "url": "<that page photo>" }]`): the server tells staff "found on a saved page — run Part 5". Not found → the server tells staff to take it or tick "Can't add". There is no new search: after the one search, "Can't add" means the photo stays missing.
-- With any problem, also send **`next`** — the part to run after staff look: `"part5"` when only small things are wrong (photo order or removals, one spec row, a typo, an empty Model No / weight), `"part3"` when the text needs rewriting from the saved search, `"part1"` when the product itself is in doubt (wrong photos of another item, data badly wrong). It shows on the Last run line.
+- With any problem, also send **`next`** — the part to run after staff look: `"part5"` when only the **photos** are wrong (order, removals, an edit to make or restore, a must photo on a saved page), `"part3"` when the text, a spec row, the Model No or the weight is wrong (Part 5 writes no text), `"part1"` when the product itself is in doubt (wrong photos of another item, data badly wrong). It shows on the Last run line.
 - **Products made before the skills existed** start here: Part 4 is the cheapest first look (no search, no change); its `next` tells the owner whether Part 5 or a full run is needed.
 - Any line in `pending` or `notes` → `{ result: "attention" }`: parked in Attention with every line (PENDING first, then NOTE), plus a line the server adds saying where it came from ("Was Published (live on the shop) before this check — if the fix is small, publish it again") so staff can put a live product back. Staff fix, then run product-recheck again (not product-prep — unless a line says so).
 - Every run leaves one **Last run** line (part, India time, result) on the product, replacing the old one — read it at the start: it shows when this product was last checked and what came of it.

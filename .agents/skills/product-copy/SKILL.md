@@ -1,7 +1,9 @@
 ---
 name: product-copy
-description: Prepare AbeerSuite shop products as Claude through the agent API — check photos against our data, find the maker / seller pages, write Verified copy (name, description, highlights, specs, compatibility, warranty), set brand and collections, fill shipping weight and parcel size, pick photos from the maker's page, advise on the gallery, and note every mistake in our data — all written onto the product, which moves to Draft for staff (never published, never "ready"). Also reviews finished products and leaves notes only. Use when the owner says "do product copy", "write product descriptions", "prepare products for the shop", "review the drafts", "check product 722", or runs /product-copy.
+description: Prepare AbeerSuite shop products as Claude through the agent API — check photos against our data, find the maker / seller pages, write Verified copy (name, description, highlights, specs, compatibility, warranty), set brand and collections, fill shipping weight and parcel size, pick photos from the maker's page, advise on the gallery, and note every mistake in our data — all written onto the product, which moves to Draft for staff (never published, never "ready"). Also reviews finished products and leaves notes only. Use when the owner says "do product copy", "write product descriptions", "prepare products for the shop", "review the drafts", "check SKU 107102", or runs /product-copy.
 ---
+
+> **Talk in SKUs.** To the owner and staff, name every product by its **SKU** (and barcode where useful) plus its name — in messages, notes and reports. The product `id` is internal to the database: use it only in API calls, never in what you say or write for people. The owner gives SKUs; look them up with `sku=`. No SKU → say so and use the name.
 
 # Product copy (Verified, by Claude)
 
@@ -42,7 +44,7 @@ card is switched off — stop and tell the owner.
 | Owner says | Mode |
 |---|---|
 | "do product copy", "prepare 5 products", "SKU 107102" | **Prepare** — steps 0–9 |
-| "review product 722", "review the drafts / ready ones", "check for mistakes" | **Review** — notes only, step R |
+| "review SKU 107102", "review the drafts / ready ones", "check for mistakes" | **Review** — notes only, step R |
 | "do compatibility for all ink, toner and printheads", "blades for razors" | **Compatibility** — the compatible list only, step C |
 
 ---

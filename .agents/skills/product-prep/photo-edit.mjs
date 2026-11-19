@@ -1,6 +1,7 @@
 // Product photo edits for product-prep / product-recheck — free, runs where Claude runs.
 //
-//   node photo-edit.mjs cutout <in> <out>             background → white, 85% fill, 1500 square, soft shadow
+//   node photo-edit.mjs cutout <in> <out> [--solid]   background → white, 85% fill, 1500 square, soft shadow
+//                                                      --solid: boxes / packs — fill any hole the model cut inside
 //   node photo-edit.mjs blank  <in> <out> x,y,w,h     fill a box with the label colour around it
 //                                                      (x,y,w,h = fractions 0–1 of width / height)
 //
@@ -16,10 +17,38 @@ import sharp from "sharp";
 const SIZE = 1500;
 const FILL = 0.85;
 
-const [mode, input, output, box] = process.argv.slice(2);
+const args = process.argv.slice(2);
+const solid = args.includes("--solid");
+const [mode, input, output, box] = args.filter((a) => a !== "--solid");
 if (!mode || !input || !output) {
     console.error("usage: photo-edit.mjs cutout|blank <in> <out> [x,y,w,h]");
     process.exit(2);
+}
+
+/**
+ * --solid (boxes, cards, packs — anything with no real see-through gap): the model
+ * can take a white panel printed on the box for background and punch a hole through
+ * it (SKU 213343, 2026-11-20). Every see-through pixel the photo's edge cannot reach
+ * through other see-through pixels is inside the product — make it solid again.
+ * Never for a product with a real gap (cable coil, ring, frame).
+ */
+function fillHoles(px, w, h) {
+    const clear = (i) => px[i * 4 + 3] < 250;
+    const seen = new Uint8Array(w * h);
+    const stack = [];
+    for (let x = 0; x < w; x++) stack.push(x, (h - 1) * w + x);
+    for (let y = 0; y < h; y++) stack.push(y * w, y * w + w - 1);
+    while (stack.length) {
+        const i = stack.pop();
+        if (seen[i] || !clear(i)) continue;
+        seen[i] = 1;
+        const x = i % w;
+        if (x > 0) stack.push(i - 1);
+        if (x < w - 1) stack.push(i + 1);
+        if (i >= w) stack.push(i - w);
+        if (i < w * (h - 1)) stack.push(i + w);
+    }
+    for (let i = 0; i < w * h; i++) if (!seen[i] && clear(i)) px[i * 4 + 3] = 255;
 }
 
 async function cutout() {
@@ -28,6 +57,7 @@ async function cutout() {
     const [cut] = await seg(input);
     // Faint specks (mask under ~40%) would stop trim at the photo's edge and leave the product small.
     for (let i = 3; i < cut.data.length; i += 4) if (cut.data[i] < 100) cut.data[i] = 0;
+    if (solid) fillHoles(cut.data, cut.width, cut.height);
     const png = await sharp(Buffer.from(cut.data), { raw: { width: cut.width, height: cut.height, channels: 4 } }).png().toBuffer();
     const trimmed = await sharp(png).trim({ threshold: 1 }).toBuffer();
     const side = Math.round(SIZE * FILL);
