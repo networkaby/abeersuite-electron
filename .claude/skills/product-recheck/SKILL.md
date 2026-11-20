@@ -55,7 +55,7 @@ Use: the product fields, every photo (open each — `GET /api/agent/products/<id
 
 **One shared open-problem list** (owner, 2026-11-20). `prep.problems` = every open problem on the product, whoever raised it: `{ text, level: stop | fix, part, source?, by?, asideAt? }`.
 - Raised by a part (`part` 1–5) or by **staff** (`source: "staff"`, `by` = who) — staff write theirs as `{…}` in the product's manual note (`prep.staffNote`, Markdown; text outside `{ }` is for people, ignore it). Treat a staff problem **exactly like any other**: do it first, within what this skill may do. An open staff problem always makes `changedSinceRun: true` — never skip that product.
-- **`asideAt`** = staff ticked **"can't fix now"**: it does not block and you never write it again in `staff` / `pending`, but it **stays until fixed** — if you see it is fixed now, report it fixed.
+- **`asideAt`** = staff ticked **"temporary pass"**: it does not block and you never write it again in `staff` / `pending`, but it **stays until fixed** — if you see it is fixed now, report it fixed.
 - **You fixed one** (any source, set aside or not) → report it, one call for all, before the part call:
 
 ```bash
@@ -127,7 +127,7 @@ The server tags each line with its part ("Part 3 · …") and **a part that runs
 | **Brand** | Empty or wrong while the label shows a brand that is now in `masters.brands` |
 | **Collections** | None, or plainly wrong for who buys it |
 | **Group** | Plainly wrong (GST) — always pending until staff fix it |
-| **Shipping** | Weight or size empty |
+| **Shipping** | Weight or size plainly wrong for the item (a 5 kg mouse). **Empty is never a problem** — no pending, no note (owner, 2026-11-20): a Published product with no weight goes to Pending by itself and staff see it there |
 | **Photos** | Main photo not a clean product photo without the box, or has a logo / watermark / text (our own too); another product's photo; someone else's watermark on any photo; blurry / dark; duplicates; a `must` photo kind still missing (`photoList.missing`). Our own logo / address on a **non-main** photo is fine — never flag it. Send **`photoCheck`** (below) — the server checks the must photos and the main photo itself |
 | **Photo edits** | A photo cut out or blanked by Part 3 / 5 (`prep.edits`, and the Part 5 notes: "Photo n: cut out onto white (original: …)") with a ragged edge, a part of the product missing, a label or text damaged, a visible grey block → pending "Photo n edit is bad — restore the original" (Part 5 restores it, see product-prep `photos.md`). A no-meaning background still left on a photo with lots of empty space → a `note` for Part 5. Never flag a meaningful or designed background (in hand, in our shop, RGB on black), and never a blanked MRP that looks clean |
 
