@@ -30,6 +30,12 @@ const nextConfig: NextConfig = {
   // sees an AI coding agent, leaving our hand-written project rules modified
   // after every dev run. Dev-only behaviour; builds are unaffected.
   agentRules: false,
+  // The photo editor (Filerobot → Konva) is browser-only, but Turbopack still compiles
+  // its server copy, where Konva's Node entry requires the native `canvas` package.
+  // We never render Konva on the server, so point it at an empty module.
+  turbopack: {
+    resolveAlias: { canvas: "./src/shared/lib/emptyModule.ts" },
+  },
   // The desktop shell loads http://127.0.0.1:<port> while `next dev` treats only
   // `localhost` as its own origin, so under `pnpm electron:dev` the HMR socket was
   // refused and the dev client reloaded the page every ~45 s without ever hydrating.

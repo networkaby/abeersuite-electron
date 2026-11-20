@@ -5,11 +5,12 @@ import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Crop, EyeOff, Images, Link2, Sparkles, Star, Trash2, Upload } from "lucide-react";
+import { ChevronLeft, ChevronRight, Crop, EyeOff, SquarePen, Images, Link2, Sparkles, Star, Trash2, Upload } from "lucide-react";
 import { isAiSkipped, setAiSkipped } from "@/shared/lib/shop/photoMark";
 import { uploadImageToCloudinary } from "@/shared/lib/uploadToCloudinary";
 import { cloudinaryThumb, isCloudinaryUrl } from "@/shared/lib/cloudinaryImage";
 import ImageAdjustDialog from "@/modules/ecommerce/components/ImageAdjustDialog";
+import PhotoEditorDialog from "@/modules/ecommerce/components/PhotoEditorDialog";
 import PhotoLibraryDialog from "@/modules/ecommerce/components/PhotoLibraryDialog";
 
 export default function ProductGalleryUploader({
@@ -32,6 +33,7 @@ export default function ProductGalleryUploader({
     const [showUrlInput, setShowUrlInput] = useState(false);
     const [urlValue, setUrlValue] = useState("");
     const [adjustIdx, setAdjustIdx] = useState<number | null>(null);
+    const [editIdx, setEditIdx] = useState<number | null>(null);
     const [libraryOpen, setLibraryOpen] = useState(false);
     const [selectedState, setSelectedState] = useState(0);
     const selected = selectedProp ?? selectedState;
@@ -193,6 +195,21 @@ export default function ProductGalleryUploader({
                                 type="button"
                                 variant="outline"
                                 size="sm"
+                                title={
+                                    isCloudinaryUrl(urls[selected])
+                                        ? "Edit photo — crop, rotate, light, text, blur; saves a new copy"
+                                        : "Only uploaded images can be edited"
+                                }
+                                disabled={uploading || !isCloudinaryUrl(urls[selected])}
+                                onClick={() => setEditIdx(selected)}
+                            >
+                                <SquarePen className="mr-2 size-4" />
+                                Edit photo
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
                                 disabled={selected === 0}
                                 onClick={() => makePrimary(selected)}
                             >
@@ -282,6 +299,14 @@ export default function ProductGalleryUploader({
                     open
                     onOpenChange={(o) => !o && setAdjustIdx(null)}
                     onSave={(next) => replaceAt(adjustIdx, next)}
+                />
+            ) : null}
+            {editIdx !== null && urls[editIdx] ? (
+                <PhotoEditorDialog
+                    key={`edit-${editIdx}`}
+                    url={urls[editIdx]}
+                    onClose={() => setEditIdx(null)}
+                    onSave={(next) => replaceAt(editIdx, next)}
                 />
             ) : null}
         </div>
