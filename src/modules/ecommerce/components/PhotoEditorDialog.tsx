@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useState } from "react";
+import { StyleSheetManager } from "styled-components";
 import { toast } from "sonner";
 import { uploadImageToCloudinary } from "@/shared/lib/uploadToCloudinary";
 import { withoutAdjust } from "@/shared/lib/cloudinaryImage";
@@ -11,6 +12,13 @@ import { isAiSkipped, setAiSkipped } from "@/shared/lib/shop/photoMark";
 // Never import anything else from the package statically (not even TABS / TOOLS) —
 // that pulls Konva into server rendering, where it wants the native `canvas` module.
 const FilerobotImageEditor = dynamic(() => import("react-filerobot-image-editor"), { ssr: false });
+
+// Filerobot's styled buttons pass styling-only props (e.g. `active`) through to the
+// real <button>, and React warns once per toolbar button. Stop those at HTML tags;
+// library components still receive them.
+const STYLE_ONLY_PROPS = new Set(["active"]);
+const forwardToDom = (prop: string, target: unknown) =>
+    typeof target !== "string" || !STYLE_ONLY_PROPS.has(prop);
 
 /**
  * Full photo editor (Filerobot, MIT, runs in the browser): free crop, rotate,
@@ -70,6 +78,7 @@ export default function PhotoEditorDialog({
                 </div>
             ) : null}
             <div className="min-h-0 flex-1">
+                <StyleSheetManager shouldForwardProp={forwardToDom}>
                 <FilerobotImageEditor
                     source={withoutAdjust(url)}
                     tabsIds={["Adjust", "Finetune", "Filters", "Annotate", "Resize"]}
@@ -88,6 +97,7 @@ export default function PhotoEditorDialog({
                     onSave={(data) => void save(data.imageCanvas)}
                     onClose={() => onClose()}
                 />
+                </StyleSheetManager>
             </div>
             </div>
         </div>
