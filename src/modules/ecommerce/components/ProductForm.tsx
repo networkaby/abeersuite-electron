@@ -113,17 +113,17 @@ export default function ProductForm({
             (onReload ?? onSaved)?.(res.data);
         } catch { /* the list shows it on the next load */ }
     };
-    /** Start AI / Remove from Waiting (owner, 2026-11-17) — the same call as the list's buttons. */
+    /** Start / Remove from Start (owner, 2026-11-17; renamed to Start 2026-11-20) — the same call as the list's buttons. */
     const [queueing, setQueueing] = useState(false);
     const sendToAi = async (action: "start" | "remove") => {
         if (!initial?.id) return;
         setQueueing(true);
         try {
             await axios.post("/api/ecommerce/products/waiting", { ids: [initial.id], action });
-            toast.success(action === "start" ? "Sent to Waiting — the next AI run picks it up" : "Removed from Waiting — back to its earlier stage");
+            toast.success(action === "start" ? "Sent to Start — the next AI run picks it up" : "Removed from Start — back to its earlier stage");
             await reloadRow();
         } catch (e: unknown) {
-            toast.error(extractApiError(e, "Could not update Waiting"));
+            toast.error(extractApiError(e, "Could not update Start"));
         } finally {
             setQueueing(false);
         }
@@ -1020,14 +1020,14 @@ export default function ProductForm({
                         </>
                     ) : shopStatus === "WAITING" ? (
                         <Button type="button" variant="outline" onClick={() => void sendToAi("remove")} disabled={busy || queueing}
-                            title="Take it off the AI list — back to its earlier stage">
-                            Remove from Waiting
+                            title="Take it off the Start list — back to its earlier stage">
+                            Remove from Start
                         </Button>
                     ) : shopStatus === "ATTENTION" ? (
                         <>
                             <Button type="button" onClick={() => void sendToAi("start")} disabled={busy || queueing}
-                                title="Fixed — clear the flag and send it back to the AI run">
-                                Start AI
+                                title="Fixed — clear the flag and send it to Start">
+                                Start
                             </Button>
                             <Button type="button" variant="outline" onClick={() => void submit("save")} disabled={busy}
                                 title="Checked — back to Draft to carry on working">
@@ -1083,9 +1083,9 @@ export default function ProductForm({
                             : shopStatus === "DRAFT"
                                 ? "Draft — being worked on, not in the shop."
                             : shopStatus === "ATTENTION"
-                                ? "Attention — parked until it is checked, not in the shop. Fixed? Start AI sends it back to the AI."
+                                ? "Attention — parked until it is checked, not in the shop. Fixed? Start sends it to the Start list for the AI."
                             : shopStatus === "WAITING"
-                                ? "Waiting — shortlisted for the AI run, not in the shop."
+                                ? "Start — shortlisted for the AI run, not in the shop."
                             : shopStatus === "READY"
                                 ? `Ready — complete, waiting to be published${qualified ? "" : `; needs ${qualification.missing.join(", ").toLowerCase()}`}.`
                                 : shopStatus === "PUBLISHED"

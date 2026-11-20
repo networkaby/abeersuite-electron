@@ -142,13 +142,13 @@ function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]> & { oldRuns?: str
                                         {i + 1}. {problemText(p.text)}
                                         <span className="ml-1 text-muted-foreground">
                                             · {staff ? (p.by ?? "staff") : `AI part ${(p.parts ?? [p.part]).join(", ")}`}
-                                            {aside && ` · can't fix now${p.asideBy ? ` (${p.asideBy}, ${formatDate(p.asideAt!)})` : ""} — not blocking, stays until fixed`}
+                                            {aside && ` · temporary pass${p.asideBy ? ` (${p.asideBy}, ${formatDate(p.asideAt!)})` : ""} — not blocking, stays until fixed`}
                                         </span>
                                     </span>
                                     {p.at && (
                                         <label className="flex shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap text-muted-foreground">
                                             <input type="checkbox" checked={aside} disabled={busy === p.text} onChange={(e) => void tick(p, e.target.checked)} />
-                                            can&apos;t fix now
+                                            temporary pass
                                         </label>
                                     )}
                                 </li>

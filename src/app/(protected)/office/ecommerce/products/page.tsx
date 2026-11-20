@@ -71,10 +71,9 @@ const PAGE_SIZE = 25;
  *  Attention = a Draft parked until a manual check is done; leaves by Save as draft / ready (owner, 2026-11-11).
  *  Waiting = shortlisted for the AI run (Start AI); the run moves it to Draft / Attention (owner, 2026-11-17). */
 // "aside" = has a problem staff set aside ("can't fix now", owner 2026-11-20) — beside any stage.
-// "notes" = has an open staff note for the AI (owner, 2026-11-20).
-type TabKey = "all" | ProductStatus["kind"] | "aside" | "notes";
-const TAB_KEYS: TabKey[] = ["all", "unpublished", "waiting", "draft", "ready", "live", "pending", "attention", "aside", "notes"];
-const TAB_LABEL: Record<TabKey, string> = { all: "All", unpublished: "Unpublished", waiting: "Waiting", draft: "Draft", ready: "Ready", live: "Published", pending: "Pending", attention: "Attention", aside: "Set aside", notes: "Staff notes" };
+type TabKey = "all" | ProductStatus["kind"] | "aside";
+const TAB_KEYS: TabKey[] = ["all", "unpublished", "waiting", "draft", "ready", "live", "pending", "attention", "aside"];
+const TAB_LABEL: Record<TabKey, string> = { all: "All", unpublished: "Unpublished", waiting: "Start", draft: "Draft", ready: "Ready", live: "Published", pending: "Pending", attention: "Attention", aside: "Temporary pass" };
 // Persist the list view (page / filters / scroll) per browser tab so leaving for
 // a product's Edit page and coming back (Esc → router.back) returns to the same
 // place instead of resetting to page 1.
@@ -114,8 +113,8 @@ function ProblemLines({ problems, full }: { problems: RowProblem[]; full?: boole
             ))}
             {!full && open.length > 1 && <span className="text-muted-foreground">+{open.length - 1} more problem{open.length > 2 ? "s" : ""}</span>}
             {aside.length > 0 && (full
-                ? aside.map((p) => <span key={p.text} className="text-muted-foreground">Set aside (can&apos;t fix now): {p.text}</span>)
-                : <span className="text-muted-foreground" title={aside.map((p) => p.text).join("\n")}>{aside.length} set aside — can&apos;t fix now</span>)}
+                ? aside.map((p) => <span key={p.text} className="text-muted-foreground">Temporary pass: {p.text}</span>)
+                : <span className="text-muted-foreground" title={aside.map((p) => p.text).join("\n")}>{aside.length} temporary pass</span>)}
         </span>
     );
 }
@@ -157,8 +156,8 @@ function StageBadge({ status }: { status: ProductStatus }) {
             <CheckCircle2 className="size-3" /> Ready
         </Badge>
     ) : status.kind === "waiting" ? (
-        <Badge variant="outline" className="gap-1 border-indigo-200 bg-indigo-50 text-indigo-700" title="Waiting for the AI run — not in the shop">
-            <Hourglass className="size-3" /> Waiting
+        <Badge variant="outline" className="gap-1 border-indigo-200 bg-indigo-50 text-indigo-700" title="In Start — shortlisted for the AI run, not in the shop">
+            <Hourglass className="size-3" /> Start
         </Badge>
     ) : status.kind === "draft" ? (
         <Badge variant="outline" className="gap-1 border-sky-200 bg-sky-50 text-sky-700" title="Being worked on — not in the shop">
@@ -248,16 +247,15 @@ export default function EcommerceProductsPage() {
     // One status per product, shared by the tab counts, the tab filter and the rows.
     const statusOf = useMemo(() => new Map(products.map((p) => [p.id, productStatus(p, rules)])), [products, rules]);
     const counts = useMemo(() => {
-        const c: Record<TabKey, number> = { all: products.length, unpublished: 0, waiting: 0, draft: 0, ready: 0, live: 0, pending: 0, attention: 0, aside: 0, notes: 0 };
+        const c: Record<TabKey, number> = { all: products.length, unpublished: 0, waiting: 0, draft: 0, ready: 0, live: 0, pending: 0, attention: 0, aside: 0 };
         for (const st of statusOf.values()) c[st.kind]++;
         c.aside = products.filter((p) => p.hasAsideProblems).length;
-        c.notes = products.filter((p) => p.hasStaffNotes).length;
         return c;
     }, [products, statusOf]);
 
     const filtered = useMemo(() => {
         const matches = productFilterMatcher(filters, rules, trees);
-        return products.filter((p) => (tab === "all" || (tab === "aside" ? !!p.hasAsideProblems : tab === "notes" ? !!p.hasStaffNotes : statusOf.get(p.id)?.kind === tab)) && matches(p));
+        return products.filter((p) => (tab === "all" || (tab === "aside" ? !!p.hasAsideProblems : statusOf.get(p.id)?.kind === tab)) && matches(p));
     }, [products, tab, filters, rules, statusOf, trees]);
 
     // Reset to page 1 when the filter actually changes — but NOT on the initial
@@ -371,7 +369,7 @@ export default function EcommerceProductsPage() {
             }
             if (data.skipped?.inWaiting) {
                 const names = data.skipped.waitingNames ?? [];
-                toast.info(`${data.skipped.inWaiting} skipped — Waiting for the AI (${names.join(", ")}${data.skipped.inWaiting > names.length ? ", …" : ""}). Remove it from Waiting first.`);
+                toast.info(`${data.skipped.inWaiting} skipped — in Start (${names.join(", ")}${data.skipped.inWaiting > names.length ? ", …" : ""}). Remove it from Start first.`);
             }
             clearSelection();
             load();
@@ -382,10 +380,10 @@ export default function EcommerceProductsPage() {
         }
     };
 
-    // Start AI / Remove from Waiting (owner, 2026-11-17) — rows and the bulk bar.
+    // Start / Remove from Start (owner, 2026-11-17, renamed to Start 2026-11-20) — rows and the bulk bar.
     const sendToAi = async (ids: number[], action: "start" | "remove") => {
         if (!ids.length) return;
-        // Rows move at once (AGENTS §7): Start AI always lands in Waiting, so it moves
+        // Rows move at once (AGENTS §7): Start always lands in Waiting, so it moves
         // before the request and rolls back on failure; Remove moves when the server
         // says where each one goes back to.
         const move = (stageOf: Map<number, ShopProductAdmin["shopStatus"]>) =>
@@ -400,17 +398,17 @@ export default function EcommerceProductsPage() {
             const { data } = await axios.post<{ queued?: number; published?: string[]; removed?: number; moved?: { id: number; shopStatus: ShopProductAdmin["shopStatus"] }[] }>("/api/ecommerce/products/waiting", { ids, action });
             if (action === "remove") move(new Map((data.moved ?? []).map((m) => [m.id, m.shopStatus])));
             if (action === "start") {
-                toast.success(`${data.queued ?? 0} sent to Waiting — the next AI run picks them up`);
-                if (data.published?.length) toast.info(`Off the shop while waiting: ${data.published.slice(0, 5).join(", ")}${data.published.length > 5 ? ", …" : ""}`);
+                toast.success(`${data.queued ?? 0} sent to Start — the next AI run picks them up`);
+                if (data.published?.length) toast.info(`Off the shop while in Start: ${data.published.slice(0, 5).join(", ")}${data.published.length > 5 ? ", …" : ""}`);
             } else {
-                toast.success(`${data.removed ?? 0} removed from Waiting — back to their earlier stage`);
+                toast.success(`${data.removed ?? 0} removed from Start — back to their earlier stage`);
             }
             clearSelection();
             load();
         } catch (e: unknown) {
             const back = new Map(before.map((p) => [p.id, p]));
             setProducts((prev) => prev.map((p) => back.get(p.id) ?? p));
-            toast.error(extractApiError(e, "Could not update Waiting"));
+            toast.error(extractApiError(e, "Could not update Start"));
         } finally {
             setBulkBusy(false);
         }
@@ -463,7 +461,7 @@ export default function EcommerceProductsPage() {
                 <div>
                     <h1 className="text-2xl font-semibold tracking-tight">Products</h1>
                     <p className="text-muted-foreground text-sm">
-                        One catalogue across shop, POS and Sale vouchers. Unpublished → Ready (complete, waiting) → Published; a published product missing a publish rule waits as Pending. Waiting = shortlisted for the AI (Start AI). Draft = being worked on, off the shop until Save as ready. Attention = a Draft parked until something is checked by hand — fix it, then Start AI, Save as draft or Save as ready.
+                        One catalogue across shop, POS and Sale vouchers. Unpublished → Ready (complete, waiting) → Published; a published product missing a publish rule waits as Pending. Start = shortlisted for the AI. Draft = being worked on, off the shop until Save as ready. Attention = a Draft parked until something is checked by hand — fix it, then Start, Save as draft or Save as ready.
                     </p>
                 </div>
                 <div className="flex gap-2">
@@ -567,11 +565,11 @@ export default function EcommerceProductsPage() {
                     </Button>
                     {tab === "waiting" ? (
                         <Button size="sm" variant="outline" disabled={bulkBusy} onClick={() => void sendToAi([...selected], "remove")}>
-                            Remove from Waiting
+                            Remove from Start
                         </Button>
                     ) : (
                         <Button size="sm" variant="outline" disabled={bulkBusy} title="Shortlist for the AI run — off the shop until it is done" onClick={() => void sendToAi([...selected], "start")}>
-                            <Hourglass className="size-4" /> Start AI
+                            <Hourglass className="size-4" /> Start
                         </Button>
                     )}
                     {tab === "draft" ? (
@@ -693,13 +691,13 @@ export default function EcommerceProductsPage() {
                                                         <Button size="sm" variant="outline" asChild title="Check it, then Save as draft or Save as ready">
                                                             <Link href={`/office/ecommerce/products/${p.id}`}>Open</Link>
                                                         </Button>
-                                                        <Button size="sm" variant="ghost" className="text-indigo-700" disabled={bulkBusy} title="Fixed — clear the flag and send it back to the AI" onClick={() => void sendToAi([p.id], "start")}>
+                                                        <Button size="sm" variant="ghost" className="text-indigo-700" disabled={bulkBusy} title="Fixed — clear the flag and send it to Start" onClick={() => void sendToAi([p.id], "start")}>
                                                             <Hourglass className="size-3.5" />
-                                                            Start AI
+                                                            Start
                                                         </Button>
                                                     </>
                                                 ) : status.kind === "waiting" ? (
-                                                    <Button size="sm" variant="ghost" disabled={bulkBusy} title="Take it off the AI list — back to its earlier stage" onClick={() => void sendToAi([p.id], "remove")}>
+                                                    <Button size="sm" variant="ghost" disabled={bulkBusy} title="Take it off the Start list — back to its earlier stage" onClick={() => void sendToAi([p.id], "remove")}>
                                                         Remove
                                                     </Button>
                                                 ) : status.kind === "draft" ? (
@@ -716,7 +714,7 @@ export default function EcommerceProductsPage() {
                                                     <>
                                                         <Button size="sm" variant="ghost" className="text-indigo-700" disabled={bulkBusy} title="Shortlist for the AI run" onClick={() => void sendToAi([p.id], "start")}>
                                                             <Hourglass className="size-3.5" />
-                                                            Start AI
+                                                            Start
                                                         </Button>
                                                         <Button
                                                             size="sm"
@@ -789,7 +787,7 @@ export default function EcommerceProductsPage() {
                                                                 : p.problems?.length
                                                                 ? <span className="flex flex-col gap-1"><span>{STAGE_LINE[status.kind] ?? ""}</span><ProblemLines problems={p.problems} full /></span>
                                                                 : status.kind === "waiting"
-                                                                ? "Waiting — shortlisted for the AI run, not in the shop. The run moves it to Draft (or Attention); Remove puts it back."
+                                                                ? "Start — shortlisted for the AI run, not in the shop. The run moves it to Draft (or Attention); Remove puts it back."
                                                                 : status.kind === "draft"
                                                                 ? `Draft — being worked on, not in the shop.${p.shopAttention ? ` Was parked for: ${p.shopAttention}` : ""}`
                                                                 : status.kind === "live"
@@ -888,7 +886,7 @@ function Detail({ label, value }: { label: string; value: ReactNode }) {
 /** A short stage line above set-aside problems on a product that is not in Attention. */
 const STAGE_LINE: Partial<Record<ProductStatus["kind"], string>> = {
     live: "Published — live on the storefront", ready: "Ready — waiting to be published", draft: "Draft — being worked on, not in the shop",
-    pending: "Pending — waits for a publish rule", unpublished: "Unpublished", waiting: "Waiting — shortlisted for the AI run",
+    pending: "Pending — waits for a publish rule", unpublished: "Unpublished", waiting: "Start — shortlisted for the AI run",
 };
 
 /** Attention, expanded: who parked it, the problems (numbered, coloured), then the small print. */

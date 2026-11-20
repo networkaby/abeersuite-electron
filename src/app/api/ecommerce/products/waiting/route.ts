@@ -22,6 +22,6 @@ export async function POST(req: Request) {
     try {
         return NextResponse.json(data.action === "start" ? await startAi(data.ids) : await cancelWaiting(data.ids));
     } catch (e) {
-        return handleApiError(e, "Could not update the Waiting list");
+        return handleApiError(e, "Could not update the Start list");
     }
 }

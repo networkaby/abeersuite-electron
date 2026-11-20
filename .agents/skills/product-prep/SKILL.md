@@ -35,7 +35,7 @@ Rules above all:
 
 | Part | Fine → | Needs staff → |
 |---|---|---|
-| **1** clean seed | stays where it is (a full run goes on to Part 2) | Attention — "fix it, then press Start AI" (back to Waiting) |
+| **1** clean seed | stays where it is (a full run goes on to Part 2) | Attention — "fix it, then press Start" (back to Start) |
 | **2** search | stays where it is — nothing found is fine too, go on to Part 3 | only a **technical failure** (search tool down, error): send `"failed": "<why>"` → Attention, the one search is not used up |
 | **3** process | **Draft** | Attention — "fix it, then run Part 4" |
 | **4** verify (product-recheck) | **Ready** (staff press Publish — never Published directly yet) | Attention |
@@ -43,7 +43,7 @@ Rules above all:
 
 **The owner's instruction wins.** When the owner says where a success should go ("keep it in Waiting", "leave it in Draft") send **`then`**: `same` · `waiting` · `draft` · `ready` · `attention`. Problems for staff still go to Attention.
 
-Staff's loop: an Unpublished product gets its seed photos and details, staff press **Start AI** → **Waiting**; the next run picks Waiting products up from Part 1.
+Staff's loop: an Unpublished product gets its seed photos and details, staff press **Start** → **Start** (waiting list); the next run picks Waiting products up from Part 1.
 
 ## Setup — run mode (where to read, where to write)
 
@@ -84,7 +84,7 @@ Keep both answers for the whole run. Each product carries its run records (`prep
 
 ## 0. Pick products and find where each one stands
 
-**Staff choose the work**: they shortlist products with **Start AI** (Products list, row or bulk, or the product page) — including Attention products they have fixed. Those sit in the **Waiting** stage. So with no products named, take the Waiting list first:
+**Staff choose the work**: they shortlist products with **Start** (Products list, row or bulk, or the product page) — including Attention products they have fixed. Those sit in the **Start** stage (Waiting in DB). So with no products named, take the Waiting list first:
 
 ```bash
 curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$PRODUCT_COPY_READ_URL/api/agent/products?stage=waiting&need=all&limit=20"
@@ -106,7 +106,7 @@ Answer = product-copy's read (`name, brand, modelNo, barcodes, typedSpecs, photo
 
 **One shared open-problem list** (owner, 2026-11-20). `prep.problems` = every open problem on the product, whoever raised it: `{ text, level: stop | fix, part, source?, by?, asideAt? }`.
 - Raised by a part (`part` 1–5) or by **staff** (`source: "staff"`, `by` = who) — staff write theirs as `{…}` in the product's manual note (`prep.staffNote`, Markdown; text outside `{ }` is for people, ignore it). Treat a staff problem **exactly like any other**: do it first, within what this skill may do. An open staff problem always makes `changedSinceRun: true` — never skip that product.
-- **`asideAt`** = staff ticked **"can't fix now"**: it does not block and you never write it again in `staff` / `pending`, but it **stays until fixed** — if you see it is fixed now, report it fixed.
+- **`asideAt`** = staff ticked **"temporary pass"**: it does not block and you never write it again in `staff` / `pending`, but it **stays until fixed** — if you see it is fixed now, report it fixed.
 - **You fixed one** (any source, set aside or not) → report it, one call for all, before the part call:
 
 ```bash
@@ -189,9 +189,9 @@ The server checks the photos itself (owner, 2026-11-18 — a one-photo product w
 
 
 The server keeps the list on the product (staff see it under Product image), **never drops a must an earlier part set**, and works out what is missing:
-- A **must** photo missing and **not ticked "Can't add"** by staff, or a main photo that is not clean → **Part 1 stops** (Attention: "Must photo missing: … — add it, or tick Can't add"). That gets us better seed before the search.
+- A **must** photo missing and **not ticked "Not applicable"** by staff, or a main photo that is not clean → **Part 1 stops** (Attention: "Must photo missing: … — add it, or tick Not applicable"). That gets us better seed before the search.
 - A missing **optional** photo never stops anything.
-- Staff tick **"Can't add"** when a photo just cannot be taken (box gone, item fitted) → it stops blocking; `photoList.findOnline` lists it, and **Part 2 looks for it online** (the maker's or a seller's photo of that view), Part 3 adds it when sure.
+- Staff tick **"Not applicable"** when a photo just cannot be taken (box gone, item fitted) → it stops blocking; `photoList.findOnline` lists it, and **Part 2 looks for it online** (the maker's or a seller's photo of that view), Part 3 adds it when sure.
 - Part 3 / Part 5: still missing → a note. Part 4: still missing, not ticked, or main not clean → **pending, never verified**.
 
 **Later parts correct Part 1** (owner, 2026-11-18). Part 1 sees only our photos and data, so it only adds musts. Parts 3, 4 and 5 know the product (the search, the maker's pages) — keep, add, or **drop** its must photos, each drop with a reason:
@@ -203,7 +203,7 @@ The server keeps the list on the product (staff see it under Product image), **n
 - A dropped photo becomes **optional**: staff need not upload it. The reason goes to staff as a note.
 - **Dropping is never a reason to remove the photo.** Other sellers not showing a view does not mean we cannot. If staff already added it, look at it: keep it unless it is ugly, low quality or adds nothing (then `remove` / `suggestRemove` with the usual reason).
 - The fixed floor (clean product photo; box front + back when boxed) can never be dropped. Part 1's drops are ignored.
-- Staff's "Can't add" tick is cleared by the server once that photo is dropped or is in the gallery — it only means something on a must photo still missing.
+- Staff's "Not applicable" tick is cleared by the server once that photo is dropped or is in the gallery — it only means something on a must photo still missing.
 
 ## Writing notes (every part)
 
@@ -229,7 +229,7 @@ The server tags each line with its part ("Part 3 · …") and **a part that runs
    - **Major** (`major`): photos show two different products and you cannot tell which is ours; the custom part and the photos point to different products.
    - Everything else is a minor `notes` line.
 5. **Enough to search?** After the clean-up, is there a brand + model, a part code, a barcode, or clear box wording to search with? No → `enough: false` and `need` = what staff must add ("a box / label photo", "the model no. printed on the back").
-6. **Photo list** → `photos` (see "The photo list" above): packing, shape, your must / optional list for this product, a tag for each photo left after the clean-up, and whether photo 1 is clean. A must photo missing (not ticked "Can't add") or an unclean main photo stops Part 1 before a search — that is on purpose. With Part 5 in the same call it does not stop: Part 5 fixes the photos and the server checks after.
+6. **Photo list** → `photos` (see "The photo list" above): packing, shape, your must / optional list for this product, a tag for each photo left after the clean-up, and whether photo 1 is clean. A must photo missing (not ticked "Not applicable") or an unclean main photo stops Part 1 before a search — that is on purpose. With Part 5 in the same call it does not stop: Part 5 fixes the photos and the server checks after.
 
 ```bash
 curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json" \

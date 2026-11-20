@@ -106,7 +106,7 @@ Answer = product-copy's read (`name, brand, modelNo, barcodes, typedSpecs, photo
 
 **One shared open-problem list** (owner, 2026-11-20). `prep.problems` = every open problem on the product, whoever raised it: `{ text, level: stop | fix, part, source?, by?, asideAt? }`.
 - Raised by a part (`part` 1–5) or by **staff** (`source: "staff"`, `by` = who) — staff write theirs as `{…}` in the product's manual note (`prep.staffNote`, Markdown; text outside `{ }` is for people, ignore it). Treat a staff problem **exactly like any other**: do it first, within what this skill may do. An open staff problem always makes `changedSinceRun: true` — never skip that product.
-- **`asideAt`** = staff ticked **"can't fix now"**: it does not block and you never write it again in `staff` / `pending`, but it **stays until fixed** — if you see it is fixed now, report it fixed.
+- **`asideAt`** = staff ticked **"temporary pass"**: it does not block and you never write it again in `staff` / `pending`, but it **stays until fixed** — if you see it is fixed now, report it fixed.
 - **You fixed one** (any source, set aside or not) → report it, one call for all, before the part call:
 
 ```bash
