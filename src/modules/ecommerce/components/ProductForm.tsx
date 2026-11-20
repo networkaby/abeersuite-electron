@@ -1182,7 +1182,6 @@ export default function ProductForm({
                                         checklist={photoChecklist}
                                         gallery={galleryUrls}
                                         onToggle={(k) => tickPhotoKinds([k], true)}
-                                        onWaiveMain={() => savePhotoChecklist({ ...photoChecklist, mainWaived: !photoChecklist.mainWaived })}
                                         onWaive={(k) => {
                                             const items = photoChecklist.items.map((i) => (i.kind === k ? { ...i, waived: !i.waived } : i));
                                             savePhotoChecklist({ ...photoChecklist, items, enough: isEnough(items) });

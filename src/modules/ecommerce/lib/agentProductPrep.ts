@@ -76,8 +76,16 @@ const AFTER_FIX = {
 /** "PENDING (Part 4) — x" → "x": one open problem, whichever part wrote it. */
 const OPEN_LINE = /^(PENDING|STOPPED|NOTE) \(Part \d\) — /;
 const openText = (l: string) => l.trim().replace(OPEN_LINE, "").trim();
-/** One problem, however a part worded its tag or spacing — set-aside and repeats match on this. */
-export const problemKey = (l: string) => openText(l).toLowerCase().replace(/\s+/g, " ").replace(/[.\s]+$/, "");
+const MAIN_NOT_CLEAN = "main photo is not a clean product photo";
+/**
+ * One problem, however a part worded its tag or spacing — set-aside and repeats match on this.
+ * The main-photo line carries the AI's reason in brackets, worded afresh each run, so it
+ * matches on its fixed part: a temporary pass on it holds until a clean main photo is added.
+ */
+export const problemKey = (l: string) => {
+    const k = openText(l).toLowerCase().replace(/\s+/g, " ").replace(/[.\s]+$/, "");
+    return k.startsWith(MAIN_NOT_CLEAN) ? MAIN_NOT_CLEAN : k;
+};
 
 /** The problems staff set aside ("can't fix now"): a part never raises them again, so they never block. */
 async function asideKeys(id: number): Promise<Set<string>> {
@@ -551,7 +559,8 @@ async function photoListOf(part: 1 | 3 | 4 | 5, id: number, c: PhotoCheck, galle
             : mainKind && !PRODUCT_KINDS.has(mainKind)
                 ? "Main photo shows the box or a scene, not the product itself — put a clean product photo first."
                 : null;
-    // Staff's "Can't do" on the clean main photo stops it blocking; a clean main photo clears the tick.
+    // Staff's old "Can't do" tick (retired 2026-11-21 — a temporary pass in AI notes does this now)
+    // still stops it blocking, so nothing passed earlier blocks again; a clean main photo clears it.
     const mainWaived = !!mainProblem && prev?.mainWaived === true;
     const mainBlock = mainWaived ? null : mainProblem;
     const checklist: PhotoChecklist = {

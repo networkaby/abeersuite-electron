@@ -91,8 +91,10 @@ export default function ImageAdjustDialog({
     // (rotation comes first). c_limit at 10000 px never resizes, so pixels stay original.
     const turned = adjust.rotate ? buildUrl(withAdjust(original, { ...DEFAULT_ADJUST, rotate: adjust.rotate }), { width: 10000 }) : original;
 
-    const preview = (frame: "card" | "square") =>
-        buildUrl(withAdjust(original, adjust), { width: 480, frame });
+    const preview = (frame: "card" | "square", width = 480) =>
+        buildUrl(withAdjust(original, adjust), { width, frame });
+    // Click a preview to see it big (owner, 2026-11-21: "cant see result in zoom").
+    const [zoom, setZoom] = useState<"card" | "square" | null>(null);
 
     /** Click on the original picks the focal point, in original-image pixels. */
     const pickFocal = (e: React.MouseEvent<HTMLImageElement>) => {
@@ -297,23 +299,27 @@ export default function ImageAdjustDialog({
                             <Label>How it will look</Label>
                             <div className="flex gap-3">
                                 <figure className="space-y-1">
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img
-                                        src={preview("card")}
-                                        alt=""
-                                        className="aspect-4/3 w-36 rounded-md border object-cover"
-                                    />
+                                    <button type="button" onClick={() => setZoom("card")} title="Click to see it big" className="block cursor-zoom-in">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                            src={preview("card")}
+                                            alt=""
+                                            className="aspect-4/3 w-52 rounded-md border object-cover"
+                                        />
+                                    </button>
                                     <figcaption className="text-center text-[11px] text-muted-foreground">
                                         Listing card
                                     </figcaption>
                                 </figure>
                                 <figure className="space-y-1">
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img
-                                        src={preview("square")}
-                                        alt=""
-                                        className="aspect-square w-28 rounded-md border object-cover"
-                                    />
+                                    <button type="button" onClick={() => setZoom("square")} title="Click to see it big" className="block cursor-zoom-in">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                            src={preview("square")}
+                                            alt=""
+                                            className="aspect-square w-40 rounded-md border object-cover"
+                                        />
+                                    </button>
                                     <figcaption className="text-center text-[11px] text-muted-foreground">
                                         Product page
                                     </figcaption>
@@ -323,6 +329,24 @@ export default function ImageAdjustDialog({
                     </div>
                 </div>
 
+                {zoom ? (
+                    <button
+                        type="button"
+                        onClick={() => setZoom(null)}
+                        title="Click to close"
+                        className="absolute inset-0 z-20 flex cursor-zoom-out flex-col items-center justify-center gap-2 rounded-lg bg-background/95 p-4"
+                    >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                            src={preview(zoom, 1200)}
+                            alt=""
+                            className={`max-h-[80vh] max-w-full rounded-md border object-cover ${zoom === "card" ? "aspect-4/3" : "aspect-square"}`}
+                        />
+                        <span className="text-xs text-muted-foreground">
+                            {zoom === "card" ? "Listing card" : "Product page"} — click anywhere to close
+                        </span>
+                    </button>
+                ) : null}
                 <DialogFooter className="gap-2 sm:justify-between">
                     <Button type="button" variant="ghost" onClick={() => setAdjust(DEFAULT_ADJUST)}>
                         Reset
