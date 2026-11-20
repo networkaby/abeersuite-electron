@@ -26,6 +26,18 @@ function runLine(r: PrepRun) {
 }
 
 /**
+ * An old "Last run: Part 5 · 20 Nov 2026, 11:27 am · photos done → Draft" line in
+ * the same shape as a run record (owner, 2026-11-20: one format). The stage it
+ * came from was never saved, so only where it went is shown.
+ */
+function oldRunLine(line: string) {
+    const m = /^Last run: Part (\d) · (\d{1,2} \w{3} \d{4})[^·]*·.*?(?:→\s*(\w+))?\s*$/.exec(line);
+    if (!m) return line.slice("Last run: ".length);
+    const skill = m[1] === "4" ? "product-recheck" : "product-prep";
+    return `${skill} part ${m[1]} · ${m[2]}${m[3] ? ` · → ${m[3]}` : ""}`;
+}
+
+/**
  * The manual note (owner, 2026-11-20): one box staff edit directly, Markdown
  * bullets allowed. Text in {…} is for the AI and joins the open problems; the
  * rest is for people. Add note → Update note; cleared → Remove note.
@@ -186,7 +198,7 @@ export function AiNotesBox({ attention, review, copy, prep }: AiNotesBoxProps) {
     // A saved product always gets the one format (owner, 2026-11-20: "keep what fits, remove others").
     if (prep) {
         const lines = [...(attention?.text.split("\n") ?? []), ...(review?.notes ?? []), ...(copy?.notes ?? [])].map((l) => l.trim());
-        const oldRuns = [...new Set(lines.filter((l) => l.startsWith("Last run: ")).map((l) => l.slice("Last run: ".length)))];
+        const oldRuns = [...new Set(lines.filter((l) => l.startsWith("Last run: ")).map(oldRunLine))];
         const oldProblems: PrepProblem[] = attention?.parked
             ? splitAttention(attention.text).problems.map((x) => ({ text: x.text, level: x.level === "stop" ? "stop" : "fix", part: 0, at: "" }))
             : [];
