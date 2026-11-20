@@ -244,19 +244,19 @@ export async function updateShopProduct(
             if (clash) return { response: NextResponse.json({ error: clash }, { status: 409 }) };
         }
 
-        const p = await prisma.$transaction(async (tx) => {
-            const row = await tx.invProduct.update({ where: { id: pid }, data, include: shopProductInclude });
-            if (b.collectionIds === undefined && b.categoryId === undefined) return row;
+        // Writes only inside the transaction — the heavy include read stays outside,
+        // or its many round trips to a remote DB outlast Prisma's 5 s timeout (P2028).
+        await prisma.$transaction(async (tx) => {
+            await tx.invProduct.update({ where: { id: pid }, data, select: { id: true } });
+            if (b.collectionIds === undefined && b.categoryId === undefined) return;
             // Collections go through the one write path (productCollections.ts);
             // a lone categoryId moves the main one and keeps the extras.
             if (b.collectionIds !== undefined) await setProductCollections(tx, pid, b.collectionIds);
             else await syncMainCollections(tx, [pid]);
-            return tx.invProduct.findUniqueOrThrow({ where: { id: pid }, include: shopProductInclude });
         });
         // Group / brand / warranty changed here → rebuild the stored name (server-side, same builder as everywhere).
-        const named = touchesName(b)
-            ? (await regenerateProductNamesSafe({ ids: [pid] }), await prisma.invProduct.findUniqueOrThrow({ where: { id: pid }, include: shopProductInclude }))
-            : p;
+        if (touchesName(b)) await regenerateProductNamesSafe({ ids: [pid] });
+        const named = await prisma.invProduct.findUniqueOrThrow({ where: { id: pid }, include: shopProductInclude });
         return { product: { ...invProductToAdmin(named, bands), variantAttrGaps: gaps.get(pid) ?? [] } };
     } catch (e: unknown) {
         const conflict = prismaUniqueError(e, "SKU or slug already exists");
