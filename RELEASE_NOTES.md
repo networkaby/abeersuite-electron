@@ -1,18 +1,20 @@
 # v1.17.11
 
-An update for the office, database operations, and online shop product preparation workflow.
+An update for the office, database operations, and online shop product preparation.
 
 ## Online Shop & AI Product Preparation
 
-- **Unified open-problem tracking**: Product issues now live in a single shared open-problem list across AI and staff. Staff can assign tasks directly to the AI using `{}` syntax in manual notes.
-- **Problem resolution endpoint**: Fixed problems are immediately marked as resolved and removed from the active Attention list.
-- **Run history & record keeping**: Every preparation run (including refused checks) is logged with its outcome in a compact 10-run history, converting old notes into a consistent timeline format.
-- **Problem search & set-aside tickets**: Staff can tick "can't fix now" on problems without blocking other stages, and search across all products with open issues.
-- **Standalone photo prep (Part 5)**: Photo preparation runs independently for products that already have copy, improving main photo cut-outs to pure white without searching the web.
-- **Fresh application favicon**: Updated high-resolution application icon.
+- **Saving a product no longer fails when the database is slow**: the product save now finishes its changes first and loads the full product afterwards, so AI prep runs stop failing with "transaction expired".
+- **One open-problem list**: every product problem, whether the AI or staff raised it, sits in one shared list. Staff can leave tasks for the AI in the notes box using `{}` items.
+- **Problem history**: when a problem is closed it is kept with who raised it, who closed it and when. Each part shows one run line above the open problems.
+- **"Start" stage and current stage on the edit page**: "Waiting" is now called "Start", and the product edit page shows the stage beside the name.
+- **"Can't fix now" is a temporary pass**: the problem stays listed until it is really fixed. The checklist tick "Can't add" is now "Not applicable".
+- **Photos filter**: filter products by photo count: up to 2, 3, 4 or 5, or 6 and more.
+- **Photo-only prep (Part 5)**: products that already have a description get only their photos treated, with no web search: cut-outs to white, a blanked covered MRP, and the original photo kept.
+- **Problem search**: the products list shows the problem first under Shop status.
 
 ## Database & Standby Operations
 
-- **Copy into standby now**: Added an on-demand button in Office Settings to dispatch an immediate backup copy into the standby database without waiting for the nightly cron schedule.
-- **Reliable read-only locking**: Setting a database to read-only now terminates existing connection pool sessions so locks apply cleanly without stale connections blocking standby copies.
-- **Accurate lock verification**: Database lock comparison ignores background telemetry timestamps on API keys, ensuring clean verification between primary and standby.
+- **Copy into standby now**: a button in Office Settings starts the standby copy at once, without waiting for the night.
+- **Reliable read-only locking**: Lock and Unlock now end old database sessions, so the standby copy no longer fails.
+- **Accurate lock check**: the lock check no longer refuses because of a background timestamp.
