@@ -55,7 +55,7 @@ Use: the product fields, every photo (open each — `GET /api/agent/products/<id
 
 **One shared open-problem list** (owner, 2026-11-20). `prep.problems` = every open problem on the product, whoever raised it: `{ text, level: stop | fix, part, source?, by?, asideAt? }`.
 - Raised by a part (`part` 1–5) or by **staff** (`source: "staff"`, `by` = who) — staff write theirs as `{…}` in the product's manual note (`prep.staffNote`, Markdown; text outside `{ }` is for people, ignore it). Treat a staff problem **exactly like any other**: do it first, within what this skill may do. An open staff problem always makes `changedSinceRun: true` — never skip that product.
-- **`asideAt`** = staff ticked **"can't fix now"**: it does not block and you never write it again in `staff` / `pending`, but it **stays until fixed** — if you see it is fixed now, report it fixed.
+- **`asideAt`** = staff ticked **"temporary pass"**: it does not block and you never write it again in `staff` / `pending`, but it **stays until fixed** — if you see it is fixed now, report it fixed.
 - **You fixed one** (any source, set aside or not) → report it, one call for all, before the part call:
 
 ```bash
@@ -92,9 +92,9 @@ The server checks the photos itself (owner, 2026-11-18 — a one-photo product w
 
 
 The server keeps the list on the product (staff see it under Product image), **never drops a must an earlier part set**, and works out what is missing:
-- A **must** photo missing and **not ticked "Can't add"** by staff, or a main photo that is not clean → **Part 1 stops** (Attention: "Must photo missing: … — add it, or tick Can't add"). That gets us better seed before the search.
+- A **must** photo missing and **not ticked "Not applicable"** by staff, or a main photo that is not clean → **Part 1 stops** (Attention: "Must photo missing: … — add it, or tick Not applicable"). That gets us better seed before the search.
 - A missing **optional** photo never stops anything.
-- Staff tick **"Can't add"** when a photo just cannot be taken (box gone, item fitted) → it stops blocking; `photoList.findOnline` lists it, and **Part 2 looks for it online** (the maker's or a seller's photo of that view), Part 3 adds it when sure.
+- Staff tick **"Not applicable"** when a photo just cannot be taken (box gone, item fitted) → it stops blocking; `photoList.findOnline` lists it, and **Part 2 looks for it online** (the maker's or a seller's photo of that view), Part 3 adds it when sure.
 - Part 3 / Part 5: still missing → a note. Part 4: still missing, not ticked, or main not clean → **pending, never verified**.
 
 **Later parts correct Part 1** (owner, 2026-11-18). Part 1 sees only our photos and data, so it only adds musts. Parts 3, 4 and 5 know the product (the search, the maker's pages) — keep, add, or **drop** its must photos, each drop with a reason:
@@ -106,7 +106,7 @@ The server keeps the list on the product (staff see it under Product image), **n
 - A dropped photo becomes **optional**: staff need not upload it. The reason goes to staff as a note.
 - **Dropping is never a reason to remove the photo.** Other sellers not showing a view does not mean we cannot. If staff already added it, look at it: keep it unless it is ugly, low quality or adds nothing (then `remove` / `suggestRemove` with the usual reason).
 - The fixed floor (clean product photo; box front + back when boxed) can never be dropped. Part 1's drops are ignored.
-- Staff's "Can't add" tick is cleared by the server once that photo is dropped or is in the gallery — it only means something on a must photo still missing.
+- Staff's "Not applicable" tick is cleared by the server once that photo is dropped or is in the gallery — it only means something on a must photo still missing.
 
 > You know the product better than Part 1 did — keep, add, or drop its must photos, each drop with a reason.
 
@@ -127,7 +127,7 @@ The server tags each line with its part ("Part 3 · …") and **a part that runs
 | **Brand** | Empty or wrong while the label shows a brand that is now in `masters.brands` |
 | **Collections** | None, or plainly wrong for who buys it |
 | **Group** | Plainly wrong (GST) — always pending until staff fix it |
-| **Shipping** | Weight or size empty |
+| **Shipping** | Weight or size plainly wrong for the item (a 5 kg mouse). **Empty is never a problem** — no pending, no note (owner, 2026-11-20): a Published product with no weight goes to Pending by itself and staff see it there |
 | **Photos** | Main photo not a clean product photo without the box, or has a logo / watermark / text (our own too); another product's photo; someone else's watermark on any photo; blurry / dark; duplicates; a `must` photo kind still missing (`photoList.missing`). Our own logo / address on a **non-main** photo is fine — never flag it. Send **`photoCheck`** (below) — the server checks the must photos and the main photo itself |
 | **Photo edits** | A photo cut out or blanked by Part 3 / 5 (`prep.edits`, and the Part 5 notes: "Photo n: cut out onto white (original: …)") with a ragged edge, a part of the product missing, a label or text damaged, a visible grey block → pending "Photo n edit is bad — restore the original" (Part 5 restores it, see product-prep `photos.md`). A no-meaning background still left on a photo with lots of empty space → a `note` for Part 5. Never flag a meaningful or designed background (in hand, in our shop, RGB on black), and never a blanked MRP that looks clean |
 
@@ -145,7 +145,7 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
   ```json
   "photoCheck": { "box": "carton", "shape": "palm-size gaming mouse", "tags": [ { "url": "…/1.jpg", "kind": "front" } ], "must": ["front", "left", "box_front", "box_back"], "nice": ["in_use"], "mainClean": false, "mainWhy": "held in hand, shop logo on it" }
   ```
-- **You change no photo.** For each must photo still missing, look in the saved pages' photos (`prep.pages[].photos`). Found → send it in **`onPages`** (`[{ "kind": "box_back", "url": "<that page photo>" }]`): the server tells staff "found on a saved page — run Part 5". Not found → the server tells staff to take it or tick "Can't add". There is no new search: after the one search, "Can't add" means the photo stays missing.
+- **You change no photo.** For each must photo still missing, look in the saved pages' photos (`prep.pages[].photos`). Found → send it in **`onPages`** (`[{ "kind": "box_back", "url": "<that page photo>" }]`): the server tells staff "found on a saved page — run Part 5". Not found → the server tells staff to take it or tick "Not applicable". There is no new search: after the one search, "Not applicable" means the photo stays missing.
 - With any problem, also send **`next`** — the part to run after staff look: `"part5"` when only the **photos** are wrong (order, removals, an edit to make or restore, a must photo on a saved page), `"part3"` when the text, a spec row, the Model No or the weight is wrong (Part 5 writes no text), `"part1"` when the product itself is in doubt (wrong photos of another item, data badly wrong). It shows on the Last run line.
 - **Products made before the skills existed** start here: Part 4 is the cheapest first look (no search, no change); its `next` tells the owner whether Part 5 or a full run is needed.
 - Any line in `pending` or `notes` → `{ result: "attention" }`: parked in Attention with every line (PENDING first, then NOTE), plus a line the server adds saying where it came from ("Was Published (live on the shop) before this check — if the fix is small, publish it again") so staff can put a live product back. Staff fix, then run product-recheck again (not product-prep — unless a line says so).
