@@ -16,6 +16,17 @@ import { cachedAdminProducts, fetchAdminProducts } from "@/modules/ecommerce/lib
 import { productStatus, type ProductStatus } from "@/modules/ecommerce/lib/productFilters";
 import { DEFAULT_SHOP_PUBLISH_RULES, type ShopPublishRules } from "@/modules/ecommerce/lib/shopQualification";
 
+/** The same stage names and colours as the products list. */
+const STAGE_LOOK: Record<ProductStatus["kind"], { label: string; tone: string }> = {
+    unpublished: { label: "Unpublished", tone: "border-border bg-muted/40 text-muted-foreground" },
+    waiting: { label: "Start", tone: "border-indigo-200 bg-indigo-50 text-indigo-700" },
+    draft: { label: "Draft", tone: "border-sky-200 bg-sky-50 text-sky-700" },
+    ready: { label: "Ready", tone: "border-violet-200 bg-violet-50 text-violet-700" },
+    live: { label: "Published", tone: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+    pending: { label: "Pending", tone: "border-amber-200 bg-amber-50 text-amber-700" },
+    attention: { label: "Attention", tone: "border-orange-200 bg-orange-50 text-orange-700" },
+};
+
 // Publish rules for the Next button's stage — read once per window.
 let rulesCache: Promise<ShopPublishRules> | null = null;
 const loadRules = () =>
@@ -70,6 +81,14 @@ export default function EcommerceProductEditPage() {
     // (a Save as ready mid-run does not knock you off the Draft run). Same order
     // as the Products list; reuses its in-memory list, reads it only if empty.
     const [openStage, setOpenStage] = useState<{ id: number; kind: ProductStatus["kind"] } | null>(null);
+    // The stage now (owner, 2026-11-20: "put somewhere the current stage") — follows every save.
+    const [stage, setStage] = useState<ProductStatus | null>(null);
+    useEffect(() => {
+        if (!product) return;
+        let live = true;
+        void loadRules().then((rules) => { if (live) setStage(productStatus(product, rules)); });
+        return () => { live = false; };
+    }, [product]);
     const [nextBusy, setNextBusy] = useState(false);
     const go = useCallback(async (step: 1 | -1) => {
         if (!openStage) return;
@@ -160,6 +179,11 @@ export default function EcommerceProductEditPage() {
                     <h1 className="text-2xl font-semibold tracking-tight break-words">
                         Edit product
                         <span className="ml-2 font-normal text-muted-foreground">· {liveName ?? product.name}</span>
+                        {stage ? (
+                            <span className={`ml-2 inline-block rounded border px-1.5 py-0.5 align-middle text-xs font-medium ${STAGE_LOOK[stage.kind].tone}`} title={stage.missing.length ? `Needs ${stage.missing.join(", ").toLowerCase()}` : undefined}>
+                                {STAGE_LOOK[stage.kind].label}
+                            </span>
+                        ) : null}
                         {liveName && liveName !== product.name ? (
                             <span className="ml-2 align-middle text-xs font-normal text-amber-600">unsaved</span>
                         ) : null}
