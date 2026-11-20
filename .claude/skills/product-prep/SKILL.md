@@ -100,11 +100,19 @@ curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$PRODUCT_COPY_READ_URL/api/agent
 
 Answer = product-copy's read (`name, brand, modelNo, barcodes, typedSpecs, photos, writing, masters …`) **plus**
 `title` (online name), `group`, `shipping`, `attention` (Attention reason now), `draftNotes`, `processNotes`, and
-`prep: { runs, changedSinceRun, problems, partDone, path, photosDoneAt, photoStatus, next, identityChanged, searchAllowed, searchedAt, pages, dropped, labelFacts, seen, labelWebsite }`.
+`prep: { runs, changedSinceRun, problems, staffNotes, partDone, path, photosDoneAt, photoStatus, next, identityChanged, searchAllowed, searchedAt, pages, dropped, labelFacts, seen, labelWebsite }`.
 
 **Run records first — never run the same thing twice for nothing** (owner, 2026-11-20). `prep.runs` = the last 5 runs (`{ skill, part, at, from, to }`, oldest first); the server writes one after every call — you never send it. `prep.changedSinceRun: false` and the last run is the same path you are about to run (`"1+5"`, `"1+2+3"`, `"1+3"`) → **skip the product** ("already ran on <date>, nothing changed since"), unless the owner said **"redo"** or named this SKU. `changedSinceRun: true` (staff saved it after the run) → go on.
 
 **Set-aside problems** (owner, 2026-11-20): `prep.problems` = what staff must solve (`level`: `stop` red, `fix` yellow). One with `asideAt` was ticked **"can't fix now"** by staff — never write it again in `staff`, never stop on it; the server drops it anyway. It stays on the product for later; the products list's **Set aside** tab finds them.
+
+**Staff notes come first** (owner, 2026-11-20). `prep.staffNotes` = open instructions staff / the owner left on the product (`{ id, text, by, at }`, e.g. "add one more photo of the back", "check the warranty and fix the name"). Each one is an order for this run: do it within what this skill may do, before anything else. An open note always makes `changedSinceRun: true` — never skip a product that has one. After the run, report on **every** open note, one call each:
+
+```bash
+curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json"   "$PRODUCT_COPY_WRITE_URL/api/agent/prep/<id>/note" -d '{ "noteId": "<id>", "done": true, "reply": "added the back photo as photo 3" }'
+```
+
+Could not do it (needs a person, outside this skill) → `"done": false` and say why in `reply` — it stays open for staff. Every run, refused ones included, leaves its run record by itself; you never send one.
 
 **`prep.path` decides first** (owner, 2026-11-20): `"part1+part5"` (a description is there — written by staff before this loop, or by an earlier Part 3) → **Parts 1 + 5**, whatever `partDone` says. `"part1+part2+part3"` (no description) → the steps below.
 

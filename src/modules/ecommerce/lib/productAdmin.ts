@@ -24,12 +24,19 @@ export type ShopDraft = {
     problems?: PrepProblem[];
     /** How many problems are set aside — the products list's "Set aside" tab reads only this. */
     asideCount?: number;
+    /** Staff / owner instructions for the next AI run ("add one more photo") — owner, 2026-11-20. */
+    staffNotes?: StaffNote[];
+    /** How many staff notes are open — the products list reads only this. */
+    noteCount?: number;
 };
 
 export type PrepRun = { skill: "product-prep" | "product-recheck"; part: string; at: string; from: ShopStatus; to: ShopStatus };
 export type PrepProblem = { text: string; level: "stop" | "fix"; part: number; at: string; asideBy?: string; asideAt?: string };
 
-export type RowProblem = { text: string; level: "stop" | "fix"; aside?: boolean };
+export type RowProblem = { text: string; level: "stop" | "fix" | "note"; aside?: boolean };
+
+/** A staff note: open until staff tick it done or an AI run reports it done (`reply`). */
+export type StaffNote = { id: string; text: string; by: string; at: string; doneAt?: string; doneBy?: string; reply?: string };
 
 /**
  * An Attention reason split for display (owner, 2026-11-20: "highlight proper way"):
@@ -49,25 +56,32 @@ export function splitAttention(text: string | null | undefined): { problems: Row
 
 /** A row's problems: the saved list when the product has one, else read from its Attention reason. */
 export function rowProblems(info: ShopDraft | null, attention: string | null): RowProblem[] {
-    if (info?.problems?.length) return info.problems.map((p) => ({ text: p.text, level: p.level, ...(p.asideAt && { aside: true }) }));
-    return splitAttention(attention).problems;
+    const notes: RowProblem[] = (info?.staffNotes ?? []).filter((n) => !n.doneAt).map((n) => ({ text: `${n.by}: ${n.text}`, level: "note" }));
+    if (info?.problems?.length) return [...notes, ...info.problems.map((p) => ({ text: p.text, level: p.level, ...(p.asideAt && { aside: true }) }))];
+    return [...notes, ...splitAttention(attention).problems];
 }
 
 const isRun = (x: unknown): x is PrepRun => !!x && typeof x === "object" && typeof (x as PrepRun).at === "string" && typeof (x as PrepRun).part === "string";
+const isNote = (x: unknown): x is StaffNote => !!x && typeof x === "object" && typeof (x as StaffNote).id === "string" && typeof (x as StaffNote).text === "string";
 const isProblem = (x: unknown): x is PrepProblem => !!x && typeof x === "object" && typeof (x as PrepProblem).text === "string";
 
 /** Runs and set-aside problems outlive Ready / Discard — they are the product's history, not the draft's. */
-export function prepHistory(info: ShopDraft | null): Pick<ShopDraft, "runs" | "problems" | "asideCount"> {
+export function prepHistory(info: ShopDraft | null): Pick<ShopDraft, "runs" | "problems" | "asideCount" | "staffNotes" | "noteCount"> {
     const aside = (info?.problems ?? []).filter((p) => p.asideAt);
-    return { ...(info?.runs?.length && { runs: info.runs }), ...(aside.length && { problems: aside, asideCount: aside.length }) };
+    return {
+        ...(info?.runs?.length && { runs: info.runs }),
+        ...(aside.length && { problems: aside, asideCount: aside.length }),
+        ...(info?.staffNotes?.length && { staffNotes: info.staffNotes, ...(info.noteCount && { noteCount: info.noteCount }) }),
+    };
 }
 
 export function readShopDraft(raw: unknown): ShopDraft | null {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-    const r = raw as { stageBefore?: unknown; aiCopy?: unknown; notes?: unknown; notesAt?: unknown; kept?: unknown; runs?: unknown; problems?: unknown };
+    const r = raw as { stageBefore?: unknown; aiCopy?: unknown; notes?: unknown; notesAt?: unknown; kept?: unknown; runs?: unknown; problems?: unknown; staffNotes?: unknown };
     const runs = Array.isArray(r.runs) ? r.runs.filter(isRun) : [];
     const problems = Array.isArray(r.problems) ? r.problems.filter(isProblem) : [];
     const aside = problems.filter((p) => p.asideAt).length;
+    const staffNotes = Array.isArray(r.staffNotes) ? r.staffNotes.filter(isNote).slice(-20) : [];
     const notes = Array.isArray(r.notes) ? r.notes.filter((x): x is string => typeof x === "string") : [];
     const stages: unknown[] = ["UNPUBLISHED", "READY", "PUBLISHED"]; // never a work stage (Draft / Attention / Waiting)
     return {
@@ -79,6 +93,8 @@ export function readShopDraft(raw: unknown): ShopDraft | null {
         ...(runs.length ? { runs } : {}),
         ...(problems.length ? { problems } : {}),
         ...(aside ? { asideCount: aside } : {}),
+        ...(staffNotes.length ? { staffNotes } : {}),
+        ...(staffNotes.some((n) => !n.doneAt) ? { noteCount: staffNotes.filter((n) => !n.doneAt).length } : {}),
     };
 }
 
@@ -120,6 +136,8 @@ export type ShopProductAdmin = ShopProductPublic & {
     shopAttentionBy: string | null;
     /** Stage-before + Claude's notes — only the product's own page gets it (withShopDraft). */
     shopDraft?: ShopDraft | null;
+    /** An open staff note — the list's "Staff notes" filter. List rows only. */
+    hasStaffNotes?: boolean;
     /** A problem staff set aside ("can't fix now") — the list's "Set aside" tab. List rows only. */
     hasAsideProblems?: boolean;
     /** The open and set-aside problems, red first — shown in the list's Shop status (owner, 2026-11-20). List rows only. */

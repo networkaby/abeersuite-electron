@@ -54,6 +54,14 @@ Use: the product fields, every photo (open each — `GET /api/agent/products/<id
 `prep.runs` (last 5 runs, `{ skill, part, at, from, to }`) and `prep.changedSinceRun` (owner, 2026-11-20): the last run was a product-recheck and `changedSinceRun: false` → **skip** ("verified / checked on <date>, nothing changed since") unless the owner said **"redo"** or named the SKU.
 `prep.problems` with `asideAt` = staff ticked **"can't fix now"**: never write it again in `pending` / `notes` — it is set aside on purpose and must not block Ready.
 
+**Staff notes come first** (owner, 2026-11-20). `prep.staffNotes` = open instructions staff / the owner left on the product (`{ id, text, by, at }`, e.g. "add one more photo of the back", "check the warranty and fix the name"). Each one is an order for this run: do it within what this skill may do, before anything else. An open note always makes `changedSinceRun: true` — never skip a product that has one. After the run, report on **every** open note, one call each:
+
+```bash
+curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json"   "$PRODUCT_COPY_WRITE_URL/api/agent/prep/<id>/note" -d '{ "noteId": "<id>", "done": true, "reply": "added the back photo as photo 3" }'
+```
+
+Could not do it (needs a person, outside this skill) → `"done": false` and say why in `reply` — it stays open for staff. Every run, refused ones included, leaves its run record by itself; you never send one.
+
 ## The photo list (send it as `photoCheck`)
 
 The server checks the photos itself (owner, 2026-11-18 — a one-photo product with our logo on the main photo got through once). Each part (Part 4 too) sends what **you see now**:

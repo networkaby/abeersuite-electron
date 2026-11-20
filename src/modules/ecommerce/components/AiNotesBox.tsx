@@ -5,7 +5,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { extractApiError } from "@/shared/lib/api";
-import type { PrepProblem, PrepRun } from "@/modules/ecommerce/lib/productAdmin";
+import type { PrepProblem, PrepRun, StaffNote } from "@/modules/ecommerce/lib/productAdmin";
 
 /** One place for every AI note on a product (owner, 2026-11-12): the Attention reason,
  *  Claude's review notes (kept, dated, after publishing) and the latest copy run's notes. */
@@ -14,13 +14,77 @@ export type AiNotesBoxProps = {
     review?: { notes: string[]; at?: string | null; kept?: boolean } | null;
     copy?: { source: string; notes: string[]; flags: string[] } | null;
     /** Product prep's runs and open problems (owner, 2026-11-20) — when there are any, the box shows only these. */
-    prep?: { productId: number; runs: PrepRun[]; problems: PrepProblem[]; onChanged: () => void } | null;
+    prep?: { productId: number; runs: PrepRun[]; problems: PrepProblem[]; staffNotes?: StaffNote[]; onChanged: () => void } | null;
 };
 
 const STAGE: Record<string, string> = { UNPUBLISHED: "Unpublished", WAITING: "Waiting", DRAFT: "Draft", ATTENTION: "Attention", READY: "Ready", PUBLISHED: "Published" };
 
 /** Only what must be solved, and which skill ran when (owner, 2026-11-20). */
-function PrepNotes({ productId, runs, problems, onChanged }: NonNullable<AiNotesBoxProps["prep"]>) {
+/**
+ * Staff / owner instructions for the next AI run (owner, 2026-11-20): "add one
+ * more photo", "check xyz and do abcd". The run reads them and reports back.
+ */
+function StaffNotes({ productId, staffNotes = [], onChanged }: NonNullable<AiNotesBoxProps["prep"]>) {
+    const [text, setText] = useState("");
+    const [busy, setBusy] = useState(false);
+    const send = async (body: object) => {
+        setBusy(true);
+        try {
+            await axios.post(`/api/ecommerce/products/${productId}/staff-notes`, body);
+            onChanged();
+            return true;
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not save the note"));
+            return false;
+        } finally {
+            setBusy(false);
+        }
+    };
+    const open = staffNotes.filter((n) => !n.doneAt);
+    const done = staffNotes.filter((n) => n.doneAt).slice(-3);
+    return (
+        <div>
+            <p className="font-medium">Notes for the AI</p>
+            {(open.length > 0 || done.length > 0) && (
+                <ul className="mt-1 space-y-1">
+                    {[...open, ...done].map((n) => (
+                        <li key={n.id} className="flex items-start justify-between gap-3">
+                            <span className={n.doneAt ? "text-muted-foreground line-through decoration-1" : "text-blue-700 dark:text-blue-400"}>
+                                <span className={`mr-1.5 inline-block size-2 rounded-full ${n.doneAt ? "bg-muted-foreground/50" : "bg-blue-600"}`} />
+                                {n.text} <span className="text-muted-foreground no-underline">— {n.by} · {formatDate(n.at)}</span>
+                                {n.reply && <span className="block pl-3.5 text-muted-foreground no-underline">AI: {n.reply}</span>}
+                            </span>
+                            <label className="flex shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap text-muted-foreground">
+                                <input type="checkbox" checked={!!n.doneAt} disabled={busy} onChange={(e) => void send({ noteId: n.id, done: e.target.checked })} />
+                                done
+                            </label>
+                        </li>
+                    ))}
+                </ul>
+            )}
+            <form
+                className="mt-1.5 flex gap-2"
+                onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (text.trim() && (await send({ add: text.trim() }))) setText("");
+                }}
+            >
+                <input
+                    type="text"
+                    value={text}
+                    maxLength={500}
+                    onChange={(e) => setText(e.target.value)}
+                    placeholder="e.g. add one more photo of the back"
+                    className="h-7 min-w-0 flex-1 rounded border border-border bg-background px-2 text-xs"
+                />
+                <button type="submit" disabled={busy || !text.trim()} className="h-7 rounded border border-border px-2 text-xs disabled:opacity-50">Add note</button>
+            </form>
+        </div>
+    );
+}
+
+function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]>) {
+    const { productId, runs, problems, onChanged } = props;
     const [busy, setBusy] = useState<string | null>(null);
     const tick = async (p: PrepProblem, aside: boolean) => {
         setBusy(p.text);
@@ -67,6 +131,7 @@ function PrepNotes({ productId, runs, problems, onChanged }: NonNullable<AiNotes
                     </ol>
                 </div>
             )}
+            <StaffNotes {...props} />
         </div>
     );
 }
@@ -108,7 +173,8 @@ function NoteList({ lines, hideRun }: { lines: string[]; hideRun?: boolean }) {
 }
 
 export function AiNotesBox({ attention, review, copy, prep }: AiNotesBoxProps) {
-    if (prep && (prep.runs.length || prep.problems.length)) return <PrepNotes {...prep} />;
+    // With a product (not a new one) the prep box always shows, so staff can leave the first note.
+    if (prep && (prep.runs.length || prep.problems.length || prep.staffNotes?.length || (!attention && !review?.notes.length && !copy?.notes.length && !copy?.flags.length))) return <PrepNotes {...prep} />;
     const hasCopy = !!copy && (copy.notes.length > 0 || copy.flags.length > 0);
     // The Attention reason carries its own Last run line — shown once.
     const runShown = !!attention?.text.includes("Last run: ");
@@ -150,6 +216,7 @@ export function AiNotesBox({ attention, review, copy, prep }: AiNotesBoxProps) {
                     <NoteList lines={copy!.notes} hideRun={runShown} />
                 </div>
             )}
+            {prep && <StaffNotes {...prep} />}
         </div>
     );
 }

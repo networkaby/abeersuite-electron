@@ -817,7 +817,7 @@ export default function ProductForm({
                         notes: row.shopDraft.notes, at: row.shopDraft.notesAt, kept: row.shopDraft.kept,
                     } : null}
                     prep={initial?.id ? {
-                        productId: initial.id, runs: row?.shopDraft?.runs ?? [], problems: row?.shopDraft?.problems ?? [], onChanged: () => void reloadRow(),
+                        productId: initial.id, runs: row?.shopDraft?.runs ?? [], problems: row?.shopDraft?.problems ?? [], staffNotes: row?.shopDraft?.staffNotes ?? [], onChanged: () => void reloadRow(),
                     } : null}
                 />
                 <div className="grid gap-2">

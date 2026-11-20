@@ -7,7 +7,7 @@ import { AI_PHOTO_LIMITS } from "@/shared/lib/constants/ai";
 import { COMPATIBLE_SPEC } from "@/shared/lib/shop/compatibility";
 import { getR2Text, isR2Configured, messagesBucket, putR2 } from "@/shared/lib/storage/r2";
 import type { ProductCopy } from "@/modules/ecommerce/lib/aiProductCopy";
-import { readShopDraft, type PrepProblem, type PrepRun, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
+import { readShopDraft, type PrepProblem, type PrepRun, type ShopDraft, type StaffNote } from "@/modules/ecommerce/lib/productAdmin";
 import type { ShopStatus } from "@/generated/prisma/enums";
 import { updateShopProduct, type ShopProductPatch } from "@/modules/ecommerce/lib/updateShopProduct";
 import { startAi } from "@/modules/ecommerce/lib/shopWaiting";
@@ -396,9 +396,12 @@ export async function productForPrep(id: number) {
              * false + a run of the same part → skip it unless the owner says "redo".
              * The run itself saves the row a moment after its record, hence the margin.
              */
-            changedSinceRun: lastRunAt ? p.updatedAt.getTime() > Date.parse(lastRunAt) + 30_000 : true,
+            // An open staff note always means "run again" — it is an instruction for this run.
+            changedSinceRun: !lastRunAt || (draft?.noteCount ?? 0) > 0 || p.updatedAt.getTime() > Date.parse(lastRunAt) + 30_000,
             /** What staff must solve: { text, level: stop | fix, part, asideAt? }. Set-aside ones never block — skip them. */
             problems: draft?.problems ?? [],
+            /** Staff instructions — act on every open one first, then report it done with POST /note { noteId, done, reply }. */
+            staffNotes: (draft?.staffNotes ?? []).filter((n) => !n.doneAt),
             /** The last part finished (0 = none). Start at the next one. */
             partDone: state?.part ?? 0,
             /** The part Part 4 suggested last (5, 3 or 1), read back from its Last run line; null when none. */
@@ -1184,4 +1187,36 @@ export async function setProblemAside(id: number, text: string, aside: boolean, 
         data: { shopDraftJson: { ...info, problems, asideCount: asideCount || undefined } as never, shopAttention: attention },
     });
     return { problems };
+}
+
+// ── Staff notes (owner, 2026-11-20) ───────────────────────────────────────────
+
+/**
+ * Staff / owner instructions for the next AI run ("add one more photo", "check
+ * the warranty and fix the name"). Open until staff tick done or an AI run
+ * reports on it (`reply`). Kept through Ready / Discard like the run records.
+ */
+export async function changeStaffNotes(
+    id: number,
+    change: { add: string } | { noteId: string; done: boolean; reply?: string },
+    by: string,
+) {
+    const r = await prisma.invProduct.findUnique({ where: { id }, select: { shopDraftJson: true } });
+    if (!r) throw new AgentCopyError("Product not found");
+    const info = readShopDraft(r.shopDraftJson);
+    const now = new Date().toISOString();
+    let list: StaffNote[] = info?.staffNotes ?? [];
+    if ("add" in change) list = [...list, { id: crypto.randomUUID().slice(0, 8), text: change.add, by, at: now }].slice(-20);
+    else {
+        if (!list.some((n) => n.id === change.noteId)) throw new AgentCopyError("That note is not on the product any more — reload.");
+        list = list.map((n) => n.id !== change.noteId ? n
+            : change.done ? { ...n, doneAt: now, doneBy: by, ...(change.reply && { reply: change.reply }) }
+            : { id: n.id, text: n.text, by: n.by, at: n.at, ...(change.reply && { reply: change.reply }) });
+    }
+    const open = list.filter((n) => !n.doneAt).length;
+    await prisma.invProduct.update({
+        where: { id },
+        data: { shopDraftJson: { ...info, staffNotes: list.length ? list : undefined, noteCount: open || undefined } as never },
+    });
+    return { staffNotes: list };
 }

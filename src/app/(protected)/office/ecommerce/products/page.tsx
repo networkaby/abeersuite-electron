@@ -71,9 +71,10 @@ const PAGE_SIZE = 25;
  *  Attention = a Draft parked until a manual check is done; leaves by Save as draft / ready (owner, 2026-11-11).
  *  Waiting = shortlisted for the AI run (Start AI); the run moves it to Draft / Attention (owner, 2026-11-17). */
 // "aside" = has a problem staff set aside ("can't fix now", owner 2026-11-20) — beside any stage.
-type TabKey = "all" | ProductStatus["kind"] | "aside";
-const TAB_KEYS: TabKey[] = ["all", "unpublished", "waiting", "draft", "ready", "live", "pending", "attention", "aside"];
-const TAB_LABEL: Record<TabKey, string> = { all: "All", unpublished: "Unpublished", waiting: "Waiting", draft: "Draft", ready: "Ready", live: "Published", pending: "Pending", attention: "Attention", aside: "Set aside" };
+// "notes" = has an open staff note for the AI (owner, 2026-11-20).
+type TabKey = "all" | ProductStatus["kind"] | "aside" | "notes";
+const TAB_KEYS: TabKey[] = ["all", "unpublished", "waiting", "draft", "ready", "live", "pending", "attention", "aside", "notes"];
+const TAB_LABEL: Record<TabKey, string> = { all: "All", unpublished: "Unpublished", waiting: "Waiting", draft: "Draft", ready: "Ready", live: "Published", pending: "Pending", attention: "Attention", aside: "Set aside", notes: "Staff notes" };
 // Persist the list view (page / filters / scroll) per browser tab so leaving for
 // a product's Edit page and coming back (Esc → router.back) returns to the same
 // place instead of resetting to page 1.
@@ -103,7 +104,7 @@ function ProblemLines({ problems, full }: { problems: RowProblem[]; full?: boole
     const open = problems.filter((p) => !p.aside);
     const aside = problems.filter((p) => p.aside);
     const shown = full ? open : open.slice(0, 1);
-    const tone = (p: RowProblem) => (p.level === "stop" ? "text-red-700 dark:text-red-400" : "text-amber-700 dark:text-amber-400");
+    const tone = (p: RowProblem) => (p.level === "stop" ? "text-red-700 dark:text-red-400" : p.level === "note" ? "text-blue-700 dark:text-blue-400" : "text-amber-700 dark:text-amber-400");
     return (
         <span className={`flex flex-col gap-0.5 whitespace-normal ${full ? "" : "w-[230px]"} text-[11px] leading-snug`}>
             {shown.map((p, i) => (
@@ -247,15 +248,16 @@ export default function EcommerceProductsPage() {
     // One status per product, shared by the tab counts, the tab filter and the rows.
     const statusOf = useMemo(() => new Map(products.map((p) => [p.id, productStatus(p, rules)])), [products, rules]);
     const counts = useMemo(() => {
-        const c: Record<TabKey, number> = { all: products.length, unpublished: 0, waiting: 0, draft: 0, ready: 0, live: 0, pending: 0, attention: 0, aside: 0 };
+        const c: Record<TabKey, number> = { all: products.length, unpublished: 0, waiting: 0, draft: 0, ready: 0, live: 0, pending: 0, attention: 0, aside: 0, notes: 0 };
         for (const st of statusOf.values()) c[st.kind]++;
         c.aside = products.filter((p) => p.hasAsideProblems).length;
+        c.notes = products.filter((p) => p.hasStaffNotes).length;
         return c;
     }, [products, statusOf]);
 
     const filtered = useMemo(() => {
         const matches = productFilterMatcher(filters, rules, trees);
-        return products.filter((p) => (tab === "all" || (tab === "aside" ? !!p.hasAsideProblems : statusOf.get(p.id)?.kind === tab)) && matches(p));
+        return products.filter((p) => (tab === "all" || (tab === "aside" ? !!p.hasAsideProblems : tab === "notes" ? !!p.hasStaffNotes : statusOf.get(p.id)?.kind === tab)) && matches(p));
     }, [products, tab, filters, rules, statusOf, trees]);
 
     // Reset to page 1 when the filter actually changes — but NOT on the initial

@@ -86,7 +86,7 @@ export async function GET(req: Request) {
         // Problems for the Shop status cell (owner, 2026-11-20): only rows in Attention or
         // with a set-aside problem read their notes — the rest of the list never does.
         const withProblems = await prisma.invProduct.findMany({
-            where: { OR: [{ shopStatus: "ATTENTION" }, { shopDraftJson: { path: ["asideCount"], gt: 0 } }] },
+            where: { OR: [{ shopStatus: "ATTENTION" }, { shopDraftJson: { path: ["asideCount"], gt: 0 } }, { shopDraftJson: { path: ["noteCount"], gt: 0 } }] },
             select: { id: true, shopAttention: true, shopDraftJson: true },
         });
         const problemsOf = new Map(withProblems.map((r) => [r.id, rowProblems(readShopDraft(r.shopDraftJson), r.shopAttention)]));
@@ -97,6 +97,7 @@ export async function GET(req: Request) {
                     ...invProductToAdmin(p, bands), variantAttrGaps: gaps.get(p.id) ?? [],
                     ...(problems.length && { problems }),
                     ...(problems.some((x) => x.aside) && { hasAsideProblems: true }),
+                    ...(problems.some((x) => x.level === "note") && { hasStaffNotes: true }),
                 };
             })
         );
