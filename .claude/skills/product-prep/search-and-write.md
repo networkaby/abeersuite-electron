@@ -6,7 +6,7 @@ Read this only on the **Parts 1 + 2 + 3** path (the product has no description y
 
 Search **once**, with the cleaned data only: brand + exact model / part code (India first). **Maker's site first**, then Amazon.in, Flipkart, Reliance Digital, Croma. At most 8 pages. Blogs and other shops are refused.
 
-**Missing photos too** — `photoList.findOnline` (and Part 1's `findOnline`) names the must photos we do not have, including the ones staff ticked "Can't add". Prefer pages that show those views (the maker's gallery, an Amazon.in listing with the box back), so Part 3 can add them. Look also at how those pages show the product — it is what your must / optional list in Part 3 should follow.
+**Missing photos too** — `photoList.findOnline` (and Part 1's `findOnline`) names the must photos we do not have, including the ones staff ticked "Not applicable". Prefer pages that show those views (the maker's gallery, an Amazon.in listing with the box back), so Part 3 can add them. Look also at how those pages show the product — it is what your must / optional list in Part 3 should follow.
 
 Accept / reject each page exactly as product-copy step 3:
 - Our code / barcode on the page → same product: accept.

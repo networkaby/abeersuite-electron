@@ -133,7 +133,7 @@ export function PhotoChecklistRows({ checklist, gallery, onToggle, onWaive, onWa
     /** The form's current gallery — advice about a photo no longer there is not shown. */
     gallery: string[];
     onToggle: (kind: PhotoKind) => void;
-    /** "Can't add" on a missing must photo (owner, 2026-11-18): it stops blocking the AI parts; the search looks for it online instead. */
+    /** "Not applicable" on a missing must photo (owner, 2026-11-18): it stops blocking the AI parts; the search looks for it online instead. */
     onWaive: (kind: PhotoKind) => void;
     /** "Can't do" on the clean main photo — e.g. every box already carries our price label. */
     onWaiveMain: () => void;
@@ -191,9 +191,9 @@ export function PhotoChecklistRows({ checklist, gallery, onToggle, onWaive, onWa
                                     {i.must && !i.done && !i.waived ? <span className="ml-1 text-amber-700 dark:text-amber-400">· must</span> : null}
                                 </label>
                                 {i.must && !i.done && (
-                                    <label className="text-muted-foreground ml-auto flex items-center gap-1" title="This photo cannot be taken — the AI stops asking for it and looks for it online">
+                                    <label className="text-muted-foreground ml-auto flex items-center gap-1" title="Not applicable: this view does not exist or cannot be taken. It stops blocking; the AI still looks for it once on the maker's or a seller's page.">
                                         <Checkbox checked={!!i.waived} onCheckedChange={() => onWaive(i.kind)} />
-                                        Can&apos;t add
+                                        Not applicable
                                     </label>
                                 )}
                             </li>

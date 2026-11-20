@@ -49,7 +49,7 @@ const OLD_KINDS: Record<string, PhotoKind> = { side: "left", label: "box_back" }
  */
 export type PhotoChecklistItem = {
     kind: PhotoKind; done: boolean; must: boolean;
-    /** Staff ticked "Can't add" on a must photo (owner, 2026-11-18): it stops blocking, and the search looks for it online instead. */
+    /** Staff ticked "Not applicable" on a must photo (owner, 2026-11-18): it stops blocking, and the search looks for it online instead. */
     waived?: boolean;
 };
 
@@ -97,7 +97,7 @@ export type PhotoArrange = { order: string[]; looks: { url: string; next: string
 export type PhotoSuggestion = { url: string; site: string; kind: PhotoKind | null };
 
 export const isEnough = (items: PhotoChecklistItem[]) => items.every((i) => i.done || !i.must || i.waived);
-/** Must photos neither in the gallery nor ticked "Can't add". */
+/** Must photos neither in the gallery nor ticked "Not applicable". */
 export const missingMust = (c: PhotoChecklist | null) => c?.items.filter((i) => i.must && !i.done && !i.waived).map((i) => i.kind) ?? [];
 
 /** AI answer → checklist: what we have is done, what we miss is open (must first); nothing else is listed. */

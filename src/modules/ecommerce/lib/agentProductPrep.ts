@@ -440,7 +440,7 @@ export async function productForPrep(id: number) {
             seen: search?.seen ?? {},
             labelWebsite: search?.labelWebsite ?? "",
         },
-        /** The product's photo list (owner, 2026-11-18): packing, shape, must / optional kinds, staff's "Can't add" ticks. */
+        /** The product's photo list (owner, 2026-11-18): packing, shape, must / optional kinds, staff's "Not applicable" ticks. */
         photoList: (() => {
             const c = readPhotoChecklist(p.photoChecklistJson);
             return {
@@ -450,7 +450,7 @@ export async function productForPrep(id: number) {
                 items: c?.items ?? [],
                 /** Must photos missing and not ticked — Part 1 stops on them. */
                 missing: missingMust(c),
-                /** Must photos missing that the next search should look for online ("Can't add" ones included). */
+                /** Must photos missing that the next search should look for online ("Not applicable" ones included). */
                 findOnline: photosToFind(c),
             };
         })(),
@@ -466,7 +466,7 @@ export async function productForPrep(id: number) {
  * the maker and good sellers show it, not a fixed table — on top of a fixed
  * floor (photoFloor: a clean product photo without the box; box front + back
  * when boxed). The server keeps the list on the product, never drops a must an
- * earlier part set, honours staff's "Can't add" ticks, and works out what is
+ * earlier part set, honours staff's "Not applicable" ticks, and works out what is
  * missing itself — the AI's word alone never passes a gallery.
  */
 const photoCheckSchema = z.object({
@@ -513,7 +513,7 @@ async function photoListOf(part: 1 | 3 | 4 | 5, id: number, c: PhotoCheck, galle
     const items: PhotoChecklistItem[] = [...new Set([...order, ...dropped])].map((kind) => {
         // Staff's own tick that the gallery has it stays.
         const done = have.has(kind) || prevOf.get(kind)?.done === true;
-        // "Can't add" only means something on a must photo still missing — cleared once it is dropped or there.
+        // "Not applicable" only means something on a must photo still missing — cleared once it is dropped or there.
         const waived = prevOf.get(kind)?.waived && must.has(kind) && !done;
         return { kind, done, must: must.has(kind), ...(waived && { waived: true }) };
     });
@@ -536,14 +536,14 @@ async function photoListOf(part: 1 | 3 | 4 | 5, id: number, c: PhotoCheck, galle
     const missing = missingMust(checklist);
     const lines = [
         ...(mainBlock ? [mainBlock] : []),
-        ...(missing.length ? [`Must photo missing: ${missing.map(photoKindLabel).join(", ")} — add it, or tick "Can't add" under Product image.`] : []),
+        ...(missing.length ? [`Must photo missing: ${missing.map(photoKindLabel).join(", ")} — add it, or tick "Not applicable" under Product image.`] : []),
     ];
     const dropNotes = drops.map((d) => `Photo "${photoKindLabel(d.kind as PhotoKind)}" no longer a must: ${d.why}${have.has(d.kind as PhotoKind) ? " — the photo we have stays." : ""}`);
     if (mainWaived) dropNotes.push(`Main photo is not clean${c.mainWhy ? ` (${c.mainWhy})` : ""} — staff ticked "Can't do", so it does not block.`);
     return { checklist, missing, mainProblem: mainBlock, lines, dropNotes };
 }
 
-/** What the next search should look for: must photos missing, ticked "Can't add" or not. */
+/** What the next search should look for: must photos missing, ticked "Not applicable" or not. */
 function photosToFind(c: PhotoChecklist | null) {
     return c?.items.filter((i) => i.must && !i.done).map((i) => photoKindLabel(i.kind)) ?? [];
 }
@@ -576,7 +576,7 @@ export const part1Schema = z.object({
     enough: z.boolean(),
     /** When not enough: what staff must add ("a box / label photo", "the model no."). */
     need: z.string().trim().max(300).default(""),
-    /** The photo list — a must photo missing (not ticked "Can't add") or a main photo that is not clean stops Part 1, for better seed. */
+    /** The photo list — a must photo missing (not ticked "Not applicable") or a main photo that is not clean stops Part 1, for better seed. */
     photos: photoCheckSchema,
     /** Where to leave the product when Part 1 is fine — the owner's instruction; default: where it is. */
     then: thenSchema,
@@ -643,8 +643,8 @@ export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?
     await writeState(id, { ...(prev?.search && { search: prev.search }), ...(prev?.photosDone && { photosDone: prev.photosDone }), ...(prev?.edits && { edits: prev.edits }), part: prev?.search ? Math.max(prev.part, 1) as PrepState["part"] : 1, at: new Date().toISOString(), identity: await currentIdentity(id) }, run);
     const find = photosToFind(list.checklist);
     const findNote = !find.length || photosNext ? [] : prev?.search
-        ? [`Can't add (staff): ${find.join(", ")} — already searched once, so they stay missing unless they are on a saved page or the owner asks for a new search.`]
-        : [`Can't add (staff): ${find.join(", ")} — the search looks for them online.`];
+        ? [`Not applicable (staff): ${find.join(", ")} — already searched once, so they stay missing unless they are on a saved page or the owner asks for a new search.`]
+        : [`Not applicable (staff): ${find.join(", ")} — the search looks for them online.`];
     await addDraftNotes(id, 1, [...done, ...unsure, ...b.notes, ...findNote], "done");
     return { result: "part1" as const, removed: gone.size, notes: done.length + unsure.length + b.notes.length, findOnline: find };
 }
@@ -1109,7 +1109,7 @@ export const part4Schema = z.object({
     /**
      * Missing must photos you found among the saved pages' photos (owner, 2026-11-18):
      * Part 4 changes no photo itself — it says who can fix each gap. On a saved page →
-     * Part 5 adds it; not → staff take it or tick "Can't add".
+     * Part 5 adds it; not → staff take it or tick "Not applicable".
      */
     onPages: z.array(z.object({ kind: z.string(), url: z.string().url() })).max(20).default([]),
     /** Where to leave a verified product — the owner's instruction; default: Ready (never Published yet). */
@@ -1128,7 +1128,7 @@ export async function savePart4(id: number, input: z.infer<typeof part4Schema>) 
     // Photos are checked here, not taken on the AI's word (owner, 2026-11-18: a
     // one-photo product with our logo on the main photo passed).
     const list = await photoListOf(4, id, input.photoCheck, galleryOf(row));
-    // The list itself is saved (not the product) so staff see the must rows and can tick "Can't add".
+    // The list itself is saved (not the product) so staff see the must rows and can tick "Not applicable".
     await prisma.invProduct.update({ where: { id }, data: { photoChecklistJson: list.checklist } });
     // Who fixes each missing must photo: a photo really on a kept saved page → Part 5; else staff.
     const { state: saved } = await liveState(id).catch(() => ({ state: null }));
@@ -1141,7 +1141,7 @@ export async function savePart4(id: number, input: z.infer<typeof part4Schema>) 
     const photoLines = [
         ...(list.mainProblem ? [list.mainProblem] : []),
         ...(onPage.length ? [`Must photo missing, found on a saved page — run Part 5 to add it: ${onPage.map((k) => `${photoKindLabel(k)} (${where.get(k)})`).join(", ")}.`] : []),
-        ...(byStaff.length ? [`Must photo missing, not on any saved page — take it, or tick "Can't add" under Product image: ${byStaff.map(photoKindLabel).join(", ")}.`] : []),
+        ...(byStaff.length ? [`Must photo missing, not on any saved page — take it, or tick "Not applicable" under Product image: ${byStaff.map(photoKindLabel).join(", ")}.`] : []),
     ];
     const aside = notAside(await asideKeys(id));
     const b = { ...input, pending: [...photoLines, ...input.pending].filter(aside), notes: input.notes.filter(aside), next: input.next ?? (photoLines.length ? ("part5" as const) : undefined) };
