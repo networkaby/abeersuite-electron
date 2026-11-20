@@ -12,7 +12,9 @@ export type ActiveFilter = "all" | "active" | "inactive";
 /** Stage filter — Draft is a stage like the others (owner, 2026-11-10). */
 /** "attention" = a Draft parked until a manual check is done (owner, 2026-11-11). */
 export type StatusFilter = "all" | "unpublished" | "waiting" | "draft" | "ready" | "live" | "pending" | "attention";
-export type PhotoFilter = "all" | "none" | "one" | "has" | "2" | "3" | "5"; // "has" = 1 or more (kept for saved filters)
+// "has" = 1 or more; "u2".."u5" = up to N (0 included); "6" = 6 or more (owner, 2026-11-20).
+// "2" / "3" / "5" (N or more) are no longer offered but still read for saved filters.
+export type PhotoFilter = "all" | "none" | "one" | "has" | "u2" | "u3" | "u4" | "u5" | "6" | "2" | "3" | "5";
 export type DescriptionFilter = "all" | "has" | "missing";
 
 export type ProductFilters = {
@@ -123,7 +125,8 @@ function matchesProductFilters(
     if (f.active === "inactive" && p.isActive) return false;
     if (f.photos !== "all") {
         const n = productPhotoCount(p);
-        if (f.photos === "none" ? n !== 0 : f.photos === "one" ? n !== 1 : n < (f.photos === "has" ? 1 : Number(f.photos))) return false;
+        const upTo = /^u(\d)$/.exec(f.photos);
+        if (f.photos === "none" ? n !== 0 : f.photos === "one" ? n !== 1 : upTo ? n > Number(upTo[1]) : n < (f.photos === "has" ? 1 : Number(f.photos))) return false;
     }
     if (f.description === "has" && !hasDescription(p)) return false;
     if (f.description === "missing" && hasDescription(p)) return false;

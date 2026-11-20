@@ -71,7 +71,7 @@ export function ProductFilterPanel({
             {choice("group", "Group", list("All groups", options.groups), "w-40")}
             {choice("status", "Shop status", [["all", "Any status"], ["unpublished", "Unpublished"], ["draft", "Draft"], ["ready", "Ready"], ["live", "Published"], ["pending", "Pending"], ["attention", "Attention"]])}
             {choice("stock", "Stock", [["all", "Any stock"], ["in", "In stock"], ["out", "Out of stock"], ["untracked", "Untracked"]])}
-            {choice("photos", "Photos", [["all", "Any"], ["none", "No photo"], ["one", "Only 1 photo"], ["has", "1 or more"], ["2", "2 or more"], ["3", "3 or more"], ["5", "5 or more"]], "w-32")}
+            {choice("photos", "Photos", [["all", "Any"], ["none", "No photo"], ["one", "Only 1 photo"], ["has", "1 or more"], ["u2", "Up to 2"], ["u3", "Up to 3"], ["u4", "Up to 4"], ["u5", "Up to 5"], ["6", "6 or more"]], "w-32")}
             {choice("description", "Description", [["all", "Any"], ["has", "Written"], ["missing", "Missing"]], "w-32")}
             {choice("active", "Active", [["all", "All"], ["active", "Active only"], ["inactive", "Inactive only"]], "w-32")}
             {activeFilterCount(value, defaults) > 0 ? (
