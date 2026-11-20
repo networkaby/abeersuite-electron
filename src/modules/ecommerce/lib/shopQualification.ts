@@ -189,7 +189,7 @@ export function shopQualification(
             c.key === "variantAttrs" && p.variantAttrGaps?.length
                 ? p.variantAttrGaps
                 : c.key === "image" && p.mustPhotoGaps?.length
-                  ? [`Must photo missing: ${p.mustPhotoGaps.join(", ")}`]
+                  ? [`${p.mustPhotoGaps.join(", ")} photo`]
                   : [c.label]
         );
     return { qualified: missing.length === 0, missing, checks };
