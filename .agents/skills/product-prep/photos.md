@@ -15,7 +15,7 @@ We improve **our own photos**; we never regenerate them. Free tool: `photo-edit.
 | Background | Example | Do |
 |---|---|---|
 | No meaning — plain wall, grey sheet, empty table — with lots of empty space round the product | a blister pack on a grey sheet, a cable coil on a table | **cutout** |
-| Meaningful, real — on a desk, in a hand, in use, in our shop | the combo in our shop with our banner | leave it; `look` fixes only (brightness, crop, straighten) |
+| Meaningful, real — on a desk, in a hand, in use, in our shop | the combo in our shop with our banner | keep the background; `look` fixes only (brightness) — lots of empty space round the product → **`crop`**; tilted a few degrees → **`straighten`** |
 | Designed / cinematic — keyboard flying in the sky, RGB glow on black, a maker's ad with headings | | leave it |
 | Meaningful but poor — dark, blurry, messy, product cut off | | `staff`: reshoot, with the reason |
 | See-through — product in a clear plastic bag or window pack | | **never cut** (the bag comes out ragged); leave it, or `staff` reshoot outside the bag |
@@ -28,12 +28,17 @@ Our own stamp (banner, address, our price sticker) stays on every photo except t
 
 ```bash
 PE="$SCRATCH/photo-edit"   # once per session
-mkdir -p "$PE" && cp .claude/skills/product-prep/photo-edit.mjs "$PE/" && (cd "$PE" && npm init -y >/dev/null && npm i @huggingface/transformers@3.7.2 sharp@0.34.3)
+mkdir -p "$PE" && cp .agents/skills/product-prep/photo-edit.mjs "$PE/" && (cd "$PE" && npm init -y >/dev/null && npm i @huggingface/transformers@3.7.2 sharp@0.34.3)
 
 curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" -o "$PE/p<n>.jpg" "$PRODUCT_COPY_READ_URL/api/agent/products/<id>/photos/<n>"
 (cd "$PE" && node photo-edit.mjs cutout p<n>.jpg p<n>-edit.jpg --solid)   # --solid for a box / card / pack; leave it off for a cable coil, ring, frame
 (cd "$PE" && node photo-edit.mjs blank  p<n>.jpg p<n>-edit.jpg 0.44,0.47,0.06,0.02)   # x,y,w,h as fractions of the photo
+(cd "$PE" && node photo-edit.mjs crop   p<n>.jpg p<n>-edit.jpg)                        # finds the product, crops to it + 6% margin, background kept
+(cd "$PE" && node photo-edit.mjs crop   p<n>.jpg p<n>-edit.jpg 0.20,0.15,0.60,0.70)    # the model missed it → your own box
+(cd "$PE" && node photo-edit.mjs straighten p<n>.jpg p<n>-edit.jpg -3)                 # degrees, + = clockwise, −15…15; empty corners cropped off
 ```
+
+**`crop` / `straighten` (owner, 2026-11-21)** — only for a photo that keeps its background (cut-out photos are already framed and shadowed by `cutout`). `crop` when the product fills well under half the photo; it prints "nothing worth cutting" when it already fills it — keep the original then. Check the crop kept the **whole** product (cable ends, stand, accessories) — the model can miss a thin part; redo with your own box. `straighten` only for a visible tilt (edges of a box / desk not level), never on a deliberately angled maker shot. Send with `edit=crop` / `edit=straighten`. One edit per photo per run — crop **after** straighten if both are needed (straighten → send → read again → crop).
 
 For `blank`, cover the **whole MRP amount** — from just after "Rs." / "₹" to just before "(inclusive …" — marker, digits and any stub alike, in one generous box; keep the "Rs." and the brackets. Crop round that line first to place the box. **Look at every `-edit.jpg` before sending it**: ragged edge, part of the product missing, a **hole cut through a white panel on the box** (redo with `--solid`), a label damaged, a grey block → do not send; keep the original. Then:
 

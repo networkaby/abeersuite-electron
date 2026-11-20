@@ -334,9 +334,15 @@ async function copyToOurPhotos(file: string | Blob): Promise<string | null> {
     }
 }
 
-// ── Edited photo (cut-out / blanked MRP) ──────────────────────────────────────
+// ── Edited photo (cut-out / blanked MRP / crop / straighten) ──────────────────────────────────────
 
-export const PHOTO_EDITS = { cutout: "cut out onto white", blank: "covered MRP blanked" } as const;
+export const PHOTO_EDITS = {
+    cutout: "cut out onto white",
+    blank: "covered MRP blanked",
+    // Background kept — empty space cut away / a small tilt fixed (owner, 2026-11-21).
+    crop: "cropped to the product",
+    straighten: "straightened",
+} as const;
 export type PhotoEdit = keyof typeof PHOTO_EDITS;
 const EDIT_MAX_BYTES = 10 * 1024 * 1024;
 

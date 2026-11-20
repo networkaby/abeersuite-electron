@@ -4,6 +4,11 @@
 //                                                      --solid: boxes / packs — fill any hole the model cut inside
 //   node photo-edit.mjs blank  <in> <out> x,y,w,h     fill a box with the label colour around it
 //                                                      (x,y,w,h = fractions 0–1 of width / height)
+//   node photo-edit.mjs crop   <in> <out> [x,y,w,h]   cut away empty space, KEEP the background:
+//                                                      no box → finds the product (same model) and crops
+//                                                      to it + a 6% margin; a box → crops to that box
+//   node photo-edit.mjs straighten <in> <out> <deg>   turn a tilted photo by deg (−15…15, + = clockwise)
+//                                                      and crop the empty corners the turn leaves
 //
 // Setup once per session (deps stay out of the app's package.json):
 //   mkdir -p "$PE" && cp .claude/skills/product-prep/photo-edit.mjs "$PE/" && cd "$PE" \
@@ -21,7 +26,7 @@ const args = process.argv.slice(2);
 const solid = args.includes("--solid");
 const [mode, input, output, box] = args.filter((a) => a !== "--solid");
 if (!mode || !input || !output) {
-    console.error("usage: photo-edit.mjs cutout|blank <in> <out> [x,y,w,h]");
+    console.error("usage: photo-edit.mjs cutout|blank|crop|straighten <in> <out> [x,y,w,h | deg]");
     process.exit(2);
 }
 
@@ -51,12 +56,26 @@ function fillHoles(px, w, h) {
     for (let i = 0; i < w * h; i++) if (!seen[i] && clear(i)) px[i * 4 + 3] = 255;
 }
 
-async function cutout() {
+/** The product on a see-through background (ISNet), faint specks dropped. */
+async function segment(src = input) {
     const { pipeline } = await import("@huggingface/transformers");
     const seg = await pipeline("background-removal", "onnx-community/ISNet-ONNX", { dtype: "fp32" });
-    const [cut] = await seg(input);
+    const [cut] = await seg(src);
     // Faint specks (mask under ~40%) would stop trim at the photo's edge and leave the product small.
     for (let i = 3; i < cut.data.length; i += 4) if (cut.data[i] < 100) cut.data[i] = 0;
+    return cut;
+}
+
+/** x,y,w,h fractions (0–1) → whole pixels inside a W×H photo. */
+function parseBox(W, H) {
+    const f = (box ?? "").split(",").map(Number);
+    if (f.length !== 4 || f.some((v) => !(v >= 0 && v <= 1)) || f[2] <= 0 || f[3] <= 0) throw new Error("box must be x,y,w,h as fractions 0–1");
+    const x = Math.round(f[0] * W), y = Math.round(f[1] * H);
+    return { x, y, w: Math.max(1, Math.min(W - x, Math.round(f[2] * W))), h: Math.max(1, Math.min(H - y, Math.round(f[3] * H))) };
+}
+
+async function cutout() {
+    const cut = await segment();
     if (solid) fillHoles(cut.data, cut.width, cut.height);
     const png = await sharp(Buffer.from(cut.data), { raw: { width: cut.width, height: cut.height, channels: 4 } }).png().toBuffer();
     const trimmed = await sharp(png).trim({ threshold: 1 }).toBuffer();
@@ -75,13 +94,16 @@ async function cutout() {
         .jpeg({ quality: 92 }).toFile(output);
 }
 
+/** Upright pixels and size — phone photos carry their turn in EXIF. */
+async function upright() {
+    const data = await sharp(input).rotate().toBuffer();
+    const { width, height } = await sharp(data).metadata();
+    return { data, W: width, H: height };
+}
+
 async function blank() {
-    const f = (box ?? "").split(",").map(Number);
-    if (f.length !== 4 || f.some((v) => !(v >= 0 && v <= 1)) || f[2] <= 0 || f[3] <= 0) throw new Error("box must be x,y,w,h as fractions 0–1");
-    const img = sharp(input).rotate();
-    const { width: W, height: H } = await img.metadata();
-    const x = Math.round(f[0] * W), y = Math.round(f[1] * H);
-    const w = Math.max(1, Math.min(W - x, Math.round(f[2] * W))), h = Math.max(1, Math.min(H - y, Math.round(f[3] * H)));
+    const { W, H } = await upright();
+    const { x, y, w, h } = parseBox(W, H);
     // The label colour: median of a thin ring just outside the box.
     const ring = 6;
     const rx = Math.max(0, x - ring), ry = Math.max(0, y - ring);
@@ -110,8 +132,55 @@ async function blank() {
     await sharp(input).rotate().composite([{ input: patch, left: px, top: py }]).jpeg({ quality: 92 }).toFile(output);
 }
 
+/**
+ * Cut away empty space round the product but keep the real background (a desk, our
+ * shop) — the photos the rules say never to cut out. Product found by the same model
+ * as cutout; a box given by the caller wins (for a product the model misses).
+ */
+async function crop() {
+    const { data, W, H } = await upright();
+    let r;
+    if (box) r = parseBox(W, H);
+    else {
+        // The model reads the file as stored, without the EXIF turn — give it the upright copy.
+        const tmp = `${output}.upright.png`;
+        await sharp(data).png().toFile(tmp);
+        const cut = await segment(tmp);
+        (await import("node:fs")).unlinkSync(tmp);
+        // Map the mask's bounds to the photo in case the model resized it.
+        let x0 = cut.width, y0 = cut.height, x1 = -1, y1 = -1;
+        for (let y = 0; y < cut.height; y++) for (let x = 0; x < cut.width; x++) {
+            if (cut.data[(y * cut.width + x) * 4 + 3] < 128) continue;
+            if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        }
+        if (x1 < 0) throw new Error("no product found — pass a box");
+        const sx = W / cut.width, sy = H / cut.height;
+        const m = 0.06 * Math.max((x1 - x0) * sx, (y1 - y0) * sy);
+        const left = Math.max(0, Math.floor(x0 * sx - m)), top = Math.max(0, Math.floor(y0 * sy - m));
+        r = { x: left, y: top, w: Math.min(W, Math.ceil(x1 * sx + m)) - left, h: Math.min(H, Math.ceil(y1 * sy + m)) - top };
+    }
+    if (r.w * r.h > 0.92 * W * H) console.log("crop: product already fills the photo — nothing worth cutting; keep the original");
+    await sharp(data).extract({ left: r.x, top: r.y, width: r.w, height: r.h }).jpeg({ quality: 92 }).toFile(output);
+}
+
+/** Turn by a small angle, then keep the largest same-shape rectangle with no empty corner. */
+async function straighten() {
+    const deg = Number(box);
+    if (!Number.isFinite(deg) || deg === 0 || Math.abs(deg) > 15) throw new Error("deg must be −15…15 and not 0");
+    const { data, W, H } = await upright();
+    const turned = await sharp(data).rotate(deg, { background: "#ffffff" }).toBuffer();
+    const { width: TW, height: TH } = await sharp(turned).metadata();
+    const a = (Math.abs(deg) * Math.PI) / 180;
+    // Same-aspect rectangle inside a W×H frame turned by a.
+    const s = 1 / (Math.cos(a) + Math.max(W / H, H / W) * Math.sin(a));
+    const w = Math.floor(W * s), h = Math.floor(H * s);
+    await sharp(turned).extract({ left: Math.floor((TW - w) / 2), top: Math.floor((TH - h) / 2), width: w, height: h }).jpeg({ quality: 92 }).toFile(output);
+}
+
 const t = Date.now();
 if (mode === "cutout") await cutout();
 else if (mode === "blank") await blank();
+else if (mode === "crop") await crop();
+else if (mode === "straighten") await straighten();
 else { console.error(`unknown mode ${mode}`); process.exit(2); }
 console.log(`${mode}: ${output} in ${((Date.now() - t) / 1000).toFixed(1)}s`);
