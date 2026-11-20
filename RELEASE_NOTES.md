@@ -4,6 +4,10 @@ An update for the office, database operations, and online shop product preparati
 
 ## Online Shop & AI Product Preparation
 
+- **In-browser photo editor (Filerobot)**: full photo editing (crop, rotate, filters, annotations) right from the product edit page beside Adjust.
+- **Clean up cut-out**: one-click background removal to solid white directly in the browser using the prep agent's cut-out service.
+- **Adjust picture integration**: edit, frame, and adjust photos together with instant zoomable preview.
+- **Missing must-photo protection**: if a required photo is missing, the product image validation alerts staff and safely keeps the product off the shop until fixed.
 - **Saving a product no longer fails when the database is slow**: the product save now finishes its changes first and loads the full product afterwards, so AI prep runs stop failing with "transaction expired".
 - **One open-problem list**: every product problem, whether the AI or staff raised it, sits in one shared list. Staff can leave tasks for the AI in the notes box using `{}` items.
 - **Problem history**: when a problem is closed it is kept with who raised it, who closed it and when. Each part shows one run line above the open problems.
