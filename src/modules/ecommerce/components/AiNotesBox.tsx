@@ -5,7 +5,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { extractApiError } from "@/shared/lib/api";
-import type { PrepProblem, PrepRun, StaffNote } from "@/modules/ecommerce/lib/productAdmin";
+import { splitAttention, type PrepProblem, type PrepRun, type StaffNote } from "@/modules/ecommerce/lib/productAdmin";
 
 /** One place for every AI note on a product (owner, 2026-11-12): the Attention reason,
  *  Claude's review notes (kept, dated, after publishing) and the latest copy run's notes. */
@@ -61,7 +61,7 @@ function ManualNote({ productId, staffNote, onChanged }: NonNullable<AiNotesBoxP
                 rows={Math.min(10, Math.max(3, text.split("\n").length + 1))}
                 onChange={(e) => setText(e.target.value)}
                 placeholder={"- Box is torn on the left, do not show it\n- {Add one more photo of the side ports}"}
-                className="mt-1 w-full rounded border border-border bg-background px-2 py-1 font-mono text-xs"
+                className="mt-1 w-full rounded border border-border bg-background px-2 py-1 font-mono text-xs placeholder:text-muted-foreground/40"
             />
             <div className="mt-1 flex items-center justify-between gap-2">
                 <span className="text-muted-foreground">
@@ -74,9 +74,15 @@ function ManualNote({ productId, staffNote, onChanged }: NonNullable<AiNotesBoxP
     );
 }
 
-/** The latest run, the one shared open list, the manual note and the short history (owner, 2026-11-20). */
-function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]>) {
-    const { productId, runs, problems, onChanged } = props;
+/**
+ * The latest run, the one shared open list, the manual note and the short history
+ * (owner, 2026-11-20). A product run before run records existed keeps only what
+ * fits: its old "Last run" lines join the history, its Attention lines the open
+ * list; the old free-text notes are not shown.
+ */
+function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]> & { oldRuns?: string[]; oldProblems?: PrepProblem[] }) {
+    const { productId, runs, onChanged, oldRuns = [] } = props;
+    const problems = props.problems.length ? props.problems : (props.oldProblems ?? []);
     const [busy, setBusy] = useState<string | null>(null);
     const tick = async (p: PrepProblem, aside: boolean) => {
         setBusy(p.text);
@@ -89,12 +95,13 @@ function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]>) {
             setBusy(null);
         }
     };
-    const latest = runs.at(-1);
-    const older = runs.slice(0, -1).reverse();
+    const history = [...runs.map(runLine).reverse(), ...oldRuns];
+    const latest = history[0];
+    const older = history.slice(1);
     return (
         <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3 text-xs">
             <p className="text-sm font-medium">AI notes</p>
-            {latest && <p className="text-muted-foreground">{runLine(latest)}</p>}
+            <p className="text-muted-foreground">{latest ?? "No AI run recorded yet"}</p>
             {problems.length > 0 && (
                 <div>
                     <p className="font-medium">Open problems</p>
@@ -114,10 +121,12 @@ function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]>) {
                                             {aside && ` · can't fix now${p.asideBy ? ` (${p.asideBy}, ${formatDate(p.asideAt!)})` : ""} — not blocking, stays until fixed`}
                                         </span>
                                     </span>
-                                    <label className="flex shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap text-muted-foreground">
-                                        <input type="checkbox" checked={aside} disabled={busy === p.text} onChange={(e) => void tick(p, e.target.checked)} />
-                                        can&apos;t fix now
-                                    </label>
+                                    {p.at && (
+                                        <label className="flex shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap text-muted-foreground">
+                                            <input type="checkbox" checked={aside} disabled={busy === p.text} onChange={(e) => void tick(p, e.target.checked)} />
+                                            can&apos;t fix now
+                                        </label>
+                                    )}
                                 </li>
                             );
                         })}
@@ -129,7 +138,7 @@ function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]>) {
                 <details>
                     <summary className="cursor-pointer text-muted-foreground">AI history ({older.length})</summary>
                     <ul className="mt-1 space-y-0.5 pl-4 text-muted-foreground">
-                        {older.map((r) => <li key={r.at}>{runLine(r)}</li>)}
+                        {older.map((r) => <li key={r}>{r}</li>)}
                     </ul>
                 </details>
             )}
@@ -174,8 +183,15 @@ function NoteList({ lines, hideRun }: { lines: string[]; hideRun?: boolean }) {
 }
 
 export function AiNotesBox({ attention, review, copy, prep }: AiNotesBoxProps) {
-    // With a product (not a new one) the prep box always shows, so staff can leave the first note.
-    if (prep && (prep.runs.length || prep.problems.length || prep.staffNote || (!attention && !review?.notes.length && !copy?.notes.length && !copy?.flags.length))) return <PrepNotes {...prep} />;
+    // A saved product always gets the one format (owner, 2026-11-20: "keep what fits, remove others").
+    if (prep) {
+        const lines = [...(attention?.text.split("\n") ?? []), ...(review?.notes ?? []), ...(copy?.notes ?? [])].map((l) => l.trim());
+        const oldRuns = [...new Set(lines.filter((l) => l.startsWith("Last run: ")).map((l) => l.slice("Last run: ".length)))];
+        const oldProblems: PrepProblem[] = attention?.parked
+            ? splitAttention(attention.text).problems.map((x) => ({ text: x.text, level: x.level === "stop" ? "stop" : "fix", part: 0, at: "" }))
+            : [];
+        return <PrepNotes {...prep} oldRuns={oldRuns} oldProblems={oldProblems} />;
+    }
     const hasCopy = !!copy && (copy.notes.length > 0 || copy.flags.length > 0);
     // The Attention reason carries its own Last run line — shown once.
     const runShown = !!attention?.text.includes("Last run: ");
@@ -217,7 +233,6 @@ export function AiNotesBox({ attention, review, copy, prep }: AiNotesBoxProps) {
                     <NoteList lines={copy!.notes} hideRun={runShown} />
                 </div>
             )}
-            {prep && <ManualNote {...prep} />}
         </div>
     );
 }
