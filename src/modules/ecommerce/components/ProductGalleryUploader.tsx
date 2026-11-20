@@ -5,11 +5,12 @@ import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Crop, EyeOff, SquarePen, Images, Link2, Sparkles, Star, Trash2, Upload } from "lucide-react";
+import { ChevronLeft, ChevronRight, Crop, Eraser, EyeOff, SquarePen, Images, Link2, Sparkles, Star, Trash2, Upload } from "lucide-react";
 import { isAiSkipped, setAiSkipped } from "@/shared/lib/shop/photoMark";
 import { uploadImageToCloudinary } from "@/shared/lib/uploadToCloudinary";
 import { cloudinaryThumb, isCloudinaryUrl } from "@/shared/lib/cloudinaryImage";
 import ImageAdjustDialog from "@/modules/ecommerce/components/ImageAdjustDialog";
+import PhotoCleanUpDialog from "@/modules/ecommerce/components/PhotoCleanUpDialog";
 import PhotoEditorDialog from "@/modules/ecommerce/components/PhotoEditorDialog";
 import PhotoLibraryDialog from "@/modules/ecommerce/components/PhotoLibraryDialog";
 
@@ -34,6 +35,7 @@ export default function ProductGalleryUploader({
     const [urlValue, setUrlValue] = useState("");
     const [adjustIdx, setAdjustIdx] = useState<number | null>(null);
     const [editIdx, setEditIdx] = useState<number | null>(null);
+    const [cleanIdx, setCleanIdx] = useState<number | null>(null);
     const [libraryOpen, setLibraryOpen] = useState(false);
     const [selectedState, setSelectedState] = useState(0);
     const selected = selectedProp ?? selectedState;
@@ -210,6 +212,21 @@ export default function ProductGalleryUploader({
                                 type="button"
                                 variant="outline"
                                 size="sm"
+                                title={
+                                    isCloudinaryUrl(urls[selected])
+                                        ? "Clean up — product onto white, fills the frame, soft shadow; saves a new copy"
+                                        : "Only uploaded images can be cleaned up"
+                                }
+                                disabled={uploading || !isCloudinaryUrl(urls[selected])}
+                                onClick={() => setCleanIdx(selected)}
+                            >
+                                <Eraser className="mr-2 size-4" />
+                                Clean up
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
                                 disabled={selected === 0}
                                 onClick={() => makePrimary(selected)}
                             >
@@ -299,6 +316,14 @@ export default function ProductGalleryUploader({
                     open
                     onOpenChange={(o) => !o && setAdjustIdx(null)}
                     onSave={(next) => replaceAt(adjustIdx, next)}
+                />
+            ) : null}
+            {cleanIdx !== null && urls[cleanIdx] ? (
+                <PhotoCleanUpDialog
+                    key={`clean-${cleanIdx}`}
+                    url={urls[cleanIdx]}
+                    onClose={() => setCleanIdx(null)}
+                    onSave={(next) => replaceAt(cleanIdx, next)}
                 />
             ) : null}
             {editIdx !== null && urls[editIdx] ? (
