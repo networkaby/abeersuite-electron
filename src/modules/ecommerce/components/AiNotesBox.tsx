@@ -5,7 +5,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { extractApiError } from "@/shared/lib/api";
-import { splitAttention, type PrepProblem, type PrepRun, type StaffNote } from "@/modules/ecommerce/lib/productAdmin";
+import { problemText, splitAttention, type PrepProblem, type PrepRun, type StaffNote } from "@/modules/ecommerce/lib/productAdmin";
 
 /** One place for every AI note on a product (owner, 2026-11-12): the Attention reason,
  *  Claude's review notes (kept, dated, after publishing) and the latest copy run's notes. */
@@ -17,7 +17,7 @@ export type AiNotesBoxProps = {
     prep?: { productId: number; runs: PrepRun[]; problems: PrepProblem[]; staffNote?: StaffNote | null; onChanged: () => void } | null;
 };
 
-const STAGE: Record<string, string> = { UNPUBLISHED: "Unpublished", WAITING: "Waiting", DRAFT: "Draft", ATTENTION: "Attention", READY: "Ready", PUBLISHED: "Published" };
+const STAGE: Record<string, string> = { UNPUBLISHED: "Unpublished", WAITING: "Start", DRAFT: "Draft", ATTENTION: "Attention", READY: "Ready", PUBLISHED: "Published" };
 
 /** One short history line (owner, 2026-11-20: "simple"): when, which part, stage, found / fixed. */
 function runLine(r: PrepRun) {
@@ -127,7 +127,7 @@ function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]> & { oldRuns?: str
                                 <li key={p.text} className="flex items-start justify-between gap-3">
                                     <span className={tone}>
                                         <span className={`mr-1.5 inline-block size-2 rounded-full ${dot}`} />
-                                        {i + 1}. {p.text}
+                                        {i + 1}. {problemText(p.text)}
                                         <span className="ml-1 text-muted-foreground">
                                             · {staff ? (p.by ?? "staff") : `AI part ${p.part}`}
                                             {aside && ` · can't fix now${p.asideBy ? ` (${p.asideBy}, ${formatDate(p.asideAt!)})` : ""} — not blocking, stays until fixed`}

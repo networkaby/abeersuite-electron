@@ -536,7 +536,7 @@ async function photoListOf(part: 1 | 3 | 4 | 5, id: number, c: PhotoCheck, galle
     const missing = missingMust(checklist);
     const lines = [
         ...(mainBlock ? [mainBlock] : []),
-        ...(missing.length ? [`Must photo missing: ${missing.map(photoKindLabel).join(", ")} — add it, or tick "Not applicable" under Product image.`] : []),
+        ...(missing.length ? [`Must photo missing: ${missing.map(photoKindLabel).join(", ")}`] : []),
     ];
     const dropNotes = drops.map((d) => `Photo "${photoKindLabel(d.kind as PhotoKind)}" no longer a must: ${d.why}${have.has(d.kind as PhotoKind) ? " — the photo we have stays." : ""}`);
     if (mainWaived) dropNotes.push(`Main photo is not clean${c.mainWhy ? ` (${c.mainWhy})` : ""} — staff ticked "Can't do", so it does not block.`);
@@ -1140,8 +1140,8 @@ export async function savePart4(id: number, input: z.infer<typeof part4Schema>) 
     const byStaff = list.missing.filter((k) => !where.has(k));
     const photoLines = [
         ...(list.mainProblem ? [list.mainProblem] : []),
-        ...(onPage.length ? [`Must photo missing, found on a saved page — run Part 5 to add it: ${onPage.map((k) => `${photoKindLabel(k)} (${where.get(k)})`).join(", ")}.`] : []),
-        ...(byStaff.length ? [`Must photo missing, not on any saved page — take it, or tick "Not applicable" under Product image: ${byStaff.map(photoKindLabel).join(", ")}.`] : []),
+        ...(onPage.length ? [`Must photo missing, on a saved page: ${onPage.map((k) => `${photoKindLabel(k)} (${where.get(k)})`).join(", ")}`] : []),
+        ...(byStaff.length ? [`Must photo missing: ${byStaff.map(photoKindLabel).join(", ")}`] : []),
     ];
     const aside = notAside(await asideKeys(id));
     const b = { ...input, pending: [...photoLines, ...input.pending].filter(aside), notes: input.notes.filter(aside), next: input.next ?? (photoLines.length ? ("part5" as const) : undefined) };

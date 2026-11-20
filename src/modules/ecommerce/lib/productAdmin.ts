@@ -43,6 +43,15 @@ export type RowProblem = { text: string; level: "stop" | "fix" | "note"; aside?:
 
 export type StaffNote = { text: string; by: string; at: string };
 
+/**
+ * A problem as staff read it (owner, 2026-11-20: "only clean problem"): the
+ * problem alone, without the "— add it, or tick … under Product image" how-to
+ * that older runs wrote after it.
+ */
+export function problemText(text: string): string {
+    return text.replace(/\s+—\s+(add it|take it|run Part \d)[^:]*?(?=:|$)/i, "").replace(/[.\s]+$/, "").trim();
+}
+
 /** The {…} items of a manual note — each one is an open problem for the AI. */
 export function noteItems(text: string): string[] {
     return [...new Set([...text.matchAll(/\{([^{}]+)\}/g)].map((m) => m[1].replace(/\s+/g, " ").trim()).filter(Boolean))];
@@ -58,7 +67,7 @@ export function splitAttention(text: string | null | undefined): { problems: Row
     const rest: string[] = [];
     for (const line of (text ?? "").split("\n").map((l) => l.trim()).filter(Boolean)) {
         const m = /^(PENDING|STOPPED|NOTE) \(Part \d\) — (.*)$/.exec(line);
-        if (m) problems.push({ text: m[2].trim(), level: m[1] === "NOTE" ? "fix" : "stop" });
+        if (m) problems.push({ text: problemText(m[2]), level: m[1] === "NOTE" ? "fix" : "stop" });
         else rest.push(line);
     }
     return { problems: [...problems.filter((p) => p.level === "stop"), ...problems.filter((p) => p.level === "fix")], rest };
@@ -67,7 +76,7 @@ export function splitAttention(text: string | null | undefined): { problems: Row
 /** A row's problems: the saved list when the product has one, else read from its Attention reason. */
 export function rowProblems(info: ShopDraft | null, attention: string | null): RowProblem[] {
     const list = info?.problems ?? [];
-    const row = (p: PrepProblem): RowProblem => ({ text: p.source === "staff" && p.by ? `${p.by}: ${p.text}` : p.text, level: p.source === "staff" ? "note" : p.level, ...(p.asideAt && { aside: true }) });
+    const row = (p: PrepProblem): RowProblem => ({ text: p.source === "staff" && p.by ? `${p.by}: ${p.text}` : problemText(p.text), level: p.source === "staff" ? "note" : p.level, ...(p.asideAt && { aside: true }) });
     const staff = list.filter((p) => p.source === "staff").map(row);
     const ai = list.filter((p) => p.source !== "staff");
     return [...staff, ...(ai.length ? ai.map(row) : splitAttention(attention).problems)];
