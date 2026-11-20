@@ -55,7 +55,15 @@ export default function PhotoEditorDialog({
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex flex-col bg-background" role="dialog" aria-label="Edit photo">
+        // A modal over the product page (the page stays visible behind), not a full-screen takeover.
+        // A backdrop click does nothing — it would throw away unsaved edits; close with the editor's ✕.
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-2 sm:p-4">
+            <div
+                className="relative flex h-[94vh] w-full max-w-[1600px] flex-col overflow-hidden rounded-lg border bg-background shadow-2xl"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Edit photo"
+            >
             {saving ? (
                 <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/70 text-sm">
                     Uploading edited photo…
@@ -80,6 +88,7 @@ export default function PhotoEditorDialog({
                     onSave={(data) => void save(data.imageCanvas)}
                     onClose={() => onClose()}
                 />
+            </div>
             </div>
         </div>
     );
