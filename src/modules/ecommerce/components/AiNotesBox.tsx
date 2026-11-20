@@ -5,7 +5,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { extractApiError } from "@/shared/lib/api";
-import { problemText, splitAttention, type PrepProblem, type PrepRun, type StaffNote } from "@/modules/ecommerce/lib/productAdmin";
+import { problemText, splitAttention, type ClosedProblem, type PrepProblem, type PrepRun, type StaffNote } from "@/modules/ecommerce/lib/productAdmin";
 
 /** One place for every AI note on a product (owner, 2026-11-12): the Attention reason,
  *  Claude's review notes (kept, dated, after publishing) and the latest copy run's notes. */
@@ -14,7 +14,7 @@ export type AiNotesBoxProps = {
     review?: { notes: string[]; at?: string | null; kept?: boolean } | null;
     copy?: { source: string; notes: string[]; flags: string[] } | null;
     /** Product prep's runs and open problems (owner, 2026-11-20) — when there are any, the box shows only these. */
-    prep?: { productId: number; runs: PrepRun[]; problems: PrepProblem[]; staffNote?: StaffNote | null; onChanged: () => void } | null;
+    prep?: { productId: number; runs: PrepRun[]; problems: PrepProblem[]; staffNote?: StaffNote | null; closed?: ClosedProblem[]; onChanged: () => void } | null;
 };
 
 const STAGE: Record<string, string> = { UNPUBLISHED: "Unpublished", WAITING: "Start", DRAFT: "Draft", ATTENTION: "Attention", READY: "Ready", PUBLISHED: "Published" };
@@ -107,9 +107,9 @@ function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]> & { oldRuns?: str
             setBusy(null);
         }
     };
-    const history = [...runs.map(runLine).reverse(), ...oldRuns];
-    const latest = history[0];
-    const older = history.slice(1);
+    const latest = runs.length ? runLine(runs[runs.length - 1]) : oldRuns[0];
+    // History = the closed problems (owner, 2026-11-20): what left the open list, who closed it, when.
+    const closed = [...(props.closed ?? [])].reverse();
     return (
         <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3 text-xs">
             <p className="text-sm font-medium">AI notes</p>
@@ -146,11 +146,16 @@ function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]> & { oldRuns?: str
                 </div>
             )}
             <ManualNote {...props} />
-            {older.length > 0 && (
+            {closed.length > 0 && (
                 <details>
-                    <summary className="cursor-pointer text-muted-foreground">AI history ({older.length})</summary>
+                    <summary className="cursor-pointer text-muted-foreground">AI history — closed problems ({closed.length})</summary>
                     <ul className="mt-1 space-y-0.5 pl-4 text-muted-foreground">
-                        {older.map((r) => <li key={r}>{r}</li>)}
+                        {closed.map((c) => (
+                            <li key={`${c.at}-${c.text}`}>
+                                <span className="text-green-700 dark:text-green-400">✓</span> {problemText(c.text)}
+                                <span className="opacity-80"> · raised by {c.raisedBy} · {c.how === "removed" ? "removed from the note" : "closed"} by {c.by} · {formatDate(c.at)}</span>
+                            </li>
+                        ))}
                     </ul>
                 </details>
             )}

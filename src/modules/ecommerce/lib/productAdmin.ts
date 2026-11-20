@@ -32,11 +32,24 @@ export type ShopDraft = {
     staffNote?: StaffNote;
     /** How many staff {…} problems are open — the products list reads only this. */
     noteCount?: number;
+    /** Problems that left the open list (owner, 2026-11-20: the history is the closed list) — newest last, last 20. */
+    closed?: ClosedProblem[];
 };
 
 /** found / fixed: how many open problems the run added / removed (the one-line history). */
 export type PrepRun = { skill: "product-prep" | "product-recheck"; part: string; at: string; from: ShopStatus; to: ShopStatus; found?: number; fixed?: number };
 /** source "staff" = a {…} item from the manual note (part 0, `by` = who wrote it). */
+/** by = "AI part 5" / "AI" / a staff name; how = fixed (AI checked) · removed from the note. */
+export type ClosedProblem = { text: string; level: "stop" | "fix"; source?: "staff"; raisedBy: string; at: string; by: string; how: "fixed" | "removed" };
+
+/** Append what left the open list, newest last, last 20 kept. */
+export function withClosed(info: ShopDraft | null, gone: PrepProblem[], by: string, how: ClosedProblem["how"]): ClosedProblem[] | undefined {
+    const now = new Date().toISOString();
+    const add = gone.map((p): ClosedProblem => ({ text: p.text, level: p.level, ...(p.source && { source: p.source }), raisedBy: p.source === "staff" ? (p.by ?? "staff") : `AI part ${p.part}`, at: now, by, how }));
+    const list = [...(info?.closed ?? []), ...add].slice(-20);
+    return list.length ? list : undefined;
+}
+
 export type PrepProblem = { text: string; level: "stop" | "fix"; part: number; at: string; source?: "staff"; by?: string; asideBy?: string; asideAt?: string };
 
 export type RowProblem = { text: string; level: "stop" | "fix" | "note"; aside?: boolean };
@@ -91,10 +104,11 @@ function fromOldNotes(raw: unknown): StaffNote | undefined {
     if (!old.length) return undefined;
     return { text: old.map((n) => (n.doneAt ? `- ✓ ${n.text}` : `- {${n.text}}`)).join("\n"), by: old[old.length - 1].by, at: old[old.length - 1].at };
 }
+const isClosed = (x: unknown): x is ClosedProblem => !!x && typeof x === "object" && typeof (x as ClosedProblem).text === "string" && typeof (x as ClosedProblem).at === "string";
 const isProblem = (x: unknown): x is PrepProblem => !!x && typeof x === "object" && typeof (x as PrepProblem).text === "string";
 
 /** Runs, the manual note, staff problems and set-aside problems outlive Ready / Discard — they are the product's history, not the draft's. */
-export function prepHistory(info: ShopDraft | null): Pick<ShopDraft, "runs" | "problems" | "asideCount" | "staffNote" | "noteCount"> {
+export function prepHistory(info: ShopDraft | null): Pick<ShopDraft, "runs" | "problems" | "asideCount" | "staffNote" | "noteCount" | "closed"> {
     const kept = (info?.problems ?? []).filter((p) => p.asideAt || p.source === "staff");
     const aside = kept.filter((p) => p.asideAt).length;
     const open = kept.filter((p) => p.source === "staff" && !p.asideAt).length;
@@ -104,6 +118,7 @@ export function prepHistory(info: ShopDraft | null): Pick<ShopDraft, "runs" | "p
         ...(aside && { asideCount: aside }),
         ...(info?.staffNote && { staffNote: info.staffNote }),
         ...(open && { noteCount: open }),
+        ...(info?.closed?.length && { closed: info.closed }),
     };
 }
 
@@ -120,6 +135,7 @@ export function readShopDraft(raw: unknown): ShopDraft | null {
     }
     const aside = problems.filter((p) => p.asideAt).length;
     const openStaff = problems.filter((p) => p.source === "staff" && !p.asideAt).length;
+    const closed = Array.isArray((raw as { closed?: unknown }).closed) ? ((raw as { closed: unknown[] }).closed).filter(isClosed).slice(-20) : [];
     const notes = Array.isArray(r.notes) ? r.notes.filter((x): x is string => typeof x === "string") : [];
     const stages: unknown[] = ["UNPUBLISHED", "READY", "PUBLISHED"]; // never a work stage (Draft / Attention / Waiting)
     return {
@@ -133,6 +149,7 @@ export function readShopDraft(raw: unknown): ShopDraft | null {
         ...(aside ? { asideCount: aside } : {}),
         ...(staffNote ? { staffNote } : {}),
         ...(openStaff ? { noteCount: openStaff } : {}),
+        ...(closed.length ? { closed } : {}),
     };
 }
 

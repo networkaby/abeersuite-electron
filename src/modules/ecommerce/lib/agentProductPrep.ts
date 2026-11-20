@@ -7,7 +7,7 @@ import { AI_PHOTO_LIMITS } from "@/shared/lib/constants/ai";
 import { COMPATIBLE_SPEC } from "@/shared/lib/shop/compatibility";
 import { getR2Text, isR2Configured, messagesBucket, putR2 } from "@/shared/lib/storage/r2";
 import type { ProductCopy } from "@/modules/ecommerce/lib/aiProductCopy";
-import { noteItems, readShopDraft, type PrepProblem, type PrepRun, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
+import { noteItems, readShopDraft, withClosed, type PrepProblem, type PrepRun, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
 import type { ShopStatus } from "@/generated/prisma/enums";
 import { updateShopProduct, type ShopProductPatch } from "@/modules/ecommerce/lib/updateShopProduct";
 import { startAi } from "@/modules/ecommerce/lib/shopWaiting";
@@ -119,9 +119,12 @@ export async function recordRun(id: number, skill: PrepRun["skill"], part: strin
     const found = open.filter((p) => !wasOpen.has(problemKey(p.text))).length;
     const fixed = [...wasOpen].filter((k) => !open.some((p) => problemKey(p.text) === k)).length;
     const runs = [...(info?.runs ?? []), { skill, part, at: now, from, to: r.shopStatus, ...(found && { found }), ...(fixed && { fixed }) }].slice(-10);
+    // AI problems this run no longer raises: closed by this run.
+    const gone = before.filter((p) => !p.asideAt && p.source !== "staff" && !open.some((o) => problemKey(o.text) === problemKey(p.text)));
+    const closed = gone.length ? withClosed(info, gone, `AI part ${part.split(" ")[0]}`, "fixed") : info?.closed;
     await prisma.invProduct.update({
         where: { id },
-        data: { shopDraftJson: { ...info, runs, problems: problems.length ? problems : undefined, asideCount: aside.length || undefined, noteCount: staff.length || undefined } as never },
+        data: { shopDraftJson: { ...info, runs, closed, problems: problems.length ? problems : undefined, asideCount: aside.length || undefined, noteCount: staff.length || undefined } as never },
     });
 }
 
@@ -1219,9 +1222,11 @@ export async function saveStaffNote(id: number, text: string, by: string) {
     const problems = [...staff, ...list.filter((p) => p.source !== "staff")];
     const asideCount = problems.filter((p) => p.asideAt).length;
     const noteCount = staff.filter((p) => !p.asideAt).length;
+    const removed = [...oldStaff.values()].filter((p) => !staff.some((x) => problemKey(x.text) === problemKey(p.text)));
+    const closed = removed.length ? withClosed(info, removed, by, "removed") : info?.closed;
     await prisma.invProduct.update({
         where: { id },
-        data: { shopDraftJson: { ...info, staffNote: clean ? { text: clean, by, at: now } : undefined, staffNotes: undefined, problems: problems.length ? problems : undefined, asideCount: asideCount || undefined, noteCount: noteCount || undefined } as never },
+        data: { shopDraftJson: { ...info, closed, staffNote: clean ? { text: clean, by, at: now } : undefined, staffNotes: undefined, problems: problems.length ? problems : undefined, asideCount: asideCount || undefined, noteCount: noteCount || undefined } as never },
     });
     return { staffNote: clean ? { text: clean, by, at: now } : null, problems };
 }
@@ -1247,7 +1252,7 @@ export async function markFixed(id: number, texts: string[]) {
     await prisma.invProduct.update({
         where: { id },
         data: {
-            shopDraftJson: { ...info, staffNote: note, problems: problems.length ? problems : undefined, asideCount: problems.filter((p) => p.asideAt).length || undefined, noteCount: problems.filter((p) => p.source === "staff" && !p.asideAt).length || undefined } as never,
+            shopDraftJson: { ...info, closed: gone.length ? withClosed(info, gone, "AI", "fixed") : info?.closed, staffNote: note, problems: problems.length ? problems : undefined, asideCount: problems.filter((p) => p.asideAt).length || undefined, noteCount: problems.filter((p) => p.source === "staff" && !p.asideAt).length || undefined } as never,
             shopAttention: attention,
         },
     });
