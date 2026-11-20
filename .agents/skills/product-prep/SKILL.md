@@ -100,11 +100,22 @@ curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$PRODUCT_COPY_READ_URL/api/agent
 
 Answer = product-copy's read (`name, brand, modelNo, barcodes, typedSpecs, photos, writing, masters …`) **plus**
 `title` (online name), `group`, `shipping`, `attention` (Attention reason now), `draftNotes`, `processNotes`, and
-`prep: { runs, changedSinceRun, problems, partDone, path, photosDoneAt, photoStatus, next, identityChanged, searchAllowed, searchedAt, pages, dropped, labelFacts, seen, labelWebsite }`.
+`prep: { runs, changedSinceRun, problems, staffNote, partDone, path, photosDoneAt, photoStatus, next, identityChanged, searchAllowed, searchedAt, pages, dropped, labelFacts, seen, labelWebsite }`.
 
-**Run records first — never run the same thing twice for nothing** (owner, 2026-11-20). `prep.runs` = the last 5 runs (`{ skill, part, at, from, to }`, oldest first); the server writes one after every call — you never send it. `prep.changedSinceRun: false` and the last run is the same path you are about to run (`"1+5"`, `"1+2+3"`, `"1+3"`) → **skip the product** ("already ran on <date>, nothing changed since"), unless the owner said **"redo"** or named this SKU. `changedSinceRun: true` (staff saved it after the run) → go on.
+**Run records first — never run the same thing twice for nothing** (owner, 2026-11-20). `prep.runs` = the last 10 runs (`{ skill, part, at, from, to, found?, fixed? }`, oldest first); the server writes one after every call — you never send it. `prep.changedSinceRun: false` and the last run is the same path you are about to run (`"1+5"`, `"1+2+3"`, `"1+3"`) → **skip the product** ("already ran on <date>, nothing changed since"), unless the owner said **"redo"** or named this SKU. `changedSinceRun: true` (staff saved it after the run) → go on.
 
-**Set-aside problems** (owner, 2026-11-20): `prep.problems` = what staff must solve (`level`: `stop` red, `fix` yellow). One with `asideAt` was ticked **"can't fix now"** by staff — never write it again in `staff`, never stop on it; the server drops it anyway. It stays on the product for later; the products list's **Set aside** tab finds them.
+**One shared open-problem list** (owner, 2026-11-20). `prep.problems` = every open problem on the product, whoever raised it: `{ text, level: stop | fix, part, source?, by?, asideAt? }`.
+- Raised by a part (`part` 1–5) or by **staff** (`source: "staff"`, `by` = who) — staff write theirs as `{…}` in the product's manual note (`prep.staffNote`, Markdown; text outside `{ }` is for people, ignore it). Treat a staff problem **exactly like any other**: do it first, within what this skill may do. An open staff problem always makes `changedSinceRun: true` — never skip that product.
+- **`asideAt`** = staff ticked **"can't fix now"**: it does not block and you never write it again in `staff` / `pending`, but it **stays until fixed** — if you see it is fixed now, report it fixed.
+- **You fixed one** (any source, set aside or not) → report it, one call for all, before the part call:
+
+```bash
+curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json"   "$PRODUCT_COPY_WRITE_URL/api/agent/prep/<id>/fixed" -d '{ "fixed": ["Must photo missing: Box back", "Add one more photo of the side ports"] }'
+```
+  Send each `text` exactly as in `prep.problems`. The server removes them from the list and the Attention reason, and a staff one turns into `✓ …` in the note. Could not do a staff one (needs a person) → leave it open and say why in your part's `notes`.
+- A new problem you find goes in the part's `staff` / `pending` as before — the server adds it to the same list. Every run, refused ones included, leaves its one-line history record (`prep.runs`, last 10, `{ skill, part, at, from, to, found?, fixed? }`) by itself; you never send one.
+
+**"Check the open problems that say xyz"** (the owner's words, any product): `GET $PRODUCT_COPY_READ_URL/api/agent/prep/problems?q=<words>` → `{ count, products: [{ sku, id, name, stage, problems: [{ text, level, source, aside }] }] }` — all words must match, any order; no `q` = every product with an open problem. Report by SKU; work on them only if the owner says so.
 
 **`prep.path` decides first** (owner, 2026-11-20): `"part1+part5"` (a description is there — written by staff before this loop, or by an earlier Part 3) → **Parts 1 + 5**, whatever `partDone` says. `"part1+part2+part3"` (no description) → the steps below.
 

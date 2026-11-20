@@ -51,8 +51,20 @@ curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$PRODUCT_COPY_READ_URL/api/agent
 
 Use: the product fields, every photo (open each — `GET /api/agent/products/<id>/photos/<n>` if blocked), `draftNotes`, `processNotes`, `attention`, and `prep.pages` / `prep.labelFacts` (the saved search — the only outside source allowed).
 `prep.identityChanged: true` → staff changed brand / model / barcode after the search: **pending** "Identity changed after the search — run product prep from Part 1".
-`prep.runs` (last 5 runs, `{ skill, part, at, from, to }`) and `prep.changedSinceRun` (owner, 2026-11-20): the last run was a product-recheck and `changedSinceRun: false` → **skip** ("verified / checked on <date>, nothing changed since") unless the owner said **"redo"** or named the SKU.
-`prep.problems` with `asideAt` = staff ticked **"can't fix now"**: never write it again in `pending` / `notes` — it is set aside on purpose and must not block Ready.
+`prep.runs` (last 10 runs, `{ skill, part, at, from, to, found?, fixed? }`) and `prep.changedSinceRun` (owner, 2026-11-20): the last run was a product-recheck and `changedSinceRun: false` → **skip** ("verified / checked on <date>, nothing changed since") unless the owner said **"redo"** or named the SKU.
+
+**One shared open-problem list** (owner, 2026-11-20). `prep.problems` = every open problem on the product, whoever raised it: `{ text, level: stop | fix, part, source?, by?, asideAt? }`.
+- Raised by a part (`part` 1–5) or by **staff** (`source: "staff"`, `by` = who) — staff write theirs as `{…}` in the product's manual note (`prep.staffNote`, Markdown; text outside `{ }` is for people, ignore it). Treat a staff problem **exactly like any other**: do it first, within what this skill may do. An open staff problem always makes `changedSinceRun: true` — never skip that product.
+- **`asideAt`** = staff ticked **"can't fix now"**: it does not block and you never write it again in `staff` / `pending`, but it **stays until fixed** — if you see it is fixed now, report it fixed.
+- **You fixed one** (any source, set aside or not) → report it, one call for all, before the part call:
+
+```bash
+curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json"   "$PRODUCT_COPY_WRITE_URL/api/agent/prep/<id>/fixed" -d '{ "fixed": ["Must photo missing: Box back", "Add one more photo of the side ports"] }'
+```
+  Send each `text` exactly as in `prep.problems`. The server removes them from the list and the Attention reason, and a staff one turns into `✓ …` in the note. Could not do a staff one (needs a person) → leave it open and say why in your part's `notes`.
+- A new problem you find goes in the part's `staff` / `pending` as before — the server adds it to the same list. Every run, refused ones included, leaves its one-line history record (`prep.runs`, last 10, `{ skill, part, at, from, to, found?, fixed? }`) by itself; you never send one.
+
+**"Check the open problems that say xyz"** (the owner's words, any product): `GET $PRODUCT_COPY_READ_URL/api/agent/prep/problems?q=<words>` → `{ count, products: [{ sku, id, name, stage, problems: [{ text, level, source, aside }] }] }` — all words must match, any order; no `q` = every product with an open problem. Report by SKU; work on them only if the owner says so.
 
 ## The photo list (send it as `photoCheck`)
 
