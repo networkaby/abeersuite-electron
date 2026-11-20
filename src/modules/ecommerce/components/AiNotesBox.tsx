@@ -14,75 +14,67 @@ export type AiNotesBoxProps = {
     review?: { notes: string[]; at?: string | null; kept?: boolean } | null;
     copy?: { source: string; notes: string[]; flags: string[] } | null;
     /** Product prep's runs and open problems (owner, 2026-11-20) — when there are any, the box shows only these. */
-    prep?: { productId: number; runs: PrepRun[]; problems: PrepProblem[]; staffNotes?: StaffNote[]; onChanged: () => void } | null;
+    prep?: { productId: number; runs: PrepRun[]; problems: PrepProblem[]; staffNote?: StaffNote | null; onChanged: () => void } | null;
 };
 
 const STAGE: Record<string, string> = { UNPUBLISHED: "Unpublished", WAITING: "Waiting", DRAFT: "Draft", ATTENTION: "Attention", READY: "Ready", PUBLISHED: "Published" };
 
-/** Only what must be solved, and which skill ran when (owner, 2026-11-20). */
+/** One short history line (owner, 2026-11-20: "simple"): when, which part, stage, found / fixed. */
+function runLine(r: PrepRun) {
+    const counts = [r.found ? `found ${r.found}` : "", r.fixed ? `fixed ${r.fixed}` : ""].filter(Boolean).join(", ");
+    return `${r.skill} part ${r.part} · ${formatDate(r.at)} · ${STAGE[r.from] ?? r.from} → ${STAGE[r.to] ?? r.to}${counts ? ` · ${counts}` : ""}`;
+}
+
 /**
- * Staff / owner instructions for the next AI run (owner, 2026-11-20): "add one
- * more photo", "check xyz and do abcd". The run reads them and reports back.
+ * The manual note (owner, 2026-11-20): one box staff edit directly, Markdown
+ * bullets allowed. Text in {…} is for the AI and joins the open problems; the
+ * rest is for people. Add note → Update note; cleared → Remove note.
  */
-function StaffNotes({ productId, staffNotes = [], onChanged }: NonNullable<AiNotesBoxProps["prep"]>) {
-    const [text, setText] = useState("");
+function ManualNote({ productId, staffNote, onChanged }: NonNullable<AiNotesBoxProps["prep"]>) {
+    const saved = staffNote?.text ?? "";
+    const [text, setText] = useState(saved);
     const [busy, setBusy] = useState(false);
-    const send = async (body: object) => {
+    const [base, setBase] = useState(saved);
+    if (saved !== base) {
+        setBase(saved);
+        setText(saved);
+    }
+    const changed = text.trim() !== saved.trim();
+    const label = !saved ? "Add note" : text.trim() ? "Update note" : "Remove note";
+    const save = async () => {
         setBusy(true);
         try {
-            await axios.post(`/api/ecommerce/products/${productId}/staff-notes`, body);
+            await axios.post(`/api/ecommerce/products/${productId}/staff-notes`, { text });
             onChanged();
-            return true;
         } catch (e) {
             toast.error(extractApiError(e, "Could not save the note"));
-            return false;
         } finally {
             setBusy(false);
         }
     };
-    const open = staffNotes.filter((n) => !n.doneAt);
-    const done = staffNotes.filter((n) => n.doneAt).slice(-3);
     return (
         <div>
-            <p className="font-medium">Notes for the AI</p>
-            {(open.length > 0 || done.length > 0) && (
-                <ul className="mt-1 space-y-1">
-                    {[...open, ...done].map((n) => (
-                        <li key={n.id} className="flex items-start justify-between gap-3">
-                            <span className={n.doneAt ? "text-muted-foreground line-through decoration-1" : "text-blue-700 dark:text-blue-400"}>
-                                <span className={`mr-1.5 inline-block size-2 rounded-full ${n.doneAt ? "bg-muted-foreground/50" : "bg-blue-600"}`} />
-                                {n.text} <span className="text-muted-foreground no-underline">— {n.by} · {formatDate(n.at)}</span>
-                                {n.reply && <span className="block pl-3.5 text-muted-foreground no-underline">AI: {n.reply}</span>}
-                            </span>
-                            <label className="flex shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap text-muted-foreground">
-                                <input type="checkbox" checked={!!n.doneAt} disabled={busy} onChange={(e) => void send({ noteId: n.id, done: e.target.checked })} />
-                                done
-                            </label>
-                        </li>
-                    ))}
-                </ul>
-            )}
-            <form
-                className="mt-1.5 flex gap-2"
-                onSubmit={async (e) => {
-                    e.preventDefault();
-                    if (text.trim() && (await send({ add: text.trim() }))) setText("");
-                }}
-            >
-                <input
-                    type="text"
-                    value={text}
-                    maxLength={500}
-                    onChange={(e) => setText(e.target.value)}
-                    placeholder="e.g. add one more photo of the back"
-                    className="h-7 min-w-0 flex-1 rounded border border-border bg-background px-2 text-xs"
-                />
-                <button type="submit" disabled={busy || !text.trim()} className="h-7 rounded border border-border px-2 text-xs disabled:opacity-50">Add note</button>
-            </form>
+            <p className="font-medium">Manual note</p>
+            <textarea
+                value={text}
+                maxLength={4000}
+                rows={Math.min(10, Math.max(3, text.split("\n").length + 1))}
+                onChange={(e) => setText(e.target.value)}
+                placeholder={"- Box is torn on the left, do not show it\n- {Add one more photo of the side ports}"}
+                className="mt-1 w-full rounded border border-border bg-background px-2 py-1 font-mono text-xs"
+            />
+            <div className="mt-1 flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">
+                    Text in {"{ }"} goes to the AI as an open problem; the rest is for people.
+                    {staffNote && ` ${staffNote.by} · ${formatDate(staffNote.at)}`}
+                </span>
+                <button type="button" onClick={() => void save()} disabled={busy || !changed} className="h-7 shrink-0 rounded border border-border px-2 text-xs disabled:opacity-50">{label}</button>
+            </div>
         </div>
     );
 }
 
+/** The latest run, the one shared open list, the manual note and the short history (owner, 2026-11-20). */
 function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]>) {
     const { productId, runs, problems, onChanged } = props;
     const [busy, setBusy] = useState<string | null>(null);
@@ -97,29 +89,30 @@ function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]>) {
             setBusy(null);
         }
     };
+    const latest = runs.at(-1);
+    const older = runs.slice(0, -1).reverse();
     return (
         <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3 text-xs">
             <p className="text-sm font-medium">AI notes</p>
-            {runs.length > 0 && (
-                <ul className="space-y-0.5 text-muted-foreground">
-                    {runs.map((r) => (
-                        <li key={r.at}>{r.skill} part {r.part} · {formatDate(r.at)} · {STAGE[r.from] ?? r.from} → {STAGE[r.to] ?? r.to}</li>
-                    ))}
-                </ul>
-            )}
+            {latest && <p className="text-muted-foreground">{runLine(latest)}</p>}
             {problems.length > 0 && (
                 <div>
                     <p className="font-medium">Open problems</p>
                     <ol className="mt-1 space-y-1">
                         {problems.map((p, i) => {
                             const aside = !!p.asideAt;
-                            const tone = aside ? "text-muted-foreground line-through decoration-1" : p.level === "stop" ? "text-red-700 dark:text-red-400" : "text-amber-700 dark:text-amber-400";
+                            const staff = p.source === "staff";
+                            const tone = aside ? "text-muted-foreground" : staff ? "text-blue-700 dark:text-blue-400" : p.level === "stop" ? "text-red-700 dark:text-red-400" : "text-amber-700 dark:text-amber-400";
+                            const dot = aside ? "bg-muted-foreground/50" : staff ? "bg-blue-600" : p.level === "stop" ? "bg-red-600" : "bg-amber-500";
                             return (
                                 <li key={p.text} className="flex items-start justify-between gap-3">
                                     <span className={tone}>
-                                        <span className={`mr-1.5 inline-block size-2 rounded-full ${aside ? "bg-muted-foreground/50" : p.level === "stop" ? "bg-red-600" : "bg-amber-500"}`} />
+                                        <span className={`mr-1.5 inline-block size-2 rounded-full ${dot}`} />
                                         {i + 1}. {p.text}
-                                        {aside && <span className="ml-1 no-underline">(set aside{p.asideBy ? ` by ${p.asideBy}` : ""}{p.asideAt ? ` · ${formatDate(p.asideAt)}` : ""})</span>}
+                                        <span className="ml-1 text-muted-foreground">
+                                            · {staff ? (p.by ?? "staff") : `AI part ${p.part}`}
+                                            {aside && ` · can't fix now${p.asideBy ? ` (${p.asideBy}, ${formatDate(p.asideAt!)})` : ""} — not blocking, stays until fixed`}
+                                        </span>
                                     </span>
                                     <label className="flex shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap text-muted-foreground">
                                         <input type="checkbox" checked={aside} disabled={busy === p.text} onChange={(e) => void tick(p, e.target.checked)} />
@@ -131,7 +124,15 @@ function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]>) {
                     </ol>
                 </div>
             )}
-            <StaffNotes {...props} />
+            <ManualNote {...props} />
+            {older.length > 0 && (
+                <details>
+                    <summary className="cursor-pointer text-muted-foreground">AI history ({older.length})</summary>
+                    <ul className="mt-1 space-y-0.5 pl-4 text-muted-foreground">
+                        {older.map((r) => <li key={r.at}>{runLine(r)}</li>)}
+                    </ul>
+                </details>
+            )}
         </div>
     );
 }
@@ -174,7 +175,7 @@ function NoteList({ lines, hideRun }: { lines: string[]; hideRun?: boolean }) {
 
 export function AiNotesBox({ attention, review, copy, prep }: AiNotesBoxProps) {
     // With a product (not a new one) the prep box always shows, so staff can leave the first note.
-    if (prep && (prep.runs.length || prep.problems.length || prep.staffNotes?.length || (!attention && !review?.notes.length && !copy?.notes.length && !copy?.flags.length))) return <PrepNotes {...prep} />;
+    if (prep && (prep.runs.length || prep.problems.length || prep.staffNote || (!attention && !review?.notes.length && !copy?.notes.length && !copy?.flags.length))) return <PrepNotes {...prep} />;
     const hasCopy = !!copy && (copy.notes.length > 0 || copy.flags.length > 0);
     // The Attention reason carries its own Last run line — shown once.
     const runShown = !!attention?.text.includes("Last run: ");
@@ -216,7 +217,7 @@ export function AiNotesBox({ attention, review, copy, prep }: AiNotesBoxProps) {
                     <NoteList lines={copy!.notes} hideRun={runShown} />
                 </div>
             )}
-            {prep && <StaffNotes {...prep} />}
+            {prep && <ManualNote {...prep} />}
         </div>
     );
 }

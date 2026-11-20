@@ -4,16 +4,14 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { AgentCopyError } from "@/modules/ecommerce/lib/agentProductCopy";
-import { changeStaffNotes } from "@/modules/ecommerce/lib/agentProductPrep";
+import { saveStaffNote } from "@/modules/ecommerce/lib/agentProductPrep";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 
-// POST /api/ecommerce/products/[id]/staff-notes — staff / owner instructions for
-// the next AI run (owner, 2026-11-20): { add } a note, or { noteId, done } tick it.
+// POST /api/ecommerce/products/[id]/staff-notes { text } — the product's manual
+// note (owner, 2026-11-20): one Markdown box, saved whole; empty text removes it.
+// Each {…} in it is an open problem for the AI.
 
-const schema = z.union([
-    z.object({ add: z.string().trim().min(1).max(500) }),
-    z.object({ noteId: z.string().min(1).max(20), done: z.boolean() }),
-]);
+const schema = z.object({ text: z.string().max(4000) });
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
     const mod = await requireModuleAccess("e-commerce");
@@ -24,7 +22,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     if (error) return error;
     try {
         const by = (await prisma.user.findUnique({ where: { id: mod.user.id }, select: { name: true } }))?.name ?? "Staff";
-        const out = await changeStaffNotes(id, data, by);
+        const out = await saveStaffNote(id, data.text, by);
         void publishChangeServer(["catalogue"]);
         return NextResponse.json(out);
     } catch (e) {

@@ -7,7 +7,7 @@ import { AI_PHOTO_LIMITS } from "@/shared/lib/constants/ai";
 import { COMPATIBLE_SPEC } from "@/shared/lib/shop/compatibility";
 import { getR2Text, isR2Configured, messagesBucket, putR2 } from "@/shared/lib/storage/r2";
 import type { ProductCopy } from "@/modules/ecommerce/lib/aiProductCopy";
-import { readShopDraft, type PrepProblem, type PrepRun, type ShopDraft, type StaffNote } from "@/modules/ecommerce/lib/productAdmin";
+import { noteItems, readShopDraft, type PrepProblem, type PrepRun, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
 import type { ShopStatus } from "@/generated/prisma/enums";
 import { updateShopProduct, type ShopProductPatch } from "@/modules/ecommerce/lib/updateShopProduct";
 import { startAi } from "@/modules/ecommerce/lib/shopWaiting";
@@ -88,18 +88,21 @@ const notAside = (aside: Set<string>) => (l: string) => !aside.has(problemKey(l)
 
 /**
  * After every prep call (owner, 2026-11-20): one run record (skill, part, from →
- * to stage; last 5 kept) and the open problems rebuilt from the Attention reason
- * the run left — red = STOPPED / PENDING, yellow = NOTE. Set-aside problems stay
- * as they are; anything no longer in the reason was fixed and goes.
+ * to stage, how many problems it found / fixed; last 10 kept) and the AI's open
+ * problems rebuilt from the Attention reason the run left — red = STOPPED /
+ * PENDING, yellow = NOTE. Staff {…} problems and set-aside ones stay until a run
+ * reports them fixed (POST /fixed); an AI problem no longer in the reason was fixed and goes.
  */
 export async function recordRun(id: number, skill: PrepRun["skill"], part: string, from: ShopStatus) {
     const r = await prisma.invProduct.findUnique({ where: { id }, select: { shopStatus: true, shopAttention: true, shopDraftJson: true } });
     if (!r) return;
     const info = readShopDraft(r.shopDraftJson);
     const now = new Date().toISOString();
-    const aside = (info?.problems ?? []).filter((p) => p.asideAt);
-    const known = new Map((info?.problems ?? []).map((p) => [problemKey(p.text), p]));
-    const seen = new Set(aside.map((p) => problemKey(p.text)));
+    const before = info?.problems ?? [];
+    const aside = before.filter((p) => p.asideAt);
+    const staff = before.filter((p) => p.source === "staff" && !p.asideAt);
+    const known = new Map(before.map((p) => [problemKey(p.text), p]));
+    const seen = new Set([...aside, ...staff].map((p) => problemKey(p.text)));
     const open: PrepProblem[] = [];
     if (r.shopStatus === "ATTENTION") {
         for (const line of (r.shopAttention ?? "").split("\n").map((l) => l.trim())) {
@@ -111,11 +114,14 @@ export async function recordRun(id: number, skill: PrepRun["skill"], part: strin
             open.push({ text: openText(line), level: m[1] === "NOTE" ? "fix" : "stop", part: Number(m[2]), at: known.get(key)?.at ?? now });
         }
     }
-    const problems = [...open.filter((p) => p.level === "stop"), ...open.filter((p) => p.level === "fix"), ...aside];
-    const runs = [...(info?.runs ?? []), { skill, part, at: now, from, to: r.shopStatus }].slice(-5);
+    const problems = [...open.filter((p) => p.level === "stop"), ...open.filter((p) => p.level === "fix"), ...staff, ...aside];
+    const wasOpen = new Set(before.filter((p) => !p.asideAt && p.source !== "staff").map((p) => problemKey(p.text)));
+    const found = open.filter((p) => !wasOpen.has(problemKey(p.text))).length;
+    const fixed = [...wasOpen].filter((k) => !open.some((p) => problemKey(p.text) === k)).length;
+    const runs = [...(info?.runs ?? []), { skill, part, at: now, from, to: r.shopStatus, ...(found && { found }), ...(fixed && { fixed }) }].slice(-10);
     await prisma.invProduct.update({
         where: { id },
-        data: { shopDraftJson: { ...info, runs, problems: problems.length ? problems : undefined, asideCount: aside.length || undefined } as never },
+        data: { shopDraftJson: { ...info, runs, problems: problems.length ? problems : undefined, asideCount: aside.length || undefined, noteCount: staff.length || undefined } as never },
     });
 }
 
@@ -389,19 +395,24 @@ export async function productForPrep(id: number) {
         /** Notes from the last Part 3 (aiCopy). */
         processNotes: draft?.aiCopy?.notes ?? [],
         prep: {
-            /** The last 5 runs: { skill, part, at, from, to } — oldest first. */
+            /** The last 10 runs: { skill, part, at, from, to, found?, fixed? } — oldest first. */
             runs: draft?.runs ?? [],
             /**
              * Staff (or anyone) changed the product after the last run (owner, 2026-11-20).
              * false + a run of the same part → skip it unless the owner says "redo".
              * The run itself saves the row a moment after its record, hence the margin.
              */
-            // An open staff note always means "run again" — it is an instruction for this run.
+            // An open staff {…} problem always means "run again" — it is an instruction for this run.
             changedSinceRun: !lastRunAt || (draft?.noteCount ?? 0) > 0 || p.updatedAt.getTime() > Date.parse(lastRunAt) + 30_000,
-            /** What staff must solve: { text, level: stop | fix, part, asideAt? }. Set-aside ones never block — skip them. */
+            /**
+             * The one shared open list: { text, level: stop | fix, part, source?: "staff", by?, asideAt? }.
+             * source "staff" = a {…} instruction from the manual note — do it like any problem.
+             * Set-aside ones never block, but stay until fixed. Anything you fixed (yours, staff's,
+             * set aside) → POST /fixed { fixed: [its text] }.
+             */
             problems: draft?.problems ?? [],
-            /** Staff instructions — act on every open one first, then report it done with POST /note { noteId, done, reply }. */
-            staffNotes: (draft?.staffNotes ?? []).filter((n) => !n.doneAt),
+            /** The manual note as staff wrote it (Markdown). Only its {…} items are for you — they are already in `problems`. */
+            staffNote: draft?.staffNote?.text ?? null,
             /** The last part finished (0 = none). Start at the next one. */
             partDone: state?.part ?? 0,
             /** The part Part 4 suggested last (5, 3 or 1), read back from its Last run line; null when none. */
@@ -1189,34 +1200,82 @@ export async function setProblemAside(id: number, text: string, aside: boolean, 
     return { problems };
 }
 
-// ── Staff notes (owner, 2026-11-20) ───────────────────────────────────────────
+// ── Manual note + fixed + search (owner, 2026-11-20) ──────────────────────────
 
 /**
- * Staff / owner instructions for the next AI run ("add one more photo", "check
- * the warranty and fix the name"). Open until staff tick done or an AI run
- * reports on it (`reply`). Kept through Ready / Discard like the run records.
+ * Save the manual note (one Markdown box; empty = remove). Its {…} items are the
+ * staff's open problems in the shared list: a new item is added, a removed one
+ * goes, an unchanged one keeps its date and any "can't fix now" tick.
  */
-export async function changeStaffNotes(
-    id: number,
-    change: { add: string } | { noteId: string; done: boolean; reply?: string },
-    by: string,
-) {
+export async function saveStaffNote(id: number, text: string, by: string) {
     const r = await prisma.invProduct.findUnique({ where: { id }, select: { shopDraftJson: true } });
     if (!r) throw new AgentCopyError("Product not found");
     const info = readShopDraft(r.shopDraftJson);
     const now = new Date().toISOString();
-    let list: StaffNote[] = info?.staffNotes ?? [];
-    if ("add" in change) list = [...list, { id: crypto.randomUUID().slice(0, 8), text: change.add, by, at: now }].slice(-20);
-    else {
-        if (!list.some((n) => n.id === change.noteId)) throw new AgentCopyError("That note is not on the product any more — reload.");
-        list = list.map((n) => n.id !== change.noteId ? n
-            : change.done ? { ...n, doneAt: now, doneBy: by, ...(change.reply && { reply: change.reply }) }
-            : { id: n.id, text: n.text, by: n.by, at: n.at, ...(change.reply && { reply: change.reply }) });
-    }
-    const open = list.filter((n) => !n.doneAt).length;
+    const clean = text.trim();
+    const list = info?.problems ?? [];
+    const oldStaff = new Map(list.filter((p) => p.source === "staff").map((p) => [problemKey(p.text), p]));
+    const staff: PrepProblem[] = noteItems(clean).map((t) => oldStaff.get(problemKey(t)) ?? { text: t, level: "fix", part: 0, at: now, source: "staff", by });
+    const problems = [...staff, ...list.filter((p) => p.source !== "staff")];
+    const asideCount = problems.filter((p) => p.asideAt).length;
+    const noteCount = staff.filter((p) => !p.asideAt).length;
     await prisma.invProduct.update({
         where: { id },
-        data: { shopDraftJson: { ...info, staffNotes: list.length ? list : undefined, noteCount: open || undefined } as never },
+        data: { shopDraftJson: { ...info, staffNote: clean ? { text: clean, by, at: now } : undefined, staffNotes: undefined, problems: problems.length ? problems : undefined, asideCount: asideCount || undefined, noteCount: noteCount || undefined } as never },
     });
-    return { staffNotes: list };
+    return { staffNote: clean ? { text: clean, by, at: now } : null, problems };
+}
+
+/**
+ * A run fixed these open problems (any source — AI, staff {…}, set aside): they
+ * leave the list and the Attention reason; a staff one turns into "✓ …" in the
+ * note so it is not picked up again. Text not on the list comes back in `unknown`.
+ */
+export async function markFixed(id: number, texts: string[]) {
+    const r = await prisma.invProduct.findUnique({ where: { id }, select: { shopAttention: true, shopDraftJson: true } });
+    if (!r) throw new AgentCopyError("Product not found");
+    const info = readShopDraft(r.shopDraftJson);
+    const keys = new Set(texts.map(problemKey));
+    const list = info?.problems ?? [];
+    const gone = list.filter((p) => keys.has(problemKey(p.text)));
+    const problems = list.filter((p) => !keys.has(problemKey(p.text)));
+    let note = info?.staffNote;
+    for (const p of gone.filter((x) => x.source === "staff")) {
+        if (note) note = { ...note, text: note.text.replace(/\{([^{}]+)\}/g, (m, inner: string) => (problemKey(inner) === problemKey(p.text) ? `✓ ${inner.trim()}` : m)) };
+    }
+    const attention = r.shopAttention?.split("\n").filter((l) => !(OPEN_LINE.test(l.trim()) && keys.has(problemKey(l)))).join("\n") ?? null;
+    await prisma.invProduct.update({
+        where: { id },
+        data: {
+            shopDraftJson: { ...info, staffNote: note, problems: problems.length ? problems : undefined, asideCount: problems.filter((p) => p.asideAt).length || undefined, noteCount: problems.filter((p) => p.source === "staff" && !p.asideAt).length || undefined } as never,
+            shopAttention: attention,
+        },
+    });
+    const found = new Set(gone.map((p) => problemKey(p.text)));
+    return { fixed: gone.map((p) => p.text), unknown: texts.filter((t) => !found.has(problemKey(t))), open: problems };
+}
+
+/**
+ * Every product with an open problem whose words match `q` (all words, any
+ * order; empty = every product with one) — "check the open problems that say
+ * box back". Reads only rows that have problems.
+ */
+export async function findProblems(q: string, limit = 200) {
+    const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+    const rows = await prisma.invProduct.findMany({
+        where: { OR: [{ shopStatus: "ATTENTION" }, { shopDraftJson: { path: ["asideCount"], gt: 0 } }, { shopDraftJson: { path: ["noteCount"], gt: 0 } }] },
+        select: { id: true, sku: true, name: true, shopStatus: true, shopAttention: true, shopDraftJson: true },
+        orderBy: { id: "desc" },
+    });
+    const out = [];
+    for (const r of rows) {
+        const info = readShopDraft(r.shopDraftJson);
+        const list: { text: string; level: string; source: string; aside: boolean }[] = (info?.problems ?? []).length
+            ? info!.problems!.map((p) => ({ text: p.text, level: p.level, source: p.source === "staff" ? `staff (${p.by ?? "?"})` : `part ${p.part}`, aside: !!p.asideAt }))
+            : (r.shopAttention ?? "").split("\n").filter((l) => OPEN_LINE.test(l.trim())).map((l) => ({ text: openText(l), level: /^NOTE/.test(l.trim()) ? "fix" : "stop", source: "attention", aside: false }));
+        const hits = list.filter((p) => words.every((w) => p.text.toLowerCase().includes(w)));
+        if (hits.length) out.push({ sku: r.sku, id: r.id, name: r.name, stage: r.shopStatus, problems: hits });
+        if (out.length >= limit) break;
+    }
+    return { count: out.length, products: out };
 }
