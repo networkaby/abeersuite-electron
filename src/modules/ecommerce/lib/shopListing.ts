@@ -27,6 +27,8 @@ export type ShopListingInput = {
     slug: string | null;
     /** Sibling attributes still empty here (loadVariantAttrGaps). */
     variantAttrGaps?: string[];
+    /** Must photos still missing (mustPhotoGaps) — fails Product image. */
+    mustPhotoGaps?: string[];
 };
 
 /** Stages staff can choose, for zod. */
@@ -87,6 +89,7 @@ export function resolveShopListing(
             weightGrams: m.weightGrams,
             // Always judged on a save: no family → no gaps.
             variantAttrGaps: m.variantAttrGaps ?? [],
+            mustPhotoGaps: m.mustPhotoGaps ?? [],
         },
         opts.rules ?? DEFAULT_SHOP_PUBLISH_RULES
     );

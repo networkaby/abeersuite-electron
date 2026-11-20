@@ -5,6 +5,7 @@
 import type { ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { shopQualification, type ShopPublishRules } from "@/modules/ecommerce/lib/shopQualification";
 import { flattenTree, subtreeIds, treeLabel, type TreeNodeRow } from "@/shared/lib/tree";
+import { mustPhotoGaps } from "@/modules/ecommerce/lib/photoChecklist";
 
 export type StockFilter = "all" | "in" | "out" | "untracked";
 export type ActiveFilter = "all" | "active" | "inactive";
@@ -67,6 +68,7 @@ export function productStatus(p: ShopProductAdmin, rules: ShopPublishRules): Pro
             allowBackorder: p.allowBackorder,
             weightGrams: p.weightGrams,
             variantAttrGaps: p.variantAttrGaps ?? [],
+            mustPhotoGaps: mustPhotoGaps(p.photoChecklist),
         },
         rules
     );

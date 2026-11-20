@@ -5,6 +5,7 @@ import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { resolveShopListing } from "@/modules/ecommerce/lib/shopListing";
 import { variantAttrGaps } from "@/modules/ecommerce/lib/shopQualification";
+import { mustPhotoGaps, readPhotoChecklist } from "@/modules/ecommerce/lib/photoChecklist";
 
 /**
  * Make these products PUBLISHED and decide, against today's publish rules, which
@@ -67,7 +68,7 @@ export async function applyPublished(ids: number[]): Promise<{ published: number
             id: true, name: true, sku: true, imageUrl: true, galleryJson: true,
             shopDescription: true, shopCategory: true, stock: true, savedSalePricePaise: true, barcodeManualPaise: true,
             mrpPaise: true, effectiveSalePricePaise: true, slug: true,
-            groupId: true, brandId: true, allowBackorder: true, weightGrams: true,
+            groupId: true, brandId: true, allowBackorder: true, weightGrams: true, photoChecklistJson: true,
         },
     });
 
@@ -89,6 +90,7 @@ export async function applyPublished(ids: number[]): Promise<{ published: number
                 savedSalePricePaise: p.savedSalePricePaise, barcodeManualPaise: p.barcodeManualPaise, mrpPaise: p.mrpPaise,
                 effectiveSalePricePaise: p.effectiveSalePricePaise, slug: p.slug,
                 variantAttrGaps: gaps.get(p.id),
+                mustPhotoGaps: mustPhotoGaps(readPhotoChecklist(p.photoChecklistJson)),
             },
             { status: "PUBLISHED", bands, rules }
         );

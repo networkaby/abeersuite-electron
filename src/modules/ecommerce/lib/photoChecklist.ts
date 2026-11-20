@@ -99,6 +99,8 @@ export type PhotoSuggestion = { url: string; site: string; kind: PhotoKind | nul
 export const isEnough = (items: PhotoChecklistItem[]) => items.every((i) => i.done || !i.must || i.waived);
 /** Must photos neither in the gallery nor ticked "Not applicable". */
 export const missingMust = (c: PhotoChecklist | null) => c?.items.filter((i) => i.must && !i.done && !i.waived).map((i) => i.kind) ?? [];
+/** Must photos still missing, as labels — the Product image publish rule (owner, 2026-11-21). */
+export const mustPhotoGaps = (c: PhotoChecklist | null) => missingMust(c).map(photoKindLabel);
 
 /** AI answer → checklist: what we have is done, what we miss is open (must first); nothing else is listed. */
 export function checklistFrom(have: PhotoKind[], must: PhotoKind[], nice: PhotoKind[], remove: PhotoRemoval[] = []): PhotoChecklist {

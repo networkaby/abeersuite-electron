@@ -11,7 +11,7 @@ import { invProductToAdmin, keptReviewNotes, prepHistory, readShopDraft, type Sh
 import { nextShopStatus, resolveShopListing, SHOP_STATUSES } from "@/modules/ecommerce/lib/shopListing";
 import type { ShopStatus } from "@/generated/prisma/enums";
 import { loadVariantAttrGaps } from "@/modules/ecommerce/lib/applyPublished";
-import { BOX_TYPE_KEYS, PHOTO_KIND_KEYS } from "@/modules/ecommerce/lib/photoChecklist";
+import { BOX_TYPE_KEYS, PHOTO_KIND_KEYS, mustPhotoGaps, readPhotoChecklist } from "@/modules/ecommerce/lib/photoChecklist";
 import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
 import { mergeGallery } from "@/modules/ecommerce/lib/mergeGallery";
 import { collectionsExist, setProductCollections, syncMainCollections } from "@/modules/inventory/lib/productCollections";
@@ -107,7 +107,7 @@ export async function updateShopProduct(
                 name: true, sku: true, imageUrl: true, galleryJson: true,
                 shopDescription: true, shopCategory: true, stock: true, savedSalePricePaise: true, barcodeManualPaise: true,
                 mrpPaise: true, effectiveSalePricePaise: true, slug: true,
-                groupId: true, brandId: true, allowBackorder: true, weightGrams: true, shopStatus: true, shopDraftJson: true, shopAttention: true, shopDraftAt: true, shopAttentionAt: true,
+                groupId: true, brandId: true, allowBackorder: true, weightGrams: true, photoChecklistJson: true, shopStatus: true, shopDraftJson: true, shopAttention: true, shopDraftAt: true, shopAttentionAt: true,
             },
         });
         if (!existing) return { response: NextResponse.json({ error: "Not found" }, { status: 404 }) };
@@ -234,6 +234,8 @@ export async function updateShopProduct(
                     b.pricePaise !== undefined ? b.pricePaise ?? null : existing.effectiveSalePricePaise,
                 slug: b.slug !== undefined ? b.slug?.trim() || null : existing.slug,
                 variantAttrGaps: gaps.get(pid),
+                // The checklist sent with this save (a tick / Not applicable) wins over the stored one.
+                mustPhotoGaps: mustPhotoGaps(readPhotoChecklist(b.photoChecklist !== undefined ? b.photoChecklist : existing.photoChecklistJson)),
             },
             { status: shopStatus, bands, rules }
         );

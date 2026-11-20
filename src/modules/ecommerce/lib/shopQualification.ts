@@ -5,6 +5,8 @@
 // public-API filter) and the client (live checklist in the product form). Slug
 // is auto-generated on publish, so it is never part of the gate.
 
+import { mustPhotoGaps, readPhotoChecklist } from "@/modules/ecommerce/lib/photoChecklist";
+
 /** Which product fields are mandatory before a product can be listed in the shop. */
 export type ShopPublishRules = {
     image: boolean;
@@ -92,6 +94,10 @@ export type ShopQualifiable = {
      *  Undefined = not checked here (e.g. the storefront, which trusts the stored
      *  isListedInShop flag that the save / family re-check already decided). */
     variantAttrGaps?: string[] | null;
+    /** Must photos on the photo checklist neither ticked nor "Not applicable" (labels,
+     *  mustPhotoGaps). A missing one fails Product image — a published product goes
+     *  Pending, off the shop, until it is added (owner, 2026-11-21). */
+    mustPhotoGaps?: string[] | null;
 };
 
 export type ShopQualificationResult = {
@@ -103,7 +109,7 @@ export type ShopQualificationResult = {
 };
 
 const REQUIREMENT_CHECKS: Record<ShopRequirementKey, (p: ShopQualifiable) => boolean> = {
-    image: (p) => Boolean(p.imageUrl) || (p.galleryUrls?.length ?? 0) > 0,
+    image: (p) => (Boolean(p.imageUrl) || (p.galleryUrls?.length ?? 0) > 0) && !(p.mustPhotoGaps?.length),
     description: (p) => Boolean(p.description && p.description.trim().length > 0),
     price: (p) => (p.pricePaise ?? 0) > 0,
     category: (p) => Boolean(p.category && p.category.trim().length > 0) || p.groupId != null,
@@ -141,7 +147,7 @@ export function storefrontQualifiable(
     raw: Pick<
         ShopQualifiable,
         "groupId" | "brandId" | "stock" | "allowBackorder" | "weightGrams" | "mrpPaise"
-    >,
+    > & { photoChecklistJson?: unknown },
     pub: {
         pricePaise: number;
         imageUrl: string | null;
@@ -163,6 +169,7 @@ export function storefrontQualifiable(
         allowBackorder: raw.allowBackorder,
         weightGrams: raw.weightGrams,
         mrpPaise: raw.mrpPaise,
+        mustPhotoGaps: mustPhotoGaps(readPhotoChecklist(raw.photoChecklistJson)),
     };
 }
 
@@ -178,7 +185,13 @@ export function shopQualification(
     // The variant rule names the exact attributes ("Colour"), so staff know what to fill.
     const missing = checks
         .filter((c) => !c.ok)
-        .flatMap((c) => (c.key === "variantAttrs" && p.variantAttrGaps?.length ? p.variantAttrGaps : [c.label]));
+        .flatMap((c) =>
+            c.key === "variantAttrs" && p.variantAttrGaps?.length
+                ? p.variantAttrGaps
+                : c.key === "image" && p.mustPhotoGaps?.length
+                  ? [`Must photo missing: ${p.mustPhotoGaps.join(", ")}`]
+                  : [c.label]
+        );
     return { qualified: missing.length === 0, missing, checks };
 }
 

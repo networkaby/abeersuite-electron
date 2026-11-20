@@ -17,7 +17,7 @@ import ProductVariantsSection from "@/modules/inventory/components/ProductVarian
 import AiCopyPanel from "@/modules/ecommerce/components/AiCopyPanel";
 import type { ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
 import { PhotoChecklistRows } from "@/modules/ecommerce/components/AiPhotoPicker";
-import { isEnough, type PhotoChecklist, type PhotoKind } from "@/modules/ecommerce/lib/photoChecklist";
+import { isEnough, mustPhotoGaps, type PhotoChecklist, type PhotoKind } from "@/modules/ecommerce/lib/photoChecklist";
 import ProductCard from "@/modules/external/shop/ProductCard";
 import {
     shopQualification,
@@ -467,6 +467,7 @@ export default function ProductForm({
             weightGrams: weightGrams.trim() === "" ? null : parseInt(weightGrams, 10),
             // From the server, then kept current by the Variants table's edits.
             variantAttrGaps: selfGaps,
+            mustPhotoGaps: mustPhotoGaps(photoChecklist),
         },
         rules
     );
