@@ -13,7 +13,8 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Crosshair, RotateCcw } from "lucide-react";
+import { Crosshair, RotateCcw, SquarePen } from "lucide-react";
+import PhotoEditorDialog from "@/modules/ecommerce/components/PhotoEditorDialog";
 import {
     CROP_MODES,
     DEFAULT_ADJUST,
@@ -81,7 +82,11 @@ export default function ImageAdjustDialog({
     // Natural size is kept in state (not read off a ref during render) so the
     // focus marker re-positions when the image finishes loading.
     const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
-    const original = withoutAdjust(url);
+    // The picture being framed — starts as the saved photo, becomes the new upload after
+    // "Edit picture". The gallery only changes on Save framing, so Cancel leaves it alone
+    // (an edited copy already uploaded simply stays unused in Cloudinary).
+    const [original, setOriginal] = useState(() => withoutAdjust(url));
+    const [editing, setEditing] = useState(false);
     // The original as turned: a focus point is picked on the picture the crop really sees
     // (rotation comes first). c_limit at 10000 px never resizes, so pixels stay original.
     const turned = adjust.rotate ? buildUrl(withAdjust(original, { ...DEFAULT_ADJUST, rotate: adjust.rotate }), { width: 10000 }) : original;
@@ -112,12 +117,16 @@ export default function ImageAdjustDialog({
             : null;
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
+        <>
+        {/* The Radix dialog steps aside while the editor is up: its focus trap and
+            transformed content would otherwise fight the editor's own full-screen modal. */}
+        <Dialog open={open && !editing} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-5xl">
                 <DialogHeader>
                     <DialogTitle>Adjust image</DialogTitle>
                     <DialogDescription>
-                        Choose how this photo is framed on the shop. Click the original to set the focus point.
+                        Choose how this photo is framed on the shop. Click the original to set the focus point, or
+                        edit the picture itself (free crop, text, blur).
                     </DialogDescription>
                 </DialogHeader>
 
@@ -147,6 +156,10 @@ export default function ImageAdjustDialog({
                                 </span>
                             ) : null}
                         </div>
+                        <Button type="button" variant="outline" size="sm" onClick={() => setEditing(true)}>
+                            <SquarePen className="mr-2 size-3.5" />
+                            Edit picture (crop, text, blur…)
+                        </Button>
                         {adjust.focal ? (
                             <Button
                                 type="button"
@@ -331,5 +344,18 @@ export default function ImageAdjustDialog({
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+        {editing ? (
+            <PhotoEditorDialog
+                url={original}
+                onClose={() => setEditing(false)}
+                onSave={(next) => {
+                    // A new picture: old framing and focus no longer fit it.
+                    setOriginal(withoutAdjust(next));
+                    setAdjust(DEFAULT_ADJUST);
+                    setNatural(null);
+                }}
+            />
+        ) : null}
+        </>
     );
 }
