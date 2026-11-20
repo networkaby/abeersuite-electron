@@ -87,6 +87,17 @@ async function asideKeys(id: number): Promise<Set<string>> {
 const notAside = (aside: Set<string>) => (l: string) => !aside.has(problemKey(l));
 
 /**
+ * One problem once (owner, 2026-11-20): the server's own photo lines ("Must photo
+ * missing: Box back") already say which photos are missing, so the AI's own
+ * wording of the same gap ("box front and back photos are missing") is dropped.
+ */
+const PHOTO_GAP = /\bphotos?\b[^.]*\bmissing\b|\bmissing\b[^.]*\bphotos?\b/i;
+const notPhotoRestatement = (serverLines: string[]) => {
+    const covered = serverLines.some((l) => /^Must photo missing/.test(openText(l)));
+    return (l: string) => !covered || /^(Must photo missing|Main photo)/.test(openText(l)) || !PHOTO_GAP.test(l);
+};
+
+/**
  * After every prep call (owner, 2026-11-20): one run record (skill, part, from →
  * to stage, how many problems it found / fixed; last 10 kept) and the AI's open
  * problems rebuilt from the Attention reason the run left — red = STOPPED /
@@ -109,9 +120,14 @@ export async function recordRun(id: number, skill: PrepRun["skill"], part: strin
             const m = /^(PENDING|STOPPED|NOTE) \(Part (\d)\) — /.exec(line);
             if (!m) continue;
             const key = problemKey(line);
+            const part = Number(m[2]);
+            const same = open.find((o) => problemKey(o.text) === key);
+            if (same) { same.parts = [...new Set([...(same.parts ?? [same.part]), part])].sort(); continue; }
             if (seen.has(key)) continue;
             seen.add(key);
-            open.push({ text: openText(line), level: m[1] === "NOTE" ? "fix" : "stop", part: Number(m[2]), at: known.get(key)?.at ?? now });
+            const was = known.get(key);
+            const parts = [...new Set([...(was && !was.asideAt && was.source !== "staff" ? (was.parts ?? [was.part]) : []), part])].sort();
+            open.push({ text: openText(line), level: m[1] === "NOTE" ? "fix" : "stop", part, ...(parts.length > 1 && { parts }), at: was?.at ?? now });
         }
     }
     const problems = [...open.filter((p) => p.level === "stop"), ...open.filter((p) => p.level === "fix"), ...staff, ...aside];
@@ -938,8 +954,8 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
     const list = await photoListOf(3, id, b.photoCheck, ph.gallery, ph.remove, ph.alias);
     patch.photoChecklist = list.checklist;
     notes.push(...list.dropNotes);
-    staff.push(...list.lines);
-    const open = [...new Set(staff)].filter(notAside(await asideKeys(id)));
+    const own3 = staff.filter(notPhotoRestatement(list.lines));
+    const open = [...new Set([...own3, ...list.lines])].filter(notAside(await asideKeys(id)));
     const runResult = open.length ? `${open.length} for staff → Attention` : `done → ${THEN_WORDS[b.then ?? "draft"]}`;
 
     const draft: ProductCopy = {
@@ -1021,7 +1037,7 @@ export async function savePart5(id: number, b: z.infer<typeof part5Schema>, run?
     const carried = (p.shopAttention ?? "").split("\n")
         .map((l) => l.trim())
         .filter((l) => OPEN_LINE.test(l) && !SERVER_PHOTO_LINE.test(openText(l)) && !fixed.has(openText(l)));
-    const open = [...new Set([...list.lines, ...carried, ...b.staff])].filter(notAside(await asideKeys(id)));
+    const open = [...new Set([...list.lines, ...carried.filter(notPhotoRestatement(list.lines)), ...b.staff.filter(notPhotoRestatement(list.lines))])].filter(notAside(await asideKeys(id)));
     const runResult = open.length ? `${open.length} for staff → Attention` : `photos done → ${THEN_WORDS[b.then ?? "draft"]}`;
 
     await leaveAt(id, open.length ? "attention" : b.then ?? "draft", patch, (info) => {
@@ -1147,7 +1163,8 @@ export async function savePart4(id: number, input: z.infer<typeof part4Schema>) 
         ...(byStaff.length ? [`Must photo missing: ${byStaff.map(photoKindLabel).join(", ")}`] : []),
     ];
     const aside = notAside(await asideKeys(id));
-    const b = { ...input, pending: [...photoLines, ...input.pending].filter(aside), notes: input.notes.filter(aside), next: input.next ?? (photoLines.length ? ("part5" as const) : undefined) };
+    const restated = notPhotoRestatement(photoLines);
+    const b = { ...input, pending: [...photoLines, ...input.pending.filter(restated)].filter(aside), notes: input.notes.filter(restated).filter(aside), next: input.next ?? (photoLines.length ? ("part5" as const) : undefined) };
     const problems = b.pending.length + b.notes.length;
     if (problems) {
         const reason = [

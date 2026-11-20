@@ -50,7 +50,8 @@ export function withClosed(info: ShopDraft | null, gone: PrepProblem[], by: stri
     return list.length ? list : undefined;
 }
 
-export type PrepProblem = { text: string; level: "stop" | "fix"; part: number; at: string; source?: "staff"; by?: string; asideBy?: string; asideAt?: string };
+/** parts = every part that raised it (owner, 2026-11-20: "one problem once, credit both parts"). */
+export type PrepProblem = { text: string; level: "stop" | "fix"; part: number; parts?: number[]; at: string; source?: "staff"; by?: string; asideBy?: string; asideAt?: string };
 
 export type RowProblem = { text: string; level: "stop" | "fix" | "note"; aside?: boolean };
 

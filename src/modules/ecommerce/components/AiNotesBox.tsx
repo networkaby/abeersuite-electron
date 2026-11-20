@@ -107,13 +107,25 @@ function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]> & { oldRuns?: str
             setBusy(null);
         }
     };
-    const latest = runs.length ? runLine(runs[runs.length - 1]) : oldRuns[0];
+    // One line per part — its most recent run, newest first (owner, 2026-11-20).
+    const partOf = (label: string) => label.split(/ \(| · /)[0];
+    const perPart = new Map<string, string>();
+    for (const r of [...runs].reverse()) if (!perPart.has(partOf(r.part))) perPart.set(partOf(r.part), runLine(r));
+    for (const l of oldRuns) {
+        const k = /part (\S+)/.exec(l)?.[1] ?? l;
+        if (!perPart.has(k)) perPart.set(k, l);
+    }
+    const recent = [...perPart.values()];
     // History = the closed problems (owner, 2026-11-20): what left the open list, who closed it, when.
     const closed = [...(props.closed ?? [])].reverse();
     return (
         <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3 text-xs">
             <p className="text-sm font-medium">AI notes</p>
-            <p className="text-muted-foreground">{latest ?? "No AI run recorded yet"}</p>
+            {recent.length ? (
+                <ul className="space-y-0.5 text-muted-foreground">{recent.map((l) => <li key={l}>{l}</li>)}</ul>
+            ) : (
+                <p className="text-muted-foreground">No AI run recorded yet</p>
+            )}
             {problems.length > 0 && (
                 <div>
                     <p className="font-medium">Open problems</p>
@@ -129,7 +141,7 @@ function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]> & { oldRuns?: str
                                         <span className={`mr-1.5 inline-block size-2 rounded-full ${dot}`} />
                                         {i + 1}. {problemText(p.text)}
                                         <span className="ml-1 text-muted-foreground">
-                                            · {staff ? (p.by ?? "staff") : `AI part ${p.part}`}
+                                            · {staff ? (p.by ?? "staff") : `AI part ${(p.parts ?? [p.part]).join(", ")}`}
                                             {aside && ` · can't fix now${p.asideBy ? ` (${p.asideBy}, ${formatDate(p.asideAt!)})` : ""} — not blocking, stays until fixed`}
                                         </span>
                                     </span>
