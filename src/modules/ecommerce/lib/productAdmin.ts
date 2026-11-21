@@ -37,7 +37,25 @@ export type ShopDraft = {
 };
 
 /** found / fixed: how many open problems the run added / removed (the one-line history). */
-export type PrepRun = { skill: "product-prep" | "product-recheck"; part: string; at: string; from: ShopStatus; to: ShopStatus; found?: number; fixed?: number };
+// skill "staff" = a stage move made by a person (owner, 2026-11-22); `part` then holds their name.
+export type PrepRun = { skill: "product-prep" | "product-recheck" | "staff"; part: string; at: string; from: ShopStatus; to: ShopStatus; found?: number; fixed?: number };
+
+/** The AI's own runs — a staff move is not a run of any part. */
+export const aiRuns = (runs: PrepRun[] | undefined) => (runs ?? []).filter((r) => r.skill !== "staff");
+
+/**
+ * Keep the shared run list at 10 (owner, 2026-11-22): drop the oldest staff move
+ * first; never drop an AI part's latest run (the skills skip a part by it).
+ */
+export function trimRuns(runs: PrepRun[], max = 10): PrepRun[] {
+    const out = [...runs];
+    while (out.length > max) {
+        let i = out.findIndex((r) => r.skill === "staff");
+        if (i < 0) i = out.findIndex((r, k) => out.slice(k + 1).some((n) => n.skill === r.skill && n.part.split(/ \(| · /)[0] === r.part.split(/ \(| · /)[0]));
+        out.splice(i < 0 ? 0 : i, 1);
+    }
+    return out;
+}
 /** source "staff" = a {…} item from the manual note (part 0, `by` = who wrote it). */
 /** by = "AI part 5" / "AI" / a staff name; how = fixed (AI checked) · removed from the note. */
 export type ClosedProblem = { text: string; level: "stop" | "fix"; source?: "staff"; raisedBy: string; at: string; by: string; how: "fixed" | "removed" };

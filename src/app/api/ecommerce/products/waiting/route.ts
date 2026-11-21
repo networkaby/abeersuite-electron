@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { cancelWaiting, startAi } from "@/modules/ecommerce/lib/shopWaiting";
+import { recordStaffMoves, staffName, stagesNow } from "@/modules/ecommerce/lib/shopStaffMoves";
 
 // POST /api/ecommerce/products/waiting { ids, action } — the Waiting stage
 // (owner, 2026-11-17). start = Start AI: shortlist for the product-prep run (an
@@ -15,12 +16,15 @@ const schema = z.object({
 });
 
 export async function POST(req: Request) {
-    const { response } = await requireModuleAccess("e-commerce");
-    if (response) return response;
+    const mod = await requireModuleAccess("e-commerce");
+    if (mod.response) return mod.response;
     const { data, error } = await validateRequest(req, schema);
     if (error) return error;
     try {
-        return NextResponse.json(data.action === "start" ? await startAi(data.ids) : await cancelWaiting(data.ids));
+        const before = await stagesNow(data.ids);
+        const out = data.action === "start" ? await startAi(data.ids) : await cancelWaiting(data.ids);
+        await recordStaffMoves(before, await staffName(mod.user.id));
+        return NextResponse.json(out);
     } catch (e) {
         return handleApiError(e, "Could not update the Start list");
     }

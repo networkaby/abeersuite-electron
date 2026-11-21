@@ -8,18 +8,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { extractApiError } from "@/shared/lib/api";
 
-// Flag attention (owner, 2026-11-11): park a Draft in the Attention stage with
-// the reason — work blocked until something is checked by hand. One box for a
+// Flag attention (owner, 2026-11-11): park a Draft — or a Published product with a
+// big mistake (2026-11-22) — in the Attention stage; the reason is optional and joins the manual note — work blocked until something is checked by hand. One box for a
 // row, ticked rows and the product page. It leaves by Save as draft / ready.
 
 const QUICK_REASONS = ["Photo wrong", "Data mismatch", "Price doubt", "Name / model wrong", "Duplicate product"];
 
-/** Park Draft products in Attention — POST /api/ecommerce/products/attention. */
+/** Park Draft / Published products in Attention — POST /api/ecommerce/products/attention. */
 async function parkInAttention(ids: number[], reason: string): Promise<boolean> {
     try {
         const { data } = await axios.post<{ parked: number; skipped: string[] }>("/api/ecommerce/products/attention", { ids, reason });
         toast.success(`${data.parked} parked in Attention`);
-        if (data.skipped.length) toast.info(`${data.skipped.length} skipped — only Draft products can be flagged (${data.skipped.slice(0, 3).join(", ")}${data.skipped.length > 3 ? ", …" : ""})`);
+        if (data.skipped.length) toast.info(`${data.skipped.length} skipped — only Draft and Published products can be flagged (${data.skipped.slice(0, 3).join(", ")}${data.skipped.length > 3 ? ", …" : ""})`);
         return data.parked > 0;
     } catch (e: unknown) {
         toast.error(extractApiError(e, "Could not park in Attention"));
@@ -40,7 +40,7 @@ export function AttentionDialog({
     const [reason, setReason] = useState("");
     const [busy, setBusy] = useState(false);
     const save = async () => {
-        if (!ids || !reason.trim()) return;
+        if (!ids) return;
         setBusy(true);
         const ok = await parkInAttention(ids, reason.trim());
         setBusy(false);
@@ -56,7 +56,7 @@ export function AttentionDialog({
                 <DialogHeader>
                     <DialogTitle>Flag attention{ids && ids.length > 1 ? ` — ${ids.length} products` : ""}</DialogTitle>
                     <DialogDescription>
-                        Why is the work stopped? It is parked in the Attention tab, off the shop, until someone checks it and saves it as draft or ready.
+                        It goes off the shop and waits in the Attention tab until someone fixes it and saves it as draft or ready. The reason is optional — it is added to the manual note.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="flex flex-wrap gap-1.5">
@@ -72,11 +72,11 @@ export function AttentionDialog({
                     maxLength={1000}
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
-                    placeholder="e.g. Name and photo not matching — verify the unit in the warehouse"
+                    placeholder="Reason (optional) — e.g. Wrong wattage in specs, box says 40W"
                 />
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose}>Cancel</Button>
-                    <Button disabled={busy || !reason.trim()} onClick={() => void save()}>
+                    <Button disabled={busy} onClick={() => void save()}>
                         {busy ? "Saving…" : "Park in Attention"}
                     </Button>
                 </DialogFooter>

@@ -39,7 +39,7 @@ export async function parkInAttention(
                     isListedInShop: false,
                     shopDraftJson: next as unknown as Prisma.InputJsonValue,
                     shopDraftAt: now,
-                    shopAttention: reason,
+                    shopAttention: reason || null,
                     shopAttentionAt: now,
                     shopAttentionBy: by,
                 },

@@ -661,7 +661,8 @@ export default function EcommerceProductsPage() {
                             Unpublish
                         </Button>
                     ) : null}
-                    {tab === "draft" ? (
+                    {["live", "pending"].includes(tab) ? <span aria-hidden className="w-6" /> : null}
+                    {["draft", "live", "pending"].includes(tab) ? (
                         <Button size="sm" variant="ghost" className={GO_TONE.attention} disabled={bulkBusy} onClick={() => setFlagIds([...selected])}>
                             <AlertTriangle className="size-4" /> Flag attention
                         </Button>
@@ -835,6 +836,12 @@ export default function EcommerceProductsPage() {
                                                         onClick={() => void moveStage(p, "READY", true)}
                                                     >
                                                         {publishing.has(p.id) ? "…" : "Unpublish"}
+                                                    </Button>
+                                                ) : null}
+                                                {status.kind === "live" || status.kind === "pending" ? (
+                                                    <Button size="sm" variant="ghost" className={GO_TONE.attention} title="Big mistake — take it off the shop and park it in Attention" onClick={() => setFlagIds([p.id])}>
+                                                        <AlertTriangle className="size-3.5" />
+                                                        Flag
                                                     </Button>
                                                 ) : null}
                                                 {/* Works whatever the publish state — draft, ready or live. */}

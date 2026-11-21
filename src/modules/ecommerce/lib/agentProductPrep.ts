@@ -7,7 +7,7 @@ import { AI_PHOTO_LIMITS } from "@/shared/lib/constants/ai";
 import { COMPATIBLE_SPEC } from "@/shared/lib/shop/compatibility";
 import { getR2Text, isR2Configured, messagesBucket, putR2 } from "@/shared/lib/storage/r2";
 import type { ProductCopy } from "@/modules/ecommerce/lib/aiProductCopy";
-import { noteItems, readShopDraft, withClosed, type PrepProblem, type PrepRun, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
+import { aiRuns, noteItems, readShopDraft, trimRuns, withClosed, type PrepProblem, type PrepRun, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
 import type { ShopStatus } from "@/generated/prisma/enums";
 import { updateShopProduct, type ShopProductPatch } from "@/modules/ecommerce/lib/updateShopProduct";
 import { startAi } from "@/modules/ecommerce/lib/shopWaiting";
@@ -142,7 +142,7 @@ export async function recordRun(id: number, skill: PrepRun["skill"], part: strin
     const wasOpen = new Set(before.filter((p) => !p.asideAt && p.source !== "staff").map((p) => problemKey(p.text)));
     const found = open.filter((p) => !wasOpen.has(problemKey(p.text))).length;
     const fixed = [...wasOpen].filter((k) => !open.some((p) => problemKey(p.text) === k)).length;
-    const runs = [...(info?.runs ?? []), { skill, part, at: now, from, to: r.shopStatus, ...(found && { found }), ...(fixed && { fixed }) }].slice(-10);
+    const runs = trimRuns([...(info?.runs ?? []), { skill, part, at: now, from, to: r.shopStatus, ...(found && { found }), ...(fixed && { fixed }) }]);
     // AI problems this run no longer raises: closed by this run.
     const gone = before.filter((p) => !p.asideAt && p.source !== "staff" && !open.some((o) => problemKey(o.text) === problemKey(p.text)));
     const closed = gone.length ? withClosed(info, gone, `AI part ${part.split(" ")[0]}`, "fixed") : info?.closed;
@@ -411,7 +411,7 @@ export async function productForPrep(id: number) {
         },
     });
     const draft = readShopDraft(p.shopDraftJson);
-    const lastRunAt = draft?.runs?.at(-1)?.at;
+    const lastRunAt = aiRuns(draft?.runs).at(-1)?.at; // a staff move is not a run
     const { state, identityChanged } = await liveState(id);
     const search = state?.search;
     return {
@@ -429,7 +429,7 @@ export async function productForPrep(id: number) {
         processNotes: draft?.aiCopy?.notes ?? [],
         prep: {
             /** The last 10 runs: { skill, part, at, from, to, found?, fixed? } — oldest first. */
-            runs: draft?.runs ?? [],
+            runs: aiRuns(draft?.runs), // the skills see their own runs only
             /**
              * Staff (or anyone) changed the product after the last run (owner, 2026-11-20).
              * false + a run of the same part → skip it unless the owner says "redo".

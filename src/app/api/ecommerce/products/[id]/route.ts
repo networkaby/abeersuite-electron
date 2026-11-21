@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAnyPermission, requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { invProductToAdmin, withShopDraft } from "@/modules/ecommerce/lib/productAdmin";
+import { recordStaffMoves, staffName, stagesNow } from "@/modules/ecommerce/lib/shopStaffMoves";
 import { shopProductInclude as productInclude, shopProductPatchSchema, updateShopProduct } from "@/modules/ecommerce/lib/updateShopProduct";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadVariantAttrGaps } from "@/modules/ecommerce/lib/applyPublished";
@@ -28,8 +29,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 }
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-    const { response } = await requireModuleAccess("e-commerce");
-    if (response) return response;
+    const mod = await requireModuleAccess("e-commerce");
+    if (mod.response) return mod.response;
     const { id } = await ctx.params;
     const pid = parseInt(id, 10);
     if (!Number.isFinite(pid)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
@@ -43,7 +44,10 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     }
     // Save / Save as draft / Save as ready / Discard draft — one write path,
     // shared with the phone app's Photos screen (updateShopProduct.ts).
+    const before = await stagesNow([pid]);
     const saved = await updateShopProduct(pid, data);
+    // A stage change (Save as ready, Publish, Unpublish …) joins the run list (owner, 2026-11-22).
+    if (!saved.response) await recordStaffMoves(before, await staffName(mod.user.id));
     return saved.response ?? NextResponse.json(saved.product);
 }
 

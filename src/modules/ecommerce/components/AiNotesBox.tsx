@@ -22,6 +22,7 @@ const STAGE: Record<string, string> = { UNPUBLISHED: "Unpublished", WAITING: "St
 /** One short history line (owner, 2026-11-20: "simple"): when, which part, stage, found / fixed. */
 function runLine(r: PrepRun) {
     const counts = [r.found ? `found ${r.found}` : "", r.fixed ? `fixed ${r.fixed}` : ""].filter(Boolean).join(", ");
+    if (r.skill === "staff") return `staff ${r.part} · ${formatDate(r.at)} · ${STAGE[r.from] ?? r.from} → ${STAGE[r.to] ?? r.to}`;
     return `${r.skill} part ${r.part} · ${formatDate(r.at)} · ${STAGE[r.from] ?? r.from} → ${STAGE[r.to] ?? r.to}${counts ? ` · ${counts}` : ""}`;
 }
 
@@ -109,13 +110,15 @@ function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]> & { oldRuns?: str
     };
     // One line per part — its most recent run, newest first (owner, 2026-11-20).
     const partOf = (label: string) => label.split(/ \(| · /)[0];
-    const perPart = new Map<string, string>();
-    for (const r of [...runs].reverse()) if (!perPart.has(partOf(r.part))) perPart.set(partOf(r.part), runLine(r));
+    // Staff stage moves (owner, 2026-11-22): the latest 3, mixed in by date.
+    const perPart = new Map<string, PrepRun>();
+    for (const r of [...runs].reverse()) if (r.skill !== "staff" && !perPart.has(partOf(r.part))) perPart.set(partOf(r.part), r);
+    const shown = [...perPart.values(), ...runs.filter((r) => r.skill === "staff").slice(-3)].sort((a, b) => b.at.localeCompare(a.at));
+    const recent = shown.map(runLine);
     for (const l of oldRuns) {
         const k = /part (\S+)/.exec(l)?.[1] ?? l;
-        if (!perPart.has(k)) perPart.set(k, l);
+        if (![...perPart.keys()].includes(k)) recent.push(l);
     }
-    const recent = [...perPart.values()];
     // History = the closed problems (owner, 2026-11-20): what left the open list, who closed it, when.
     const closed = [...(props.closed ?? [])].reverse();
     return (
