@@ -102,7 +102,7 @@ const GO_TONE = {
 const BULK_SHOWS: Record<"start" | "ready" | "publish" | "unpublish", TabKey[]> = {
     start: ["all", "aside", "unpublished", "draft", "ready", "attention"],
     ready: ["all", "aside", "unpublished", "waiting", "draft", "attention"],
-    publish: ["all", "aside", "unpublished", "waiting", "draft", "ready", "attention"],
+    publish: ["ready"], // only a verified product goes live (owner, 2026-11-22)
     unpublish: ["all", "aside", "live", "pending"],
 };
 /** [what to do in this stage, what moves it on] */
