@@ -1,7 +1,7 @@
 {
   "name": "abeersuite-electron",
-  "version": "1.17.11",
-  "minimumCounterVersion": "1.17.10",
+  "version": "1.17.12",
+  "minimumCounterVersion": "1.17.12",
   "description": "AbeerSuite Desktop Operating System",
   "author": "AbeerSuite",
   "main": "dist-electron/main.js",
