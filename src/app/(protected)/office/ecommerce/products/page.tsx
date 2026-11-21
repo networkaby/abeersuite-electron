@@ -23,7 +23,7 @@ import {
     type ProductStatus,
 } from "@/modules/ecommerce/lib/productFilters";
 import { useShopMasters } from "@/modules/mobile/hooks/useShopMasters";
-import { cachedAdminProducts, fetchAdminProducts, handOffAiPick, patchCachedAdminProduct } from "@/modules/ecommerce/lib/productListCache";
+import { cachedAdminProducts, fetchAdminProducts, /* handOffAiPick — back with Write with AI */ patchCachedAdminProduct } from "@/modules/ecommerce/lib/productListCache";
 import { ProductFilterButton, ProductFilterPanel } from "@/modules/ecommerce/components/ProductFilterPanel";
 import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
 import { PaginationBar } from "@/shared/components/PaginationBar";
@@ -47,7 +47,7 @@ import {
     AlertTriangle,
     ChevronRight,
     ExternalLink,
-    Sparkles,
+    // Sparkles — back with Write with AI
     Hourglass,
     // SlidersHorizontal,
 } from "lucide-react";
@@ -88,6 +88,22 @@ const STAGE_TONE: Partial<Record<TabKey, string>> = {
     pending: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-100",
     attention: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-100",
     aside: "bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-200",
+};
+/** A move button wears the colour of the stage it sends the product to. */
+// Written out in full so Tailwind sees every class; keep in step with STAGE_TONE.
+const GO_TONE = {
+    unpublished: "bg-stone-200 text-stone-800 hover:bg-stone-300 hover:text-stone-900 dark:bg-stone-700 dark:text-stone-100 dark:hover:bg-stone-600",
+    waiting: "bg-sky-100 text-sky-900 hover:bg-sky-200 hover:text-sky-950 dark:bg-sky-950 dark:text-sky-100 dark:hover:bg-sky-900",
+    ready: "bg-sky-300 text-sky-950 hover:bg-sky-400 hover:text-sky-950 dark:bg-sky-800 dark:text-sky-50 dark:hover:bg-sky-700",
+    live: "bg-green-200 text-green-900 hover:bg-green-300 hover:text-green-950 dark:bg-green-900 dark:text-green-100 dark:hover:bg-green-800",
+    attention: "bg-amber-100 text-amber-900 hover:bg-amber-200 hover:text-amber-950 dark:bg-amber-950 dark:text-amber-100 dark:hover:bg-amber-900",
+} as const;
+/** Which tabs show each bulk move. All / Temporary pass hold mixed stages, so they show every move. */
+const BULK_SHOWS: Record<"start" | "ready" | "publish" | "unpublish", TabKey[]> = {
+    start: ["all", "aside", "unpublished", "draft", "ready", "attention"],
+    ready: ["all", "aside", "unpublished", "waiting", "draft", "attention"],
+    publish: ["all", "aside", "unpublished", "waiting", "draft", "ready", "attention"],
+    unpublish: ["all", "aside", "live", "pending"],
 };
 /** [what to do in this stage, what moves it on] */
 const STAGE_HINT: Partial<Record<TabKey, [string, string]>> = {
@@ -616,35 +632,46 @@ export default function EcommerceProductsPage() {
             {/* Bulk action bar — appears when rows are selected */}
             {selected.size > 0 ? (
                 <div className="border-primary/30 bg-primary/5 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm">
-                    <span className="font-medium">{selected.size} selected</span>
-                    <Button size="sm" variant="outline" disabled={bulkBusy} onClick={() => void runBulk("ready")}>
-                        Mark ready
-                    </Button>
-                    <Button size="sm" disabled={bulkBusy} onClick={() => void runBulk("publish")}>
-                        Publish
-                    </Button>
-                    <Button size="sm" variant="outline" disabled={bulkBusy} onClick={() => void runBulk("unpublish")}>
-                        Unpublish
-                    </Button>
+                    <span className="mr-2 font-medium">{selected.size} selected</span>
+                    {/* Buttons in stage order, each in the colour of the stage it sends to;
+                        only the moves that make sense from this tab (owner, 2026-11-22). */}
                     {tab === "waiting" ? (
-                        <Button size="sm" variant="outline" disabled={bulkBusy} onClick={() => void sendToAi([...selected], "remove")}>
+                        <Button size="sm" variant="ghost" className={GO_TONE.unpublished} disabled={bulkBusy} onClick={() => void sendToAi([...selected], "remove")}>
                             Remove from Start
                         </Button>
-                    ) : (
-                        <Button size="sm" variant="outline" disabled={bulkBusy} title="Shortlist for the AI run — off the shop until it is done" onClick={() => void sendToAi([...selected], "start")}>
+                    ) : BULK_SHOWS.start.includes(tab) ? (
+                        <Button size="sm" variant="ghost" className={GO_TONE.waiting} disabled={bulkBusy} title="Shortlist for the AI run — off the shop until it is done" onClick={() => void sendToAi([...selected], "start")}>
                             <Hourglass className="size-4" /> Start
                         </Button>
-                    )}
+                    ) : null}
+                    {/* Blank slot = this stage's own place: back moves on its left, forward on its right. */}
+                    {["waiting", "draft", "ready", "attention"].includes(tab) ? <span aria-hidden className="w-6" /> : null}
+                    {BULK_SHOWS.ready.includes(tab) ? (
+                        <Button size="sm" variant="ghost" className={GO_TONE.ready} disabled={bulkBusy} onClick={() => void runBulk("ready")}>
+                            Mark ready
+                        </Button>
+                    ) : null}
+                    {BULK_SHOWS.publish.includes(tab) ? (
+                        <Button size="sm" variant="ghost" className={GO_TONE.live} disabled={bulkBusy} onClick={() => void runBulk("publish")}>
+                            Publish
+                        </Button>
+                    ) : null}
+                    {BULK_SHOWS.unpublish.includes(tab) ? (
+                        <Button size="sm" variant="ghost" className={GO_TONE.ready} disabled={bulkBusy} title="Off the shop — kept as Ready" onClick={() => void runBulk("unpublish")}>
+                            Unpublish
+                        </Button>
+                    ) : null}
                     {tab === "draft" ? (
-                        <Button size="sm" variant="outline" disabled={bulkBusy} onClick={() => setFlagIds([...selected])}>
+                        <Button size="sm" variant="ghost" className={GO_TONE.attention} disabled={bulkBusy} onClick={() => setFlagIds([...selected])}>
                             <AlertTriangle className="size-4" /> Flag attention
                         </Button>
                     ) : null}
+                    {/* Hidden until its skill matches the Claude.ai product skill (owner, 2026-11-22).
                     <Button size="sm" variant="outline" asChild>
                         <Link href="/office/ecommerce/products/ai" onClick={() => handOffAiPick([...selected])}>
                             <Sparkles className="size-4" /> Write with AI
                         </Link>
-                    </Button>
+                    </Button> */}
                     {allPageSelected && filtered.length > selected.size ? (
                         <Button size="sm" variant="ghost" onClick={selectAllFiltered}>
                             Select all {filtered.length}
@@ -754,13 +781,13 @@ export default function EcommerceProductsPage() {
                                                         <Button size="sm" variant="outline" asChild title="Check it, then Save as draft or Save as ready">
                                                             <Link href={`/office/ecommerce/products/${p.id}`}>Open</Link>
                                                         </Button>
-                                                        <Button size="sm" variant="ghost" className="text-indigo-700" disabled={bulkBusy} title="Fixed — clear the flag and send it to Start" onClick={() => void sendToAi([p.id], "start")}>
+                                                        <Button size="sm" variant="ghost" className={GO_TONE.waiting} disabled={bulkBusy} title="Fixed — clear the flag and send it to Start" onClick={() => void sendToAi([p.id], "start")}>
                                                             <Hourglass className="size-3.5" />
                                                             Start
                                                         </Button>
                                                     </>
                                                 ) : status.kind === "waiting" ? (
-                                                    <Button size="sm" variant="ghost" disabled={bulkBusy} title="Take it off the Start list — back to its earlier stage" onClick={() => void sendToAi([p.id], "remove")}>
+                                                    <Button size="sm" variant="ghost" className={GO_TONE.unpublished} disabled={bulkBusy} title="Take it off the Start list — back to its earlier stage" onClick={() => void sendToAi([p.id], "remove")}>
                                                         Remove
                                                     </Button>
                                                 ) : status.kind === "draft" ? (
@@ -768,20 +795,21 @@ export default function EcommerceProductsPage() {
                                                         <Button size="sm" variant="outline" asChild>
                                                             <Link href={`/office/ecommerce/products/${p.id}`}>Open draft</Link>
                                                         </Button>
-                                                        <Button size="sm" variant="ghost" className="text-orange-700" title="Work blocked — park it in Attention with the reason" onClick={() => setFlagIds([p.id])}>
+                                                        <Button size="sm" variant="ghost" className={GO_TONE.attention} title="Work blocked — park it in Attention with the reason" onClick={() => setFlagIds([p.id])}>
                                                             <AlertTriangle className="size-3.5" />
                                                             Flag
                                                         </Button>
                                                     </>
                                                 ) : status.kind === "unpublished" ? (
                                                     <>
-                                                        <Button size="sm" variant="ghost" className="text-indigo-700" disabled={bulkBusy} title="Shortlist for the AI run" onClick={() => void sendToAi([p.id], "start")}>
+                                                        <Button size="sm" variant="ghost" className={GO_TONE.waiting} disabled={bulkBusy} title="Shortlist for the AI run" onClick={() => void sendToAi([p.id], "start")}>
                                                             <Hourglass className="size-3.5" />
                                                             Start
                                                         </Button>
                                                         <Button
                                                             size="sm"
-                                                            variant="outline"
+                                                            variant="ghost"
+                                                            className={GO_TONE.ready}
                                                             disabled={publishing.has(p.id)}
                                                             onClick={() => void moveStage(p, "READY")}
                                                         >
@@ -791,6 +819,8 @@ export default function EcommerceProductsPage() {
                                                 ) : status.kind === "ready" ? (
                                                     <Button
                                                         size="sm"
+                                                        variant="ghost"
+                                                        className={GO_TONE.live}
                                                         disabled={publishing.has(p.id)}
                                                         onClick={() => void moveStage(p, "PUBLISHED")}
                                                     >
@@ -799,7 +829,8 @@ export default function EcommerceProductsPage() {
                                                 ) : status.kind === "live" || status.kind === "pending" ? (
                                                     <Button
                                                         size="sm"
-                                                        variant="outline"
+                                                        variant="ghost"
+                                                        className={GO_TONE.ready}
                                                         disabled={publishing.has(p.id)}
                                                         onClick={() => void moveStage(p, "READY", true)}
                                                     >
