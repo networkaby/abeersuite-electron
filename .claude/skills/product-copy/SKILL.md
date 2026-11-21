@@ -192,7 +192,7 @@ For the courier rate. Prefer the **package** weight and size (what is shipped); 
 "shipping": { "weight": "~0.05 kg", "dimensions": "116.26 x 36.46 x 100.94 mm", "source": "<accepted page url or \"label\">" }
 ```
 
-The server finds the text on that source, converts it itself (grams; whole cm, rounded up), and sets the product's weight / size. Not on any source → leave `shipping` out and add a note ("Shipping weight / size unknown — weigh the box").
+The server finds the text on that source, converts it itself (grams; whole cm, rounded up), and sets the product's weight / size. Not on any source → leave `shipping` out, **no note** (owner, 2026-11-22, same as product-prep): a published product with no weight goes to Pending by itself and staff weigh it there.
 
 ## 7. Photos from the maker / seller pages
 
@@ -216,7 +216,7 @@ Go through this list for every product and write each problem as one short line 
 - **Primary photo** with any logo, watermark, date stamp or text overlay (our own shop logo too) → "Pick a clean primary photo — Google and Meta reject logos on the main image". Our logo or a camera stamp on the other photos is fine.
 - **Photos**: another model or old box version, someone else's watermark, blurry / dark, duplicates, no plain product front, no size photo, the main photo is not the best.
 - **Description already there**: a wrong spec, missing compatibility, our support period written as the maker's warranty.
-- **Shipping**: weight or size missing and not found anywhere.
+- **Shipping**: only a weight / size plainly wrong for the item (a 5 kg mouse). Empty is never a note.
 - **Price / stock**: only if something is plainly off (MRP below price) — say it, never guess a price.
 
 ## 9. Send (the server checks)
