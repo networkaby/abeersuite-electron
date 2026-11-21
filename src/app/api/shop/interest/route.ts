@@ -5,6 +5,8 @@ import { requirePortalCustomer } from "@/shared/lib/auth/portalAuthGuard";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { getDealsPipeline } from "@/modules/deals/lib/dealsPipeline";
 import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
+import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
+import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
 
 // POST /api/shop/interest { productId } — "Show interest" on an out-of-stock
 // product the shop cannot sell (owner, 2026-11-22). A signed-in customer only (an
@@ -23,12 +25,21 @@ export async function POST(req: Request) {
     const { data, error } = await validateRequest(req, schema);
     if (error) return error;
     try {
-        const [product, person, pipeline] = await Promise.all([
-            prisma.invProduct.findUnique({ where: { id: data.productId }, select: { id: true, sku: true, name: true, shopSubheading: true } }),
+        const [product, person, pipeline, policy] = await Promise.all([
+            prisma.invProduct.findUnique({
+                where: { id: data.productId },
+                select: { id: true, sku: true, name: true, shopSubheading: true, stock: true, allowBackorder: true, reserved: true },
+            }),
             prisma.person.findUnique({ where: { id: auth.customerId }, select: { id: true, name: true } }),
             getDealsPipeline(prisma),
+            loadShopStockPolicy(),
         ]);
         if (!product) return NextResponse.json({ error: "Product not found" }, { status: 404 });
+        // Only a product the shop cannot sell (owner, 2026-11-22) — the same rule the
+        // product page uses; an in-stock or backorder product is simply added to the cart.
+        if (resolveAvailability(product.stock, product.allowBackorder, policy, product.reserved).orderable) {
+            return NextResponse.json({ error: "This product is in stock — add it to your cart" }, { status: 409 });
+        }
         if (!person) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
         if (!pipeline) return NextResponse.json({ error: "Deals are not set up" }, { status: 503 });
         const entry = pipeline.statuses.find((s) => s.isEntryPoint) ?? pipeline.statuses[0];
