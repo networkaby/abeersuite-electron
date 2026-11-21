@@ -882,11 +882,13 @@ export default function ProductForm({
                         One price everywhere — shelf, POS and shop all charge this.
                     </p>
                 </div>
-                <div className="grid gap-2">
-                    <Label>Badge</Label>
-                    <Input value={badge} onChange={(e) => setBadge(e.target.value)} placeholder="e.g. Sale" />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
+                {/* Badge · Stock · Weight on one line (owner, 2026-11-22). The low-stock floor
+                    left this page — it only feeds the Reorder report, which edits it. */}
+                <div className="grid grid-cols-3 gap-3">
+                    <div className="grid gap-2">
+                        <Label>Badge</Label>
+                        <Input value={badge} onChange={(e) => setBadge(e.target.value)} placeholder="e.g. Sale" />
+                    </div>
                     {/* Stock is read-only — it is the ledger balance, not an input.
                         It changes by posting an inventory voucher. */}
                     <div className="grid gap-2">
@@ -897,38 +899,20 @@ export default function ProductForm({
                             </span>
                         </div>
                     </div>
-                    {/* Reorder input, not a shop field — the storefront never reads
-                        it. Edited on the Reorder page, which shows it in context. */}
                     <div className="grid gap-2">
-                        <div className="flex items-center justify-between gap-2">
-                            <Label className="text-muted-foreground">Low-stock floor</Label>
-                            <GatedLink
-                                href="/office/inventory/reorder"
-                                className="inline-flex items-center gap-1 text-xs text-primary underline"
-                            >
-                                Reorder
-                                <ExternalLink className="size-3" />
-                            </GatedLink>
-                        </div>
-                        <div className="flex h-9 items-center rounded-md border border-border bg-muted/40 px-3">
-                            <span className="text-sm font-semibold tabular-nums">{lowStockThresholdValue}</span>
-                        </div>
+                        <Label>Shipping weight (grams)</Label>
+                        <Input
+                            value={weightGrams}
+                            onChange={(e) => setWeightGrams(e.target.value)}
+                            inputMode="numeric"
+                            placeholder="e.g. 500 — actual weight"
+                        />
                     </div>
                 </div>
                 <p className="-mt-2 text-xs text-muted-foreground">
                     Stock comes from posted inventory vouchers — edit it there, not here.
-                    &ldquo;Not tracked&rdquo; means the shop always treats it as in stock. The low-stock
-                    floor only feeds the Reorder report, never the storefront.
+                    &ldquo;Not tracked&rdquo; means the shop always treats it as in stock.
                 </p>
-                <div className="grid gap-2">
-                    <Label>Shipping weight (grams)</Label>
-                    <Input
-                        value={weightGrams}
-                        onChange={(e) => setWeightGrams(e.target.value)}
-                        inputMode="numeric"
-                        placeholder="e.g. 500 — actual weight"
-                    />
-                </div>
                 <div className="grid gap-2">
                     <Label>Parcel dimensions (cm) — for volumetric weight</Label>
                     <div className="grid grid-cols-3 gap-3">
