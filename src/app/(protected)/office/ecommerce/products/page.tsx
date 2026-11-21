@@ -549,7 +549,7 @@ export default function EcommerceProductsPage() {
             {/* Tabs + search + filter button */}
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2">
-                    {tabs.filter((t) => !STAGE_FLOW.includes(t.key) && !SIDE_TABS.includes(t.key)).map((t) => (
+                    {tabs.filter((t) => t.key === "all").map((t) => (
                         <button
                             key={t.key}
                             type="button"
