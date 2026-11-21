@@ -9,7 +9,7 @@ export const DEFAULT_OUT_OF_STOCK_POLICY: ShopOutOfStockPolicy = "NOTIFY";
 
 export const OUT_OF_STOCK_POLICY_LABELS: Record<ShopOutOfStockPolicy, string> = {
     HIDE: "Hide from shop",
-    NOTIFY: "Show with an “Out of stock” notice (can’t order)",
+    NOTIFY: "Show with a “Show interest” button — creates a deal (can’t order)",
     BACKORDER: "Allow orders anyway (backorder / procure later)",
 };
 

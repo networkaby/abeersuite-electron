@@ -16,6 +16,19 @@ export function canonicalStateName(name: string | null | undefined): string | nu
     return name ? STATE_CANONICAL.get(name.trim().toLowerCase()) ?? null : null;
 }
 
+/**
+ * "Quick" = the option commits delivery today or tomorrow (owner, 2026-11-22). A cart
+ * with any item short of stock (backorder) is never offered a quick option — we
+ * cannot promise a day for something we still have to procure. Stored as
+ * `configJson.quick`; unset falls back to the kind's default (delivery boy and
+ * store pickup are quick).
+ */
+export const QUICK_BY_DEFAULT: DeliveryKind[] = ["OWN_BOY", "STORE_PICKUP"];
+export function isQuickMethod(kind: DeliveryKind, configJson: unknown): boolean {
+    const q = (configJson as { quick?: unknown } | null)?.quick;
+    return typeof q === "boolean" ? q : QUICK_BY_DEFAULT.includes(kind);
+}
+
 export const DELIVERY_KINDS: DeliveryKind[] = ["OWN_BOY", "CUSTOM", "SHIPROCKET", "SHIPWAY", "STORE_PICKUP", "FREE_DELIVERY"];
 
 export const DELIVERY_KIND_LABEL: Record<DeliveryKind, string> = {
@@ -636,8 +649,10 @@ export function sanitizeDeliveryConfig(kind: DeliveryKind, raw: Record<string, u
     // Availability exclusions are common to every kind (only stored when non-empty).
     const exclude = sanitizeExclusions(raw.exclude);
     const hasExclude = (exclude.states?.length ?? 0) > 0 || (exclude.pincodePrefixes?.length ?? 0) > 0;
+    // The Quick tick is common to every kind too (owner, 2026-11-22) — kept only when set.
+    const quick = typeof raw.quick === "boolean" ? { quick: raw.quick } : {};
     const withExclude = (o: Record<string, unknown>): Record<string, unknown> =>
-        hasExclude ? { ...o, exclude } : o;
+        ({ ...(hasExclude ? { ...o, exclude } : o), ...quick });
 
     if (kind === "CUSTOM") {
         return withExclude(sanitizeCustomConfig(raw) as Record<string, unknown>);

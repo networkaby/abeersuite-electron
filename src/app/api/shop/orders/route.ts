@@ -146,6 +146,8 @@ export async function POST(req: Request) {
             subtotalPaise: totalPaise,
             weightGrams,
             cod: isCod,
+            // Same rule as the quote: a backorder cart cannot pick a quick option (owner, 2026-11-22).
+            backorder: lines.some((l) => { const p = byId.get(l.productId); return !!p && p.stock !== null && p.stock < l.quantity; }),
         });
         const chosen = options.find((o) => o.optionId === optionId);
         if (!chosen) {

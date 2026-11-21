@@ -1,6 +1,7 @@
 "use client";
 
 import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
+import { useShowInterest } from "@/modules/external/shop/useShowInterest";
 import Link from "next/link";
 import { Heart, GitCompare } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import { toast } from "sonner";
 
 export default function ProductListRow({ product, className }: { product: ShopProductPublic; className?: string }) {
     const add = useShopCartStore((s) => s.add);
+    const interest = useShowInterest(() => `/login?callbackUrl=${encodeURIComponent(typeof window !== "undefined" ? window.location.pathname : "/shop")}`);
     const toggleWish = useShopWishlistStore((s) => s.toggle);
     const wishHas = useShopWishlistStore((s) => s.has(product.id));
     const addCompare = useShopCompareStore((s) => s.add);
@@ -53,10 +55,6 @@ export default function ProductListRow({ product, className }: { product: ShopPr
                 {product.stockStatus === "out_of_stock" ? (
                     <Badge className="absolute left-3 top-3 rounded-md shadow-sm" variant="destructive">
                         Out of stock
-                    </Badge>
-                ) : product.stockStatus === "backorder" ? (
-                    <Badge className="absolute left-3 top-3 rounded-md border-amber-500/40 bg-amber-50 text-amber-700 shadow-sm" variant="outline">
-                        Backorder
                     </Badge>
                 ) : product.badge ? (
                     <Badge className="absolute left-3 top-3 rounded-md shadow-sm" variant="secondary">
@@ -135,13 +133,15 @@ export default function ProductListRow({ product, className }: { product: ShopPr
                         <Button
                             className="h-10 min-h-10 touch-manipulation rounded-full shadow-sm"
                             type="button"
-                            disabled={!product.orderable}
+                            disabled={interest.busy}
                             onClick={() => {
+                                // Out of stock and not orderable → a Deal for staff (owner, 2026-11-22).
+                                if (!product.orderable) return void interest.send(product.id);
                                 add(product.id, 1);
-                                toast.success(product.stockStatus === "backorder" ? "Added (backorder)" : "Added to cart");
+                                toast.success("Added to cart");
                             }}
                         >
-                            {!product.orderable ? "Out of stock" : product.stockStatus === "backorder" ? "Backorder" : "Add to cart"}
+                            {product.orderable ? "Add to cart" : "Show interest"}
                         </Button>
                     </div>
                 </div>

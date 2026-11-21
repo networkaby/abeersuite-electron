@@ -14,7 +14,8 @@ import type { VariantOption } from "@/shared/lib/shop/variants";
 import VariantPicker from "@/modules/external/shop/VariantPicker";
 import type { BridgeRow } from "@/shared/lib/shop/productRelations";
 import { useCartCount } from "@/modules/external/shopApp/CustomerAppShell";
-import { APP } from "@/modules/external/shopApp/appPaths";
+import { APP, appLoginPath } from "@/modules/external/shopApp/appPaths";
+import { useShowInterest } from "@/modules/external/shop/useShowInterest";
 import { noteViewed, savePincode, useSavedPincode } from "@/modules/external/shopApp/appDevicePrefs";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { parseDigitsInput } from "@/shared/lib/format";
@@ -73,9 +74,10 @@ export default function AppProductView({
             /* the customer closed the share sheet */
         }
     };
+    const interest = useShowInterest(() => appLoginPath(typeof window !== "undefined" ? window.location.pathname : APP));
     const addToCart = () => {
         if (!inCart) add(p.id, 1);
-        toast.success(p.stockStatus === "backorder" ? "Added to cart (on order)" : "Added to cart", {
+        toast.success("Added to cart", {
             action: { label: "View cart", onClick: () => router.push(`${APP}/cart`) },
         });
     };
@@ -171,14 +173,15 @@ export default function AppProductView({
                 {p.badge && <span className="inline-block rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">{p.badge}</span>}
                 <p
                     className={`text-sm font-medium ${
-                        p.stockStatus === "in_stock" ? "text-emerald-700" : p.stockStatus === "backorder" ? "text-amber-700" : "text-destructive"
+                        p.stockStatus === "out_of_stock" ? "text-destructive" : "text-emerald-700"
                     }`}
                 >
+                    {/* A backorder looks like any product (owner, 2026-11-22) — only the time differs. */}
                     {p.stockStatus === "in_stock"
                         ? "In stock"
                         : p.stockStatus === "backorder"
-                          ? "On order — we'll get it for you; delivery takes a little longer"
-                          : "Out of stock"}
+                          ? "Available · ships in a few days"
+                          : "Out of stock — tap Show interest and we will tell you when it is back"}
                 </p>
             </div>
 
@@ -243,11 +246,19 @@ export default function AppProductView({
                                 onClick={buyNow}
                                 className="h-12 flex-1 rounded-xl bg-amber-400 text-[15px] font-semibold text-amber-950 active:bg-amber-300"
                             >
-                                {p.stockStatus === "backorder" ? "Order now" : "Buy now"}
+                                Buy now
                             </button>
                         </>
                     ) : (
-                        <p className="flex h-12 flex-1 items-center justify-center rounded-xl bg-muted text-[15px] font-medium text-muted-foreground">Out of stock</p>
+                        // Out of stock and not orderable → a Deal for staff (owner, 2026-11-22).
+                        <button
+                            type="button"
+                            disabled={interest.busy}
+                            onClick={() => void interest.send(p.id)}
+                            className="h-12 flex-1 rounded-xl bg-primary text-[15px] font-semibold text-primary-foreground active:opacity-90 disabled:opacity-60"
+                        >
+                            Show interest
+                        </button>
                     )}
                 </div>
             </div>

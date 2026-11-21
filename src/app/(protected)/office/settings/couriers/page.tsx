@@ -28,6 +28,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
     DELIVERY_KIND_LABEL,
+    QUICK_BY_DEFAULT,
+    isQuickMethod,
     INDIA_STATE_NAMES,
     type DeliveryKind,
 } from "@/modules/delivery/lib/deliveryMethodConfig";
@@ -62,6 +64,8 @@ type FormState = {
     // Availability exclusions (common to every kind).
     excludeStates: string[];
     excludePincodes: string; // prefixes, one per line / comma-separated
+    // Commits delivery today / tomorrow — hidden for a backorder cart (owner, 2026-11-22).
+    quick: boolean;
 };
 
 const rupees = (paise: unknown) => String(paiseToRupees(Number(paise) || 0));
@@ -84,6 +88,7 @@ function emptyForm(kind: DeliveryKind = "OWN_BOY"): FormState {
         includePincodes: "",
         excludeStates: [],
         excludePincodes: "",
+        quick: QUICK_BY_DEFAULT.includes(kind),
     };
 }
 
@@ -131,6 +136,7 @@ export default function CouriersSettingsPage() {
             includePincodes: Array.isArray(inc.pincodePrefixes) ? (inc.pincodePrefixes as string[]).join("\n") : "",
             excludeStates: Array.isArray(ex.states) ? (ex.states as string[]) : [],
             excludePincodes: Array.isArray(ex.pincodePrefixes) ? (ex.pincodePrefixes as string[]).join("\n") : "",
+            quick: isQuickMethod(m.kind, c),
         });
         setDialogOpen(true);
     };
@@ -186,7 +192,7 @@ export default function CouriersSettingsPage() {
         const baseCfg = preserveRates
             ? { ...(methods.find((m) => m.id === id)?.configJson ?? {}) }
             : buildConfig();
-        const configJson = { ...baseCfg, exclude: buildExclude() };
+        const configJson = { ...baseCfg, exclude: buildExclude(), quick: form.quick };
         try {
             await axios.patch(`/api/settings/couriers/${id}`, {
                 displayName: form.displayName.trim(),
@@ -523,6 +529,15 @@ export default function CouriersSettingsPage() {
                                 <div className="flex h-9 items-center">
                                     <Switch id="c-active" checked={form.isActive} onCheckedChange={(v) => setForm((f) => ({ ...f, isActive: v }))} />
                                 </div>
+                            </div>
+                        </div>
+                        <div className="flex items-start gap-3 rounded-md border border-border p-3">
+                            <Switch id="c-quick" checked={form.quick} onCheckedChange={(v) => setForm((f) => ({ ...f, quick: v }))} />
+                            <div className="grid gap-0.5">
+                                <Label htmlFor="c-quick">Quick — commits delivery today or tomorrow</Label>
+                                <p className="text-muted-foreground text-[11px]">
+                                    Not offered when any item in the cart is out of stock and ordered on backorder — we cannot promise a day for something we still have to get.
+                                </p>
                             </div>
                         </div>
                     </div>

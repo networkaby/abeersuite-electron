@@ -70,6 +70,7 @@ export async function POST(req: Request) {
             subtotalPaise,
             weightGrams,
             cod: cod ?? true,
+            backorder: lines.some((l) => { const p = byId.get(l.productId); return !!p && p.stock !== null && p.stock < l.quantity; }),
         });
 
         return NextResponse.json({ options, subtotalPaise, weightGrams });

@@ -83,7 +83,7 @@ export default function AppCart({ products }: { products: ShopProductPublic[] })
                                     {!p.orderable ? (
                                         <p className="text-xs font-medium text-destructive">Out of stock — remove it to place the order</p>
                                     ) : p.stockStatus === "backorder" ? (
-                                        <p className="text-xs text-amber-700">On order · ships a little later</p>
+                                        <p className="text-xs text-muted-foreground">Ships in a few days</p>
                                     ) : null}
                                 </div>
                             </div>

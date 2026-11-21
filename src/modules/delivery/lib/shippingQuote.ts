@@ -18,6 +18,7 @@ import {
     computeCustomRatePaise,
     cheapestCustomRatePaise,
     isDestinationExcluded,
+    isQuickMethod,
     destinationMatchesList,
     hasServeList,
     type CustomConfig,
@@ -171,6 +172,8 @@ export async function quoteShipping(params: {
     subtotalPaise: number;
     weightGrams: number;
     cod: boolean;
+    /** Any line short of stock (a backorder) — quick options are left out. */
+    backorder?: boolean;
 }): Promise<ShippingOption[]> {
     const methods = await loadActiveDeliveryMethods();
     const out: ShippingOption[] = [];
@@ -179,6 +182,8 @@ export async function quoteShipping(params: {
         // Availability exclusions — this courier isn't offered to the excluded
         // states / pincode prefixes, whatever its kind.
         if (isDestinationExcluded(m.configJson.exclude, params.deliveryPincode, params.deliveryState)) continue;
+        // A backorder cart never gets a today / tomorrow promise (owner, 2026-11-22).
+        if (params.backorder && isQuickMethod(m.kind as DeliveryKind, m.configJson)) continue;
 
         if (m.kind === "CUSTOM") {
             const cfg = m.configJson as CustomConfig;

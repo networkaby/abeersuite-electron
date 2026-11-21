@@ -47,7 +47,7 @@ export function AppProductTile({ product: p }: { product: ShopProductPublic }) {
                         <span className="text-[11px] text-muted-foreground line-through tabular-nums">{formatRupeesFromPaise(p.mrpPaise)}</span>
                     )}
                 </p>
-                {p.stockStatus === "backorder" && <p className="text-[11px] text-amber-700">On order · ships later</p>}
+                
                 {!p.orderable && <p className="text-[11px] text-muted-foreground">Out of stock</p>}
             </div>
         </Link>

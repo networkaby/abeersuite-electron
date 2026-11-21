@@ -15,6 +15,7 @@ import { useShopCompareStore, SHOP_COMPARE_MAX } from "@/store/external/shopComp
 import { toast } from "sonner";
 import { Heart, GitCompare, Minus, Plus, Share2 } from "lucide-react";
 import { cn } from "@/shared/lib/format/utils";
+import { useShowInterest } from "@/modules/external/shop/useShowInterest";
 
 export default function ProductPurchasePanel({
     product,
@@ -35,6 +36,7 @@ export default function ProductPurchasePanel({
     const wishHas = useShopWishlistStore((s) => s.has(product.id));
     const addCompare = useShopCompareStore((s) => s.add);
     const [qty, setQty] = useState(1);
+    const interest = useShowInterest(() => `/login?callbackUrl=${encodeURIComponent(typeof window !== "undefined" ? window.location.pathname : "/shop")}`);
 
     const discountPct =
         product.mrpPaise && product.mrpPaise > product.pricePaise
@@ -56,10 +58,6 @@ export default function ProductPurchasePanel({
             <div className="flex flex-wrap gap-2">
                 {product.stockStatus === "out_of_stock" ? (
                     <Badge variant="destructive">Out of stock</Badge>
-                ) : product.stockStatus === "backorder" ? (
-                    <Badge variant="outline" className="border-amber-500/40 bg-amber-50 text-amber-700">
-                        Available on backorder
-                    </Badge>
                 ) : null}
                 {product.badge ? <Badge variant="secondary">{product.badge}</Badge> : null}
                 <Badge variant="outline">{product.category}</Badge>
@@ -116,28 +114,23 @@ export default function ProductPurchasePanel({
                         size="lg"
                         className="min-w-[200px] flex-1 rounded-full text-base shadow-md"
                         type="button"
-                        disabled={!product.orderable}
+                        disabled={interest.busy}
                         onClick={() => {
+                            // Out of stock and not orderable → a Deal for staff (owner, 2026-11-22).
+                            if (!product.orderable) return void interest.send(product.id);
                             add(product.id, qty);
-                            toast.success(
-                                product.stockStatus === "backorder" ? `Added ${qty} (backorder)` : `Added ${qty} to cart`
-                            );
+                            toast.success(`Added ${qty} to cart`);
                         }}
                     >
-                        {!product.orderable
-                            ? "Out of stock"
-                            : product.stockStatus === "backorder"
-                              ? "Backorder"
-                              : "Add to cart"}
+                        {product.orderable ? "Add to cart" : "Show interest"}
                     </Button>
                 </div>
                 {product.stockStatus === "backorder" ? (
-                    <p className="mt-3 text-xs text-amber-700">
-                        Out of stock — order now and we’ll procure and deliver it (may take longer).
-                    </p>
+                    // A backorder looks like any product (owner, 2026-11-22) — only the time differs.
+                    <p className="mt-3 text-xs text-muted-foreground">Ships in a few days.</p>
                 ) : !product.orderable ? (
                     <p className="mt-3 text-xs text-muted-foreground">
-                        This item is currently out of stock. Please check back later.
+                        Out of stock — tap Show interest and we will tell you when it is back.
                     </p>
                 ) : null}
                 <div className="mt-4 flex flex-wrap gap-2">
