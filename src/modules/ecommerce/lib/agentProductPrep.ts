@@ -7,7 +7,7 @@ import { AI_PHOTO_LIMITS } from "@/shared/lib/constants/ai";
 import { COMPATIBLE_SPEC } from "@/shared/lib/shop/compatibility";
 import { getR2Text, isR2Configured, messagesBucket, putR2 } from "@/shared/lib/storage/r2";
 import type { ProductCopy } from "@/modules/ecommerce/lib/aiProductCopy";
-import { aiRuns, noteItems, readShopDraft, trimRuns, withClosed, type PrepProblem, type PrepRun, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
+import { aiRuns, nextStep, noteItems, readShopDraft, trimRuns, withClosed, type PrepProblem, type PrepRun, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
 import type { ShopStatus } from "@/generated/prisma/enums";
 import { updateShopProduct, type ShopProductPatch } from "@/modules/ecommerce/lib/updateShopProduct";
 import { startAi } from "@/modules/ecommerce/lib/shopWaiting";
@@ -430,6 +430,16 @@ export async function productForPrep(id: number) {
         prep: {
             /** The last 10 runs: { skill, part, at, from, to, found?, fixed? } — oldest first. */
             runs: aiRuns(draft?.runs), // the skills see their own runs only
+            /**
+             * The next step (owner, 2026-11-22) — the same line staff see at the end of AI notes.
+             * When the owner says "follow next step", run exactly `nextStep.skill` part `nextStep.part`;
+             * no `skill` means it is a staff step — leave the product alone. (`next` below is Part 4's own suggestion.)
+             */
+            nextStep: nextStep({
+                stage: base.shopStatus, listed: base.shopStatus === "PUBLISHED", photos: base.photos.length, weight: !!p.weightGrams,
+                description: !!base.currentDescription?.trim(), runs: draft?.runs ?? [],
+                openProblems: (draft?.problems ?? []).filter((x) => !x.asideAt).length,
+            }),
             /**
              * Staff (or anyone) changed the product after the last run (owner, 2026-11-20).
              * false + a run of the same part → skip it unless the owner says "redo".

@@ -5,7 +5,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { extractApiError } from "@/shared/lib/api";
-import { problemText, splitAttention, type ClosedProblem, type PrepProblem, type PrepRun, type StaffNote } from "@/modules/ecommerce/lib/productAdmin";
+import { problemText, splitAttention, type ClosedProblem, type PrepProblem, type PrepRun, type StaffNote, type NextAct, type NextStep } from "@/modules/ecommerce/lib/productAdmin";
 
 /** One place for every AI note on a product (owner, 2026-11-12): the Attention reason,
  *  Claude's review notes (kept, dated, after publishing) and the latest copy run's notes. */
@@ -14,7 +14,11 @@ export type AiNotesBoxProps = {
     review?: { notes: string[]; at?: string | null; kept?: boolean } | null;
     copy?: { source: string; notes: string[]; flags: string[] } | null;
     /** Product prep's runs and open problems (owner, 2026-11-20) — when there are any, the box shows only these. */
-    prep?: { productId: number; runs: PrepRun[]; problems: PrepProblem[]; staffNote?: StaffNote | null; closed?: ClosedProblem[]; onChanged: () => void } | null;
+    prep?: {
+        productId: number; runs: PrepRun[]; problems: PrepProblem[]; staffNote?: StaffNote | null; closed?: ClosedProblem[]; onChanged: () => void;
+        /** The last line (owner, 2026-11-22): where to go from here; `onAct` makes the move when staff press it. */
+        next?: NextStep | null; onAct?: (act: NextAct) => void; acting?: boolean;
+    } | null;
 };
 
 const STAGE: Record<string, string> = { UNPUBLISHED: "Unpublished", WAITING: "Start", DRAFT: "Draft", ATTENTION: "Attention", READY: "Ready", PUBLISHED: "Published" };
@@ -174,6 +178,17 @@ function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]> & { oldRuns?: str
                     </ul>
                 </details>
             )}
+            {props.next?.text ? (
+                <div className="flex flex-wrap items-center gap-2 rounded-md bg-sky-100 px-2.5 py-1.5 text-sky-900 dark:bg-sky-950 dark:text-sky-100">
+                    <span className="flex-1"><span className="font-medium">Next:</span> {props.next.text}</span>
+                    {props.next.act && props.onAct ? (
+                        <button type="button" disabled={props.acting} onClick={() => props.onAct!(props.next!.act!)}
+                            className="rounded border border-sky-300 bg-white px-2 py-0.5 text-xs font-medium hover:bg-sky-50 disabled:opacity-50 dark:border-sky-700 dark:bg-sky-900">
+                            {props.next.actLabel}
+                        </button>
+                    ) : null}
+                </div>
+            ) : null}
         </div>
     );
 }

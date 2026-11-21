@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import type { ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
+import { nextStep, type ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { productShopUrl, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import ProductGalleryUploader from "@/modules/ecommerce/components/ProductGalleryUploader";
 import ProductVariantsSection from "@/modules/inventory/components/ProductVariantsSection";
@@ -832,6 +832,14 @@ export default function ProductForm({
                     } : null}
                     prep={initial?.id ? {
                         productId: initial.id, runs: row?.shopDraft?.runs ?? [], problems: row?.shopDraft?.problems ?? [], staffNote: row?.shopDraft?.staffNote ?? null, closed: row?.shopDraft?.closed ?? [], onChanged: () => void reloadRow(),
+                        next: nextStep({
+                            stage: shopStatus, listed: !!initial?.isListedInShop, photos: galleryUrls.length, weight: !!weightGrams.trim(),
+                            description: !!description.trim(), runs: row?.shopDraft?.runs ?? [],
+                            openProblems: (row?.shopDraft?.problems ?? []).filter((x) => !x.asideAt).length, pendingMissing: qualification.missing,
+                        }),
+                        acting: busy || queueing,
+                        // Staff may follow the suggestion (owner, 2026-11-22) — the same calls as the buttons below.
+                        onAct: (act) => void (act === "start" ? saveAndStart() : submit(act)),
                     } : null}
                 />
                 <div className="grid gap-2">

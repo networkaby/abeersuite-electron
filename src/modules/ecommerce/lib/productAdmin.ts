@@ -314,3 +314,66 @@ export function withShopDraft(
     return { ...invProductToAdmin(p, bands), shopDraft: readShopDraft(p.shopDraftJson) };
 }
 
+
+/**
+ * The next step for a product (owner, 2026-11-22) — the last line of AI notes and
+ * `prep.next` in the agent API. Worked out each time from the stage, the content and
+ * the run list; nothing is saved. Staff may press it (`act`); an AI told to "follow
+ * next" runs exactly `skill` / `part`. Attention resumes from whoever parked it:
+ * part 1 / 2 → Start again; part 3 / 4 / 5 → Save as draft; staff from Published /
+ * Ready → Save as ready; staff from anywhere else → Save as draft.
+ */
+export type NextAct = "start" | "save" | "ready" | "publish";
+export type NextStep = { text: string; act?: NextAct; actLabel?: string; skill?: "product-prep" | "product-recheck"; part?: string };
+export type NextInput = {
+    stage: ShopStatus;
+    /** Published and in the shop (false = Pending). */
+    listed: boolean;
+    photos: number;
+    weight: boolean;
+    description: boolean;
+    runs: PrepRun[];
+    openProblems: number;
+    /** What the publish rules still need (Pending only). */
+    pendingMissing?: string[];
+};
+
+const partNo = (r: PrepRun) => Number(r.part.split(/ \(| · |\+/)[0]) || 0;
+
+export function nextStep(i: NextInput): NextStep {
+    const fix = i.openProblems ? `fix ${i.openProblems} open problem${i.openProblems > 1 ? "s" : ""}, then ` : "";
+    const ai = aiRuns(i.runs);
+    switch (i.stage) {
+        case "UNPUBLISHED":
+            if (!i.photos || !i.weight) return { text: `add ${[!i.photos && "photos", !i.weight && "shipping weight"].filter(Boolean).join(" and ")}, then Start` };
+            return { text: "Start → product-prep part 1", act: "start", actLabel: "Start" };
+        case "WAITING": {
+            const last = [...ai].reverse().find((r) => r.skill === "product-prep");
+            const done = last && last.to === "WAITING" ? partNo(last) : 0;
+            const part = i.description ? (done >= 1 ? "5" : "1") : String(Math.min(done + 1, 3));
+            return { text: `product-prep part ${part}${i.description && part === "1" ? " + 5 (photos only)" : ""}`, skill: "product-prep", part };
+        }
+        case "DRAFT":
+            return { text: `${fix}product-recheck part 4 → Ready`, skill: "product-recheck", part: "4" };
+        case "ATTENTION": {
+            const parked = [...i.runs].reverse().find((r) => r.to === "ATTENTION");
+            if (parked?.skill === "staff") {
+                return parked.from === "PUBLISHED" || parked.from === "READY"
+                    ? { text: `${fix}Save as ready → Publish`, act: "ready", actLabel: "Save as ready" }
+                    : { text: `${fix}Save as draft → product-recheck part 4`, act: "save", actLabel: "Save as draft" };
+            }
+            const p = parked ? partNo(parked) : 1;
+            return p <= 2
+                ? { text: `${fix}Start → product-prep part ${p || 1} runs again`, act: "start", actLabel: "Start", skill: "product-prep", part: String(p || 1) }
+                : { text: `${fix}Save as draft → product-recheck part 4`, act: "save", actLabel: "Save as draft" };
+        }
+        case "READY":
+            return { text: "Publish", act: "publish", actLabel: "Publish" };
+        case "PUBLISHED":
+            return i.listed
+                ? { text: "nothing — live on the shop" }
+                : { text: `add ${i.pendingMissing?.length ? i.pendingMissing.join(", ").toLowerCase() : "what the publish rules need"} — it goes live by itself` };
+        default:
+            return { text: "" };
+    }
+}

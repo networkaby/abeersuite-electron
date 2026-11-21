@@ -43,6 +43,8 @@ Before anything else, ask the owner **which mode** — cloud · local · smart l
 
 Usually the Draft tab: `GET /api/agent/products?stage=draft&limit=20` (or `sku=` / `q=`). Tell the owner the list, then one at a time.
 
+**"Follow next step"** (owner, 2026-11-22): check only products whose `prep.nextStep.skill` is `product-recheck` (part 4). Any other `nextStep` → skip it and name it in the report with its `text` — a staff step or a product-prep part.
+
 ## 2. Read
 
 ```bash

@@ -72,6 +72,7 @@ Before anything else, ask the owner **both** questions in one message, unless th
 
 1. **Which mode?** — cloud · local · smart local · office (Setup above). Running in the cloud → do not ask, it is always **cloud**.
 2. **Which part?**
+   - **Follow next step** (owner says "follow next step" / "follow AI notes") — each product runs exactly `prep.nextStep`: `{ text, skill?, part? }`, the same "Next:" line staff see at the end of AI notes. `skill` + `part` → run that skill's part only. No `skill` → it is a staff step (Start, Save as draft / ready, Publish, add photos) — skip it and name it in the report with its `text`.
    - **Follow Part 4** — each product runs the part its last Part 4 suggested (`prep.next`: 5 → Parts 1 + 5, 3 → Part 3, 1 → full run from Part 1). No suggestion on a product → skip it and name it in the report.
    - **Full run** (the usual) — one call per product, its path chosen by the product ("Two paths" below): no description → Parts 1 + 2 + 3; has one → Parts 1 + 5.
    - **Part 1 only** — clean the data and check it is enough to search; no search.
@@ -100,7 +101,7 @@ curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$PRODUCT_COPY_READ_URL/api/agent
 
 Answer = product-copy's read (`name, brand, modelNo, barcodes, typedSpecs, photos, writing, masters …`) **plus**
 `title` (online name), `group`, `shipping`, `attention` (Attention reason now), `draftNotes`, `processNotes`, and
-`prep: { runs, changedSinceRun, problems, staffNote, partDone, path, photosDoneAt, photoStatus, next, identityChanged, searchAllowed, searchedAt, pages, dropped, labelFacts, seen, labelWebsite }`.
+`prep: { runs, changedSinceRun, problems, staffNote, partDone, path, photosDoneAt, photoStatus, next, nextStep, identityChanged, searchAllowed, searchedAt, pages, dropped, labelFacts, seen, labelWebsite }`.
 
 **Run records first — never run the same thing twice for nothing** (owner, 2026-11-20). `prep.runs` = the last 10 runs (`{ skill, part, at, from, to, found?, fixed? }`, oldest first); the server writes one after every call — you never send it. `prep.changedSinceRun: false` and the last run is the same path you are about to run (`"1+5"`, `"1+2+3"`, `"1+3"`) → **skip the product** ("already ran on <date>, nothing changed since"), unless the owner said **"redo"** or named this SKU. `changedSinceRun: true` (staff saved it after the run) → go on.
 
