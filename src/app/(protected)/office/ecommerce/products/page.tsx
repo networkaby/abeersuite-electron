@@ -67,13 +67,40 @@ const STICKY_HEAD =
 const COL_COUNT = 11;
 const PAGE_SIZE = 25;
 
-/** Stages: Unpublished → Draft → Ready → Published (live) / Pending — one stage per product (owner, 2026-11-10).
+/** Stages: Unpublished → Start (waiting) → Draft → Ready → Published (live) / Pending — one stage per product (owner, 2026-11-10).
  *  Attention = a Draft parked until a manual check is done; leaves by Save as draft / ready (owner, 2026-11-11).
  *  Waiting = shortlisted for the AI run (Start AI); the run moves it to Draft / Attention (owner, 2026-11-17). */
 // "aside" = has a problem staff set aside ("can't fix now", owner 2026-11-20) — beside any stage.
 type TabKey = "all" | ProductStatus["kind"] | "aside";
 const TAB_KEYS: TabKey[] = ["all", "unpublished", "waiting", "draft", "ready", "live", "pending", "attention", "aside"];
 const TAB_LABEL: Record<TabKey, string> = { all: "All", unpublished: "Unpublished", waiting: "Start", draft: "Draft", ready: "Ready", live: "Published", pending: "Pending", attention: "Attention", aside: "Temporary pass" };
+// The stage bar (owner, 2026-11-21): main flow drawn as numbered arrows, side tabs apart,
+// and one line under the bar telling staff what to do here and what moves it on.
+// Wording only — how a product moves is unchanged.
+const STAGE_FLOW: TabKey[] = ["unpublished", "waiting", "draft", "ready", "live"];
+const SIDE_TABS: TabKey[] = ["pending", "attention", "aside"];
+const STAGE_TONE: Partial<Record<TabKey, string>> = {
+    unpublished: "bg-stone-200 text-stone-800 dark:bg-stone-700 dark:text-stone-100",
+    waiting: "bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-100",
+    draft: "bg-sky-200 text-sky-900 dark:bg-sky-900 dark:text-sky-100",
+    ready: "bg-sky-300 text-sky-950 dark:bg-sky-800 dark:text-sky-50",
+    live: "bg-green-200 text-green-900 dark:bg-green-900 dark:text-green-100",
+    pending: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-100",
+    attention: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-100",
+    aside: "bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-200",
+};
+/** [what to do in this stage, what moves it on] */
+const STAGE_HINT: Partial<Record<TabKey, [string, string]>> = {
+    all: ["Every product, any stage.", "Pick a stage to see what to do next."],
+    unpublished: ["Stage 0 — add photos and shipping weight.", "Then press Start to move it to stage 1."],
+    waiting: ["Stage 1 — has enough info; write the copy and process the photos.", "When done it moves to Draft."],
+    draft: ["Stage 2 — check the text, specs, photos and notes.", "All correct → Save as ready."],
+    ready: ["Stage 3 — verified, waiting.", "Press Publish to put it on the shop."],
+    live: ["Live on the shop.", "Nothing to do."],
+    pending: ["Published but missing a publish rule — off the shop.", "Fix what it says, then Re-check pending."],
+    attention: ["Parked for a hand check.", "Fix it, then Start, Save as draft or Save as ready."],
+    aside: ["Problem set aside for now.", "Comes back when the pass is removed."],
+};
 // Persist the list view (page / filters / scroll) per browser tab so leaving for
 // a product's Edit page and coming back (Esc → router.back) returns to the same
 // place instead of resetting to page 1.
@@ -461,7 +488,7 @@ export default function EcommerceProductsPage() {
                 <div>
                     <h1 className="text-2xl font-semibold tracking-tight">Products</h1>
                     <p className="text-muted-foreground text-sm">
-                        One catalogue across shop, POS and Sale vouchers. Unpublished → Ready (complete, waiting) → Published; a published product missing a publish rule waits as Pending. Start = shortlisted for the AI. Draft = being worked on, off the shop until Save as ready. Attention = a Draft parked until something is checked by hand — fix it, then Start, Save as draft or Save as ready.
+                        One catalogue across shop, POS and Sale vouchers. Each product moves through the stages below, one at a time.
                     </p>
                 </div>
                 <div className="flex gap-2">
@@ -487,34 +514,65 @@ export default function EcommerceProductsPage() {
                             {rechecking ? "Checking…" : "Re-check pending"}
                         </Button>
                     )}
+                    {/* Hidden for now — product copy is done with the Claude skills (owner, 2026-11-21).
                     <Button asChild variant="outline" size="sm">
                         <Link href="/office/ecommerce/products/ai">Write descriptions with AI</Link>
-                    </Button>
+                    </Button> */}
                 </div>
             </div>
 
             {/* Tabs + search + filter button */}
             <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="inline-flex rounded-lg border border-border bg-muted/30 p-0.5">
-                    {tabs.map((t) => (
+                <div className="flex flex-wrap items-center gap-2">
+                    {tabs.filter((t) => !STAGE_FLOW.includes(t.key) && !SIDE_TABS.includes(t.key)).map((t) => (
                         <button
                             key={t.key}
                             type="button"
                             onClick={() => setTab(t.key)}
-                            className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${tab === t.key
-                                ? "bg-background text-foreground shadow-sm"
-                                : "text-muted-foreground hover:text-foreground"
-                                }`}
+                            className={`rounded-md border px-3 py-1.5 text-sm font-medium ${tab === t.key ? "border-primary bg-background ring-1 ring-primary" : "border-border bg-background text-muted-foreground hover:text-foreground"}`}
                         >
-                            {t.label}
-                            <span
-                                className={`rounded-full px-1.5 py-0.5 text-xs tabular-nums ${tab === t.key ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
-                                    }`}
-                            >
-                                {t.count}
-                            </span>
+                            {t.label} <span className="text-xs tabular-nums opacity-80">{t.count}</span>
                         </button>
                     ))}
+                    <div className="flex max-w-full overflow-x-auto">
+                        {STAGE_FLOW.map((key, i) => {
+                            const t = tabs.find((x) => x.key === key)!;
+                            const first = i === 0;
+                            const last = i === STAGE_FLOW.length - 1;
+                            const clip = first
+                                ? "polygon(0 0,calc(100% - 10px) 0,100% 50%,calc(100% - 10px) 100%,0 100%)"
+                                : last
+                                    ? "polygon(0 0,100% 0,100% 100%,0 100%,10px 50%)"
+                                    : "polygon(0 0,calc(100% - 10px) 0,100% 50%,calc(100% - 10px) 100%,0 100%,10px 50%)";
+                            return (
+                                <button
+                                    key={key}
+                                    type="button"
+                                    title={STAGE_HINT[key]?.[0]}
+                                    onClick={() => setTab(key)}
+                                    style={{ clipPath: clip }}
+                                    className={`${first ? "" : "-ml-1.5"} ${last ? "pr-3" : "pr-5"} ${first ? "pl-3" : "pl-5"} whitespace-nowrap py-1.5 text-sm font-medium transition-opacity ${STAGE_TONE[key]} ${tab === key ? "underline underline-offset-4 decoration-2" : "opacity-75 hover:opacity-100"}`}
+                                >
+                                    {last ? "✓" : i} {t.label} <span className="text-xs tabular-nums">{t.count}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <span className="text-border">|</span>
+                    {SIDE_TABS.map((key) => {
+                        const t = tabs.find((x) => x.key === key)!;
+                        return (
+                            <button
+                                key={key}
+                                type="button"
+                                title={STAGE_HINT[key]?.[0]}
+                                onClick={() => setTab(key)}
+                                className={`whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium ${STAGE_TONE[key]} ${tab === key ? "ring-2 ring-primary" : "opacity-80 hover:opacity-100"}`}
+                            >
+                                {t.label} <span className="tabular-nums">{t.count}</span>
+                            </button>
+                        );
+                    })}
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="flex items-center gap-2">
@@ -548,6 +606,11 @@ export default function EcommerceProductsPage() {
             </div>
 
             {/* Expandable filter panel */}
+            {STAGE_HINT[tab] ? (
+                <div className="bg-muted/50 -mt-2 rounded-md px-3 py-2 text-sm">
+                    {STAGE_HINT[tab]![0]} <span className="text-muted-foreground">{STAGE_HINT[tab]![1]}</span>
+                </div>
+            ) : null}
             {showFilters ? <ProductFilterPanel value={filters} onChange={setFilters} options={filterOptions} /> : null}
 
             {/* Bulk action bar — appears when rows are selected */}
