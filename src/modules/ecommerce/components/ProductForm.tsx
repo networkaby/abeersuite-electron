@@ -855,7 +855,7 @@ export default function ProductForm({
                     the selling voice (Strategy / Computed / Saved) is chosen. */}
                 <div className="rounded-md border border-border bg-muted/40 p-3">
                     <div className="flex items-center justify-between gap-3">
-                        <Label className="text-muted-foreground">Price &amp; MRP</Label>
+                        <Label className="text-muted-foreground">Price, MRP &amp; stock</Label>
                         <GatedLink
                             href="/office/pricing-strategy/update-print-labels"
                             className="inline-flex items-center gap-1 text-xs text-primary underline"
@@ -864,7 +864,7 @@ export default function ProductForm({
                             <ExternalLink className="size-3" />
                         </GatedLink>
                     </div>
-                    <div className="mt-2 grid grid-cols-2 gap-3">
+                    <div className="mt-2 grid grid-cols-3 gap-3">
                         <div>
                             <p className="text-xs text-muted-foreground">Shop price (barcode tag)</p>
                             <p className="text-lg font-semibold tabular-nums">
@@ -877,27 +877,24 @@ export default function ProductForm({
                                 {effectiveMrpPaise ? formatRupeesFromPaise(effectiveMrpPaise) : "—"}
                             </p>
                         </div>
+                        {/* Stock joins the read-only card (owner, 2026-11-22) — the ledger balance,
+                            changed only by posting an inventory voucher. */}
+                        <div>
+                            <p className="text-xs text-muted-foreground">Stock (from ledger)</p>
+                            <p className="text-lg font-semibold tabular-nums">{stockValue === null ? "Not tracked" : stockValue}</p>
+                        </div>
                     </div>
                     <p className="mt-2 text-xs text-muted-foreground">
-                        One price everywhere — shelf, POS and shop all charge this.
+                        One price everywhere — shelf, POS and shop all charge this. Stock comes from posted
+                        inventory vouchers; &ldquo;Not tracked&rdquo; means the shop always treats it as in stock.
                     </p>
                 </div>
-                {/* Badge · Stock · Weight on one line (owner, 2026-11-22). The low-stock floor
-                    left this page — it only feeds the Reorder report, which edits it. */}
-                <div className="grid grid-cols-3 gap-3">
+                {/* Badge · Weight on one line (owner, 2026-11-22). The low-stock floor left this
+                    page — it only feeds the Reorder report, which edits it. */}
+                <div className="grid grid-cols-2 gap-3">
                     <div className="grid gap-2">
                         <Label>Badge</Label>
                         <Input value={badge} onChange={(e) => setBadge(e.target.value)} placeholder="e.g. Sale" />
-                    </div>
-                    {/* Stock is read-only — it is the ledger balance, not an input.
-                        It changes by posting an inventory voucher. */}
-                    <div className="grid gap-2">
-                        <Label className="text-muted-foreground">Stock (from ledger)</Label>
-                        <div className="flex h-9 items-center rounded-md border border-border bg-muted/40 px-3">
-                            <span className="text-sm font-semibold tabular-nums">
-                                {stockValue === null ? "Not tracked" : stockValue}
-                            </span>
-                        </div>
                     </div>
                     <div className="grid gap-2">
                         <Label>Shipping weight (grams)</Label>
@@ -909,10 +906,6 @@ export default function ProductForm({
                         />
                     </div>
                 </div>
-                <p className="-mt-2 text-xs text-muted-foreground">
-                    Stock comes from posted inventory vouchers — edit it there, not here.
-                    &ldquo;Not tracked&rdquo; means the shop always treats it as in stock.
-                </p>
                 <div className="grid gap-2">
                     <Label>Parcel dimensions (cm) — for volumetric weight</Label>
                     <div className="grid grid-cols-3 gap-3">

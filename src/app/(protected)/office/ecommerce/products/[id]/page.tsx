@@ -177,8 +177,8 @@ export default function EcommerceProductEditPage() {
                 </div>
                 <div className="flex h-9 min-w-0 flex-1 items-center rounded-md border border-input bg-background px-2">
                     <h1 className="text-2xl font-semibold tracking-tight break-words">
-                        Edit product
-                        <span className="ml-2 font-normal text-muted-foreground">· {liveName ?? product.name}</span>
+                        {/* No "Edit product" prefix (owner, 2026-11-22) — the name is the title. */}
+                        <span>{liveName ?? product.name}</span>
                         {stage ? (
                             <span className={`ml-2 inline-block rounded border px-1.5 py-0.5 align-middle text-xs font-medium ${STAGE_LOOK[stage.kind].tone}`} title={stage.missing.length ? `Needs ${stage.missing.join(", ").toLowerCase()}` : undefined}>
                                 {STAGE_LOOK[stage.kind].label}
