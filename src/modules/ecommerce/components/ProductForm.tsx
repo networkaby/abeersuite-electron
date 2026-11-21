@@ -561,10 +561,10 @@ export default function ProductForm({
      * "ready" = Save as ready; "discard" = Discard draft (back to the stage it
      * came from, edits kept); or move the stage — markReady, publish, unpublish.
      */
-    const submit = async (act?: "save" | "ready" | "discard" | "markReady" | "publish" | "unpublish") => {
+    const submit = async (act?: "save" | "ready" | "discard" | "markReady" | "publish" | "unpublish", quiet = false): Promise<boolean> => {
 
-        if (!name.trim()) { toast.error("Name is required"); return; }
-        if (!sku.trim() && !initial?.id) { toast.error("SKU is required"); return; }
+        if (!name.trim()) { toast.error("Name is required"); return false; }
+        if (!sku.trim() && !initial?.id) { toast.error("SKU is required"); return false; }
         const specs = Object.fromEntries(specPairs.filter((x) => x.k.trim()).map((x) => [x.k.trim(), x.v.trim()]));
         const payload = {
             sku: sku.trim() || undefined,
@@ -610,7 +610,7 @@ export default function ProductForm({
             const live = saved.shopStatus === "PUBLISHED"
                 ? saved.isListedInShop ? "live in the shop" : "pending until Shop readiness is met"
                 : "";
-            toast.success(
+            if (!quiet) toast.success(
                 act === "save" ? "Saved as draft — off the shop until Save as ready"
                     : act === "ready" ? readyNote || "Saved as ready — publish when the time is right"
                         : act === "discard" ? `Draft closed — back to ${saved.shopStatus === "PUBLISHED" ? live || "Published" : saved.shopStatus.toLowerCase()}`
@@ -620,12 +620,25 @@ export default function ProductForm({
                                         : live ? `Saved — ${live}` : "Saved",
             );
             onSaved?.(res.data);
+            return true;
         } catch (e: unknown) {
             toast.error(extractApiError(e, "Save failed"));
+            return false;
         } finally {
             setBusy(false);
         }
     };
+
+    /** Owner, 2026-11-21: staff fill the weight / photos, then hand it to the AI from here. */
+    const saveAndStart = async () => {
+        if (await submit(undefined, true)) await sendToAi("start");
+    };
+    const startButton = (
+        <Button type="button" variant="outline" onClick={() => void sendToAi("start")} disabled={busy || queueing}
+            title="Send it to Start — the next AI run picks it up">
+            Start
+        </Button>
+    );
 
     return (
         <div className="grid gap-8 lg:grid-cols-2">
@@ -1018,6 +1031,12 @@ export default function ProductForm({
                                     Save as ready
                                 </Button>
                             )}
+                            {shopStatus !== "PUBLISHED" && shopStatus !== "WAITING" && (
+                                <Button type="button" variant="outline" onClick={() => void saveAndStart()} disabled={busy || queueing}
+                                    title="Save the changes and send it to Start — the next AI run picks it up">
+                                    Save and start
+                                </Button>
+                            )}
                         </>
                     ) : shopStatus === "WAITING" ? (
                         <Button type="button" variant="outline" onClick={() => void sendToAi("remove")} disabled={busy || queueing}
@@ -1045,16 +1064,20 @@ export default function ProductForm({
                                 title="The work is done — Ready to publish">
                                 Save as ready
                             </Button>
+                            {startButton}
                             <Button type="button" variant="ghost" onClick={() => void submit("discard")} disabled={busy}
                                 title="Leave Draft — back to the stage it came from; the edits stay">
                                 Discard draft
                             </Button>
                         </>
                     ) : shopStatus === "UNPUBLISHED" ? (
-                        <Button type="button" variant="outline" onClick={() => void submit("markReady")} disabled={busy}
-                            title="The product is complete — Ready to publish">
-                            Mark ready
-                        </Button>
+                        <>
+                            {startButton}
+                            <Button type="button" variant="outline" onClick={() => void submit("markReady")} disabled={busy}
+                                title="The product is complete — Ready to publish">
+                                Mark ready
+                            </Button>
+                        </>
                     ) : shopStatus === "READY" ? (
                         <Button type="button" onClick={() => void submit("publish")} disabled={busy}
                             title={qualified ? "Go live in the shop" : "Publish — waits as Pending until Shop readiness is met"}>
