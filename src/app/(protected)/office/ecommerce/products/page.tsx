@@ -78,7 +78,16 @@ const TAB_LABEL: Record<TabKey, string> = { all: "All", unpublished: "Unpublishe
 // and one line under the bar telling staff what to do here and what moves it on.
 // Wording only — how a product moves is unchanged.
 const STAGE_FLOW: TabKey[] = ["unpublished", "waiting", "draft", "ready", "live"];
-const SIDE_TABS: TabKey[] = ["pending", "attention", "aside"];
+// Pending sits inside the Published arrow as a chip (owner, 2026-11-22: "Pending is inside Published").
+const SIDE_TABS: TabKey[] = ["attention", "aside"];
+// The stage bar's own, louder shades (owner, 2026-11-22: "make them loud to be visible").
+const BAR_TONE: Partial<Record<TabKey, string>> = {
+    unpublished: "bg-stone-300 text-stone-900 dark:bg-stone-600 dark:text-white",
+    waiting: "bg-sky-200 text-sky-950 dark:bg-sky-800 dark:text-white",
+    draft: "bg-sky-400 text-sky-950 dark:bg-sky-600 dark:text-white",
+    ready: "bg-sky-600 text-white dark:bg-sky-500",
+    live: "bg-green-600 text-white dark:bg-green-600",
+};
 const STAGE_TONE: Partial<Record<TabKey, string>> = {
     unpublished: "bg-stone-200 text-stone-800 dark:bg-stone-700 dark:text-stone-100",
     waiting: "bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-100",
@@ -86,7 +95,7 @@ const STAGE_TONE: Partial<Record<TabKey, string>> = {
     ready: "bg-sky-300 text-sky-950 dark:bg-sky-800 dark:text-sky-50",
     live: "bg-green-200 text-green-900 dark:bg-green-900 dark:text-green-100",
     pending: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-100",
-    attention: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-100",
+    attention: "bg-red-600 text-white dark:bg-red-700 dark:text-white", // danger (owner, 2026-11-22)
     aside: "bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-200",
 };
 /** A move button wears the colour of the stage it sends the product to. */
@@ -96,7 +105,7 @@ const GO_TONE = {
     waiting: "bg-sky-100 text-sky-900 hover:bg-sky-200 hover:text-sky-950 dark:bg-sky-950 dark:text-sky-100 dark:hover:bg-sky-900",
     ready: "bg-sky-300 text-sky-950 hover:bg-sky-400 hover:text-sky-950 dark:bg-sky-800 dark:text-sky-50 dark:hover:bg-sky-700",
     live: "bg-green-200 text-green-900 hover:bg-green-300 hover:text-green-950 dark:bg-green-900 dark:text-green-100 dark:hover:bg-green-800",
-    attention: "bg-amber-100 text-amber-900 hover:bg-amber-200 hover:text-amber-950 dark:bg-amber-950 dark:text-amber-100 dark:hover:bg-amber-900",
+    attention: "bg-red-600 text-white hover:bg-red-700 hover:text-white dark:bg-red-700 dark:text-white dark:hover:bg-red-600",
 } as const;
 /** Which tabs show each bulk move. All / Temporary pass hold mixed stages, so they show every move. */
 const BULK_SHOWS: Record<"start" | "ready" | "publish" | "unpublish", TabKey[]> = {
@@ -560,17 +569,25 @@ export default function EcommerceProductsPage() {
                                 : last
                                     ? "polygon(0 0,100% 0,100% 100%,0 100%,10px 50%)"
                                     : "polygon(0 0,calc(100% - 10px) 0,100% 50%,calc(100% - 10px) 100%,0 100%,10px 50%)";
+                            const pending = tabs.find((x) => x.key === "pending")!;
+                            const on = tab === key;
                             return (
-                                <button
+                                <span
                                     key={key}
-                                    type="button"
-                                    title={STAGE_HINT[key]?.[0]}
-                                    onClick={() => setTab(key)}
                                     style={{ clipPath: clip }}
-                                    className={`${first ? "" : "-ml-1.5"} ${last ? "pr-3" : "pr-5"} ${first ? "pl-3" : "pl-5"} whitespace-nowrap py-1.5 text-sm font-medium transition-opacity ${STAGE_TONE[key]} ${tab === key ? "underline underline-offset-4 decoration-2" : "opacity-75 hover:opacity-100"}`}
+                                    className={`${first ? "" : "-ml-1.5"} ${last ? "pr-1.5" : "pr-5"} ${first ? "pl-3" : "pl-5"} flex items-center gap-2 whitespace-nowrap text-sm shadow-sm ${BAR_TONE[key]} ${on ? "font-bold" : "font-semibold hover:brightness-95"}`}
                                 >
-                                    {last ? "✓" : i} {t.label} <span className="text-xs tabular-nums">{t.count}</span>
-                                </button>
+                                    <button type="button" title={STAGE_HINT[key]?.[0]} onClick={() => setTab(key)}
+                                        className={`py-1.5 ${on ? "underline decoration-2 underline-offset-4" : ""}`}>
+                                        {last ? "✓" : i} {t.label} <span className="tabular-nums">{t.count}</span>
+                                    </button>
+                                    {last ? (
+                                        <button type="button" title={STAGE_HINT.pending?.[0]} onClick={() => setTab("pending")}
+                                            className={`rounded px-1.5 py-0.5 text-xs font-semibold ${STAGE_TONE.pending} ${tab === "pending" ? "ring-2 ring-amber-500" : "hover:brightness-95"}`}>
+                                            Pending {pending.count}
+                                        </button>
+                                    ) : null}
+                                </span>
                             );
                         })}
                     </div>
