@@ -51,6 +51,12 @@ export type PhotoChecklistItem = {
     kind: PhotoKind; done: boolean; must: boolean;
     /** Staff ticked "Not applicable" on a must photo (owner, 2026-11-18): it stops blocking, and the search looks for it online instead. */
     waived?: boolean;
+    /**
+     * Staff gave the "Must photo missing" problem a temporary pass (owner, 2026-11-22):
+     * the photo is still wanted (the AI keeps asking for it — `missingMust`), but it
+     * no longer holds the product off the shop (`mustPhotoGaps`). Adding the photo ends it.
+     */
+    passed?: boolean;
 };
 
 /**
@@ -100,7 +106,16 @@ export const isEnough = (items: PhotoChecklistItem[]) => items.every((i) => i.do
 /** Must photos neither in the gallery nor ticked "Not applicable". */
 export const missingMust = (c: PhotoChecklist | null) => c?.items.filter((i) => i.must && !i.done && !i.waived).map((i) => i.kind) ?? [];
 /** Must photos still missing, as labels — the Product image publish rule (owner, 2026-11-21). */
-export const mustPhotoGaps = (c: PhotoChecklist | null) => missingMust(c).map(photoKindLabel);
+export const mustPhotoGaps = (c: PhotoChecklist | null) =>
+    c?.items.filter((i) => i.must && !i.done && !i.waived && !i.passed).map((i) => photoKindLabel(i.kind)) ?? [];
+
+/** "Must photo missing: Front, Box back" → the kinds it names (the temporary-pass link). */
+export function kindsInMustLine(text: string): PhotoKind[] {
+    const m = /must photos? missing:\s*(.+)/iu.exec(text);
+    if (!m) return [];
+    const want = m[1].split(/,|\band\b/u).map((x) => x.trim().toLowerCase().replace(/[.\s]+$/u, ""));
+    return PHOTO_KIND_KEYS.filter((k) => want.includes(photoKindLabel(k).toLowerCase()));
+}
 
 /** AI answer → checklist: what we have is done, what we miss is open (must first); nothing else is listed. */
 export function checklistFrom(have: PhotoKind[], must: PhotoKind[], nice: PhotoKind[], remove: PhotoRemoval[] = []): PhotoChecklist {
@@ -130,7 +145,7 @@ export function readPhotoChecklist(raw: unknown): PhotoChecklist | null {
         if (!kind || seen.has(kind)) return [];
         seen.add(kind);
         // A first-menu row has no `must`; its gallery verdict stands in.
-        return [{ kind, done: o.done === true, must: typeof o.must === "boolean" ? o.must : r.enough !== true, ...(o.waived === true && { waived: true }) }];
+        return [{ kind, done: o.done === true, must: typeof o.must === "boolean" ? o.must : r.enough !== true, ...(o.waived === true && { waived: true }), ...(o.passed === true && { passed: true }) }];
     });
     const remove = (Array.isArray(r.remove) ? r.remove : []).flatMap((x): PhotoRemoval[] => {
         const o = (x ?? {}) as Record<string, unknown>;

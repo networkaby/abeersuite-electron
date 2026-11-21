@@ -15,7 +15,8 @@ import { parkInAttention } from "@/modules/ecommerce/lib/shopAttention";
 import { arrangeFrom, checkWrittenCopy, writtenCopySchema } from "@/modules/ecommerce/lib/aiVerifiedCopy";
 import { readGivenPages, type PageRead, type PageSearch } from "@/modules/ecommerce/lib/aiPageReader";
 import { checkFact, cmOf, gramsOf, normForCheck } from "@/modules/ecommerce/lib/aiFactCheck";
-import { BOX_TYPES, BOX_TYPE_KEYS, PHOTO_KINDS, PHOTO_REMOVE_REASONS, isEnough, isPhotoKind, missingMust, photoFloor, photoKindLabel, readPhotoChecklist, type BoxType, type PhotoChecklist, type PhotoChecklistItem, type PhotoKind, type PhotoRemoval, type PhotoRemoveReason, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
+import { BOX_TYPES, BOX_TYPE_KEYS, PHOTO_KINDS, PHOTO_REMOVE_REASONS, isEnough, isPhotoKind, kindsInMustLine, missingMust, photoFloor, photoKindLabel, readPhotoChecklist, type BoxType, type PhotoChecklist, type PhotoChecklistItem, type PhotoKind, type PhotoRemoval, type PhotoRemoveReason, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
+import { applyPublished } from "@/modules/ecommerce/lib/applyPublished";
 import { cloudinarySignature } from "@/shared/lib/cloudinary";
 import { isCloudinaryUrl } from "@/shared/lib/cloudinaryImage";
 import { regenerateProductNamesSafe } from "@/modules/inventory/lib/regenerateNames";
@@ -558,7 +559,9 @@ async function photoListOf(part: 1 | 3 | 4 | 5, id: number, c: PhotoCheck, galle
         const done = have.has(kind) || prevOf.get(kind)?.done === true;
         // "Not applicable" only means something on a must photo still missing — cleared once it is dropped or there.
         const waived = prevOf.get(kind)?.waived && must.has(kind) && !done;
-        return { kind, done, must: must.has(kind), ...(waived && { waived: true }) };
+        // A staff temporary pass survives a re-run until the photo is added (owner, 2026-11-22).
+        const passed = prevOf.get(kind)?.passed && must.has(kind) && !done;
+        return { kind, done, must: must.has(kind), ...(waived && { waived: true }), ...(passed && { passed: true }) };
     });
     const main = gallery[0];
     const mainKind = main ? tagOf.get(main) : undefined;
@@ -1226,7 +1229,7 @@ export async function savePart4(id: number, input: z.infer<typeof part4Schema>) 
  * Back: it is open again; the next run raises it if it is still true.
  */
 export async function setProblemAside(id: number, text: string, aside: boolean, by: string) {
-    const r = await prisma.invProduct.findUnique({ where: { id }, select: { shopAttention: true, shopDraftJson: true } });
+    const r = await prisma.invProduct.findUnique({ where: { id }, select: { shopAttention: true, shopDraftJson: true, photoChecklistJson: true, shopStatus: true } });
     if (!r) throw new AgentCopyError("Product not found");
     const info = readShopDraft(r.shopDraftJson);
     const key = problemKey(text);
@@ -1238,10 +1241,20 @@ export async function setProblemAside(id: number, text: string, aside: boolean, 
     const attention = aside && r.shopAttention
         ? r.shopAttention.split("\n").filter((l) => !(OPEN_LINE.test(l.trim()) && problemKey(l) === key)).join("\n")
         : r.shopAttention;
+    // A pass on "Must photo missing: …" also lets those photos stop holding the product
+    // off the shop (owner, 2026-11-22: "publish with hope we add the photo soon").
+    const kinds = kindsInMustLine(text);
+    const c = kinds.length ? readPhotoChecklist(r.photoChecklistJson) : null;
+    const checklist = c ? { ...c, items: c.items.map((i) => (kinds.includes(i.kind) && i.must && !i.done ? { ...i, passed: aside || undefined } : i)) } : null;
     await prisma.invProduct.update({
         where: { id },
-        data: { shopDraftJson: { ...info, problems, asideCount: asideCount || undefined } as never, shopAttention: attention },
+        data: {
+            shopDraftJson: { ...info, problems, asideCount: asideCount || undefined } as never, shopAttention: attention,
+            ...(checklist && { photoChecklistJson: checklist as never }),
+        },
     });
+    // A published product goes live / back to Pending by the new rule at once.
+    if (checklist && r.shopStatus === "PUBLISHED") await applyPublished([id]);
     return { problems };
 }
 

@@ -178,6 +178,9 @@ export function PhotoChecklistRows({ checklist, gallery, onToggle, onWaive, onRe
                                 <label htmlFor={`photo-${i.kind}`} className={`${i.must ? "font-medium" : ""} ${i.done ? "" : "text-muted-foreground"}`}>
                                     {photoKindLabel(i.kind)}
                                     {i.must && !i.done && !i.waived ? <span className="ml-1 text-amber-700 dark:text-amber-400">· must</span> : null}
+                                    {i.must && !i.done && i.passed ? (
+                                        <span className="ml-1 text-sky-700 dark:text-sky-400" title="Temporary pass in AI notes — still wanted, but it does not keep the product off the shop">· temporary pass</span>
+                                    ) : null}
                                 </label>
                                 {i.must && !i.done && (
                                     <label className="text-muted-foreground ml-auto flex items-center gap-1" title="Not applicable: this view does not exist or cannot be taken. It stops blocking; the AI still looks for it once on the maker's or a seller's page.">
