@@ -634,8 +634,13 @@ export const part1Schema = z.object({
  * search follows, and Part 5 fixes the main photo and the must photos itself, so
  * "not enough to search" and the photo list do not stop Part 1; only a real
  * problem (`major`) does.
+ * `next` = "part3": Part 1 runs with Part 3 in one call — Part 3 orders the photos,
+ * so an unclean photo 1 does not stop Part 1 (owner, 2026-11-23: a box photo first
+ * stopped every new product before Part 3 could put the product photo first).
+ * Part 3 checks the main photo again after its order; a missing must photo still stops.
  */
-export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?: RunCtx, photosNext = false) {
+export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?: RunCtx, next?: "part3" | "part5") {
+    const photosNext = next === "part5";
     requireR2();
     const p = await prisma.invProduct.findUnique({ where: { id }, select: { imageUrl: true, galleryJson: true, specsJson: true } });
     if (!p) throw new AgentCopyError("Product not found");
@@ -669,7 +674,7 @@ export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?
     patch.photoChecklist = list.checklist;
     const searchStop = !photosNext && !b.enough;
     const aside = notAside(await asideKeys(id));
-    const photoStop = (photosNext ? [] : list.lines).filter(aside);
+    const photoStop = (photosNext ? [] : next === "part3" ? list.lines.filter((l) => l !== list.mainProblem) : list.lines).filter(aside);
     const major = b.major.filter(aside);
     if (major.length > 0 || searchStop || photoStop.length > 0) {
         const reason = [
@@ -1131,7 +1136,7 @@ export const runSchema = z.object({
  */
 export async function runParts(id: number, b: z.infer<typeof runSchema>) {
     const run: RunCtx = await liveState(id);
-    const p1 = await savePart1(id, b.part1, run, !!b.part5);
+    const p1 = await savePart1(id, b.part1, run, b.part5 ? "part5" : b.part3 ? "part3" : undefined);
     if (p1.result === "attention") {
         // Part 1 stopped: the saved state did not change, nothing to write.
         return { result: "attention" as const, stoppedAt: 1, part1: p1 };

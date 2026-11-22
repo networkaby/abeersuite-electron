@@ -189,7 +189,7 @@ The server checks the photos itself (owner, 2026-11-18 — a one-photo product w
 
 
 The server keeps the list on the product (staff see it under Product image), **never drops a must an earlier part set**, and works out what is missing:
-- A **must** photo missing and **not ticked "Not applicable"** by staff, or a main photo that is not clean → **Part 1 stops** (Attention: "Must photo missing: … — add it, or tick Not applicable"). That gets us better seed before the search.
+- A **must** photo missing and **not ticked "Not applicable"** by staff, or a main photo that is not clean → **Part 1 stops** (an unclean main photo does not stop it when Part 3 or Part 5 is in the same call — they fix the order) (Attention: "Must photo missing: … — add it, or tick Not applicable"). That gets us better seed before the search.
 - A missing **optional** photo never stops anything.
 - Staff tick **"Not applicable"** when a photo just cannot be taken (box gone, item fitted) → it stops blocking; `photoList.findOnline` lists it, and **Part 2 looks for it online** (the maker's or a seller's photo of that view), Part 3 adds it when sure.
 - Part 3 / Part 5: still missing → a note. Part 4: still missing, not ticked, or main not clean → **pending, never verified**.
@@ -210,7 +210,7 @@ The server keeps the list on the product (staff see it under Product image), **n
 The server tags each line with its part ("Part 3 · …") and **a part that runs again replaces its own earlier lines** — so write the full set each run, never "as before".
 - **One point per line, about 20 words.** Say **what, where, what to do**: "Photo 3 shows the 2-port model — remove it", not "Some photos may be wrong".
 - **`staff`** = a human must act. **`notes`** = information staff gain from (where a fact came from, what you changed). Nothing else.
-- **No "OK" / "no problem" / "looks good" lines**, no repeating what the server writes itself (photo list lines, Model No filled, weight source, Last run).
+- **No "OK" / "no problem" / "looks good" lines**, no repeating what the server writes itself (photo list lines — never put "Must photo missing …" or "Main photo is not …" in `staff`, the server adds them; Model No filled, weight source, Last run).
 - Our own stamp on a non-main photo is never a note (see "The photo list").
 
 ## Part 1 — Prepare the seed (remove only, add nothing)
@@ -229,7 +229,7 @@ The server tags each line with its part ("Part 3 · …") and **a part that runs
    - **Major** (`major`): photos show two different products and you cannot tell which is ours; the custom part and the photos point to different products.
    - Everything else is a minor `notes` line.
 5. **Enough to search?** After the clean-up, is there a brand + model, a part code, a barcode, or clear box wording to search with? No → `enough: false` and `need` = what staff must add ("a box / label photo", "the model no. printed on the back").
-6. **Photo list** → `photos` (see "The photo list" above): packing, shape, your must / optional list for this product, a tag for each photo left after the clean-up, and whether photo 1 is clean. A must photo missing (not ticked "Not applicable") or an unclean main photo stops Part 1 before a search — that is on purpose. With Part 5 in the same call it does not stop: Part 5 fixes the photos and the server checks after.
+6. **Photo list** → `photos` (see "The photo list" above): packing, shape, your must / optional list for this product, a tag for each photo left after the clean-up, and whether photo 1 is clean. A must photo missing (not ticked "Not applicable") or an unclean main photo stops Part 1 before a search — that is on purpose. With Part 5 in the same call it does not stop: Part 5 fixes the photos and the server checks after. With Part 3 in the same call an unclean photo 1 does not stop it either (a must photo missing still does): Part 3 cuts out / orders the product photo first and the server checks the main photo after (owner, 2026-11-23).
 
 ```bash
 curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json" \
