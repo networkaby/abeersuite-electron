@@ -22,7 +22,7 @@ const schema = z.object({
 // Sends the approved PAY_REQUEST template from the shop's number; its Pay now
 // button opens /portal/b/p<signed> → the customer's UPI app. The answer's
 // `status` is "sent", or why not (no-mobile / disabled / not-configured /
-// failed) — the dialog then falls back to WhatsApp Web + paste.
+// failed) — the counter shows the reason; there is no WhatsApp Web fallback.
 export async function POST(req: Request) {
     const { data, error } = await validateRequest(req, schema);
     if (error) return error;

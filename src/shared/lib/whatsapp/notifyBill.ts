@@ -25,6 +25,7 @@ import { notifyEmail, notifyRepairEmail } from "@/shared/lib/email/notifyEmail";
 
 export { autoKindForVoucherType };
 import { isBillSendConfigured, sendBillTemplate, sendTextMessage } from "./metaTemplates";
+import { billsWaNumber, listWaNumbers } from "./waNumbers";
 
 /**
  * Tell the customer about a saved document — app notification AND WhatsApp,
@@ -524,12 +525,26 @@ async function sendWhatsApp(kind: WaAnyKind, linkCode: string, mobile: string | 
         return { status: "disabled" };
     }
     if (!(await isBillSendConfigured())) return { status: "not-configured" };
+    const send = (fromNumberId?: string) =>
+        sendBillTemplate({ mobile10: mobile, name: tpl.name, approved: tpl.draft, values, linkCode, headerImage, fromNumberId });
+    let error: string;
     try {
-        const messageId = await sendBillTemplate({ mobile10: mobile, name: tpl.name, approved: tpl.draft, values, linkCode, headerImage });
-        return { status: "sent", messageId };
+        return { status: "sent", messageId: await send() };
     } catch (e) {
-        return { status: "failed", error: (e instanceof Error ? e.message : String(e)).slice(0, 500) };
+        error = (e instanceof Error ? e.message : String(e)).slice(0, 500);
     }
+    // The bills number refused it → try each other number once (a number on
+    // the same WhatsApp account shares the template).
+    const bills = await billsWaNumber();
+    for (const n of await listWaNumbers()) {
+        if (n.id === bills?.id || n.wabaId !== bills?.wabaId) continue;
+        try {
+            return { status: "sent", messageId: await send(n.phoneNumberId) };
+        } catch {
+            // next number
+        }
+    }
+    return { status: "failed", error };
 }
 
 // ── Workflow: "Send WhatsApp / email template" on a worker ───────────────────

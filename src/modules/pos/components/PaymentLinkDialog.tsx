@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { toast } from "sonner";
 import { Copy, Check, MessageCircle, Loader2, QrCode } from "lucide-react";
@@ -255,14 +255,32 @@ export function PaymentLinkDialog({
         }
     }
 
+    // With a phone on file: the shop's number only (the server tries the other
+    // number itself) — never WhatsApp Web. No phone: the paste flow below.
     async function onWhatsAppClick() {
+        if (!waNum) return sendOnWhatsApp();
         const reason = await sendViaApi();
-        if (reason === null) return;
-        // Chrome keeps a click's user activation for ~5s, so the clipboard + open
-        // below still work after the fetch.
-        toast.warning(`Couldn't send from the shop's number: ${reason}. Opening WhatsApp Web.`, { duration: 8000 });
-        sendOnWhatsApp();
+        if (reason === null) onOpenChange(false);
+        else toast.error(`UPI request not sent: ${reason}`, { duration: 8000 });
     }
+
+    // Opened with a phone, a UPI ID and an amount → send at once, no box.
+    const autoSend = open && !!waNum && !!ctx.upiVpa?.trim() && defaultAmount > 0;
+    const autoSent = useRef(false);
+    useEffect(() => {
+        if (!open) {
+            autoSent.current = false;
+            return;
+        }
+        if (!autoSend || autoSent.current) return;
+        autoSent.current = true;
+        void (async () => {
+            const reason = await sendViaApi();
+            if (reason !== null) toast.error(`UPI request not sent: ${reason}`, { duration: 8000 });
+            onOpenChange(false);
+        })();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, autoSend]);
 
     function sendOnWhatsApp() {
         const file = shareFile;
@@ -314,6 +332,8 @@ export function PaymentLinkDialog({
         window.open(chatUrl, "_blank", "noopener,noreferrer");
         toast.success("QR downloaded — attach it in the WhatsApp chat");
     }
+
+    if (autoSend) return null;
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
