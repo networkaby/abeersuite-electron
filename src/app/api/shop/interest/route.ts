@@ -16,8 +16,10 @@ import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
 
 const INTEREST_SOURCE = "Shop — out of stock";
 const schema = z.object({ productId: z.coerce.number().int().positive() });
-/** One customer may open at most this many interest deals a day. */
+/** One customer may open at most this many interest deals in any 24 hours. */
 const DAILY_LIMIT = 10;
+/** pg_advisory_xact_lock namespace for interest deals (4711 = bill links). */
+const INTEREST_LOCK = 4712;
 
 export async function POST(req: Request) {
     const auth = await requirePortalCustomer();
@@ -45,24 +47,35 @@ export async function POST(req: Request) {
         const entry = pipeline.statuses.find((s) => s.isEntryPoint) ?? pipeline.statuses[0];
         if (!entry) return NextResponse.json({ error: "Deals are not set up" }, { status: 503 });
 
-        const title = `Interest: ${product.shopSubheading || product.name} (SKU ${product.sku})`;
+        // The SKU ends the title and never changes; the name can be corrected later, so
+        // a repeat is matched on the SKU — a renamed product must not open a second deal.
+        const skuTag = `(SKU ${product.sku})`;
+        const title = `Interest: ${product.shopSubheading || product.name} ${skuTag}`;
         const mine = { deal: { personId: person.id, source: INTEREST_SOURCE } };
-        const open = await prisma.ticket.findFirst({ where: { ...mine, title, closedAt: null }, select: { id: true } });
-        if (open) return NextResponse.json({ ok: true, again: true });
-        const today = await prisma.ticket.count({ where: { ...mine, createdAt: { gte: new Date(Date.now() - 86_400_000) } } });
-        if (today >= DAILY_LIMIT) return NextResponse.json({ error: "Too many requests today — we will be in touch" }, { status: 429 });
-
-        await prisma.ticket.create({
-            data: {
-                sourceCounterId: await sourceCounterId(),
-                pipelineId: pipeline.id,
-                status: entry.id,
-                title,
-                priority: "MEDIUM",
-                notes: `Customer asked to be told when SKU ${product.sku} is back in stock (shop "Show interest").`,
-                deal: { create: { contactName: person.name, personId: person.id, source: INTEREST_SOURCE } },
-            },
+        const counterId = await sourceCounterId();
+        // Check and create under one lock per customer, so two taps at once (two tabs,
+        // card + product page) cannot both pass the "already open?" check.
+        const outcome = await prisma.$transaction(async (tx) => {
+            await tx.$executeRaw`SELECT pg_advisory_xact_lock(${INTEREST_LOCK}, ${person.id})`;
+            const open = await tx.ticket.findFirst({ where: { ...mine, title: { endsWith: skuTag }, closedAt: null }, select: { id: true } });
+            if (open) return "again" as const;
+            const recent = await tx.ticket.count({ where: { ...mine, createdAt: { gte: new Date(Date.now() - 86_400_000) } } });
+            if (recent >= DAILY_LIMIT) return "limit" as const;
+            await tx.ticket.create({
+                data: {
+                    sourceCounterId: counterId,
+                    pipelineId: pipeline.id,
+                    status: entry.id,
+                    title,
+                    priority: "MEDIUM",
+                    notes: `Customer asked to be told when SKU ${product.sku} is back in stock (shop "Show interest").`,
+                    deal: { create: { contactName: person.name, personId: person.id, source: INTEREST_SOURCE } },
+                },
+            });
+            return "created" as const;
         });
+        if (outcome === "again") return NextResponse.json({ ok: true, again: true });
+        if (outcome === "limit") return NextResponse.json({ error: "Too many requests today — we will be in touch" }, { status: 429 });
         return NextResponse.json({ ok: true, again: false }, { status: 201 });
     } catch (e) {
         return handleApiError(e, "Could not save your interest");
