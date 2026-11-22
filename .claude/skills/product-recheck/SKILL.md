@@ -37,7 +37,7 @@ Every **GET** (reading a product, a list, a photo) goes to `$PRODUCT_COPY_READ_U
 
 ## Start: ask the mode first
 
-Before anything else, ask the owner **which mode** — cloud · local · smart local · office (Setup above) — unless the request already says. Running in the cloud → do not ask, it is always **cloud**. This skill is Part 4 only — it never changes the product's data; it only moves it: verified → **Ready** (never Published directly yet), any problem → **Attention**. When the owner says where a verified product should go, send `then` (`same` · `draft` · `ready` · `waiting`). For Parts 1–3, or **Part 5 (photos — runs with Part 1, no search, no text)** when only the photos need work, say so and switch to **product-prep**. The owner can also run Part 4 straight after prep in one go (product-prep "+ Part 4 (one go)") — optional; this separate run stays the usual way.
+Before anything else, ask the owner **which mode** — cloud · local · smart local · office (Setup above) — unless the request already says. Running in the cloud → do not ask, it is always **cloud**. This skill is Part 4 only — it never changes the product's data; it only moves it: verified → **Ready** (never Published directly yet), any problem → **Attention**. When the owner says where a verified product should go, send `then` (`same` · `draft` · `ready` · `waiting`). For Parts 1–3, or **Part 5 (photos — runs with Part 1, no search, no text)** when only the photos need work, say so and switch to **product-prep**. When the owner says **"part 6"**, product-prep runs this same check right after its prep parts; that is only on the owner's word — this separate run is the usual way.
 
 ## 1. Pick
 
