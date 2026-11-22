@@ -80,6 +80,7 @@ Before anything else, ask the owner **both** questions in one message, unless th
    - **Part 3 only** — write from the saved search (Part 2 must be done).
    - **Part 4** — verify; that is the **product-recheck** skill, say so and switch to it.
    - **Part 5 · Photos** — Parts 1 + 5 even when there is no description (owner's call). Add **"redo"** to treat photos an earlier Part 5 already did (made before the edit tool existed).
+   - **+ Part 4 (one go)** — optional, only when the owner asks ("with Part 4", "prep and verify", "one go"). Add it to any choice above: after the last part, the same product goes straight into Part 4 — see "Part 4 in the same run" below. **Not the default**: the owner prefers Part 4 as its own product-recheck run; without these words, stop after the prep parts as usual.
 
 Keep both answers for the whole run. Each product carries its run records (`prep.runs`, below) — read them first; they say what ran last and whether running again would do anything. A part that cannot run yet for a product (its earlier part not done) → skip that product and name it in the report, never run the earlier part on your own.
 
@@ -254,13 +255,23 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
 - `attention` → stop this product (staff fix, then run again).
 - `part1` → go on to Part 2 (or Part 5, on that path) now.
 
+## Part 4 in the same run (optional, owner asked)
+
+Only with **+ Part 4 (one go)**. It saves a run when nothing is left for staff — a photo order, a photo from the saved search — instead of a separate product-recheck loop.
+
+- Run Part 4 **only when the prep call ended with no `staff` line** (result Draft). Stopped in Attention → no Part 4: staff must act first.
+- **Read the product again** (`GET /api/agent/prep/<id>`) and follow **product-recheck** in full — open every photo again, check every row of its table, send `/part4` with `photoCheck`. Judge what is there now, never what your prep part said it did: you are checking your own work, so look harder, not softer.
+- No second loop: Part 4 finds a problem → send it as usual (Attention, with `next`). Do not run Part 5 or Part 3 again in this run.
+- The run-records skip never trips here: the last run is product-prep, not product-recheck.
+
 ## Report (always, at the end)
 
 | Product | Reached | Result | Notes |
 |---|---|---|---|
-| SKU · name | Part 1 / 2 / 3 / 5 | attention: reason · no good page · draft | the 1–3 most important; for Part 5 what each new photo got |
+| SKU · name | Part 1 / 2 / 3 / 5 (+ 4) | attention: reason · no good page · draft · ready (Part 4 verified) | the 1–3 most important; for Part 5 what each new photo got |
 
 Then:
 > **Attention** tab: the stopped ones — fix what the reason says, then run **product prep** again (it starts at the next part).
 > **Draft** tab: the processed ones — carry out the notes (Remove / Use / add photos), then run **product-recheck**.
+> **Ready** tab (one-go runs only): verified by Part 4 — press **Publish**.
 > **No good page**: written from the label only — check them first.
