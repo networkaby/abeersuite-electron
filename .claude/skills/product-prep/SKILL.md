@@ -212,6 +212,7 @@ The server keeps the list on the product (staff see it under Product image), **n
 The server tags each line with its part ("Part 3 · …") and **a part that runs again replaces its own earlier lines** — so write the full set each run, never "as before".
 - **One point per line, about 20 words.** Say **what, where, what to do**: "Photo 3 shows the 2-port model — remove it", not "Some photos may be wrong".
 - **`staff`** = a human must act. **`notes`** = information staff gain from (where a fact came from, what you changed). Nothing else.
+- **Shipping never blocks** (owner, 2026-11-23): fill weight / parcel size when the box or a kept page gives it (Part 3 / Part 5 `shipping`); empty or doubtful → no `staff` / `pending` line. The shop readiness gate already holds a product without shipping. An old shipping line left on a product → clear it with `/fixed`.
 - **No "OK" / "no problem" / "looks good" lines**, no repeating what the server writes itself (photo list lines, Model No filled, weight source, Last run).
 - Our own stamp on a non-main photo is never a note (see "The photo list").
 

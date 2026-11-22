@@ -65,7 +65,8 @@ For a product that already has its text — made by staff before this loop exist
 5. **Add / suggest from the saved search** (`prep.pages[].photos`, only when the product has one): the missing must photos (`photoList.findOnline`) and any better view — `add` when sure it is this exact model and colour, `suggest` when not. No saved search → nothing is added; a must photo still missing goes to staff by the server.
 6. **`order`** — the whole gallery: clean product photo first, then sides / close-ups, box, feel photos.
 7. **`photoCheck`** — the list after your changes (SKILL.md "The photo list"); `drop` a must with a reason when the product does not need it.
-8. **`notes`** — one line per `new` photo you **left** as it is, with why: "Photo 4 (new): kept — in use on a desk". Edited photos need no line (the server writes them, with the original). Say nothing about `done` photos. `fixed` — the open Attention lines you fixed, copied exactly.
+8. **`shipping`** (optional, owner 2026-11-23) — the box back prints a weight or size (`Weight: 56 gm`, `Size (cm): 20 x 6 x 1.5`) → send `{ "weight": "56 g", "dimensions": "20 x 6 x 1.5 cm", "source": "label" }` (or a kept page url). The server fills only empty fields and notes where it came from. Nothing printed → leave it out. Never a `staff` line for shipping — the shop readiness gate handles a missing one.
+9. **`notes`** — one line per `new` photo you **left** as it is, with why: "Photo 4 (new): kept — in use on a desk". Edited photos need no line (the server writes them, with the original). Say nothing about `done` photos. `fixed` — the open Attention lines you fixed, copied exactly.
 
 ```bash
 curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json" \

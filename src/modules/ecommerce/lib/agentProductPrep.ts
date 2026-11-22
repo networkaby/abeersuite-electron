@@ -1017,6 +1017,12 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
 export const part5Schema = z.object({
     photos: photoPlanSchema,
     photoCheck: photoCheckSchema,
+    /**
+     * Weight / parcel size as printed on the box ("label") or on a kept page — fills
+     * only empty fields, never blocks (owner, 2026-11-23: the shop readiness gate
+     * catches missing shipping). Left out when nothing is printed.
+     */
+    shipping: shippingSchema.optional(),
     /** Information only — never blocks. One line per photo: what was done, or why it was left. */
     notes: lines,
     /** What only staff can do (a reshoot, a revised-MRP sticker) — any line → Attention. */
@@ -1051,6 +1057,13 @@ export async function savePart5(id: number, b: z.infer<typeof part5Schema>, run?
     const trusted = search ? search.found.pages.filter((pg) => pg.codeMatch || search.verdicts.find((v) => v.url === pg.url)?.accepted) : [];
     const notes: string[] = [...b.notes];
     const patch: ShopProductPatch = {};
+
+    // Shipping from the box: with no saved search the label facts are what Claude
+    // read off the box photos in this call — the same trust as Part 2's labelFacts.
+    const sentLabel = b.shipping?.source.trim().toLowerCase() === "label"
+        ? Object.fromEntries([["Weight", b.shipping.weight], ["Dimensions", b.shipping.dimensions]].filter((e): e is [string, string] => !!e[1]))
+        : {};
+    applyShipping(b.shipping, p, { labelFacts: { ...(search?.labelFacts ?? {}), ...sentLabel }, seen: search?.seen ?? {} }, trusted, patch, notes);
 
     const ph = await applyPhotos(b.photos, p, trusted, patch, notes);
     if (!trusted.length && (b.photos.add.length || b.photos.suggest.length)) notes.push("No saved search for this product — photos can only be added by hand.");
