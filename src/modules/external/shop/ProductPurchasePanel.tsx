@@ -36,7 +36,7 @@ export default function ProductPurchasePanel({
     const wishHas = useShopWishlistStore((s) => s.has(product.id));
     const addCompare = useShopCompareStore((s) => s.add);
     const [qty, setQty] = useState(1);
-    const interest = useShowInterest(() => `/login?callbackUrl=${encodeURIComponent(typeof window !== "undefined" ? window.location.pathname : "/shop")}`);
+    const interest = useShowInterest();
 
     const discountPct =
         product.mrpPaise && product.mrpPaise > product.pricePaise
@@ -117,7 +117,11 @@ export default function ProductPurchasePanel({
                         disabled={interest.busy}
                         onClick={() => {
                             // Out of stock and not orderable → a Deal for staff (owner, 2026-11-22).
-                            if (!product.orderable) return void interest.send(product.id);
+                            if (!product.orderable) {
+                                // Staff preview: same button, but no sign-in jump and no Deal.
+                                if (preview) return void toast.info("Preview — customers see this button");
+                                return void interest.send(product.id);
+                            }
                             add(product.id, qty);
                             toast.success(`Added ${qty} to cart`);
                         }}

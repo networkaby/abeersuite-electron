@@ -18,7 +18,7 @@ import { toast } from "sonner";
 
 export default function ProductListRow({ product, className }: { product: ShopProductPublic; className?: string }) {
     const add = useShopCartStore((s) => s.add);
-    const interest = useShowInterest(() => `/login?callbackUrl=${encodeURIComponent(typeof window !== "undefined" ? window.location.pathname : "/shop")}`);
+    const interest = useShowInterest();
     const toggleWish = useShopWishlistStore((s) => s.toggle);
     const wishHas = useShopWishlistStore((s) => s.has(product.id));
     const addCompare = useShopCompareStore((s) => s.add);
