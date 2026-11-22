@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
+import { auth } from "@/auth";
+import SessionWrapper from "@/shared/components/SessionWrapper";
 import { requireStaffPage } from "@/shared/lib/auth/permissions";
 import ProductDetailView from "@/modules/external/shop/ProductDetailView";
 import { loadShopProduct } from "@/shared/lib/shop/loadShopProduct";
@@ -32,8 +34,12 @@ export default async function ProductPreviewPage({ params }: { params: Promise<{
     const found = await loadShopProduct(id, true);
     if (!found) notFound();
     const { product, liveInShop } = found;
+    // The purchase panel's "Show interest" reads useSession(); this page sits
+    // outside every layout that mounts the provider, so it brings its own.
+    const session = await auth();
 
     return (
+        <SessionWrapper session={session}>
         <main className="mx-auto w-full max-w-6xl space-y-8 px-4 py-8 sm:py-12">
             <div className="flex flex-wrap items-center gap-3 rounded-md border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
                 <span className="flex-1">
@@ -55,5 +61,6 @@ export default async function ProductPreviewPage({ params }: { params: Promise<{
                 host a Toaster is not around this page. */}
             <Toaster position="bottom-center" richColors closeButton />
         </main>
+        </SessionWrapper>
     );
 }
