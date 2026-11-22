@@ -1,9 +1,12 @@
-# v1.17.13
+# v1.17.14
 
-Billing counter fix for UPI payments. Every counter should install it, so a UPI payment request reaches the customer again.
+A small update for the online shop. Counters can install it whenever convenient — nothing changes at the billing counter.
 
-## Billing — UPI payment request
+## Online shop
+- Opening a product preview no longer crashes the page.
+- Tapping **Show interest** on a preview now just explains what it does, instead of jumping to the customer sign-in.
+- Tapping Show interest twice, or after a product was renamed, now adds to the customer's existing enquiry instead of creating a duplicate.
 
-- The UPI payment request sent to the customer on WhatsApp now arrives as a plain pay link, the same way bill links do. Earlier the link could open a "not found" page and the QR photo was sometimes dropped.
-- It sends straight from the UPI payment row at checkout.
-- If the bills WhatsApp number refuses the message, the shop's other number tries it. There is no more WhatsApp Web fallback.
+## Product preparation
+- Empty shipping weight and parcel size are now filled from the box label wherever possible, and missing shipping details never hold up a product.
+- An unclean first photo no longer stops preparation when the photos are being re-ordered in the same run.
