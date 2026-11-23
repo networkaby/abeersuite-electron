@@ -28,3 +28,24 @@ export async function checkPositionDepartment(
     }
     return null;
 }
+
+/**
+ * Old-form fallback: a counter on a build from before the Department box sends no
+ * `departmentId` at all (undefined — the new form sends null for "None"). Derive it
+ * from the roles the old way, so a release and a deploy can go out in either order.
+ * Highest-ranked role wins when the ticks span departments. Remove once every
+ * counter runs the new form.
+ */
+export async function departmentFromRoles(
+    roleIds: string[],
+    client: DbClient = prisma,
+): Promise<string | null> {
+    const ids = [...new Set(roleIds.filter(Boolean))];
+    if (ids.length === 0) return null;
+    const top = await client.role.findFirst({
+        where:   { id: { in: ids } },
+        orderBy: { rank: "desc" },
+        select:  { departmentId: true },
+    });
+    return top?.departmentId ?? null;
+}

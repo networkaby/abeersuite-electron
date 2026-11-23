@@ -5,7 +5,7 @@ import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { checkPositionDepartment } from "@/shared/lib/org/positionDepartment";
+import { checkPositionDepartment, departmentFromRoles } from "@/shared/lib/org/positionDepartment";
 import {
     flattenPositionRoles,
     POSITION_INCLUDE,
@@ -68,7 +68,11 @@ export async function POST(req: Request) {
         const existing = await prisma.position.findUnique({ where: { id } });
         if (existing) return NextResponse.json({ error: "Position ID already exists" }, { status: 409 });
 
-        const deptError = await checkPositionDepartment(departmentId, branchId);
+        // undefined = an old counter's form with no Department box → the old roles rule.
+        const finalDepartmentId = departmentId === undefined
+            ? await departmentFromRoles(roleTemplateIds)
+            : departmentId || null;
+        const deptError = departmentId === undefined ? null : await checkPositionDepartment(finalDepartmentId, branchId);
         if (deptError) return NextResponse.json({ error: deptError }, { status: 400 });
         const position = await prisma.$transaction(async (tx) => {
             const created = await tx.position.create({
@@ -76,7 +80,7 @@ export async function POST(req: Request) {
                     id,
                     title,
                     branchId: branchId ?? null,
-                    departmentId: departmentId || null,
+                    departmentId: finalDepartmentId,
                     parentPositionId: parentPositionId ?? null,
                 },
             });

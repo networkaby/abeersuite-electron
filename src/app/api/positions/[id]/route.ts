@@ -7,7 +7,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { flattenPositionRoles, POSITION_INCLUDE } from "@/shared/lib/org/positionIncludes";
 import { syncPositionRoles } from "@/shared/lib/org/positionRoles";
-import { checkPositionDepartment } from "@/shared/lib/org/positionDepartment";
+import { checkPositionDepartment, departmentFromRoles } from "@/shared/lib/org/positionDepartment";
 import { revokePositionSessions } from "@/shared/lib/auth/revokeSessions";
 
 const updateSchema = z.object({
@@ -46,10 +46,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             const existing = await tx.position.findUnique({ where: { id }, select: { branchId: true, departmentId: true } });
             if (!existing) return null;
 
+            // An old counter's form sends roles but no department → the old roles rule.
+            // Like before, that department is not checked against the branch.
+            const fromRoles = scalarFields.departmentId === undefined && roleTemplateIds !== undefined;
+            if (fromRoles) scalarFields.departmentId = await departmentFromRoles(roleTemplateIds, tx);
             // Branch moved without a department → drop a department of the old branch.
             const finalBranchId = scalarFields.branchId !== undefined ? scalarFields.branchId : existing.branchId;
             const finalDeptId   = scalarFields.departmentId !== undefined ? scalarFields.departmentId : existing.departmentId;
-            const deptError = await checkPositionDepartment(finalDeptId, finalBranchId, tx);
+            const deptError = fromRoles ? null : await checkPositionDepartment(finalDeptId, finalBranchId, tx);
             if (deptError) {
                 if (scalarFields.departmentId !== undefined) throw new DepartmentError(deptError);
                 scalarFields.departmentId = null;
