@@ -24,8 +24,6 @@ test("odd paisa lands on SGST", () => {
     const s = computeGstSplit({ taxAmount: 10.01, sellerStateCode: "27", buyerStateCode: "27" });
     assert.deepEqual([s.cgst, s.sgst], [5, 5.01]);
 });
-    assert.ok(s.cgst >= s.sgst);
-});
 
 test("different state -> IGST only", () => {
     const s = computeGstSplit({ taxAmount: 54.5, sellerStateCode: "27", buyerStateCode: "29" });
