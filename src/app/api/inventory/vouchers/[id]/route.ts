@@ -33,10 +33,19 @@ type Params = { params: Promise<{ id: string }> };
 //   ?forEdit=1 on a POS sale adds `posCounter` + `posEdit` — what the counter's
 //   Update Sale starts from. Left off for a plain view, which needs neither.
 export async function GET(req: Request, { params }: Params) {
-    const { response } = await requireAuth();
+    const { response, user } = await requireAuth();
     if (response) return response;
 
     const { id } = await params;
+    // TEMP (2026-11-24, remove after ~2 days): find who calls this route thousands of
+    // times a day on Vercel. Read the lines in Vercel Logs, search "[voucher-get]".
+    console.info("[voucher-get]", JSON.stringify({
+        id,
+        user: user?.id ?? null,
+        ua: req.headers.get("user-agent")?.slice(0, 120) ?? null,
+        ref: req.headers.get("referer") ?? null,
+        ip: req.headers.get("x-forwarded-for")?.split(",")[0] ?? null,
+    }));
     const voucherRow = await prisma.voucherDetail.findUnique({
         where: { id: Number(id) },
         include: {
