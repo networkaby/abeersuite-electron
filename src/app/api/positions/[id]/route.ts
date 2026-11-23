@@ -7,14 +7,18 @@ import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { flattenPositionRoles, POSITION_INCLUDE } from "@/shared/lib/org/positionIncludes";
 import { syncPositionRoles } from "@/shared/lib/org/positionRoles";
+import { checkPositionDepartment } from "@/shared/lib/org/positionDepartment";
 import { revokePositionSessions } from "@/shared/lib/auth/revokeSessions";
 
 const updateSchema = z.object({
     title:            z.string().trim().min(1, "Title is required").optional(),
     branchId:         z.string().trim().optional().nullable(),
+    departmentId:     z.string().trim().optional().nullable(),
     parentPositionId: z.string().trim().optional().nullable(),
     roleTemplateIds:  z.array(z.string().trim().min(1)).optional(),
 });
+
+class DepartmentError extends Error {}
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requireAuth();
@@ -39,8 +43,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         const { roleTemplateIds, ...scalarFields } = data;
         const position = await prisma.$transaction(async (tx) => {
-            const existing = await tx.position.findUnique({ where: { id }, select: { id: true } });
+            const existing = await tx.position.findUnique({ where: { id }, select: { branchId: true, departmentId: true } });
             if (!existing) return null;
+
+            // Branch moved without a department → drop a department of the old branch.
+            const finalBranchId = scalarFields.branchId !== undefined ? scalarFields.branchId : existing.branchId;
+            const finalDeptId   = scalarFields.departmentId !== undefined ? scalarFields.departmentId : existing.departmentId;
+            const deptError = await checkPositionDepartment(finalDeptId, finalBranchId, tx);
+            if (deptError) {
+                if (scalarFields.departmentId !== undefined) throw new DepartmentError(deptError);
+                scalarFields.departmentId = null;
+            }
+            if (scalarFields.departmentId === "") scalarFields.departmentId = null;
 
             if (Object.keys(scalarFields).length > 0) {
                 await tx.position.update({ where: { id }, data: scalarFields });
@@ -58,6 +72,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         await revokePositionSessions(id);
         return NextResponse.json(flattenPositionRoles(position));
     } catch (e) {
+        if (e instanceof DepartmentError) return NextResponse.json({ error: e.message }, { status: 400 });
         return handleApiError(e, "Failed to update position");
     }
 }

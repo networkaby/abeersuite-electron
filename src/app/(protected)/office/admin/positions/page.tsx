@@ -32,7 +32,7 @@ import { confirmAction } from "@/shared/lib/ui/confirmStore";
 interface Branch     { id: string; name: string; }
 interface Department { id: string; name: string; branchId: string | null; }
 interface UserStub   { id: number; name: string; avatarUrl: string | null; role: string; title: string | null; userRole: { label: string; color: string } | null; }
-interface RoleOption { id: string; label: string; color: string; department: { id: string; name: string } | null; }
+interface RoleOption { id: string; label: string; color: string; department: { id: string; name: string; isAllAccess?: boolean } | null; }
 
 interface Position {
     id: string;
@@ -48,8 +48,33 @@ interface Position {
     _count:     { children: number };
 }
 
-type FormState = { id: string; title: string; branchId: string; parentPositionId: string; roleTemplateIds: string[] };
-const EMPTY: FormState = { id: "", title: "", branchId: "", parentPositionId: "", roleTemplateIds: [] };
+type FormState = { id: string; title: string; branchId: string; departmentId: string; parentPositionId: string; roleTemplateIds: string[] };
+const EMPTY: FormState = { id: "", title: "", branchId: "", departmentId: "", parentPositionId: "", roleTemplateIds: [] };
+
+/** Departments a position in this branch may sit in: the branch's own, plus cross-branch ones. */
+function departmentsForBranch(departments: Department[], branchId: string): Department[] {
+    return departments.filter(d => !d.branchId || d.branchId === branchId);
+}
+
+/**
+ * Roles offered for a department. Every branch has its own department row but a
+ * role points at one row, so match by NAME. All-access roles (Admin) always show.
+ * No department chosen -> every role.
+ */
+function rolesForDepartment(roleOptions: RoleOption[], deptName: string | null): RoleOption[] {
+    if (!deptName) return roleOptions;
+    const want = deptName.trim().toLowerCase();
+    return roleOptions.filter(r => r.department?.isAllAccess || r.department?.name.trim().toLowerCase() === want);
+}
+
+function positionToForm(p: Position): FormState {
+    return {
+        id: p.id, title: p.title,
+        branchId: p.branchId ?? "", departmentId: p.departmentId ?? "",
+        parentPositionId: p.parentPositionId ?? "",
+        roleTemplateIds: p.roleTemplates.map((r) => r.id),
+    };
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -83,17 +108,6 @@ function UserChip({ user, onRemove }: { user: UserStub; onRemove?: () => void })
     );
 }
 
-function roleDepartmentHint(roleIds: string[], roleOptions: RoleOption[]): string | null {
-    const depts = [...new Set(
-        roleIds
-            .map((id) => roleOptions.find((r) => r.id === id)?.department?.name)
-            .filter((name): name is string => Boolean(name)),
-    )];
-    if (depts.length === 0) return null;
-    if (depts.length === 1) return depts[0]!;
-    return depts.join(", ");
-}
-
 function RoleTemplatePicker({
     roleOptions,
     selectedIds,
@@ -111,7 +125,6 @@ function RoleTemplatePicker({
         );
     };
 
-    const deptHint = roleDepartmentHint(selectedIds, roleOptions);
 
     return (
         <div>
@@ -144,12 +157,6 @@ function RoleTemplatePicker({
                     })
                 )}
             </div>
-            {deptHint && (
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                    Home department{deptHint.includes(",") ? "s" : ""}:{" "}
-                    <span className="font-medium text-foreground">{deptHint}</span> (from roles)
-                </p>
-            )}
         </div>
     );
 }
@@ -157,15 +164,25 @@ function RoleTemplatePicker({
 // ── Form fields (extracted to avoid remount on parent re-render) ──────────────
 
 function PositionFormFields({
-    addingNew, form, branches, allPositions, roleOptions, onChange,
+    addingNew, form, branches, departments, allPositions, roleOptions, onChange,
 }: {
     addingNew: boolean;
     form: FormState;
     branches: Branch[];
+    departments: Department[];
     allPositions: Position[];
     roleOptions: RoleOption[];
     onChange: (f: FormState) => void;
 }) {
+    const branchDepts = departmentsForBranch(departments, form.branchId);
+    const deptName    = departments.find(d => d.id === form.departmentId)?.name ?? null;
+    const shownRoles  = rolesForDepartment(roleOptions, deptName);
+    // Keep only the role ticks the new department still offers.
+    const pickDepartment = (departmentId: string) => {
+        const name    = departments.find(d => d.id === departmentId)?.name ?? null;
+        const allowed = new Set(rolesForDepartment(roleOptions, name).map(r => r.id));
+        onChange({ ...form, departmentId, roleTemplateIds: form.roleTemplateIds.filter(id => allowed.has(id)) });
+    };
     return (
         <div className="grid grid-cols-2 gap-3">
             {addingNew && (
@@ -190,7 +207,11 @@ function PositionFormFields({
             </div>
             <div>
                 <label className="text-xs font-medium text-muted-foreground">Branch scope <span className="font-normal">(blank = org-wide)</span></label>
-                <Select value={form.branchId || "org-wide"} onValueChange={(value) => onChange({ ...form, branchId: value === "org-wide" ? "" : value })}>
+                <Select value={form.branchId || "org-wide"} onValueChange={(value) => {
+                    const branchId = value === "org-wide" ? "" : value;
+                    const keep = departmentsForBranch(departments, branchId).some(d => d.id === form.departmentId);
+                    onChange({ ...form, branchId, departmentId: keep ? form.departmentId : "" });
+                }}>
                     <SelectTrigger className="mt-1">
                         <SelectValue placeholder="Org-wide (Executive Council)" />
                     </SelectTrigger>
@@ -200,9 +221,21 @@ function PositionFormFields({
                     </SelectContent>
                 </Select>
             </div>
+            <div>
+                <label className="text-xs font-medium text-muted-foreground">Department <span className="font-normal">(optional)</span></label>
+                <Select value={form.departmentId || "none"} onValueChange={(value) => pickDepartment(value === "none" ? "" : value)}>
+                    <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="None" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {branchDepts.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                    </SelectContent>
+                </Select>
+            </div>
             <div className="col-span-2">
                 <RoleTemplatePicker
-                    roleOptions={roleOptions}
+                    roleOptions={shownRoles}
                     selectedIds={form.roleTemplateIds}
                     onChange={(roleTemplateIds) => onChange({ ...form, roleTemplateIds })}
                 />
@@ -293,13 +326,14 @@ function AssignPanel({
 // ── Position row ──────────────────────────────────────────────────────────────
 
 function PositionRow({
-    position, allPositions, allUsers, branches, roleOptions,
+    position, allPositions, allUsers, branches, departments, roleOptions,
     onSave, onDelete, onAssign, onUnassign,
 }: {
     position: Position;
     allPositions: Position[];
     allUsers: UserStub[];
     branches: Branch[];
+    departments: Department[];
     roleOptions: RoleOption[];
     onSave: (id: string, data: object) => Promise<void>;
     onDelete: (id: string) => Promise<void>;
@@ -308,22 +342,14 @@ function PositionRow({
 }) {
     const [editing, setEditing]   = useState(false);
     const [expanded, setExpanded] = useState(false);
-    const [form, setForm]         = useState<FormState>({
-        id: position.id, title: position.title,
-        branchId: position.branchId ?? "", parentPositionId: position.parentPositionId ?? "",
-        roleTemplateIds: position.roleTemplates.map((r) => r.id),
-    });
+    const [form, setForm]         = useState<FormState>(() => positionToForm(position));
     const [saving, setSaving] = useState(false);
 
     const scopeLabel = positionScopeLabel(position, { withDepartment: true });
 
     // Always sync form with latest position data when opening edit mode
     const openEdit = () => {
-        setForm({
-            id: position.id, title: position.title,
-            branchId: position.branchId ?? "", parentPositionId: position.parentPositionId ?? "",
-            roleTemplateIds: position.roleTemplates.map((r) => r.id),
-        });
+        setForm(positionToForm(position));
         setEditing(true);
     };
 
@@ -334,6 +360,7 @@ function PositionRow({
             await onSave(position.id, {
                 title:            form.title,
                 branchId:         form.branchId         || null,
+                departmentId:     form.departmentId     || null,
                 parentPositionId: form.parentPositionId || null,
                 roleTemplateIds:  form.roleTemplateIds,
             });
@@ -348,7 +375,7 @@ function PositionRow({
             {editing ? (
                 <div className="p-4 space-y-3">
                     <PositionFormFields
-                        addingNew={false} form={form} branches={branches}
+                        addingNew={false} form={form} branches={branches} departments={departments}
                         allPositions={allPositions} roleOptions={roleOptions} onChange={setForm}
                     />
                     <div className="flex gap-2">
@@ -488,6 +515,7 @@ export default function PositionsPage() {
                 id:               form.id.toUpperCase(),
                 title:            form.title,
                 branchId:         form.branchId         || null,
+                departmentId:     form.departmentId     || null,
                 parentPositionId: form.parentPositionId || null,
                 roleTemplateIds:  form.roleTemplateIds,
             });
@@ -608,7 +636,7 @@ export default function PositionsPage() {
                 <div className="space-y-3 rounded-lg border border-primary bg-muted/30 p-4">
                     <p className="text-sm font-semibold">New Position</p>
                     <PositionFormFields
-                        addingNew={true} form={form} branches={branches}
+                        addingNew={true} form={form} branches={branches} departments={departments}
                         allPositions={positions} roleOptions={roleOptions} onChange={setForm}
                     />
                     <div className="flex gap-2 pt-1">
@@ -637,7 +665,7 @@ export default function PositionsPage() {
                             <div className="space-y-1.5">
                                 {orgPositions.map(p => (
                                     <PositionRow key={p.id} position={p} allPositions={positions} allUsers={allUsers}
-                                        branches={branches} roleOptions={roleOptions}
+                                        branches={branches} departments={departments} roleOptions={roleOptions}
                                         onSave={handleSave} onDelete={handleDelete}
                                         onAssign={handleAssign} onUnassign={handleUnassign} />
                                 ))}
@@ -666,7 +694,7 @@ export default function PositionsPage() {
                                     <div className="space-y-1.5 mb-3">
                                         {noDeptPositions.map(p => (
                                             <PositionRow key={p.id} position={p} allPositions={positions} allUsers={allUsers}
-                                                branches={branches} roleOptions={roleOptions}
+                                                branches={branches} departments={departments} roleOptions={roleOptions}
                                                 onSave={handleSave} onDelete={handleDelete}
                                                 onAssign={handleAssign} onUnassign={handleUnassign} />
                                         ))}
@@ -683,7 +711,7 @@ export default function PositionsPage() {
                                         <div className="space-y-1.5">
                                             {dPositions.map(p => (
                                                 <PositionRow key={p.id} position={p} allPositions={positions} allUsers={allUsers}
-                                                    branches={branches} roleOptions={roleOptions}
+                                                    branches={branches} departments={departments} roleOptions={roleOptions}
                                                     onSave={handleSave} onDelete={handleDelete}
                                                     onAssign={handleAssign} onUnassign={handleUnassign} />
                                             ))}

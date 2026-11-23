@@ -5,7 +5,7 @@ import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { resolvePositionDepartmentId } from "@/shared/lib/org/positionDepartment";
+import { checkPositionDepartment } from "@/shared/lib/org/positionDepartment";
 import {
     flattenPositionRoles,
     POSITION_INCLUDE,
@@ -17,6 +17,7 @@ const createSchema = z.object({
     id:               z.string().trim().min(1, "ID is required").toUpperCase(),
     title:            z.string().trim().min(1, "Title is required"),
     branchId:         z.string().trim().optional().nullable(),
+    departmentId:     z.string().trim().optional().nullable(),
     parentPositionId: z.string().trim().optional().nullable(),
     roleTemplateIds:  z.array(z.string().trim().min(1)).optional().default([]),
 });
@@ -63,18 +64,19 @@ export async function POST(req: Request) {
     try {
         const { data, error } = await validateRequest(req, createSchema);
         if (error) return error;
-        const { id, title, branchId, parentPositionId, roleTemplateIds } = data;
+        const { id, title, branchId, departmentId, parentPositionId, roleTemplateIds } = data;
         const existing = await prisma.position.findUnique({ where: { id } });
         if (existing) return NextResponse.json({ error: "Position ID already exists" }, { status: 409 });
 
-        const resolvedDepartmentId = await resolvePositionDepartmentId(roleTemplateIds);
+        const deptError = await checkPositionDepartment(departmentId, branchId);
+        if (deptError) return NextResponse.json({ error: deptError }, { status: 400 });
         const position = await prisma.$transaction(async (tx) => {
             const created = await tx.position.create({
                 data: {
                     id,
                     title,
                     branchId: branchId ?? null,
-                    departmentId: resolvedDepartmentId,
+                    departmentId: departmentId || null,
                     parentPositionId: parentPositionId ?? null,
                 },
             });

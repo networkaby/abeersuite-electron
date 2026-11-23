@@ -1,15 +1,14 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { resolvePositionDepartmentId } from "@/shared/lib/org/positionDepartment";
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
 
-/** Replace all role templates on a position and re-derive departmentId. */
+/** Replace all role templates on a position. The department is left alone — it is picked by hand. */
 export async function syncPositionRoles(
     client: DbClient,
     positionId: string,
     roleIds: string[],
-): Promise<string | null> {
+): Promise<void> {
     const uniqueRoleIds = [...new Set(roleIds.filter(Boolean))];
     await client.positionRole.deleteMany({ where: { positionId } });
     if (uniqueRoleIds.length > 0) {
@@ -18,10 +17,4 @@ export async function syncPositionRoles(
             skipDuplicates: true,
         });
     }
-    const departmentId = await resolvePositionDepartmentId(uniqueRoleIds, client);
-    await client.position.update({
-        where: { id: positionId },
-        data:  { departmentId },
-    });
-    return departmentId;
 }

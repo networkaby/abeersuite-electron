@@ -4,27 +4,27 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 type DbClient = Prisma.TransactionClient | typeof prisma;
 
 /**
- * A Position's department is derived from its role templates — each role carries
- * a home department (`Role.departmentId`). When all roles agree, that department
- * wins; when they differ, the highest-rank role's home department is used.
- * A role-less seat has no department.
+ * A position's department is picked by hand. It must be a department of the
+ * position's own branch (or a cross-branch one with no branch). Returns an
+ * error message, or null when the pair is fine.
+ *
+ * Role templates no longer decide the department — the role's home department
+ * is only the Role Matrix authoring lens (see rbac.prisma), and the Positions
+ * form filters roles by department NAME, since every branch has its own row.
  */
-export async function resolvePositionDepartmentId(
-    roleIds: string[],
+export async function checkPositionDepartment(
+    departmentId: string | null | undefined,
+    branchId: string | null | undefined,
     client: DbClient = prisma,
 ): Promise<string | null> {
-    const uniqueRoleIds = [...new Set(roleIds.filter(Boolean))];
-    if (uniqueRoleIds.length === 0) return null;
-
-    const roles = await client.role.findMany({
-        where:  { id: { in: uniqueRoleIds } },
-        select: { departmentId: true, rank: true },
+    if (!departmentId) return null;
+    const dept = await client.department.findUnique({
+        where:  { id: departmentId },
+        select: { branchId: true },
     });
-    if (roles.length === 0) return null;
-
-    const deptIds = [...new Set(roles.map((r) => r.departmentId))];
-    if (deptIds.length === 1) return deptIds[0]!;
-
-    const top = roles.reduce((best, r) => (r.rank > best.rank ? r : best), roles[0]!);
-    return top.departmentId;
+    if (!dept) return "Department not found";
+    if (dept.branchId && dept.branchId !== (branchId ?? null)) {
+        return "That department belongs to another branch";
+    }
+    return null;
 }
