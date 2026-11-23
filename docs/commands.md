@@ -158,6 +158,7 @@ Read `docs/seeds.md` first. Current DB is **demo**.
 
 | Command | What it does |
 | --- | --- |
+| `pnpm test:unit` | Unit tests (`src/**/*.test.ts`) — money, GST, bill maths |
 | `pnpm test:e2e` | Playwright run |
 | `pnpm test:e2e:ui` | Playwright UI mode |
 | `pnpm test:e2e:report` | Opens the last report |
