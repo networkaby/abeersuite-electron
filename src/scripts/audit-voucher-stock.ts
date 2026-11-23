@@ -20,20 +20,9 @@
 // Run:  pnpm tsx src/scripts/audit-voucher-stock.ts
 //       pnpm tsx src/scripts/audit-voucher-stock.ts --all   (print every row, not the first 25)
 
-import * as dotenv from "dotenv";
-dotenv.config({ path: ".env.local" });
-dotenv.config({ path: ".env" });
+import { prisma } from "@/shared/lib/db/scriptPrisma";
 
-import { PrismaClient } from "@/generated/prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
-import { scriptDbUrl } from "@/shared/lib/db/dbTargets";
 
-const rawUrl = scriptDbUrl()
-    .replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
-const isLocalDb = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(rawUrl);
-const pool = new Pool({ connectionString: rawUrl, ssl: isLocalDb ? false : { rejectUnauthorized: false }, max: 2 });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 const SHOW_ALL = process.argv.includes("--all");
 const n = (v: unknown) => Number(v ?? 0);

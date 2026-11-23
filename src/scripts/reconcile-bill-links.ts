@@ -48,23 +48,12 @@
 // machine is live Supabase. `--fix` writes to the real books on the first run,
 // with no prompt.
 
-import * as dotenv from "dotenv";
-dotenv.config({ path: ".env.local" });
-dotenv.config({ path: ".env" });
+import { prisma, pool, rawUrl } from "@/shared/lib/db/scriptPrisma";
 
-import { PrismaClient } from "@/generated/prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
 import { planAutoLink, type AutoLinkOutcome } from "@/modules/accountancy/lib/autoLinkPlan";
 import { assertLinkPlan, createLink, BillLinkError } from "@/modules/accountancy/lib/billLink";
 import { formatInr } from "@/shared/lib/format/moneyInr";
-import { scriptDbUrl } from "@/shared/lib/db/dbTargets";
 
-const rawUrl = scriptDbUrl()
-    .replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
-const isLocalDb = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(rawUrl);
-const pool = new Pool({ connectionString: rawUrl, ssl: isLocalDb ? false : { rejectUnauthorized: false }, max: 2 });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 const ARGV = process.argv.slice(2);
 const FIX = ARGV.includes("--fix");

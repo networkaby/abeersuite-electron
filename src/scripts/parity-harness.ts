@@ -16,13 +16,9 @@
 //
 // Run: pnpm tsx src/scripts/parity-harness.ts
 
-import * as dotenv from "dotenv";
-dotenv.config({ path: ".env.local" });
-dotenv.config({ path: ".env" });
+import { prisma } from "@/shared/lib/db/scriptPrisma";
 
-import { PrismaClient, type Prisma, type VoucherType } from "@/generated/prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
+import { type Prisma, type VoucherType } from "@/generated/prisma/client";
 import type { PostVoucherInput } from "@/modules/accountancy/lib/postInvVoucher";
 import { saleToSpec, buildTradingStockMoves } from "@/modules/accountancy/lib/voucherMappers";
 import { enginePost, engineCreateVoucher, engineCreateSpine, engineGlArm } from "@/modules/accountancy/lib/transactionEngine";
@@ -36,15 +32,7 @@ import { tillBalancePaise, sumShiftTendersByAccount } from "@/modules/pos/lib/sh
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 import { syncVoucherLink, syncVoucherLinks } from "@/modules/accountancy/lib/voucherLinks";
 import { HEAD_OFFICE_BRANCH_ID } from "@/shared/lib/org/systemBranch";
-import { scriptDbUrl } from "@/shared/lib/db/dbTargets";
 
-// Self-built client (the app singleton reads env at import-time; tsx doesn't load
-// .env.local for us). Mirror prismaClient.ts's local-vs-remote SSL detection.
-const rawUrl = scriptDbUrl()
-    .replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
-const isLocalDb = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(rawUrl);
-const pool = new Pool({ connectionString: rawUrl, ssl: isLocalDb ? false : { rejectUnauthorized: false }, max: 2 });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 const ROLLBACK = "ROLLBACK_OK";
 type GlLine = { accountId: number; account: string; type: string; amount: number };

@@ -33,22 +33,11 @@
 //   pnpm report:ps-double-count                    print the list
 //   pnpm report:ps-double-count --csv out.csv      also write it as CSV
 
-import * as dotenv from "dotenv";
-dotenv.config({ path: ".env.local" });
-dotenv.config({ path: ".env" });
+import { prisma, rawUrl } from "@/shared/lib/db/scriptPrisma";
 
 import { writeFileSync } from "node:fs";
-import { PrismaClient } from "@/generated/prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
 import { HEAD_OFFICE_BRANCH_ID } from "@/shared/lib/org/systemBranch";
-import { scriptDbUrl } from "@/shared/lib/db/dbTargets";
 
-const rawUrl = scriptDbUrl()
-    .replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
-const isLocalDb = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(rawUrl);
-const pool = new Pool({ connectionString: rawUrl, ssl: isLocalDb ? false : { rejectUnauthorized: false }, max: 2 });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 const csvAt = process.argv.indexOf("--csv");
 const CSV = csvAt > 0 ? process.argv[csvAt + 1] : null;

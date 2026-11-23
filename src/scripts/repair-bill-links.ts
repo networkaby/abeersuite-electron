@@ -24,25 +24,14 @@
 // Safe on live: it never touches a GL line, an amount or a balance — only the
 // party label on a voucher, and rows that point at vouchers that are gone.
 
-import * as dotenv from "dotenv";
-dotenv.config({ path: ".env.local" });
-dotenv.config({ path: ".env" });
+import { prisma, pool } from "@/shared/lib/db/scriptPrisma";
 
-import { PrismaClient } from "@/generated/prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 // The shared walk, read through THIS script's own connection. It used to be
 // copied into this file because the shared one could only ever use the app's
 // global client; it now takes the client it should read with.
 import { accountIdsUnderGroup } from "@/modules/accountancy/lib/accountGroups";
-import { scriptDbUrl } from "@/shared/lib/db/dbTargets";
 
-const rawUrl = scriptDbUrl()
-    .replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
-const isLocalDb = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(rawUrl);
-const pool = new Pool({ connectionString: rawUrl, ssl: isLocalDb ? false : { rejectUnauthorized: false }, max: 2 });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 const FIX = process.argv.includes("--fix");
 

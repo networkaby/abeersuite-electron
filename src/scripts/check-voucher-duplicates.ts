@@ -9,20 +9,9 @@
 //
 //   pnpm check:voucher-duplicates            (exit 1 when any are found)
 
-import * as dotenv from "dotenv";
-dotenv.config({ path: ".env.local" });
-dotenv.config({ path: ".env" });
+import { prisma, pool } from "@/shared/lib/db/scriptPrisma";
 
-import { PrismaClient } from "@/generated/prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
-import { scriptDbUrl } from "@/shared/lib/db/dbTargets";
 
-const rawUrl = scriptDbUrl()
-    .replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
-const isLocalDb = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(rawUrl);
-const pool = new Pool({ connectionString: rawUrl, ssl: isLocalDb ? false : { rejectUnauthorized: false }, max: 2 });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 async function main() {
     const dupes = await prisma.$queryRaw<Array<{ type: string; voucherNo: string; n: number; ids: number[] }>>`

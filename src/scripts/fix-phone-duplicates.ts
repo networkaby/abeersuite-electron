@@ -15,23 +15,12 @@
 //   npx tsx src/scripts/fix-phone-duplicates.ts          report only
 //   npx tsx src/scripts/fix-phone-duplicates.ts --fix    apply
 
-import * as dotenv from "dotenv";
-dotenv.config({ path: ".env.local" });
-dotenv.config({ path: ".env" });
+import { prisma, pool, isLocalDb } from "@/shared/lib/db/scriptPrisma";
 
-import { PrismaClient } from "@/generated/prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
 import { canonicalPhone } from "@/shared/lib/format/phone";
-import { scriptDbUrl } from "@/shared/lib/db/dbTargets";
 
 const FIX = process.argv.includes("--fix");
 
-const rawUrl = scriptDbUrl()
-    .replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
-const isLocalDb = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(rawUrl);
-const pool = new Pool({ connectionString: rawUrl, ssl: isLocalDb ? false : { rejectUnauthorized: false }, max: 2 });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 type Row = {
     id: number; phone: string; personId: number | null; companyId: number | null;
