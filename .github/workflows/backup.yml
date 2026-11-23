@@ -268,12 +268,16 @@ jobs:
           END $$;
           COMMIT;
           SQL
-          /usr/lib/postgresql/17/bin/pg_restore \
-            --no-owner --no-privileges \
-            --schema=public \
-            --jobs=4 \
-            --dbname "$STANDBY_DB_URL" \
-            backup.dump
+          # ro off alone is not enough: the pooler still handed pg_restore's sessions
+          # out read-only (2026-11-20..23, "CREATE TYPE in a read-only transaction").
+          # So the script runs through ONE psql session that switches read-only off for
+          # itself, as the schema step above does with BEGIN READ WRITE. No --jobs.
+          { echo "SET default_transaction_read_only = off;"
+            /usr/lib/postgresql/17/bin/pg_restore \
+              --no-owner --no-privileges \
+              --schema=public \
+              -f - backup.dump
+          } | "$PSQL" "$STANDBY_DB_URL" -v ON_ERROR_STOP=1 -q >/dev/null
           echo "restored into $STANDBY_DB"
 
       - name: Report the copy to the app

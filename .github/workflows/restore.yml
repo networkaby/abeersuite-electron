@@ -129,12 +129,16 @@ jobs:
           # --schema=public restores only the application data, skipping
           # Supabase's superuser-owned system schemas (which the "postgres" role
           # cannot recreate). Works whether the dump is public-only or full.
-          /usr/lib/postgresql/17/bin/pg_restore \
-            --clean --if-exists --no-owner --no-privileges \
-            --schema=public \
-            --jobs=4 \
-            --dbname "$DIRECT_DATABASE_URL" \
-            restore.dump
+          # The script goes through ONE psql session that switches read-only off for
+          # itself: the pooler can hand out an old session still read-only from the
+          # database setting, even after "Open the target" (2026-11-20..23 copy failures).
+          # One session means no --jobs; slower, but it always writes.
+          { echo "SET default_transaction_read_only = off;"
+            /usr/lib/postgresql/17/bin/pg_restore \
+              --clean --if-exists --no-owner --no-privileges \
+              --schema=public \
+              -f - restore.dump
+          } | /usr/lib/postgresql/17/bin/psql "$DIRECT_DATABASE_URL" -v ON_ERROR_STOP=1 -q >/dev/null
 
       # The dump carries `_prisma_migrations` as it was at backup time. If migrations
       # shipped after that backup, `--clean` just reverted them — migrate deploy applies
