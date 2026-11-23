@@ -24,6 +24,7 @@
     "build": "tsx scripts/strip-build.ts && prisma generate && cross-env NODE_OPTIONS=--max-old-space-size=8192 tsx scripts/counter-build.ts",
     "start": "next start",
     "lint": "eslint",
+    "test:unit": "tsx --test \"src/**/*.test.ts\"",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:report": "playwright show-report",
