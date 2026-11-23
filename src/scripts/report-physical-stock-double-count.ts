@@ -42,8 +42,9 @@ import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { HEAD_OFFICE_BRANCH_ID } from "@/shared/lib/org/systemBranch";
+import { scriptDbUrl } from "@/shared/lib/db/dbTargets";
 
-const rawUrl = (process.env.DIRECT_URL_1 ?? process.env.DATABASE_URL_1 ?? "")
+const rawUrl = scriptDbUrl()
     .replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
 const isLocalDb = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(rawUrl);
 const pool = new Pool({ connectionString: rawUrl, ssl: isLocalDb ? false : { rejectUnauthorized: false }, max: 2 });

@@ -72,6 +72,30 @@ export function otherDb(id: DbId): DbId {
     return id === "DB1" ? "DB2" : "DB1";
 }
 
+/**
+ * The primary as `.env` names it: NEXT_PUBLIC_DB_PRIMARY = DB2 (and DB2 set) → DB2, else DB1.
+ * The one rule — `currentPrimary()`, `scripts/migrate-primary.mjs` and `prisma.config.ts`
+ * all agree with it.
+ */
+export function namedPrimary(): DbId {
+    const named = process.env.NEXT_PUBLIC_DB_PRIMARY?.trim().toUpperCase();
+    const k = dbEnvKeys("DB2");
+    return named === "DB2" && (clean(process.env[k.pooled]) || clean(process.env[k.direct])) ? "DB2" : "DB1";
+}
+
+/**
+ * Scripts and seeds: the PRIMARY's direct URL, `sslmode` stripped (they set ssl themselves).
+ * Until 2026-11-23 they all read DIRECT_URL_1, so with DB2 primary they checked — or
+ * wrote to — the wrong database. Prints which one, so a run always says where it went.
+ */
+export function scriptDbUrl(): string {
+    const id = namedPrimary();
+    const k = dbEnvKeys(id);
+    const url = (clean(process.env[k.direct]) ?? clean(process.env[k.pooled]) ?? "").replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
+    if (url) console.log(`[db] using ${id} (primary)`);
+    return url;
+}
+
 export function isDbId(v: unknown): v is DbId {
     return v === "DB1" || v === "DB2";
 }

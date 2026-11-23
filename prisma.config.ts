@@ -4,12 +4,18 @@ import * as dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 dotenv.config({ path: ".env" });
 
+function primaryUrl(): string | undefined {
+  const n = process.env.NEXT_PUBLIC_DB_PRIMARY?.trim().toUpperCase() === "DB2" && (process.env.DATABASE_URL_2?.trim() || process.env.DIRECT_URL_2?.trim()) ? "2" : "1";
+  return process.env[`DIRECT_URL_${n}`]?.trim() || process.env[`DATABASE_URL_${n}`]?.trim();
+}
+
 export default defineConfig({
   schema: "prisma/schema",
   datasource: {
-    // PRISMA_MIGRATE_URL is set by scripts/migrate-primary.mjs on deploy (the primary,
-    // DB1 or DB2). Otherwise DB1. The old DIRECT_URL / DATABASE_URL names are gone.
-    url: (process.env.PRISMA_MIGRATE_URL ?? process.env.DIRECT_URL_1 ?? process.env.DATABASE_URL_1)!,
+    // PRISMA_MIGRATE_URL is set by scripts/migrate-primary.mjs on deploy. Otherwise the
+    // primary by NEXT_PUBLIC_DB_PRIMARY (same rule as namedPrimary() in dbTargets.ts —
+    // until 2026-11-23 this was always DB1). The old DIRECT_URL / DATABASE_URL names are gone.
+    url: (process.env.PRISMA_MIGRATE_URL ?? primaryUrl())!,
   },
   migrations: {
     // Committed migrations live here (docs/migrations.md). Spelled out because

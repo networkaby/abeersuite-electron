@@ -20,11 +20,12 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import * as dotenv from "dotenv";
 import { barcodeTagPaise, normalizeBarcodeBands } from "../../src/shared/lib/pricing/barcodePrice";
+import { scriptDbUrl } from "../../src/shared/lib/db/dbTargets";
 
 dotenv.config({ path: ".env.local" });
 dotenv.config({ path: ".env" });
 
-const rawUrl = (process.env.DIRECT_URL_1 ?? process.env.DATABASE_URL_1 ?? "")
+const rawUrl = scriptDbUrl()
     .replace(/[?&]sslmode=[^&]*/g, "")
     .replace(/[?&]$/, "");
 const pool = new Pool({
