@@ -37,11 +37,13 @@ Every **GET** (reading a product, a list, a photo) goes to `$PRODUCT_COPY_READ_U
 
 ## Start: ask the mode first
 
-Before anything else, ask the owner **which mode** — cloud · local · smart local · office (Setup above) — unless the request already says. Running in the cloud → do not ask, it is always **cloud**. This skill is Part 4 only — it never changes the product's data; it only moves it: verified → **Ready** (never Published directly yet), any problem → **Attention**. When the owner says where a verified product should go, send `then` (`same` · `draft` · `ready` · `waiting`). For Parts 1–3, or **Part 5 (photos — runs with Part 1, no search, no text)** when only the photos need work, say so and switch to **product-prep**.
+Before anything else, ask the owner **which mode** — cloud · local · smart local · office (Setup above) — unless the request already says. Running in the cloud → do not ask, it is always **cloud**. This skill is Part 4 only — it never changes the product's data; it only moves it: verified → **Ready** (never Published directly yet), any problem → **Attention**. When the owner says where a verified product should go, send `then` (`same` · `draft` · `ready` · `waiting`). For Parts 1–3, or **Part 5 (photos — runs with Part 1, no search, no text)** when only the photos need work, say so and switch to **product-prep**. When the owner says **"part 6"**, product-prep runs this same check right after its prep parts; that is only on the owner's word — this separate run is the usual way.
 
 ## 1. Pick
 
 Usually the Draft tab: `GET /api/agent/products?stage=draft&limit=20` (or `sku=` / `q=`). Tell the owner the list, then one at a time.
+
+**"Follow next step"** (owner, 2026-11-22): check only products whose `prep.nextStep.skill` is `product-recheck` (part 4). Any other `nextStep` → skip it and name it in the report with its `text` — a staff step or a product-prep part.
 
 ## 2. Read
 
@@ -127,7 +129,7 @@ The server tags each line with its part ("Part 3 · …") and **a part that runs
 | **Brand** | Empty or wrong while the label shows a brand that is now in `masters.brands` |
 | **Collections** | None, or plainly wrong for who buys it |
 | **Group** | Plainly wrong (GST) — always pending until staff fix it |
-| **Shipping** | Weight or size plainly wrong for the item (a 5 kg mouse). **Empty is never a problem** — no pending, no note (owner, 2026-11-20): a Published product with no weight goes to Pending by itself and staff see it there |
+| **Shipping** | **Never pending, never a note** (owner, 2026-11-23) — empty, a spec weight that differs from the box, or an old shipping line: none of them blocks. The shop readiness gate puts a product with no weight in Pending by itself. Mention a doubtful weight in the report to the owner only; an old shipping line in `prep.problems` → send it in `/fixed` |
 | **Photos** | Main photo not a clean product photo without the box, or has a logo / watermark / text (our own too); another product's photo; someone else's watermark on any photo; blurry / dark; duplicates; a `must` photo kind still missing (`photoList.missing`). Our own logo / address on a **non-main** photo is fine — never flag it. Send **`photoCheck`** (below) — the server checks the must photos and the main photo itself |
 | **Photo edits** | A photo cut out, blanked, cropped or straightened by Part 3 / 5 (`prep.edits`, and the Part 5 notes: "Photo n: cut out onto white (original: …)") with a ragged edge, a part of the product missing (a crop that cut off a cable end or stand counts), a label or text damaged, a visible grey block, a straighten that left it more tilted → pending "Photo n edit is bad — restore the original" (Part 5 restores it, see product-prep `photos.md`). A no-meaning background still left on a photo with lots of empty space → a `note` for Part 5. Never flag a meaningful or designed background (in hand, in our shop, RGB on black), and never a blanked MRP that looks clean |
 

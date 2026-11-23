@@ -1,6 +1,6 @@
 ---
 name: product-prep
-description: Prepare AbeerSuite shop products as Claude in a loop of parts — Part 1 cleans our own data (removes wrong photos / fields, adds nothing) and checks it is enough to search, Part 2 does the ONE internet search and saves it, Part 3 writes everything from the saved pages (copy, brand, collections, shipping, photos added / removed / ordered) and moves the product to Draft. A product that already has a description goes Part 1 + Part 5 instead — photos only (pick and improve the main photo, cut out no-meaning backgrounds, blank a covered MRP, add / suggest from the saved search, order), no search, no text; photos treated by an earlier Part 5 are skipped unless the owner says "redo". A major problem stops a part and parks the product in Attention for staff; the next run starts where the last one stopped. Use when the owner says "prep products", "product prep", "run the prep loop", "prepare SKU 107102 step by step", "fix the photos of SKU …", "part 5", "redo the photos", or runs /product-prep. Not product-copy (one-shot) and not product-recheck (Part 4, verify).
+description: Prepare AbeerSuite shop products as Claude in a loop of parts — Part 1 cleans our own data (removes wrong photos / fields, adds nothing) and checks it is enough to search, Part 2 does the ONE internet search and saves it, Part 3 writes everything from the saved pages (copy, brand, collections, shipping, photos added / removed / ordered) and moves the product to Draft. A product that already has a description goes Part 1 + Part 5 instead — photos only (pick and improve the main photo, cut out no-meaning backgrounds, blank a covered MRP, add / suggest from the saved search, order), no search, no text; photos treated by an earlier Part 5 are skipped unless the owner says "redo". A major problem stops a part and parks the product in Attention for staff; the next run starts where the last one stopped. Use when the owner says "prep products", "product prep", "run the prep loop", "prepare SKU 107102 step by step", "fix the photos of SKU …", "part 5", "redo the photos", or runs /product-prep. Not product-copy (one-shot) and not product-recheck (Part 4, verify) — though "part 6" runs that same check here, only when the owner says so.
 ---
 
 > **Talk in SKUs.** To the owner and staff, name every product by its **SKU** (and barcode where useful) plus its name — in messages, notes and reports. The product `id` is internal to the database: use it only in API calls, never in what you say or write for people. The owner gives SKUs; look them up with `sku=`. No SKU → say so and use the name.
@@ -72,6 +72,7 @@ Before anything else, ask the owner **both** questions in one message, unless th
 
 1. **Which mode?** — cloud · local · smart local · office (Setup above). Running in the cloud → do not ask, it is always **cloud**.
 2. **Which part?**
+   - **Follow next step** (owner says "follow next step" / "follow AI notes") — each product runs exactly `prep.nextStep`: `{ text, skill?, part? }`, the same "Next:" line staff see at the end of AI notes. `skill` + `part` → run that skill's part only. No `skill` → it is a staff step (Start, Save as draft / ready, Publish, add photos) — skip it and name it in the report with its `text`.
    - **Follow Part 4** — each product runs the part its last Part 4 suggested (`prep.next`: 5 → Parts 1 + 5, 3 → Part 3, 1 → full run from Part 1). No suggestion on a product → skip it and name it in the report.
    - **Full run** (the usual) — one call per product, its path chosen by the product ("Two paths" below): no description → Parts 1 + 2 + 3; has one → Parts 1 + 5.
    - **Part 1 only** — clean the data and check it is enough to search; no search.
@@ -79,6 +80,7 @@ Before anything else, ask the owner **both** questions in one message, unless th
    - **Part 3 only** — write from the saved search (Part 2 must be done).
    - **Part 4** — verify; that is the **product-recheck** skill, say so and switch to it.
    - **Part 5 · Photos** — Parts 1 + 5 even when there is no description (owner's call). Add **"redo"** to treat photos an earlier Part 5 already did (made before the edit tool existed).
+   - **+ Part 6 · Verify in the same run** — only when the owner says **"part 6"**. Part 6 is the Part 4 check (product-recheck) run inside this skill, straight after the prep parts — see "Part 6" below. Never on your own: the owner runs Part 4 as its own product-recheck run for better trust; without "part 6", stop after the prep parts.
 
 Keep both answers for the whole run. Each product carries its run records (`prep.runs`, below) — read them first; they say what ran last and whether running again would do anything. A part that cannot run yet for a product (its earlier part not done) → skip that product and name it in the report, never run the earlier part on your own.
 
@@ -100,7 +102,7 @@ curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$PRODUCT_COPY_READ_URL/api/agent
 
 Answer = product-copy's read (`name, brand, modelNo, barcodes, typedSpecs, photos, writing, masters …`) **plus**
 `title` (online name), `group`, `shipping`, `attention` (Attention reason now), `draftNotes`, `processNotes`, and
-`prep: { runs, changedSinceRun, problems, staffNote, partDone, path, photosDoneAt, photoStatus, next, identityChanged, searchAllowed, searchedAt, pages, dropped, labelFacts, seen, labelWebsite }`.
+`prep: { runs, changedSinceRun, problems, staffNote, partDone, path, photosDoneAt, photoStatus, next, nextStep, identityChanged, searchAllowed, searchedAt, pages, dropped, labelFacts, seen, labelWebsite }`.
 
 **Run records first — never run the same thing twice for nothing** (owner, 2026-11-20). `prep.runs` = the last 10 runs (`{ skill, part, at, from, to, found?, fixed? }`, oldest first); the server writes one after every call — you never send it. `prep.changedSinceRun: false` and the last run is the same path you are about to run (`"1+5"`, `"1+2+3"`, `"1+3"`) → **skip the product** ("already ran on <date>, nothing changed since"), unless the owner said **"redo"** or named this SKU. `changedSinceRun: true` (staff saved it after the run) → go on.
 
@@ -189,7 +191,7 @@ The server checks the photos itself (owner, 2026-11-18 — a one-photo product w
 
 
 The server keeps the list on the product (staff see it under Product image), **never drops a must an earlier part set**, and works out what is missing:
-- A **must** photo missing and **not ticked "Not applicable"** by staff, or a main photo that is not clean → **Part 1 stops** (an unclean main photo does not stop it when Part 3 or Part 5 is in the same call — they fix the order) (Attention: "Must photo missing: … — add it, or tick Not applicable"). That gets us better seed before the search.
+- A **must** photo missing and **not ticked "Not applicable"** by staff, or a main photo that is not clean → **Part 1 stops** (Attention: "Must photo missing: … — add it, or tick Not applicable"). That gets us better seed before the search.
 - A missing **optional** photo never stops anything.
 - Staff tick **"Not applicable"** when a photo just cannot be taken (box gone, item fitted) → it stops blocking; `photoList.findOnline` lists it, and **Part 2 looks for it online** (the maker's or a seller's photo of that view), Part 3 adds it when sure.
 - Part 3 / Part 5: still missing → a note. Part 4: still missing, not ticked, or main not clean → **pending, never verified**.
@@ -210,7 +212,8 @@ The server keeps the list on the product (staff see it under Product image), **n
 The server tags each line with its part ("Part 3 · …") and **a part that runs again replaces its own earlier lines** — so write the full set each run, never "as before".
 - **One point per line, about 20 words.** Say **what, where, what to do**: "Photo 3 shows the 2-port model — remove it", not "Some photos may be wrong".
 - **`staff`** = a human must act. **`notes`** = information staff gain from (where a fact came from, what you changed). Nothing else.
-- **No "OK" / "no problem" / "looks good" lines**, no repeating what the server writes itself (photo list lines — never put "Must photo missing …" or "Main photo is not …" in `staff`, the server adds them; Model No filled, weight source, Last run).
+- **Shipping never blocks** (owner, 2026-11-23): fill weight / parcel size when the box or a kept page gives it (Part 3 / Part 5 `shipping`); empty or doubtful → no `staff` / `pending` line. The shop readiness gate already holds a product without shipping. An old shipping line left on a product → clear it with `/fixed`.
+- **No "OK" / "no problem" / "looks good" lines**, no repeating what the server writes itself (photo list lines, Model No filled, weight source, Last run).
 - Our own stamp on a non-main photo is never a note (see "The photo list").
 
 ## Part 1 — Prepare the seed (remove only, add nothing)
@@ -229,7 +232,7 @@ The server tags each line with its part ("Part 3 · …") and **a part that runs
    - **Major** (`major`): photos show two different products and you cannot tell which is ours; the custom part and the photos point to different products.
    - Everything else is a minor `notes` line.
 5. **Enough to search?** After the clean-up, is there a brand + model, a part code, a barcode, or clear box wording to search with? No → `enough: false` and `need` = what staff must add ("a box / label photo", "the model no. printed on the back").
-6. **Photo list** → `photos` (see "The photo list" above): packing, shape, your must / optional list for this product, a tag for each photo left after the clean-up, and whether photo 1 is clean. A must photo missing (not ticked "Not applicable") or an unclean main photo stops Part 1 before a search — that is on purpose. With Part 5 in the same call it does not stop: Part 5 fixes the photos and the server checks after. With Part 3 in the same call an unclean photo 1 does not stop it either (a must photo missing still does): Part 3 cuts out / orders the product photo first and the server checks the main photo after (owner, 2026-11-23).
+6. **Photo list** → `photos` (see "The photo list" above): packing, shape, your must / optional list for this product, a tag for each photo left after the clean-up, and whether photo 1 is clean. A must photo missing (not ticked "Not applicable") or an unclean main photo stops Part 1 before a search — that is on purpose. With Part 5 in the same call it does not stop: Part 5 fixes the photos and the server checks after.
 
 ```bash
 curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json" \
@@ -253,13 +256,23 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
 - `attention` → stop this product (staff fix, then run again).
 - `part1` → go on to Part 2 (or Part 5, on that path) now.
 
+## Part 6 — Verify in the same run (only when the owner says "part 6")
+
+Part 6 = the Part 4 check, run by this skill right after prep. It saves a run when nothing is left for staff — a photo order, a photo from the saved search — instead of a separate product-recheck loop.
+
+- Run Part 6 **only when the prep call ended with no `staff` line** (result Draft). Stopped in Attention → no Part 6: staff must act first.
+- **Read the product again** (`GET /api/agent/prep/<id>`) and follow **product-recheck** in full — open every photo again, check every row of its table, send `/part4` with `photoCheck`. Judge what is there now, never what your prep part said it did: you are checking your own work, so look harder, not softer.
+- No second loop: Part 6 finds a problem → send it as usual (Attention, with `next`). Do not run Part 5 or Part 3 again in this run.
+- The run-records skip never trips here: the last run is product-prep, not product-recheck.
+
 ## Report (always, at the end)
 
 | Product | Reached | Result | Notes |
 |---|---|---|---|
-| SKU · name | Part 1 / 2 / 3 / 5 | attention: reason · no good page · draft | the 1–3 most important; for Part 5 what each new photo got |
+| SKU · name | Part 1 / 2 / 3 / 5 (+ 6) | attention: reason · no good page · draft · ready (Part 6 verified) | the 1–3 most important; for Part 5 what each new photo got |
 
 Then:
 > **Attention** tab: the stopped ones — fix what the reason says, then run **product prep** again (it starts at the next part).
 > **Draft** tab: the processed ones — carry out the notes (Remove / Use / add photos), then run **product-recheck**.
+> **Ready** tab (Part 6 runs only): verified by Part 6 — press **Publish**.
 > **No good page**: written from the label only — check them first.

@@ -44,7 +44,7 @@ Read the product again (`GET /api/agent/prep/<id>`); work only from `prep.pages`
    - `remove` / `suggestRemove`: same as Part 1 for anything still wrong.
    - `order`: the whole gallery as you want it (our kept photos + added ones) — a clean product front first, then sides / close-ups, then box, then feel photos. Applied now.
    - `look`: crops / fixes from `photoLookOptions` (staff press Use / Undo).
-   - **Edits first** — pick and improve the main photo, cut out no-meaning backgrounds, blank a covered MRP: see "Photo edits" in `photos.md`. Then read the product again for the new links. Box photo first and a product photo further down is fine — Part 1 does not stop for it in the same run; put the product photo first in `order` (cut out when its background is not clean).
+   - **Edits first** — pick and improve the main photo, cut out no-meaning backgrounds, blank a covered MRP: see "Photo edits" in `photos.md`. Then read the product again for the new links.
    - Fill the missing must photos (`photoList.findOnline`) from the saved pages when you are **sure** they are this exact model.
    - Primary photo with any logo, watermark or text → do not put it first; a maker's clean product photo is usually the best photo 1. **Our own shop logo / address on any other photo is fine — never flag it** (owner, 2026-11-17); someone else's watermark is always a problem.
    - **`photoCheck`** — the photo list **after** your changes (see "The photo list"): tag the page photos you add by their page url; refine must / optional from how the saved pages show the product. Still missing → the server adds a note; the product still goes to Draft.
