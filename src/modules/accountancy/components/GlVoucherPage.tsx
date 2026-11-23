@@ -1207,7 +1207,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
             {/* Entry boxes sit on the raised (white) surface so they stand off the
                 grey page, and hint text is faded so it never reads as typed data. */}
             <div ref={bodyRef} className="flex-1 overflow-y-auto px-8 py-6 [&_input]:bg-card [&_select]:bg-card [&_input::placeholder]:text-muted-foreground/55 [&_input:disabled]:bg-muted">
-                <div className={`mx-auto flex items-start gap-8 ${showSidePanel ? "max-w-6xl" : "max-w-3xl"}`}>
+                <div className={`mx-auto flex items-start gap-6 ${showSidePanel ? "max-w-[1400px]" : "max-w-3xl"}`}>
                 <div className="min-w-0 flex-1 space-y-6">
 
                     {/* Top side — single first line. Dr/Cr prefix in grey, then picker, then amount. */}
@@ -1527,7 +1527,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                     combined result is what the deposit slip prints. */}
                 {showSidePanel && (
                     <aside
-                        className={`${showOpenBills ? "w-[440px]" : "w-[300px]"} shrink-0 space-y-4 sticky top-0 overflow-y-auto`}
+                        className={`${showOpenBills ? "w-[580px]" : "w-[300px]"} shrink-0 space-y-4 sticky top-0 overflow-y-auto`}
                         // Visible body height minus its py-6 padding (48px).
                         style={bodyHeight ? { maxHeight: Math.max(240, bodyHeight - 48) } : undefined}
                     >
