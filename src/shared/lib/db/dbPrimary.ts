@@ -20,7 +20,7 @@
  */
 import { Pool, type PoolClient } from "pg";
 import { usesOfficeHandedDb } from "@/shared/lib/appModeCore";
-import { dbTarget, isDualDb, otherDb, type DbId, type DbTarget } from "./dbTargets";
+import { dbTarget, isDualDb, namedPrimary, otherDb, type DbId, type DbTarget } from "./dbTargets";
 
 export const SWITCH_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS "_db_switch" (
@@ -45,9 +45,9 @@ export interface SwitchRow {
 /** The primary for this deployment. DB2 only when it is named AND configured. */
 export function currentPrimary(): DbId {
     if (usesOfficeHandedDb()) return "DB1";
-    const named = process.env.NEXT_PUBLIC_DB_PRIMARY?.trim().toUpperCase();
-    if (named === "DB2") {
-        if (dbTarget("DB2")) return "DB2";
+    // Same rule as namedPrimary() (scripts), but the app needs the POOLED URL too.
+    if (namedPrimary() === "DB2" && dbTarget("DB2")) return "DB2";
+    if (process.env.NEXT_PUBLIC_DB_PRIMARY?.trim().toUpperCase() === "DB2") {
         console.warn("[dbPrimary] NEXT_PUBLIC_DB_PRIMARY=DB2 but DATABASE_URL_2 is not set — using DB1.");
     }
     return "DB1";

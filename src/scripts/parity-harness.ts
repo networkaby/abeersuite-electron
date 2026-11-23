@@ -36,10 +36,11 @@ import { tillBalancePaise, sumShiftTendersByAccount } from "@/modules/pos/lib/sh
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 import { syncVoucherLink, syncVoucherLinks } from "@/modules/accountancy/lib/voucherLinks";
 import { HEAD_OFFICE_BRANCH_ID } from "@/shared/lib/org/systemBranch";
+import { scriptDbUrl } from "@/shared/lib/db/dbTargets";
 
 // Self-built client (the app singleton reads env at import-time; tsx doesn't load
 // .env.local for us). Mirror prismaClient.ts's local-vs-remote SSL detection.
-const rawUrl = (process.env.DIRECT_URL_1 ?? process.env.DATABASE_URL_1 ?? "")
+const rawUrl = scriptDbUrl()
     .replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
 const isLocalDb = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(rawUrl);
 const pool = new Pool({ connectionString: rawUrl, ssl: isLocalDb ? false : { rejectUnauthorized: false }, max: 2 });

@@ -16,11 +16,12 @@ import { PrismaClient } from "../../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import * as dotenv from "dotenv";
+import { scriptDbUrl } from "../../src/shared/lib/db/dbTargets";
 
 dotenv.config({ path: ".env.local" });
 dotenv.config({ path: ".env" });
 
-const rawUrl = (process.env.DIRECT_URL_1 ?? process.env.DATABASE_URL_1 ?? "").replace(/[?&]sslmode=[^&]*/g, "");
+const rawUrl = scriptDbUrl().replace(/[?&]sslmode=[^&]*/g, "");
 const pool = new Pool({ connectionString: rawUrl, ssl: /@(localhost|127\.0\.0\.1)/.test(rawUrl) ? false : { rejectUnauthorized: false } });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });

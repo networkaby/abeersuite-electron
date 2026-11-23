@@ -23,10 +23,11 @@ import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { canonicalPhone } from "@/shared/lib/format/phone";
+import { scriptDbUrl } from "@/shared/lib/db/dbTargets";
 
 const FIX = process.argv.includes("--fix");
 
-const rawUrl = (process.env.DIRECT_URL_1 ?? process.env.DATABASE_URL_1 ?? "")
+const rawUrl = scriptDbUrl()
     .replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
 const isLocalDb = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(rawUrl);
 const pool = new Pool({ connectionString: rawUrl, ssl: isLocalDb ? false : { rejectUnauthorized: false }, max: 2 });

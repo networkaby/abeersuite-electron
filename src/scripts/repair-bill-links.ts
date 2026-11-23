@@ -36,8 +36,9 @@ import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 // copied into this file because the shared one could only ever use the app's
 // global client; it now takes the client it should read with.
 import { accountIdsUnderGroup } from "@/modules/accountancy/lib/accountGroups";
+import { scriptDbUrl } from "@/shared/lib/db/dbTargets";
 
-const rawUrl = (process.env.DIRECT_URL_1 ?? process.env.DATABASE_URL_1 ?? "")
+const rawUrl = scriptDbUrl()
     .replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
 const isLocalDb = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(rawUrl);
 const pool = new Pool({ connectionString: rawUrl, ssl: isLocalDb ? false : { rejectUnauthorized: false }, max: 2 });

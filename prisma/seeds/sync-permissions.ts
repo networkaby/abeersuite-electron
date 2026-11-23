@@ -57,11 +57,12 @@ import * as dotenv from "dotenv";
 import { PERMISSION_CATALOG } from "./lib/codeOwnedCatalog";
 import { assertNotCounterReplica } from "./lib/assertNotCounter";
 import { crudSatisfied } from "../../src/shared/lib/auth/crudLadder";
+import { scriptDbUrl } from "../../src/shared/lib/db/dbTargets";
 
 dotenv.config({ path: ".env.local" });
 dotenv.config({ path: ".env" });
 
-const rawUrl = (process.env.DIRECT_URL_1 ?? process.env.DATABASE_URL_1 ?? "")
+const rawUrl = scriptDbUrl()
     .replace(/[?&]sslmode=[^&]*/g, "")
     .replace(/[?&]$/, "");
 const pool = new Pool({ connectionString: rawUrl, ssl: /@(localhost|127\.0\.0\.1)/.test(rawUrl) ? false : { rejectUnauthorized: false }, max: 2 });
@@ -102,7 +103,7 @@ async function main(): Promise<void> {
     assertNotCounterReplica("sync-permissions");
 
     if (!rawUrl) {
-        console.error("\n✖ No DIRECT_URL_1 or DATABASE_URL_1 found in .env.local / .env\n");
+        console.error("\n✖ No URL for the primary DB (DIRECT_URL_n / DATABASE_URL_n) found in .env.local / .env\n");
         process.exit(1);
     }
 
