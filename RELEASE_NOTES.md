@@ -1,12 +1,13 @@
-# v1.17.14
+# v1.17.15
 
-A small update for the online shop. Counters can install it whenever convenient — nothing changes at the billing counter.
+A small office update. Counters can install it whenever convenient — nothing changes at the billing counter.
 
-## Online shop
-- Opening a product preview no longer crashes the page.
-- Tapping **Show interest** on a preview now just explains what it does, instead of jumping to the customer sign-in.
-- Tapping Show interest twice, or after a product was renamed, now adds to the customer's existing enquiry instead of creating a duplicate.
+## Staff positions
 
-## Product preparation
-- Empty shipping weight and parcel size are now filled from the box label wherever possible, and missing shipping details never hold up a product.
-- An unclean first photo no longer stops preparation when the photos are being re-ordered in the same run.
+- The Positions form now has its own **Department** box. Pick the department first, and the role list shows only that department's roles (plus the all-access ones).
+- The department you choose is saved as chosen — it no longer gets worked out from the roles. The Department choice in the Org Chart dialog now sticks too.
+- Counters still on an older version keep saving positions as before, so nothing breaks while they update.
+
+## Accounts
+
+- The voucher page and the Open Bills panel are wider, so long party names and bill lists are easier to read.
