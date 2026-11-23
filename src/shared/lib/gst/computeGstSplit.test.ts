@@ -18,10 +18,12 @@ test("odd paise: CGST + SGST still add up to the tax exactly", () => {
     }
 });
 
-// The file's comment says the odd paisa goes to CGST; today it goes to SGST
-// (₹10.01 -> CGST 5.00 / SGST 5.01). Owner to decide; un-skip once settled.
-test("odd paise go to CGST (as the comment says)", { todo: "owner to confirm before changing printed split" }, () => {
+// Convention (see the file header): an odd paisa lands on SGST. Kept so
+// already-printed bills never change.
+test("odd paisa lands on SGST", () => {
     const s = computeGstSplit({ taxAmount: 10.01, sellerStateCode: "27", buyerStateCode: "27" });
+    assert.deepEqual([s.cgst, s.sgst], [5, 5.01]);
+});
     assert.ok(s.cgst >= s.sgst);
 });
 

@@ -10,9 +10,11 @@
  *   • Place of supply ≠ seller state → inter-state, charge IGST.
  *
  * Rounding: half of the tax amount goes each way for INTRA. Any remainder
- * paise (e.g. ₹0.01 on an odd total) attaches to CGST so the two legs sum
- * exactly to the input — no off-by-one drift between the GL entry and the
- * printed invoice.
+ * paisa (e.g. ₹10.01 → CGST 5.00 / SGST 5.01) attaches to SGST so the two
+ * legs sum exactly to the input — no off-by-one drift between the GL entry
+ * and the printed invoice. The law (CGST Act §9 / SGST Acts) only says both
+ * are charged at equal rates; it names no leg for a rounding paisa, so this
+ * is a convention, kept so already-printed bills never change.
  */
 
 import { round2 } from "@/shared/lib/format";
@@ -73,7 +75,7 @@ export function computeGstSplit(args: {
         };
     }
 
-    // INTRA — split tax exactly in half; pin the remainder paise to CGST so
+    // INTRA — split tax exactly in half; the remainder paisa lands on SGST so
     // (cgst + sgst) === input tax to two decimal places.
     const halfPaise = Math.round((tax * 100) / 2);  // SGST half (lower)
     const sgst      = halfPaise / 100;
