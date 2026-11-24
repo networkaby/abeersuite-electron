@@ -3,7 +3,7 @@ import { shopSlugClash } from "@/shared/lib/shop/shopSlug";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import { regenerateProductNamesSafe, touchesName } from "@/modules/inventory/lib/regenerateNames";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError, prismaUniqueError } from "@/shared/lib/api";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
@@ -101,7 +101,8 @@ export async function updateShopProduct(
     b: ShopProductPatch,
 ): Promise<{ product: ShopProductAdmin; response?: undefined } | { response: NextResponse }> {
     try {
-        const existing = await prisma.invProduct.findUnique({
+        // Read where the save lands: a replica-reading counter would merge onto an old gallery.
+        const existing = await prismaWhereSaved().invProduct.findUnique({
             where: { id: pid },
             select: {
                 name: true, sku: true, imageUrl: true, galleryJson: true,
@@ -258,7 +259,8 @@ export async function updateShopProduct(
         });
         // Group / brand / warranty changed here → rebuild the stored name (server-side, same builder as everywhere).
         if (touchesName(b)) await regenerateProductNamesSafe({ ids: [pid] });
-        const named = await prisma.invProduct.findUniqueOrThrow({ where: { id: pid }, include: shopProductInclude });
+        // Same here — the replica still has the old row, and the page shows this answer.
+        const named = await prismaWhereSaved().invProduct.findUniqueOrThrow({ where: { id: pid }, include: shopProductInclude });
         return { product: { ...invProductToAdmin(named, bands), variantAttrGaps: gaps.get(pid) ?? [] } };
     } catch (e: unknown) {
         const conflict = prismaUniqueError(e, "SKU or slug already exists");

@@ -614,3 +614,15 @@ export const prisma: PrismaClient = localClient
  */
 export const prismaAuthoritative: PrismaClient = localClient ? prismaOnline : prismaLive;
 
+/**
+ * The database this machine's saves go to: Supabase under `WRITE_MODE=live`, the
+ * replica under `local` and during an outage.
+ *
+ * For a read a save depends on, or the answer it returns. `prisma` may serve those
+ * from the replica, which does not have the row yet under `live`; and
+ * `prismaAuthoritative` would miss a save made to the replica under `local`.
+ */
+export function prismaWhereSaved(): PrismaClient {
+    return localClient && shouldWriteLocal() ? localClient : prismaAuthoritative;
+}
+
