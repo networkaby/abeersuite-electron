@@ -19,6 +19,8 @@ import { payAccountMdr } from "@/modules/pos/lib/paymentGateways";
 import { mdrRecovery, upliftedRates } from "@/modules/pos/lib/paymentMdr";
 import { resolveProductTax } from "@/modules/inventory/lib/gstResolver";
 import { lookupActiveGiftCard } from "@/modules/coupons/lib";
+import { round2 } from "@/shared/lib/format";
+import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import type { createSchema, lineSchema } from "./saleSchema";
 
 export type SaleBody = z.infer<typeof createSchema>;
@@ -219,4 +221,54 @@ export async function giftCardStep(args: {
         giftCardId = gc.id;
     }
     return { giftCardRedeem, giftCardId, giftCardLiabilityAccountId };
+}
+
+// Repair-ticket timeline entry — records the bill, its link, and whether
+// it was paid in full / partly on credit / fully on credit. Best-effort:
+// a failure here never fails the (already committed) sale.
+export async function logTicketBill(args: {
+    ticketId: number;
+    userId: number;
+    totalAmount: number;
+    paymentTotal: number;
+    onCredit: number;
+    bill: { voucherId: number; voucherRef: string };
+}) {
+    const { ticketId, userId, totalAmount, paymentTotal, onCredit, bill } = args;
+    try {
+        const billTotal = round2(totalAmount);
+        const paid = round2(Math.min(paymentTotal, billTotal));
+        const credit = round2(onCredit);
+        const payStatus = credit <= 0.01 ? "full" : paid <= 0.01 ? "credit" : "partial";
+        const payLabel =
+            payStatus === "full" ? "Paid in full"
+                : payStatus === "credit" ? `On credit — ₹${credit.toFixed(2)} due`
+                    : `Partial — paid ₹${paid.toFixed(2)}, ₹${credit.toFixed(2)} on credit`;
+        const t = await prisma.ticket.findUnique({ where: { id: ticketId }, select: { status: true } });
+        if (t) {
+            const author = await buildActorSnapshot(userId);
+            await prisma.ticketLog.create({
+                data: {
+                    ticketId: ticketId,
+                    status: t.status,
+                    note: `Bill ${bill.voucherRef} · ₹${billTotal.toFixed(2)} · ${payLabel}`,
+                    visibility: "INTERNAL",
+                    author,
+                    data: {
+                        bill: {
+                            voucherId: bill.voucherId,
+                            voucherRef: bill.voucherRef,
+                            voucherType: "POS",
+                            total: billTotal,
+                            paid,
+                            onCredit: credit,
+                            status: payStatus,
+                        },
+                    },
+                },
+            });
+        }
+    } catch (e) {
+        console.error("[pos sale] ticket timeline log failed", e);
+    }
 }

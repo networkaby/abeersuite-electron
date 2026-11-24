@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, after } from "next/server";
 import { createSchema, alreadySavedReply } from "@/modules/pos/lib/saleSchema";
-import { priceFloorAndTier, lineDiscountIncl, mdrStep, freeGrantLines, giftCardStep, refused, type ComputedLine } from "@/modules/pos/lib/saleSteps";
+import { priceFloorAndTier, lineDiscountIncl, mdrStep, freeGrantLines, giftCardStep, refused, logTicketBill, type ComputedLine } from "@/modules/pos/lib/saleSteps";
 import { notifyBill } from "@/shared/lib/whatsapp/notifyBill";
 import { requirePosVoucher } from "@/shared/lib/auth/permissions";
 import { cleanLineNote } from "@/shared/lib/print/lineDescription";
@@ -13,7 +13,6 @@ import { buildSettlementJson, type ChargeInput } from "@/shared/lib/accountancy/
 import { resolveServiceCharges, chargesNetTotal } from "@/shared/lib/accountancy/serviceCharges";
 import { enginePost, engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
 import { syncVoucherLink } from "@/modules/accountancy/lib/voucherLinks";
-import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
 import { resolveCounterPayments, giftCardTenderRef } from "@/modules/pos/lib/counterTenders";
 import { Prisma, type PaymentMethod } from "@/generated/prisma/client";
@@ -1123,47 +1122,8 @@ export async function POST(req: Request) {
         });
         const _tTx = performance.now();
 
-        // Repair-ticket timeline entry — records the bill, its link, and whether
-        // it was paid in full / partly on credit / fully on credit. Best-effort:
-        // a failure here never fails the (already committed) sale.
-        if (body.ticketId) {
-            try {
-                const billTotal = round2(totalAmount);
-                const paid = round2(Math.min(paymentTotal, billTotal));
-                const credit = round2(onCredit);
-                const payStatus = credit <= 0.01 ? "full" : paid <= 0.01 ? "credit" : "partial";
-                const payLabel =
-                    payStatus === "full" ? "Paid in full"
-                        : payStatus === "credit" ? `On credit — ₹${credit.toFixed(2)} due`
-                            : `Partial — paid ₹${paid.toFixed(2)}, ₹${credit.toFixed(2)} on credit`;
-                const t = await prisma.ticket.findUnique({ where: { id: body.ticketId }, select: { status: true } });
-                if (t) {
-                    const author = await buildActorSnapshot(user!.id);
-                    await prisma.ticketLog.create({
-                        data: {
-                            ticketId: body.ticketId,
-                            status: t.status,
-                            note: `Bill ${result.voucherRef} · ₹${billTotal.toFixed(2)} · ${payLabel}`,
-                            visibility: "INTERNAL",
-                            author,
-                            data: {
-                                bill: {
-                                    voucherId: result.voucherId,
-                                    voucherRef: result.voucherRef,
-                                    voucherType: "POS",
-                                    total: billTotal,
-                                    paid,
-                                    onCredit: credit,
-                                    status: payStatus,
-                                },
-                            },
-                        },
-                    });
-                }
-            } catch (e) {
-                console.error("[pos sale] ticket timeline log failed", e);
-            }
-        }
+        // Repair-ticket timeline entry (saleSteps.ts) — best-effort, never fails the sale.
+        if (body.ticketId) await logTicketBill({ ticketId: body.ticketId, userId: user!.id, totalAmount, paymentTotal, onCredit, bill: result });
 
         // Bill to the customer's app + WhatsApp — after the response, never in the cashier's way.
         if (isIdentified) after(() => notifyBill("SALE", result.universalVoucherId));
