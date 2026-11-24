@@ -6,6 +6,7 @@ import { APP, appProductPath, appProductsPath } from "@/modules/external/shopApp
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import type { StorefrontCategory } from "@/shared/lib/shop/storefrontProducts";
+import { cloudinaryThumb } from "@/shared/lib/cloudinaryImage";
 
 // Home's building blocks, the way shopping apps lay them out. Plain server
 // components — no script — so Home stays a cached page.
@@ -85,7 +86,7 @@ export function BrandRow({ brands }: { brands: { name: string; imageUrl: string 
                         {b.imageUrl ? (
                             // Brand logos come from any site (e.g. simpleicons) — a plain img, as the website's brand strip does.
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={b.imageUrl} alt={b.name} className="max-h-9 max-w-20 object-contain" loading="lazy" />
+                            <img src={cloudinaryThumb(b.imageUrl, 160)} alt={b.name} className="max-h-9 max-w-20 object-contain" loading="lazy" />
                         ) : (
                             <span className="text-xs font-semibold">{b.name}</span>
                         )}

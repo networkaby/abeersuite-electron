@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { formatInr } from "@/shared/lib/format";
 import { productMatchesSearch, readCachedMasters, syncMasters } from "@/shared/lib/inventory";
 import type { ProductOption, CartLine } from "@/modules/pos/lib/posDraftTypes";
+import { cloudinaryThumb } from "@/shared/lib/cloudinaryImage";
 
 const NO_PRODUCTS: ProductOption[] = [];
 
@@ -406,7 +407,7 @@ export const PosProductExplorer = memo(function PosProductExplorer({
                                         >
                                             {p.imageUrl ? (
                                                 // eslint-disable-next-line @next/next/no-img-element -- small, arbitrary-host catalogue photo; not worth next/image's remote-pattern config here
-                                                <img src={p.imageUrl} alt="" loading="lazy" decoding="async" onLoad={() => { void cacheThumbnail(p.imageUrl!); }} className="h-8 w-8 shrink-0 rounded border border-violet-200/70 object-cover dark:border-violet-500/30" />
+                                                <img src={cloudinaryThumb(p.imageUrl, 64)} alt="" loading="lazy" decoding="async" onLoad={() => { void cacheThumbnail(cloudinaryThumb(p.imageUrl!, 64)); }} className="h-8 w-8 shrink-0 rounded border border-violet-200/70 object-cover dark:border-violet-500/30" />
                                             ) : (
                                                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-dashed border-violet-300/60 bg-violet-50/50 text-violet-400 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-400/70">
                                                     <PackageSearch size={12} />

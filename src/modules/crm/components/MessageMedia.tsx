@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Download, FileSpreadsheet, FileText } from "lucide-react";
 import { ImageViewer } from "@/shared/components/ImageViewer";
+import { cloudinaryThumb } from "@/shared/lib/cloudinaryImage";
 
 /**
  * One WhatsApp attachment inside a chat bubble. Links are short-lived signed
@@ -40,7 +41,7 @@ export function MessageMedia({ m }: { m: MediaInfo }) {
                 {/* Opens the zoom viewer on the page — no new tab, no download. */}
                 <button type="button" onClick={() => setViewing(true)} className="block cursor-zoom-in" title="View photo">
                     {/* eslint-disable-next-line @next/next/no-img-element -- signed, expiring R2 link; next/image would cache it */}
-                    <img src={m.mediaUrl} alt={m.fileName ?? "Photo"} className="max-h-64 max-w-full rounded-md object-contain" loading="lazy" />
+                    <img src={cloudinaryThumb(m.mediaUrl, 800)} alt={m.fileName ?? "Photo"} className="max-h-64 max-w-full rounded-md object-contain" loading="lazy" />
                 </button>
                 {viewing && (
                     <ImageViewer src={m.mediaUrl} alt={m.fileName ?? "Photo"} downloadUrl={m.downloadUrl} fileName={m.fileName} onClose={() => setViewing(false)} />

@@ -30,6 +30,7 @@ import { useCollapsibleTree } from "@/modules/inventory/hooks";
 import ShopImageField from "@/modules/ecommerce/components/ShopImageField";
 import { productMatchesSearch, searchableText } from "@/shared/lib/inventory";
 import { useValueChange } from "@/shared/hooks/useValueChange";
+import { cloudinaryThumb } from "@/shared/lib/cloudinaryImage";
 
 export type ShopMasterRow = {
     id: number;
@@ -211,7 +212,7 @@ export default function ShopMasterPresentationList({
                                         <div className="flex size-9 items-center justify-center overflow-hidden rounded-md border border-border bg-muted">
                                             {r.imageUrl ? (
                                                 // eslint-disable-next-line @next/next/no-img-element -- arbitrary remote URL
-                                                <img src={r.imageUrl} alt="" className="size-full object-cover" />
+                                                <img src={cloudinaryThumb(r.imageUrl, 72)} alt="" className="size-full object-cover" />
                                             ) : (
                                                 <ImageIcon className="size-4 text-muted-foreground" />
                                             )}

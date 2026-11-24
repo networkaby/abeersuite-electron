@@ -12,6 +12,7 @@ import { POST_CHANNELS, channelOf, pendingChannels, type PostRow } from "@/modul
 import CampaignsHeader from "./CampaignsHeader";
 import PostsCalendar, { postTime, weekStart } from "./PostsCalendar";
 import { formatDate } from "@/shared/lib/format/formatDate";
+import { cloudinaryThumb } from "@/shared/lib/cloudinaryImage";
 
 type View = "calendar" | "list";
 type Tab = "queue" | "drafts" | "sent";
@@ -245,7 +246,7 @@ export default function PostsQueue() {
                                             </div>
                                             {p.mediaUrl && !p.mediaType?.startsWith("video/") ? (
                                                 // eslint-disable-next-line @next/next/no-img-element -- a signed private R2 link
-                                                <img src={p.mediaUrl} alt="" className="h-12 w-12 shrink-0 rounded-lg bg-muted object-cover" />
+                                                <img src={cloudinaryThumb(p.mediaUrl, 96)} alt="" className="h-12 w-12 shrink-0 rounded-lg bg-muted object-cover" />
                                             ) : (
                                                 <div className="h-12 w-12 shrink-0 rounded-lg bg-muted" />
                                             )}

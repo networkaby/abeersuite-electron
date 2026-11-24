@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { uploadImageToCloudinary } from "@/shared/lib/uploadToCloudinary";
+import { cloudinaryThumb } from "@/shared/lib/cloudinaryImage";
 
 /**
  * One-image field: square preview + Upload button + a paste-URL fallback.
@@ -63,7 +64,7 @@ export default function ShopImageField({
                         <Loader2 className="size-5 animate-spin text-muted-foreground" />
                     ) : value ? (
                         // eslint-disable-next-line @next/next/no-img-element -- arbitrary remote URL, not a static asset
-                        <img src={value} alt="" className="size-full object-cover" />
+                        <img src={cloudinaryThumb(value, 160)} alt="" className="size-full object-cover" />
                     ) : (
                         <span className="text-[10px] text-muted-foreground">No image</span>
                     )}

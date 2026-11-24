@@ -8,6 +8,7 @@ import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { channelOf, channelPost, pendingChannels, postCaption, type PostRow } from "@/modules/campaigns/lib/post";
 import { PHONE_POST_CHANNELS, WHATSAPP_PACKAGES } from "@/modules/mobile/lib/mobilePosts";
 import MobileHeader from "./MobileHeader";
+import { cloudinaryThumb } from "@/shared/lib/cloudinaryImage";
 
 /** The staff Android app's share add-on (phone-app, NsSharePlugin.java) — absent in a browser. */
 type NativeShare = {
@@ -133,7 +134,7 @@ export default function MobilePosts() {
                                 <button type="button" onClick={() => setOpen(expanded ? null : p.id)} className="flex w-full items-start gap-3 p-3 text-left active:bg-muted">
                                     {p.mediaUrl && !p.mediaType?.startsWith("video/") ? (
                                         // eslint-disable-next-line @next/next/no-img-element -- a signed private R2 link
-                                        <img src={p.mediaUrl} alt="" className="size-16 shrink-0 rounded-xl bg-muted object-cover" />
+                                        <img src={cloudinaryThumb(p.mediaUrl, 128)} alt="" className="size-16 shrink-0 rounded-xl bg-muted object-cover" />
                                     ) : (
                                         <div className="size-16 shrink-0 rounded-xl bg-muted" />
                                     )}
@@ -153,7 +154,7 @@ export default function MobilePosts() {
                                                 <video src={p.mediaUrl} className="w-full rounded-xl bg-black" controls muted playsInline />
                                             ) : (
                                                 // eslint-disable-next-line @next/next/no-img-element -- a signed private R2 link
-                                                <img src={p.mediaUrl} alt="" className="w-full rounded-xl bg-muted object-contain" />
+                                                <img src={cloudinaryThumb(p.mediaUrl, 1080)} alt="" className="w-full rounded-xl bg-muted object-contain" />
                                             ))}
                                         {waiting.map((c) => {
                                             const cp = channelPost(p, c);
