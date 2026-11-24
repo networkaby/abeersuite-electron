@@ -39,6 +39,7 @@ import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 import { invNextRef, calcLineTotals } from "@/modules/inventory/lib/stock";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
+import { buildVoucherBridgePayload } from "@/modules/accountancy/lib/voucherReceiptSample";
 import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 import { systemBranchId } from "@/shared/lib/org/systemBranch";
@@ -57,6 +58,8 @@ const returnSchema = z.object({
     lines:             z.array(returnLineSchema).min(1),
     refundMode:        z.enum(["CASH", "CREDIT", "GIFT_CARD"]),
     notes:             z.string().trim().max(500).optional(),
+    /** Return + Print — send the thermal slip back with the answer. */
+    print: z.boolean().optional(),
 });
 
 class GlPostFailedError extends Error {
@@ -443,7 +446,17 @@ export async function POST(req: Request) {
             after(() => notifyBill("SALE_RETURN", uvId));
         }
 
-        return NextResponse.json(result, { status: 201 });
+        // The slip rides the answer, as a sale's does, so the counter prints it
+        // without reading the return back from a copy it may not have reached yet.
+        // The return is already saved: a slip that cannot be built never fails it.
+        const returnPrint = data.print
+            ? await buildVoucherBridgePayload("inv", result.returnVoucherId).catch((err: unknown) => {
+                Sentry.captureException(err, { tags: { source: "pos-return-slip", voucherId: String(result.returnVoucherId) } });
+                return null;
+            })
+            : null;
+
+        return NextResponse.json({ ...result, returnPrint }, { status: 201 });
     } catch (e) {
         if (e instanceof GlPostFailedError) {
             return NextResponse.json({ error: e.message, notes: e.notes }, { status: 500 });
