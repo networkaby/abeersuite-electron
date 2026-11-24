@@ -22,11 +22,11 @@ import { usePosCustomerDisplay } from "@/modules/pos/hooks/usePosCustomerDisplay
 import { usePosDisplaySlides } from "@/modules/pos/hooks/usePosDisplaySlides";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { DEFAULT_PAYEE_NAME } from "@/modules/pos/lib/paymentLink";
-import { formatInr, parseDigitsInput, round2 } from "@/shared/lib/format";
+import { formatInr, round2 } from "@/shared/lib/format";
 import { resolveTierTitles } from "@/shared/lib/pricing";
 import { groupRebatesExcl, groupStartPricePaise, rebatedRate, ruleForGroup } from "@/modules/pricing-strategy/lib/groupPricing";
 import { POS_MAX_ROUND_OFF } from "@/shared/lib/constants/inventory";
-import { capToFloorExcl, floorExclFromPaise, floorRoomIncl } from "@/modules/pricing-strategy/lib/priceFloor";
+import { capToFloorExcl, floorRoomIncl } from "@/modules/pricing-strategy/lib/priceFloor";
 import { mdrRecovery, upiPlan, upliftedRates, type UpiPart, type UpliftLine } from "@/modules/pos/lib/paymentMdr";
 import { CHANNEL_LABEL } from "@/modules/pos/lib/counterTenders";
 import { type UpiPanelState } from "@/modules/pos/components/UpiPartsPanel";
@@ -39,20 +39,11 @@ import { focusWhenReady } from "@/shared/lib/ui/focusWhenReady";
 import { parseAmt, type EditBill } from "@/modules/pos/hooks/posBilling/types";
 import { usePosShift } from "@/modules/pos/hooks/posBilling/usePosShift";
 import { usePosCatalogue } from "@/modules/pos/hooks/posBilling/usePosCatalogue";
+import { lineFloorExcl, lineHeadroom, loyaltyRedemption } from "@/modules/pos/hooks/posBilling/billMath";
 
 /** How many rows the product dropdown shows — kept constant so the list does
  *  not change height between a good query and a poor one. */
 const DROPDOWN_ROWS = 12;
-
-/** Pre-tax lowest price a cashier may type on a line — the item's sale price
- *  (tax-inclusive paise) backed out to exclusive. null = no floor (service,
- *  or no sale price on the line). Hydrated edit / converted lines never carry
- *  salePaise, so an old bill sold below today's sale price still re-saves —
- *  keep it that way. */
-function lineFloorExcl(l: CartLine): number | null {
-    if (l.kind === "service") return null;
-    return floorExclFromPaise(l.salePaise, l.taxRate);
-}
 
 // Moved to posBilling/types.ts; re-exported so the screens' imports stay as they were.
 export { parseAmt, type EditBill };
@@ -506,44 +497,11 @@ export function usePosBilling(opts: {
     // Redeemed" ledger, so it folds into chargesNet here exactly as the server
     // folds it into calcVoucherTotals. We clamp to balance + bill caps client-
     // side so we only ever send the route a value it will accept.
-    // An edit redeems at its sale day's rates, up to the points it may use (posSaleEdit.ts).
-    const rates = eb ? eb.promo.loyaltyRates : snapshot?.loyaltyRates ?? null;
-    // Redemption is live only while the programme AND its redeem gate are on.
-    const canRedeem = !!rates?.enabled && !!rates?.redeemEnabled;
-    const loyaltyBalance = eb ? eb.maxRedeem : snapshot?.loyaltyPoints ?? 0;
-    const minRedeemPts = rates?.minRedeemPoints ?? 0;
-    // Pre-redemption bill — used to enforce the min-invoice-to-redeem floor.
-    const billBeforeRedemption = calcVoucherTotals(lineRows, shippingAmt, discountAmount, 0, manualChargesNet).totalAmount;
-    const redeemBlocked = rates?.minRedeemInvoiceValue != null && billBeforeRedemption < rates.minRedeemInvoiceValue;
-    // Cart-aware redeem ceiling — Σ (line net × that item's redeem cap %), with the
-    // global cap as the per-line default (null → 100%). Mirrors the server's
-    // redeemableBaseForCart so the bill total + payment check always agree.
-    const globalCapPct = rates?.maxRedeemPctOfBill ?? null;
-    // Loyalty redeems against GOODS only — service lines stay out of the base,
-    // mirroring the server (earnLines / redeemableBaseForCart see body.lines,
-    // which carry products only). Discount-protected lines are dropped too: no
-    // redemption against a protected product (mirrors the server's blacklist).
-    const goodsCart = cart.filter((l) => l.kind !== "service" && !lineProtected(l));
-    const cartGoods = goodsCart.reduce((s, l) => s + l.qty * l.unitPrice, 0);
-    const maxRedeemableRupees = cartGoods <= 0 ? 0 : goodsCart.reduce((acc, l) => {
-        const lineGoods = l.qty * l.unitPrice;
-        const allocated = discountAmount * (lineGoods / cartGoods);
-        const net = Math.max(0, lineGoods - allocated);
-        const cap = l.redeemCapPct ?? globalCapPct;
-        const frac = cap == null ? 1 : Math.max(0, Math.min(100, cap)) / 100;
-        return acc + net * frac;
-    }, 0);
-    const requestedPts = canRedeem && redeemOn && !redeemBlocked ? parseInt(parseDigitsInput(redeemPointsStr) || "0", 10) : 0;
-    // The wall: points may only take what the tier discount left above the floor.
-    const wallRedeemRupees = Math.min(maxRedeemableRupees, Math.max(0, floorRoom - discountAmount));
-    const cartCapPts = rates && rates.redeemValue > 0 ? Math.floor(wallRedeemRupees / rates.redeemValue) : 0;
-    // The points an unchanged edit already redeemed stay redeemable whatever the cap reads now.
-    const maxRedeemablePts = eb && editLinesUnchanged ? Math.max(cartCapPts, eb.redeemedBefore) : cartCapPts;
-    const cappedPts = Math.min(requestedPts, loyaltyBalance, maxRedeemablePts);
-    const redeemPts = cappedPts >= minRedeemPts || (eb != null && cappedPts === eb.redeemedBefore) ? cappedPts : 0;
-    const redemptionRupees = eb && redeemPts === eb.redeemedBefore
-        ? eb.redeemRupeesBefore
-        : rates ? redeemPts * rates.redeemValue : 0;
+    // An edit redeems at its sale day's rates (billMath.ts, mirrors the server).
+    const { rates, canRedeem, loyaltyBalance, redeemBlocked, maxRedeemablePts, redeemPts, redemptionRupees } = loyaltyRedemption({
+        eb, snapshot, cart, lineRows, shippingAmt, discountAmount, manualChargesNet, floorRoom,
+        editLinesUnchanged, redeemOn, redeemPointsStr, lineProtected,
+    });
 
     // ── Coupon (server-validated) ──────────────────────────────────────────────
     // A non-stackable coupon DROPS the tier discount + BLOCKS loyalty redemption;
@@ -587,25 +545,8 @@ export function usePosBilling(opts: {
     // Incl ₹ a cashier may still cut by hand before a line hits its sale price:
     // (price − floor) − the line's own level discount − its share of the bill-wide
     // cuts (loyalty, coupon, on-top free item), shared by line value. Display only.
-    const lineRoomIncl = cart.map((l, i) => {
-        const floor = lineFloorExcl(l);
-        if (floor == null) return null;
-        const k = 1 + l.taxRate / 100;
-        return (l.qty * (l.unitPrice - floor) - lineTierAfterCoupon[i]) * k;
-    });
-    const roomBase = cart.reduce((s, l, i) => s + (lineRoomIncl[i] != null ? l.qty * l.unitPrice : 0), 0);
     const billWideCuts = effRedemptionRupees + couponRupees + onTopRupees;
-    // Keyed by the line itself — the screen lists renderCart, not cart order.
-    const lineGapRupees = new Map<CartLine, number>();
-    cart.forEach((l, i) => {
-        const room = lineRoomIncl[i];
-        if (room == null || l.qty <= 0) return;
-        const share = roomBase > 0 ? billWideCuts * (l.qty * l.unitPrice) / roomBase : 0;
-        lineGapRupees.set(l, round2((room - share) / l.qty)); // per piece, what the price box moves by
-    });
-    const totalGapRupees = lineRoomIncl.some((r) => r != null)
-        ? round2(lineRoomIncl.reduce<number>((s, r) => s + (r ?? 0), 0) - billWideCuts)
-        : null;
+    const { lineGapRupees, totalGapRupees } = lineHeadroom(cart, lineTierAfterCoupon, billWideCuts);
 
     const lineRebateExcl = cart.map(() => 0);
     if (groupPricing) {
