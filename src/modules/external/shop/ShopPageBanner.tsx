@@ -130,12 +130,12 @@ export default function ShopPageBanner({
                                     Home &amp; deals
                                 </Link>
                             </Button>
-                            <a
+                            <Link
                                 href="/shop?view=all#catalog"
                                 className="min-h-11 text-center text-sm font-medium text-primary underline-offset-4 hover:underline sm:min-h-0 sm:text-left"
                             >
                                 Go to filters
-                            </a>
+                            </Link>
                         </div>
                     </div>
 

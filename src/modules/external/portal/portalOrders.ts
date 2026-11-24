@@ -154,7 +154,7 @@ export async function loadPortalOrders(customerId: number, onlyOrderId?: number)
         const o = t.order!;
         const addr = (o.shippingAddress ?? {}) as AddrJson;
         const delivery = deliveryByOrder.get(t.id);
-        const address = formatAddress(addr as any);
+        const address = formatAddress(addr as Parameters<typeof formatAddress>[0]);
         return {
             id: t.id,
             createdAt: t.createdAt.toISOString(),

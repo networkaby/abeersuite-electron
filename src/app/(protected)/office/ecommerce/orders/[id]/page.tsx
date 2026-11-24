@@ -585,7 +585,7 @@ export default function EcommerceOrderDetailPage() {
                             </h2>
                             <p className="font-medium">{addr.name ?? order.shippingName ?? "—"}</p>
                             {addr.phone && <p className="text-muted-foreground">{addr.phone}</p>}
-                            <p className="text-muted-foreground">{formatAddress(addr as any)}</p>
+                            <p className="text-muted-foreground">{formatAddress(addr as Parameters<typeof formatAddress>[0])}</p>
                         </div>
                     ) : null}
 

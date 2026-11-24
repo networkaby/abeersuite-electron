@@ -307,7 +307,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         const partyName = t.order.shippingName || t.account?.name || "Customer";
         const partyType = t.account?.personId ? "customer" : t.account?.companyId ? "company" : null;
         const partyId = t.account?.personId ?? t.account?.companyId ?? null;
-        const partyAddress = formatAddress(addr as any);
+        const partyAddress = formatAddress(addr as Parameters<typeof formatAddress>[0]);
         const placeOfSupply = stateCodeForName(typeof addr.state === "string" ? addr.state : null) ?? null;
 
         // Seller = the online channel's branch (Head Office), falling back to the

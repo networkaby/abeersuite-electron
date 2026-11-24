@@ -75,3 +75,15 @@ jobs:
 
       - name: Sync table registry up to date
         run: pnpm sync:tables:check
+
+      # Money, GST and bill maths (node:test via tsx, no database) — see
+      # `pnpm test:unit` in docs/commands.md. A red run here means a bill would
+      # come out different.
+      - name: Unit tests
+        run: pnpm test:unit
+
+      # Errors only fail the run; warnings are reported but allowed.
+      - name: Lint
+        run: pnpm lint
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
