@@ -81,7 +81,7 @@ import { groupRebatesExcl, rebatedRate, ruleForGroup } from "@/modules/pricing-s
 // As of 2026-05-14 the route requires the cashier to have an OPEN PosShift
 // in the active branch. The CASH portion of any payment auto-debits the
 // shift's tillAccountId; non-CASH portions debit the user-picked bank account.
-// See docs/modules/pos.md.
+// Keyboard rules: docs/pos-conventions.md. History: PROJECT_BRAIN.md.
 
 class GlPostFailedError extends Error {
     constructor(message: string, public notes: string[]) { super(message); }

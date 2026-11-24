@@ -204,8 +204,8 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     // refVoucherId on the InvVoucher row. Picker only renders when
     // copy.linkParentType is set.
     const [parentLink, setParentLink] = useState<{ id: number; reference: string } | null>(null);
-    // Challan-only print toggle. Persisted as InvVoucher.showPrices and read
-    // back by the print job (deferred — see plan TODO).
+    // Challan-only print toggle. Persisted as InvVoucher.showPrices; the print
+    // reads it back (voucherReceiptSample.ts, ThermalReceiptPreview.tsx).
     const [showPricesOnPrint, setShowPricesOnPrint] = useState(true);
     const [party, setParty] = useState<PickedParty | null>(null);
     const partyPickerRef = useRef<PartySearchAndCreateHandle>(null);

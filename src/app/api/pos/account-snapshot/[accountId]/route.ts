@@ -28,10 +28,12 @@ import { ACCOUNT_LEDGERS } from "@/shared/lib/constants/accounting";
 //   discountPct    — the SUM of those titles' percentages (periods apply independently),
 //                    capped by the global discount guard and a hard 100; driven by
 //                    bracketed spend, NOT lifetime
-//   loyaltyPoints  — placeholder = ⌊lifetime / 100⌋
+//   loyaltyPoints  — live balance (liveBalance: in-window lots); 0 when the
+//                    customer's group switches loyalty off
 //   lastVisitAt    — most recent of (latest sale voucher date, latest ticket createdAt)
 //   recentTickets  — last 3 tickets (matched via Ticket.billingAccountId)
-//   warrantiesEnding — TODO; placeholder
+//   warrantiesEnding — always [] for now: no warranty end date is stored.
+//                      PosCustomerPanel hides the box while it is empty.
 //
 // Overdue calculation uses outstandings.ts (the canonical receivables
 // engine) so InvVoucher allocations are netted correctly. Migrated from
