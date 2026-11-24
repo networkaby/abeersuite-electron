@@ -1,4 +1,5 @@
 import { PrismaClient } from "@/generated/prisma/client";
+import { inTransaction } from "./inTransaction";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { OfflineWriteBlockedError } from "./offlineError";
@@ -207,7 +208,8 @@ function wrapLive(redirect: ReadRedirect): PrismaClient {
         name: `live-reads-${redirect}`,
         query: {
             $allModels: {
-                async $allOperations({ model, operation, args, query }) {
+                async $allOperations(params) {
+                    const { model, operation, args, query } = params;
                     // ── Writes ───────────────────────────────────────────────────
                     // Still never retried: a write that died after reaching the server
                     // but before the ack could otherwise be applied twice. But its
@@ -223,6 +225,20 @@ function wrapLive(redirect: ReadRedirect): PrismaClient {
                             // instead of within the hour. See deleteAnnounce.ts.
                             if (operation === "delete") noteDeleted(model);
                             else if (operation === "deleteMany" && (out as { count?: number } | null)?.count) noteDeleted(model);
+                            return out;
+                        } catch (e) {
+                            if (localClient && isConnectionFailure(e)) reportLiveDown();
+                            throw e;
+                        }
+                    }
+
+                    // ── Reads inside a transaction ───────────────────────────────
+                    // Never redirected or retried: they must see what the transaction
+                    // wrote, and a failed one cannot be continued anyway.
+                    if (inTransaction(params)) {
+                        try {
+                            const out = await query(args);
+                            if (localClient) reportLiveUp();
                             return out;
                         } catch (e) {
                             if (localClient && isConnectionFailure(e)) reportLiveDown();
@@ -369,7 +385,8 @@ function createLocal(): PrismaClient {
         name: "replica-write-guard",
         query: {
             $allModels: {
-                async $allOperations({ model, operation, args, query }) {
+                async $allOperations(params) {
+                    const { model, operation, args, query } = params;
                     if (!READ_OPS.has(operation)) {
                         // 1. No deletes, ever. A delete replayed against a row another
                         // counter has since changed is not recoverable, and the reconcile
@@ -466,9 +483,9 @@ function createLocal(): PrismaClient {
                     // become a counter is to sign in. wrapLive fails closed on readiness;
                     // this path did not, and old leftover data was hiding that.
                     //
-                    // Reads inside a transaction are NOT redirected: `query(args)` for a
-                    // transactional operation must stay on the client that opened it, and
-                    // the Proxy has already chosen this one for the write.
+                    // Reads inside a transaction are NOT redirected: they must stay on the
+                    // client that opened it, and see what it wrote.
+                    if (inTransaction(params)) return query(args);
                     await refreshReplicaReadinessInline();
                     if ((READ_PREFERENCE === "live" || !isReplicaReady()) && getMode() === "LIVE") {
                         try {
@@ -577,7 +594,8 @@ if (localClient) {
  * ── WRITE_MODE picks the client; READ_MODE redirects reads off it ────────────
  * Because the choice is per-CLIENT and not per-operation, it has to be made on the
  * thing that cannot be split: a `$transaction` is a write, so it opens on the
- * WRITE_MODE client and every read inside it stays on that same database. Deciding
+ * WRITE_MODE client and every read inside it stays on that same database (both
+ * redirects skip it — see inTransaction.ts). Deciding
  * per-operation instead would let one transaction straddle two databases.
  *
  * Reads then get redirected by the extension inside whichever client was chosen —
