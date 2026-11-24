@@ -216,19 +216,14 @@ export function CustomerImportPanel() {
         setPreviewing(true);
         setCommitResult(null);
         try {
-            const res = await fetch("/api/settings/customer-import/preview", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ rows: buildRowsPayload(), mode }),
-            });
-            const json = (await res.json()) as PreviewResult & { error?: string };
-            if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+            const { data: json } = await http.post<PreviewResult>("/api/settings/customer-import/preview",
+                { rows: buildRowsPayload(), mode });
             setPreview(json);
             toast.success(
                 `Preview: ${json.willCreate} create · ${json.willUpdate} update · ${json.willSkip} skip · ${json.errorCount} error`,
             );
         } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Preview failed");
+            toast.error(extractApiError(err, "Preview failed"));
         } finally {
             setPreviewing(false);
         }

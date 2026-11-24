@@ -2,11 +2,14 @@
  * "Pull these models into this replica now, and tell me when they are in."
  *
  * A counter's replica learns about a row written to Supabase only when the sync
- * worker next pulls it. Most of the time that lag is harmless. Twice it is not:
+ * worker next pulls it. Most of the time that lag is harmless. Three times it is not:
  *
  *   • A relayed save (`WRITE_MODE=v_live`, see writeRelay.ts) lands in Supabase, and
  *     the screen that re-reads after it reads THIS replica — so the relay holds its
  *     response until the rows are here.
+ *   • A till that reads its replica but writes Supabase itself (`WRITE_MODE=live`):
+ *     the browser holds its own save's response on `POST /api/counter/pull`, which
+ *     runs this same pull (see appChannel.ts `pullsAfterOwnWrite`).
  *   • A session ended in Supabase (`User.tokensValidFrom`, stamped authoritatively by
  *     a sign-out or a role edit) goes on being accepted by this machine, which checks
  *     sign-ins against the replica. For as long as the two disagree the office refuses

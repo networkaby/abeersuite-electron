@@ -102,6 +102,9 @@ export async function captureMyDay(
         const ac = new AbortController();
         const timer = setTimeout(() => ac.abort(), timeoutMs);
         try {
+            // Plain fetch ON PURPOSE, never `http` / axios: this pings every minute
+            // for every user, and the change publisher would announce "settings" each
+            // time, waking every screen on every machine.
             await fetch("/api/hr/activity", {
                 method: "POST",
                 headers: { "content-type": "application/json" },

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
-import { ALL_TOPICS, modelsForTopics, type Topic } from "@/shared/lib/realtime/topics";
+import { isTopic, modelsForTopics, type Topic } from "@/shared/lib/realtime/topics";
 import { pullAndWait } from "@/shared/lib/counter/replicaPull";
 
 /**
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     try {
         const body = (await req.json()) as { topics?: unknown };
         if (Array.isArray(body.topics)) {
-            topics = body.topics.filter((t): t is Topic => (ALL_TOPICS as readonly unknown[]).includes(t));
+            topics = body.topics.filter(isTopic);
         }
     } catch { /* bad body → nothing to pull */ }
 

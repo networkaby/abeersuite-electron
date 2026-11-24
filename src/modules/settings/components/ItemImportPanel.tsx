@@ -178,9 +178,7 @@ export function ItemImportPanel() {
         let cancelled = false;
         void (async () => {
             try {
-                const res = await fetch("/api/inventory/units");
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const json = (await res.json()) as UnitMaster[];
+                const { data: json } = await http.get<UnitMaster[]>("/api/inventory/units");
                 if (!cancelled) setUnits(json);
             } catch {
                 if (!cancelled) toast.error("Could not load the unit master — unit mapping is unavailable");
@@ -199,9 +197,7 @@ export function ItemImportPanel() {
         let cancelled = false;
         void (async () => {
             try {
-                const res = await fetch("/api/branches");
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const json = (await res.json()) as BranchOption[];
+                const { data: json } = await http.get<BranchOption[]>("/api/branches");
                 if (cancelled) return;
                 const live = json.filter((b) => b.isActive !== false);
                 setBranches(live);
@@ -353,19 +349,14 @@ export function ItemImportPanel() {
         setPreviewing(true);
         setCommitResult(null);
         try {
-            const res = await fetch("/api/settings/item-import/preview", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ rows: buildRowsPayload(), mode, autoCreateMasters, openingBranchId: openingBranchId || null }),
-            });
-            const json = (await res.json()) as PreviewResult & { error?: string };
-            if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+            const { data: json } = await http.post<PreviewResult>("/api/settings/item-import/preview",
+                { rows: buildRowsPayload(), mode, autoCreateMasters, openingBranchId: openingBranchId || null });
             setPreview(json);
             toast.success(
                 `Preview: ${json.willCreate} create · ${json.willUpdate} update · ${json.willSkip} skip · ${json.errorCount} error`,
             );
         } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Preview failed");
+            toast.error(extractApiError(err, "Preview failed"));
         } finally {
             setPreviewing(false);
         }

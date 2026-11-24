@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { GatedLink } from "@/shared/components/GatedLink";
 import { Loader2, Wifi, Usb, Monitor, CheckCircle, XCircle, RefreshCw, Printer, Download, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,8 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { http } from "@/shared/lib/http";
-import { resolveMachineIdentity, matchesThisMachine, type MachineIdentity } from "@/shared/lib/counter/identity";
 
 import { bridgeRequest } from "@/shared/lib/bridge/hardwareBridge";
 import { mergeTemplateWithOrg } from "@/shared/lib/print/mergeTemplateWithOrg";
@@ -84,14 +81,6 @@ export default function PrinterSettingsPage() {
     const isElectron = useIsDesktopApp();
     const [latestVersion, setLatestVersion] = useState<string | null>(null);
     const [config, setConfig] = useState<RelayConfig>(DEFAULT);
-    // The counter this PC is bound to (server-side, keyed by this PC's identity).
-    // Read only inside the parked "Counter lock" card below (currently commented out).
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const [boundCounter, setBoundCounter] = useState<{ id: number; name: string } | null>(null);
-    // Electron installation id (or bridge id off-Electron) — resolved independently
-    // rather than piggybacking on `config.deviceId`, which is only there once the
-    // bridge config has loaded.
-    const [identity, setIdentity] = useState<MachineIdentity | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [testing, setTesting] = useState(false);
@@ -137,34 +126,6 @@ export default function PrinterSettingsPage() {
             .catch(() => { /* manifest optional — no warning if unavailable */ });
     }, []);
 
-    useEffect(() => {
-        resolveMachineIdentity().then(setIdentity);
-    }, []);
-
-    // Which counter is this PC bound to? Match this PC's identity against the
-    // server's counter locks so the Forget card knows what it's releasing.
-    const loadBoundCounter = useCallback(() => {
-        // No identity yet → nothing bound (boundCounter starts null).
-        if (!identity?.machineId) return () => {};
-        let cancelled = false;
-        fetch(`/api/pos/counters`)
-            .then((r) => r.ok ? r.json() : [])
-            .then((list: { id: number; name: string; boundDeviceId: string | null }[]) => {
-                if (cancelled) return;
-                const mine = Array.isArray(list) ? list.find((c) => matchesThisMachine(c.boundDeviceId, identity)) : null;
-                setBoundCounter(mine ? { id: mine.id, name: mine.name } : null);
-            })
-            .catch(() => { /* ignore — card just won't show */ });
-        return () => { cancelled = true; };
-    }, [identity]);
-
-    useEffect(() => loadBoundCounter(), [loadBoundCounter]);
-
-    // An admin releasing this PC's counter lock from /office/admin/counters
-    // announces `settings`. Without this the Forget card kept offering to
-    // release a binding that was already gone.
-    useRealtimeTopics(["settings"], () => { loadBoundCounter(); });
-
     const fetchWinPrinters = async () => {
         setPortsLoading(true);
         try {
@@ -208,21 +169,6 @@ export default function PrinterSettingsPage() {
             toast.error(err instanceof Error ? err.message : "Save failed");
         } finally {
             setSaving(false);
-        }
-    };
-
-    // Bound to the parked "Counter lock" card below (currently commented out).
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const forgetCounter = async () => {
-        const releaseId = identity?.machineId;
-        if (!releaseId) return;
-        try {
-            // `http` announces the release to the other tills (topics.ts: pos/counters).
-            await http.post(`/api/pos/counters/release-mine`, { deviceId: releaseId });
-            toast.success("Counter lock cleared for this PC");
-            setBoundCounter(null);
-        } catch {
-            toast.error("Could not clear counter lock");
         }
     };
 
@@ -349,18 +295,6 @@ export default function PrinterSettingsPage() {
                     </div>
                 )}
 
-                {/* {relayUp && boundCounter && (
-                <div className="rounded-lg border border-border bg-card p-4 flex items-center justify-between gap-3 text-sm">
-                    <div>
-                        <p className="font-medium">Counter lock</p>
-                        <p className="text-xs text-muted-foreground">
-                            This PC opens POS shifts as{" "}
-                            <span className="font-medium text-foreground">{boundCounter.name}</span>.
-                        </p>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={forgetCounter}>Forget</Button>
-                </div>
-            )} */}
 
                 {!relayUp && !loading && <BridgeNotRunningNotice device="printer" />}
 

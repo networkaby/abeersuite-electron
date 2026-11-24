@@ -191,7 +191,7 @@ export async function flushOnce(localUrl: string): Promise<number> {
         if (pushedIds.length > 0) {
             console.log(`[OutboxFlusher] pushed ${pushedIds.length} mutation(s).`);
             // THE announcement for a counter's writes. The browser stayed silent when it
-            // saved (see appChannel.setWritesGoLocal), because at that moment the row was
+            // saved (see appChannel.setWritePreference), because at that moment the row was
             // only in this machine's _outbox — anyone acting on it would have pulled
             // Supabase about a second too early, found nothing, and never been told
             // again. Now the row genuinely exists for others to read, so say so: their

@@ -62,6 +62,7 @@
 import type { AxiosInstance } from "axios";
 import { realtimeReady, supabase } from "@/shared/lib/supabase/supabaseClient";
 import { topicsForApiPath, type Topic } from "./topics";
+import type { WritePreference } from "@/shared/lib/prisma/counterMode";
 import { writeCache, readCache, subscribeToCache } from "@/shared/lib/browser/pollCache";
 import { isTabLeader, onBecomeLeader } from "./tabLeader";
 import { CHANGE_CHANNEL_NAME as CHANNEL_NAME, CHANGE_EVENT_NAME as EVENT_NAME } from "./channel";
@@ -236,17 +237,24 @@ function flush() {
  * response already trails the Supabase commit, so the announcement below is correct and
  * is the only one there is.
  *
+ * Under WRITE_MODE=v_live the office commits the row and this window announces it the
+ * same way. Two more things follow from the preference, together with READ_MODE (see
+ * `setReadsGoLocal`): whether a screen may re-read straight after its own save
+ * (`getWritesHeldUntilApplied`), and whether the publisher must first pull the save
+ * into the replica (`pullsAfterOwnWrite`). Both are DERIVED here, never set apart, so
+ * they cannot drift from each other.
+ *
  * Defaults to "live" so a machine that never reports behaves exactly as it always has;
  * a counter simply goes quiet a few seconds into its session, and those first few
  * premature announcements cost one wasted cycle each. Deliberately NOT inferred from
  * `window.electronAPI`: WRITE_MODE=live is how a misbehaving till is reverted without a
  * rebuild, and a till on that path must keep announcing.
  */
-let writesGoLocal = false;
+let writePreference: WritePreference = "live";
 
 /** Called by `useCounterMode` each time the status endpoint answers. */
-export function setWritesGoLocal(local: boolean) {
-    writesGoLocal = local;
+export function setWritePreference(pref: WritePreference) {
+    writePreference = pref;
 }
 
 /**
@@ -283,43 +291,33 @@ export function getReadsGoLocal(): boolean {
 }
 
 /**
- * Whether this machine's writes are HELD until its replica has the rows, as reported
- * by `/api/counter/status` (`WRITE_MODE=v_live`, see writeRelay.ts). On such a till a
- * screen may re-read straight after its own save. On a till that reads its replica but
- * writes live, it may not: the row is still in flight, and the read would show the old
- * state AND stamp the cache past the row (see `useTicketsDelta.afterOwnWrite`).
+ * A till that reads its replica but writes Supabase itself (`WRITE_MODE=live`): its own
+ * save is in Supabase, not here. So after each successful write the publisher below
+ * announces it as usual, then calls `/api/counter/pull`, which pulls the touched models
+ * into the replica, and only then hands the response on — the same read-your-write
+ * `v_live` gets from writeRelay.ts.
  */
-let writesHeldUntilApplied = false;
-
-export function setWritesHeldUntilApplied(held: boolean) {
-    writesHeldUntilApplied = held;
-}
-
-export function getWritesHeldUntilApplied(): boolean {
-    return writesHeldUntilApplied;
+function pullsAfterOwnWrite(): boolean {
+    return readsGoLocal && writePreference === "live";
 }
 
 /**
- * True on a till that reads its replica but writes Supabase itself (`WRITE_MODE=live`).
- * Its own save is in Supabase, not here. So after each successful write the publisher
- * below announces it as usual, then calls `/api/counter/pull`, which pulls the touched
- * models into the replica, and only then hands the response on — the same
- * read-your-write `v_live` gets from writeRelay.ts. Set by `useCounterMode`.
+ * Whether this machine's writes are HELD until its replica has the rows: `v_live`
+ * (writeRelay.ts) and the live + replica case above. On such a till a screen may
+ * re-read straight after its own save. Otherwise, on a replica-reading till, it may
+ * not: the row is still in flight, and the read would show the old state AND stamp the
+ * cache past the row (see `useTicketsDelta.afterOwnWrite`).
  */
-let pullAfterOwnWrite = false;
-
-export function setPullAfterOwnWrite(on: boolean) {
-    pullAfterOwnWrite = on;
+export function getWritesHeldUntilApplied(): boolean {
+    return writePreference === "v_live" || pullsAfterOwnWrite();
 }
-
-const OWN_PULL_PATH = "/api/counter/pull";
 
 /** Announce that these topics changed. Coalesced; safe to call as often as you like.
  *  Supabase broadcast does not echo to the sender, so the acting tab is untouched —
  *  it already knows, and updates through its own save path. */
 export function publishChange(topics: readonly Topic[]) {
     if (typeof window === "undefined" || topics.length === 0) return;
-    if (writesGoLocal) return; // the flusher announces instead — see setWritesGoLocal
+    if (writePreference === "local") return; // the flusher announces instead — see setWritePreference
     pending ??= new Set<Topic>();
     for (const t of topics) pending.add(t);
     if (flushTimer) return;
@@ -350,10 +348,10 @@ export function attachChangePublisher(instance: AxiosInstance): number {
 
             const topics = topicsForApiPath(url.pathname);
             publishChange(topics);
-            if (pullAfterOwnWrite && topics.length > 0 && url.pathname !== OWN_PULL_PATH) {
+            if (pullsAfterOwnWrite() && topics.length > 0) {
                 // Hold the response until the replica has the rows. Plain fetch, not
                 // axios, so it never re-enters this interceptor; never rejects.
-                return fetch(OWN_PULL_PATH, {
+                return fetch("/api/counter/pull", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ topics }),

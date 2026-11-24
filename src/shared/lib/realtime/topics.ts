@@ -108,6 +108,9 @@ const RULES: ReadonlyArray<readonly [RegExp, readonly Topic[]]> = [
     [/^\/api\/settings\/customer-import\/commit/,     ["parties", "ledger"]],
 
     // ── Configuration ────────────────────────────────────────────────────────
+    // Matched by ADDRESS, not by what a route writes: a route under /api/settings that
+    // writes master data (products, customers, books) needs its own rule ABOVE this
+    // one, like the imports, or it announces only "settings" and those screens stay stale.
     [/^\/api\/(settings|roles|permissions|users|positions|departments|branches|org-chart)/, ["settings"]],
     // HR & People — the staff record is org config like users and positions.
     [/^\/api\/hr\//,                                 ["settings"]],
@@ -125,6 +128,15 @@ const RULES: ReadonlyArray<readonly [RegExp, readonly Topic[]]> = [
     [/^\/api\/messages/,                            ["messages"]],
 ];
 
+/** True when `t` is one of our topic names — for checking a body from the wire. */
+export function isTopic(t: unknown): t is Topic {
+    return (ALL_TOPICS as readonly unknown[]).includes(t);
+}
+
+/** POSTs that only COMPUTE (a dry run before a commit) and write nothing. Their prefix
+ *  rule would otherwise announce, waking every screen for a change that never happened. */
+const READ_ONLY_POST = /preview$/;
+
 /**
  * Topics a successful write to `pathname` should announce.
  *
@@ -132,6 +144,7 @@ const RULES: ReadonlyArray<readonly [RegExp, readonly Topic[]]> = [
  * for anything unlisted, which the publisher reads as "say nothing".
  */
 export function topicsForApiPath(pathname: string): Topic[] {
+    if (READ_ONLY_POST.test(pathname)) return [];
     const hit = new Set<Topic>();
     for (const [re, topics] of RULES) {
         if (re.test(pathname)) for (const t of topics) hit.add(t);

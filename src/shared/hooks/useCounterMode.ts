@@ -27,7 +27,7 @@
 
 import { useSyncExternalStore } from "react";
 import axios from "axios";
-import { setWritesGoLocal, setReadsGoLocal, setWritesHeldUntilApplied, setPullAfterOwnWrite } from "@/shared/lib/realtime/appChannel";
+import { setWritePreference, setReadsGoLocal } from "@/shared/lib/realtime/appChannel";
 import { setServedByReplica } from "@/shared/lib/browser/localDb";
 import { COUNTER_STATUS_POLL_MS, COUNTER_STATUS_IDLE_POLL_MS } from "@/shared/lib/constants/polling";
 
@@ -114,22 +114,13 @@ function refresh(): Promise<void> {
         .get<CounterStatus>("/api/counter/status")
         .then(({ data }) => {
             settledUnauthenticated = false;
-            // Where writes land decides who announces them. Under WRITE_MODE=local
-            // the browser must stay quiet: its response means "in this counter's
-            // _outbox", not "in Supabase", and the flusher announces once the push
-            // lands instead. See setWritesGoLocal.
-            setWritesGoLocal(data.writePreference === "local");
+            // Where writes land decides who announces them, and — with where reads
+            // come from — whether a save is pulled into the replica before the screen
+            // re-reads. See setWritePreference.
+            setWritePreference(data.writePreference);
             // Where reads come from decides which signal a screen waits for: the
             // replica's "rows applied" line rather than the early Supabase nudge.
-            const readsLocal = data.isCounter && data.preference !== "live";
-            setReadsGoLocal(readsLocal);
-            // A replica-reading till that writes Supabase itself pulls its own save in
-            // before the screen sees the response. See setPullAfterOwnWrite.
-            const pullOwn = readsLocal && data.writePreference === "live";
-            setPullAfterOwnWrite(pullOwn);
-            // Whether a screen may re-read right after its own save, or must wait for
-            // the replica to say the rows have landed. See setWritesHeldUntilApplied.
-            setWritesHeldUntilApplied(data.writePreference === "v_live" || pullOwn);
+            setReadsGoLocal(data.isCounter && data.preference !== "live");
             // Whether the browser's Dexie cache is worth keeping at all. The
             // exact mirror of `shouldReadLocal()` in prisma/counterMode.ts —
             // stricter than setReadsGoLocal above, which deliberately leaves

@@ -200,7 +200,7 @@ and reconcile run regardless), it only makes things happen sooner.
 2. **Push** — the in-process flusher ([`flusher.ts`](../src/shared/lib/sync/flusher.ts))
    holds `LISTEN outbox_changed`, pushes the batch through Prisma to Supabase, and only
    after `markOutboxPushed` retires a non-empty batch does it publish `ALL_TOPICS`. The
-   counter's own browser stays silent under `WRITE_MODE=local` (`setWritesGoLocal`), so
+   counter's own browser stays silent under `WRITE_MODE=local` (`setWritePreference`), so
    nothing announces before Supabase holds the row.
 3. **Other writers announce themselves too.** A browser on Vercel or `WRITE_MODE=live`
    publishes from the axios response interceptor (after the server's commit). Writes with
