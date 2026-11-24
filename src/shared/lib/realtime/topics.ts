@@ -155,9 +155,10 @@ export function topicsForApiPath(pathname: string): Topic[] {
 /**
  * Topic → the Prisma models a screen re-reads right after a write to that topic.
  *
- * Consumed by ONE caller: the `WRITE_MODE=v_live` write relay
- * (shared/lib/counter/writeRelay.ts), which asks the sync worker to pull exactly these
- * before it releases the response, so the screen that refetches after a save finds the
+ * Consumed by the two read-your-write pulls: the `WRITE_MODE=v_live` write relay
+ * (shared/lib/counter/writeRelay.ts) and, for `WRITE_MODE=live` on a replica-reading
+ * till, `POST /api/counter/pull`. Each asks the sync worker to pull exactly these
+ * before the response is released, so the screen that refetches after a save finds the
  * new rows in the replica. Names are `prisma/sync-tables.json` model names; a `child`
  * table comes along with its parent, so only parents are listed.
  *
