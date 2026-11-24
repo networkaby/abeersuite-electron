@@ -14,6 +14,7 @@
     "electron:build": "tsx scripts/electron-build.ts",
     "electron:pack": "pnpm electron:build && electron-builder --dir && pnpm verify:package",
     "electron:dist": "pnpm electron:build && electron-builder && pnpm verify:package",
+    "dist:pin": "tsx scripts/dist-pin.ts",
     "electron:release": "tsx scripts/release-electron.ts --preflight && pnpm electron:pack && tsx scripts/release-electron.ts",
     "verify:package": "tsx scripts/verify-package.ts",
     "icon:build": "electron scripts/make-icon.js",

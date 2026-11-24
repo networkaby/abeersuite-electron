@@ -57,28 +57,17 @@ Stage only these two files. **Do not push.** A clean tree here is what lets `pub
 pnpm electron:dist
 ```
 
-Runs `electron:build` + `electron-builder` (installer, blockmap, `latest.yml`) + the **`verify:package` gate**. A gate failure → stop, fix the cause, rebuild. Never mark a build that failed the gate.
+Runs `electron:build` + `electron-builder` (installer, blockmap) + the **`verify:package` gate**. A gate failure → stop, fix the cause, rebuild. Never mark a build that failed the gate.
 
-Confirm the outputs are **this** version — `dist-app/` keeps every old setup:
-
-```bash
-ls -l dist-app/AbeerSuite-Setup-<version>.exe dist-app/AbeerSuite-Setup-<version>.exe.blockmap && cat dist-app/latest.yml
-```
-
-`latest.yml` must name `<version>`.
+`latest.yml` is **not** made here: electron-builder writes none without a publish config. Step 6 makes it.
 
 ### 6. Pin the build — the `dist-v<version>` marker
 
-Annotated, local, on `HEAD` (the commit just built). The message records what was tested:
-
 ```bash
-git tag -a -f dist-v<version> -m "dist v<version> — local test build, never push
-installer: AbeerSuite-Setup-<version>.exe
-sha512: <sha512 from dist-app/latest.yml>
-variant: APP_MODE=<...> LANDING_PAGE=<...>"
+pnpm dist:pin
 ```
 
-Take `sha512` from `latest.yml` (the top-level `sha512:` line) and the variant from `verify:package`'s output. `-f` moves an existing marker when the same version is rebuilt — the old hash no longer describes anything.
+`scripts/dist-pin.ts` hashes the installer itself, writes `dist-app/latest.yml` from it, and puts the annotated local marker on `HEAD` with the hash and the variant (`APP_MODE`, `LANDING_PAGE`, `READ_MODE`, `WRITE_MODE`). It refuses on a version mismatch, a dirty tree, a `HEAD` newer than the pack, or an existing `v<version>` tag — fix the cause, never tag by hand. A rebuild of the same version moves the marker.
 
 ### 7. Report and stop
 

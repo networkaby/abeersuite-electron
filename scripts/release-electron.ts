@@ -8,12 +8,17 @@
  * 2. The commit and tag are pushed to `origin` (`devloperakramul/abeersuite-electron`),
  *    and the tag to every other release repo's remote, before anything is published.
  * 3. Binaries and release notes are attached to the release in both repos.
+ *
+ * `--reuse-installer` (the `publish` skill, after a `dist` build): uploads the installer
+ * that was tested, byte for byte, and tags the commit its `dist-v` marker names. Without
+ * it electron-builder makes a new installer from `win-unpacked`, as `release` always has.
  */
 import * as fs from "fs";
 import * as path from "path";
 import { config as loadDotenv } from "dotenv";
 import { spawnSync, execSync, execFileSync } from "child_process";
 import { compareVersions, isAppVersion } from "../electron/versionCompare";
+import { git, readDistBuild, readMarker, writeManifest, type DistBuild } from "./distBuild";
 
 loadDotenv({ path: path.join(process.cwd(), ".env") });
 
@@ -22,6 +27,33 @@ const originalPackageJsonText = fs.readFileSync(packageJsonPath, "utf-8");
 const pkg = JSON.parse(originalPackageJsonText);
 const version = pkg.version;
 const tagName = `v${version}`;
+
+// Checked before anything is tagged or pushed.
+const reuseInstaller = process.argv.includes("--reuse-installer");
+let distBuild: DistBuild | null = null;
+/** The commit this release is made of: HEAD, or the one the tested build was made from. */
+let releaseCommit = git("rev-parse", "HEAD");
+if (reuseInstaller) {
+    try {
+        distBuild = readDistBuild(path.join(process.cwd(), "dist-app"), version);
+        const marker = readMarker(version);
+        if (!marker) throw new Error(`there is no dist-v${version} marker — run dist first.`);
+        if (marker.sha512 !== distBuild.sha512) throw new Error("the installer is not the one the marker names; it was rebuilt or changed after the test.");
+        if (spawnSync("git", ["merge-base", "--is-ancestor", marker.commit, "HEAD"]).status !== 0) {
+            throw new Error("HEAD does not contain the commit the installer was built from.");
+        }
+        const built = JSON.parse(git("show", `${marker.commit}:package.json`));
+        if (built.version !== version || built.minimumCounterVersion !== pkg.minimumCounterVersion) {
+            throw new Error("package.json's version or minimumCounterVersion changed after the build.");
+        }
+        if (spawnSync("gh", ["--version"]).status !== 0) throw new Error("the GitHub CLI (gh) is not installed.");
+        releaseCommit = marker.commit;
+    } catch (e: unknown) {
+        console.error(`[release-electron] FATAL: cannot reuse the installer — ${(e as Error).message}`);
+        process.exit(1);
+    }
+    console.log(`[release-electron] Reusing the tested installer, built from ${releaseCommit.slice(0, 9)}.`);
+}
 
 interface PublishTarget {
     provider: string;
@@ -180,7 +212,7 @@ if (lastRelease) {
     if (isAppVersion(before) && compareVersions(minimumVersion, before) < 0) {
         minimumFail(`v${lastRelease} already required ${before}; the minimum never goes down.`);
     }
-    const newMigrations = execFileSync("git", ["diff", "--name-only", `v${lastRelease}`, "HEAD", "--", "prisma/migrations"], { encoding: "utf-8" }).trim();
+    const newMigrations = execFileSync("git", ["diff", "--name-only", `v${lastRelease}`, releaseCommit, "--", "prisma/migrations"], { encoding: "utf-8" }).trim();
     if (newMigrations && compareVersions(minimumVersion, lastRelease) <= 0) {
         minimumFail(
             `prisma/migrations changed since v${lastRelease}, so every counter on v${lastRelease} must update now.\n` +
@@ -238,7 +270,7 @@ try {
 
     // Find previous version tag if any
     const prevTag = rawTags.find(t => t !== tagName && /^v?\d+\.\d+/.test(t));
-    const range = prevTag ? `${prevTag}..HEAD` : "-n 20";
+    const range = prevTag ? `${prevTag}..${releaseCommit}` : `-n 20 ${releaseCommit}`;
     console.log(`[release-electron] Collecting commit log for release notes (${prevTag ? `commits since ${prevTag}` : "last 20 commits"})...`);
 
     const commitLog = execSync(`git log ${range} --pretty=format:"* %s (%h)"`, { encoding: "utf-8" }).trim();
@@ -257,9 +289,14 @@ try {
     const existingTags = execSync("git tag -l", { encoding: "utf-8" }).split("\n").map(t => t.trim());
     if (!existingTags.includes(tagName)) {
         console.log(`[release-electron] Creating git tag ${tagName}...`);
-        execSync(`git tag -a ${tagName} -m "Release ${tagName}"`, { stdio: "inherit" });
+        execSync(`git tag -a ${tagName} ${releaseCommit} -m "Release ${tagName}"`, { stdio: "inherit" });
     } else {
         console.log(`[release-electron] Git tag ${tagName} already exists locally.`);
+    }
+
+    // Before any push: a tag left on another commit must not go out with this installer.
+    if (reuseInstaller && git("rev-parse", `${tagName}^{commit}`) !== releaseCommit) {
+        throw new Error(`${tagName} is not on ${releaseCommit.slice(0, 9)}, the commit the installer was built from.`);
     }
 
     // `git push origin HEAD` needs a branch: with a detached HEAD git cannot work out which
@@ -328,6 +365,40 @@ for (const target of publishTargets) {
     console.log(`[release-electron] Pushing tag ${tagName} to ${remote} (${target.owner}/${target.repo})...`);
     // Forced only so a lightweight tag on the SAME commit is replaced by our annotated one.
     execSync(`git push --force ${remote} refs/tags/${tagName}`, { stdio: "inherit" });
+}
+
+// 3a. Reused installer: upload the three files as they are. The release stays a draft
+// until all of them are there, so a counter never sees half of one; a retry continues
+// the draft. Each token is passed to its own `gh` run only.
+if (distBuild) {
+    writeManifest(distBuild, version, releaseNotes, minimumVersion);
+    const notesFile = path.join(process.cwd(), "dist-app", "release-notes.tmp.md");
+    fs.writeFileSync(notesFile, releaseNotes);
+    let failed = false;
+    for (const target of publishTargets) {
+        const repo = `${target.owner}/${target.repo}`;
+        const env = { ...process.env, GH_TOKEN: process.env[target.tokenEnv] };
+        const gh = (...args: string[]) =>
+            execFileSync("gh", [...args, "--repo", repo], { env, encoding: "utf-8", stdio: ["ignore", "pipe", "inherit"] });
+        console.log(`[release-electron] → Uploading to ${repo}...`);
+        try {
+            const list = JSON.parse(gh("release", "list", "--limit", "100", "--json", "tagName,isDraft")) as { tagName: string; isDraft: boolean }[];
+            const existing = list.find(r => r.tagName === tagName);
+            if (existing && !existing.isDraft) throw new Error(`${tagName} is already published there.`);
+            if (!existing) {
+                gh("release", "create", tagName, "--verify-tag", "--draft", "--title", version, "--notes-file", notesFile,
+                    ...(isPrerelease ? ["--prerelease"] : []));
+            }
+            gh("release", "upload", tagName, distBuild.installer, distBuild.blockmap, distBuild.manifest, "--clobber");
+            gh("release", "edit", tagName, "--draft=false");
+        } catch (e: unknown) {
+            console.error(`[release-electron] FATAL: publish to ${repo} failed: ${(e as Error).message}`);
+            failed = true;
+            break;
+        }
+    }
+    fs.rmSync(notesFile, { force: true });
+    process.exit(failed ? 1 : 0);
 }
 
 // 3. Publish to GitHub — one electron-builder invocation PER target. Each repo

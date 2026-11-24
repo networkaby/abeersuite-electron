@@ -112,6 +112,7 @@ Everything else in this document is occasional.
 | `pnpm electron:build` | Loads `.env`, then runs the whole desktop build chain (see §3) |
 | `pnpm electron:pack` | `electron:build` → `electron-builder --dir` → `verify:package` — unpacked folder, no installer |
 | `pnpm electron:dist` | `electron:build` → `electron-builder` → `verify:package` — makes the real installer |
+| `pnpm dist:pin` | After `electron:dist`: writes `latest.yml` from the installer and the local `dist-v<version>` marker, so `publish` can upload that exact file |
 | `pnpm electron:release` | `electron:pack` → `release-electron.ts` — publishes the **already verified** tree to GitHub |
 | `pnpm verify:package` | The build gate — checks the packaged tree for missing `node_modules`, symlinks into the pnpm store, stray `.env` files, and secrets outside the `counter.env` allowlist |
 | `pnpm pg:fetch` | Downloads + trims the embedded PostgreSQL into `resources/pgsql` (~80 MB). **Once per build machine**, again on a version bump |
