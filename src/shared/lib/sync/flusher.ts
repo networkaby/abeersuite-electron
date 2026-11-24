@@ -201,7 +201,9 @@ export async function flushOnce(localUrl: string): Promise<number> {
             //
             // Best-effort by contract — a missed announcement costs latency, never data,
             // because every consumer still has its own interval and reconcile pass.
-            void publishChangeServer(ALL_TOPICS);
+            // These rows came FROM this replica, so this PC's own worker skips the echo.
+            const origin = process.env.COUNTER_SIGNAL_ORIGIN;
+            void publishChangeServer(ALL_TOPICS, origin ? { origin } : {});
         }
         // A full batch means there is probably more behind it; do not wait for a
         // notification that already fired, or for the interval.

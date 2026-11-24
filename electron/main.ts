@@ -813,7 +813,7 @@ import {
 } from "./backupManager";
 import { provisionLocalDatabase } from "./localDbProvisioner";
 import { loadRemoteConfig } from "./remoteConfig";
-import { startSyncWorker, stopSyncWorker } from "./syncManager";
+import { ensureSignalOrigin, startSyncWorker, stopSyncWorker } from "./syncManager";
 import { wipeReplica, replicaBindsThisPc, countPendingOutbox, counterBoundToThisPc, replicaHasSyncedData } from "./replicaWipe";
 import { waitForReplicaReady } from "./waitForReplica";
 import { startHardwareBridge, stopHardwareBridge, bridgeSend, bridgeRequest, isBridgeConnected } from "./hardwareBridgeManager";
@@ -1536,6 +1536,8 @@ app.whenReady().then(async () => {
     // `env: {...process.env}`.
     if (counterInstallationId) process.env.COUNTER_MACHINE_ID = counterInstallationId;
     process.env.COUNTER_USER_DATA = app.getPath("userData");
+    // Shared with the sync worker so it can skip its own echoes (syncManager.ts).
+    ensureSignalOrigin();
 
     sendBootProgress("Starting server…");
     let result: ServerStartResult = { url: `http://127.0.0.1:${PORT}`, ready: false };

@@ -513,6 +513,12 @@ post a purchase on Vercel, this worker hears it for free and syncs only what mov
 Polling every table on a schedule is the expensive way to notice a change, and
 egress is the whole reason this project exists.
 
+**Its own echo is skipped.** A signal whose `origin` is this PC's own
+`COUNTER_SIGNAL_ORIGIN` (minted by `electron/syncManager.ts`, shared with the Next
+server) announces rows this replica already holds — a save it pulled itself, or an
+outbox push of its own rows — so no cycle runs for it. One naming `deleted` tables
+still runs: a delete made on Supabase is not here until a reconcile.
+
 **The signal is a hint, never the source of truth.** It is published by an axios
 interceptor running *in a browser*, so a write made by a script, a seed, a
 GitHub-Actions restore, or a browser whose publish failed emits nothing at all.

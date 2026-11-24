@@ -22,7 +22,12 @@ import { primaryRealtimePair } from "@/shared/lib/db/dbPrimary";
 
 /** Optional extras on the wire. `deleted` names Prisma models that lost rows on the
  *  source — read only by the counter sync worker (see `deleteAnnounce.ts`). */
-export type ServerSignalExtras = { deleted?: readonly string[] };
+export type ServerSignalExtras = {
+    deleted?: readonly string[];
+    /** This PC's name (electron/syncManager.ts), for rows this replica already holds —
+     *  its own worker skips the echo. See appChannel `ownOrigin`. */
+    origin?: string;
+};
 
 /** The primary database's realtime project — the one every open tab listens on. On a
  *  counter (the outbox flusher's announcements) it is the pair the office handed over. */

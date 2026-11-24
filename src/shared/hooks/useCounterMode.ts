@@ -27,7 +27,7 @@
 
 import { useSyncExternalStore } from "react";
 import axios from "axios";
-import { setWritePreference, setReadsGoLocal } from "@/shared/lib/realtime/appChannel";
+import { setWritePreference, setReadsGoLocal, setSignalOrigin } from "@/shared/lib/realtime/appChannel";
 import { setServedByReplica } from "@/shared/lib/browser/localDb";
 import { COUNTER_STATUS_POLL_MS, COUNTER_STATUS_IDLE_POLL_MS } from "@/shared/lib/constants/polling";
 
@@ -46,6 +46,8 @@ export type CounterStatus = {
     replicaSchemaOk: boolean;
     isCounter: boolean;
     replicaSource: "installed" | "embedded" | null;
+    /** This PC's name on the change channel; see setSignalOrigin. */
+    signalOrigin: string | null;
     /**
      * Whether the last outbox flush reached Supabase.
      *
@@ -121,6 +123,7 @@ function refresh(): Promise<void> {
             // Where reads come from decides which signal a screen waits for: the
             // replica's "rows applied" line rather than the early Supabase nudge.
             setReadsGoLocal(data.isCounter && data.preference !== "live");
+            setSignalOrigin(data.signalOrigin ?? null);
             // Whether the browser's Dexie cache is worth keeping at all. The
             // exact mirror of `shouldReadLocal()` in prisma/counterMode.ts —
             // stricter than setReadsGoLocal above, which deliberately leaves

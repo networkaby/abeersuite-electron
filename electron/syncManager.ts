@@ -27,11 +27,24 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { BrowserWindow } from "electron";
 import { writeJsonAtomic } from "./stateFile";
 import { app } from "electron";
 import { noteSchemaDrift } from "./updateManager";
 import { HelperSupervisor } from "./helperSupervisor";
+
+/**
+ * This PC's name on the change channel, for this run. Called before the Next server is
+ * forked (main.ts) and before the worker is spawned (below) — whichever comes first
+ * mints it, so both inherit the same value through `...process.env`. The announcements
+ * of saves already in this replica carry it, and this PC's own worker skips them
+ * instead of running a full cycle for rows it already has (sync-engine/lib/signal.js).
+ * A random id, not the installation id: it names nothing.
+ */
+export function ensureSignalOrigin(): void {
+    process.env.COUNTER_SIGNAL_ORIGIN ??= randomUUID();
+}
 
 let worker: ChildProcess | null = null;
 
@@ -139,6 +152,7 @@ function spawnWorker(syncUrl: string): void {
     // worker needs no separate Node runtime installed on the counter — the whole point
     // of shipping one box. The `ipc` channel carries its messages to us (onWorkerMessage)
     // and our request to stop (stopSyncWorker).
+    ensureSignalOrigin();
     const proc = spawn(process.execPath, [entry], {
         cwd: dir,
         stdio: ["ignore", "pipe", "pipe", "ipc"],

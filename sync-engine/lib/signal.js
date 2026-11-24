@@ -21,8 +21,9 @@
  * watermarks and the reconcile pass, which run on their own schedule regardless of
  * whether a single signal is ever received.
  *
- * Payload is `{ topics, at }` and nothing else -- never a row -- so a forged or
- * duplicated message costs a wasted cycle and can leak nothing.
+ * Payload is `{ topics, at }` (+ `deleted`, `origin`) -- never a row -- so a forged or
+ * duplicated message costs a wasted cycle (or, with a copied `origin`, one skipped
+ * hint the timer still covers) and can leak nothing.
  *
  * ── Why the topics themselves are ignored ────────────────────────────────────
  * This module used to expand the payload's topics into a model list through a
@@ -108,8 +109,16 @@ function listen(cfg, onChange, log) {
     };
 
     const channel = client.channel(CHANNEL);
+    // This PC's name for this run (electron/syncManager.ts). A signal carrying it
+    // announces rows this replica already holds — a save it pulled itself, or an
+    // outbox push of its own rows — so a full cycle would only re-read them (egress).
+    // Never skipped when it names deleted tables: a hard delete made on Supabase is
+    // NOT in this replica until a reconcile, and that is what the signal is for.
+    const ownOrigin = process.env.COUNTER_SIGNAL_ORIGIN || null;
+
     channel.on("broadcast", { event: EVENT }, ({ payload }) => {
         const named = payload && Array.isArray(payload.deleted) ? payload.deleted : [];
+        if (ownOrigin && payload && payload.origin === ownOrigin && named.length === 0) return;
         for (const m of named) if (typeof m === "string" && m) deleted.add(m);
         if (timer) clearTimeout(timer);
         timer = setTimeout(flush, SETTLE_MS);

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { isTopic, modelsForTopics, type Topic } from "@/shared/lib/realtime/topics";
 import { pullAndWait } from "@/shared/lib/counter/replicaPull";
+import { getMode } from "@/shared/lib/prisma/counterMode";
 
 /**
  * POST /api/counter/pull — "my save just landed in Supabase; bring it into this
@@ -22,6 +23,9 @@ import { pullAndWait } from "@/shared/lib/counter/replicaPull";
 export async function POST(req: NextRequest) {
     const { response } = await requireAuth({ allowReleased: true });
     if (response) return response;
+    // Supabase is down: the save fell back to this replica and its outbox, so it is
+    // already here — and a pull could only wait out its 3 s for nothing.
+    if (getMode() === "LOCAL") return NextResponse.json({ ok: true });
 
     let topics: Topic[] = [];
     try {

@@ -332,6 +332,8 @@ export function counterStatus(): {
      *  "installed" returns when ALLOW_EXITING_DB is implemented alongside the installer
      *  work that collects the local server's credentials. */
     replicaSource: "installed" | "embedded" | null;
+    /** This PC's name on the change channel (electron/syncManager.ts); null off Electron. */
+    signalOrigin: string | null;
 } {
     const source = process.env.LOCAL_DATABASE_SOURCE;
     return {
@@ -342,5 +344,6 @@ export function counterStatus(): {
         replicaSchemaOk: S.replicaSchemaOk,
         isCounter: IS_COUNTER_PC,
         replicaSource: source === "installed" || source === "embedded" ? source : null,
+        signalOrigin: process.env.COUNTER_SIGNAL_ORIGIN ?? null,
     };
 }

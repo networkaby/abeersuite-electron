@@ -69,7 +69,9 @@ import { CHANGE_CHANNEL_NAME as CHANNEL_NAME, CHANGE_EVENT_NAME as EVENT_NAME } 
 import { ensureSyncAppliedBridge } from "./syncApplied";
 
 /** What travels on the wire: which buckets moved, and when. Nothing else. */
-export type ChangeSignal = { topics: Topic[]; at: string };
+/** `origin`: the sending PC, set only when its own replica already holds the save
+ *  (see `ownOrigin`), so that PC's worker can skip the echo. */
+export type ChangeSignal = { topics: Topic[]; at: string; origin?: string };
 
 /** A single save can fire several requests (post, then allocate, then print).
  *  Collect them into one announcement instead of one per request. */
@@ -143,11 +145,13 @@ function connect(forSend = false): Promise<ReturnType<typeof supabase.channel> |
                 const sig = payload as ChangeSignal | undefined;
                 if (!sig) return;
                 notify(sig);
-                stampLive();
+                // A replica-reading counter only borrows the socket to send; it is not
+                // listening, so it must not claim to be (see msSinceLastLive).
+                if (!replicaOnly()) stampLive();
                 // Hand it to every other tab on this machine for free — see MIRROR_KEY.
                 writeCache(MIRROR_KEY, sig, sig.at);
             })
-            .subscribe((status) => { if (status === "SUBSCRIBED") { stampLive(); resolve(ch); } });
+            .subscribe((status) => { if (status === "SUBSCRIBED") { if (!replicaOnly()) stampLive(); resolve(ch); } });
 
         // Never leave a publish waiting forever on a join that is not coming;
         // a send on an unjoined channel simply fails, which is what we want.
@@ -212,7 +216,7 @@ function flush() {
             await ch.send({
                 type:    "broadcast",
                 event:   EVENT_NAME,
-                payload: { topics, at: new Date().toISOString() } satisfies ChangeSignal,
+                payload: { topics, at: new Date().toISOString(), ...ownOrigin() } satisfies ChangeSignal,
             });
         } catch { /* a missed nudge is not an error — every surface still has Refresh */
         } finally {
@@ -310,6 +314,24 @@ function pullsAfterOwnWrite(): boolean {
  * may not: the row is still in flight, and the read would show the old state AND stamp
  * the cache past the row (see `useTicketsDelta.afterOwnWrite`).
  */
+/** This PC's name on the change channel, from `/api/counter/status`; null off Electron. */
+let signalOrigin: string | null = null;
+
+export function setSignalOrigin(origin: string | null) {
+    signalOrigin = origin;
+}
+
+/**
+ * Tag the announcement with this PC's name when THIS replica already pulled the save
+ * (`v_live`: writeRelay.ts; `live` + replica: `/api/counter/pull`) — this PC's worker
+ * then skips the echo rather than running a full cycle for rows it has (egress). Any
+ * other machine, or a save not pulled here, sends no origin, so every worker syncs.
+ */
+function ownOrigin(): { origin?: string } {
+    if (!signalOrigin) return {};
+    return writePreference === "v_live" || pullsAfterOwnWrite() ? { origin: signalOrigin } : {};
+}
+
 export function getWritesHeldUntilApplied(): boolean {
     return writePreference !== "live" || pullsAfterOwnWrite();
 }
