@@ -352,8 +352,8 @@ function CustomerPanel({ snapshot, tier, counterNo, onOpenUpsell, offersReadyCou
             {snapshot.warrantiesEnding.length > 0 && (
                 <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs">
                     <div className="mb-1 font-semibold text-amber-700">Warranties ending soon</div>
-                    {snapshot.warrantiesEnding.map((w) => (
-                        <div key={w.productName} className="flex items-center justify-between">
+                    {snapshot.warrantiesEnding.map((w, i) => (
+                        <div key={`${i}-${w.productName}`} className="flex items-center justify-between">
                             <span className="truncate">{w.productName}</span>
                             <span className="text-muted-foreground">{w.endsAt}</span>
                         </div>

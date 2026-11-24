@@ -13,6 +13,7 @@ import { latestRating, parseQualityLog } from "@/modules/customer/lib/customerQu
 import { loadPartyPricing } from "@/modules/pricing-strategy/lib/groupPricingServer";
 import { getWalkInAccountId } from "@/shared/lib/parties/offlinePersonCollision";
 import { ACCOUNT_LEDGERS } from "@/shared/lib/constants/accounting";
+import { warrantiesEndingSoon } from "@/shared/lib/warranty/warrantyEnd";
 
 // GET /api/pos/account-snapshot/[accountId]   (or /walk-in for the cash sale)
 // Polymorphic POS "we know you" panel — works for either a Person account
@@ -32,8 +33,9 @@ import { ACCOUNT_LEDGERS } from "@/shared/lib/constants/accounting";
 //                    customer's group switches loyalty off
 //   lastVisitAt    — most recent of (latest sale voucher date, latest ticket createdAt)
 //   recentTickets  — last 3 tickets (matched via Ticket.billingAccountId)
-//   warrantiesEnding — always [] for now: no warranty end date is stored.
-//                      PosCustomerPanel hides the box while it is empty.
+//   warrantiesEnding — bill-wise, item-wise: each POS / Sale line's bill date +
+//                      its product's warranty days, ending in the next 90 days
+//                      (warrantyEnd.ts); at most 5, soonest first
 //
 // Overdue calculation uses outstandings.ts (the canonical receivables
 // engine) so InvVoucher allocations are netted correctly. Migrated from
@@ -43,6 +45,43 @@ import { ACCOUNT_LEDGERS } from "@/shared/lib/constants/accounting";
 // One customer, every channel — online invoices count as spend too
 // (shared with the tier resolver so brackets and turnover agree).
 const SALE_TYPES = TIER_SPEND_VOUCHER_TYPES;
+
+// Warranties run from the bill date — POS and Sale bills only (warrantyEnd.ts).
+const WARRANTY_BILL_TYPES = ["POS", "SALE"] as const;
+// The longest warranty term decides how far back a bill can still be covered.
+// Terms change rarely, so it is kept for 10 minutes instead of read per customer.
+let longestWarranty: { at: number; days: number } | null = null;
+async function longestWarrantyDays(): Promise<number> {
+    if (longestWarranty && Date.now() - longestWarranty.at < 600_000) return longestWarranty.days;
+    const agg = await prisma.invWarrantyTerm.aggregate({ _max: { durationDays: true } });
+    longestWarranty = { at: Date.now(), days: agg._max.durationDays ?? 0 };
+    return longestWarranty.days;
+}
+
+/** This customer's bill lines that may still be under warranty, bill-wise. */
+async function warrantyLines(accountId: number) {
+    const days = await longestWarrantyDays();
+    if (days <= 0) return [];
+    const since = new Date();
+    since.setUTCDate(since.getUTCDate() - days - 1);
+    const rows = await prisma.voucherInventoryLine.findMany({
+        where: {
+            quantity: { gt: 0 },
+            universalVoucher: { partyAccountId: accountId, status: "POSTED", type: { in: [...WARRANTY_BILL_TYPES] }, date: { gte: since } },
+            product: { warrantyTerm: { durationDays: { gt: 0 } } },
+        },
+        select: {
+            universalVoucher: { select: { voucherNo: true, date: true } },
+            product: { select: { name: true, warrantyTerm: { select: { durationDays: true } } } },
+        },
+    });
+    return rows.map((r) => ({
+        productName: r.product.name,
+        billNo: r.universalVoucher.voucherNo,
+        billDate: r.universalVoucher.date,
+        durationDays: r.product.warrantyTerm?.durationDays ?? null,
+    }));
+}
 
 export async function GET(_: Request, { params }: { params: Promise<{ accountId: string }> }) {
     const { response } = await requireAuth();
@@ -134,7 +173,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
             universalVoucher: { partyAccountId: accountId, status: "POSTED", type: { in: [...SALE_TYPES] } },
         };
 
-        const [lifetimeAgg, ytdAgg, tierCtx, latestVoucher, latestTicket, recentTickets, ledgerOutstanding, loyaltyConfig, partyPricing] = await Promise.all([
+        const [lifetimeAgg, ytdAgg, tierCtx, latestVoucher, latestTicket, recentTickets, ledgerOutstanding, loyaltyConfig, partyPricing, soldWithWarranty] = await Promise.all([
             prisma.voucherDetail.aggregate({
                 where: baseWhere,
                 _sum: { totalAmount: true },
@@ -179,6 +218,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
             // response below, so the POS previews the bill the server will post.
             // Neither the flag nor the group is ever named — POS staff see no reason.
             loadPartyPricing(prisma, accountId),
+            // Bill lines still possibly under warranty (bill date + term days).
+            warrantyLines(accountId),
         ]);
         const { benefits } = partyPricing;
 
@@ -272,7 +313,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
                 statusLabel: t.ticketStatus?.label ?? "—",
                 statusColor: t.ticketStatus?.color ?? "",
             })),
-            warrantiesEnding: [] as Array<{ productName: string; endsAt: string }>,
+            // Next 90 days, soonest first, one row per bill line (warrantyEnd.ts).
+            warrantiesEnding: warrantiesEndingSoon(soldWithWarranty, new Date()),
         });
     } catch (e) {
         return handleApiError(e, "Snapshot failed");
