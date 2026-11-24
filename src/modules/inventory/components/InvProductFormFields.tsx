@@ -173,7 +173,7 @@ function taxSourceLabel(src: EffectiveTax["gstSource"]): string {
  *  not here — this dialog owns the inventory master only. */
 export type InvProductFormTab = "basics" | "pricing" | "tax" | "variants";
 
-/** Actual sale + Safety %, kept between the sale price and MRP. */
+/** Actual sale + Safety %, kept between the lowest price and MRP. */
 function printPriceFrom(f: InvProductFormState, pct: string): { rupees: string; hint: string } | null {
     const actual = Number(f.actualSaleRupees);
     if (!(actual > 0)) return null;
@@ -182,7 +182,7 @@ function printPriceFrom(f: InvProductFormState, pct: string): { rupees: string; 
     let price = round2(actual * (1 + (Number(pct) || 0) / 100));
     let note = "";
     if (mrp > 0 && price > mrp) { price = mrp; note = ", limited to MRP"; }
-    if (price < lowest) { price = lowest; note = ", raised to sale price"; }
+    if (price < lowest) { price = lowest; note = ", raised to lowest price"; }
     const rupees = price.toFixed(2);
     return { rupees, hint: `${actual} + ${Number(pct) || 0}% = ₹${rupees}${note}` };
 }
@@ -630,7 +630,7 @@ export function InvProductFormFields({
                 </p>
                 <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                        <Label>Sale price (₹)</Label>
+                        <Label>Lowest price (₹)</Label>
                         <Input
                             type="text" inputMode="decimal"
                             value={form.priceRupees}
