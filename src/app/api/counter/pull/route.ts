@@ -2,7 +2,6 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { ALL_TOPICS, modelsForTopics, type Topic } from "@/shared/lib/realtime/topics";
 import { pullAndWait } from "@/shared/lib/counter/replicaPull";
-import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 
 /**
  * POST /api/counter/pull — "my save just landed in Supabase; bring it into this
@@ -15,9 +14,6 @@ import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
  * `attachChangePublisher`) calls this instead and only then hands the save's response
  * to the screen. Without it the till learnt of its own save by a round trip through
  * Supabase Realtime plus the worker's settle window — seconds of stale screen.
- *
- * It also ANNOUNCES the save (`publishChangeServer`): the window's own socket is off
- * on a replica-reading till, so without this nobody else heard of the save.
  *
  * Never relayed (`/api/counter` is local-only in relayPolicy.ts) and never announced
  * (no topic rule matches it). Bounded and never fails: `pullAndWait` resolves within
@@ -35,9 +31,6 @@ export async function POST(req: NextRequest) {
         }
     } catch { /* bad body → nothing to pull */ }
 
-    // This till's window cannot announce while it reads the replica, so the save is
-    // announced from here — once, for other tills and the office. Not awaited.
-    void publishChangeServer(topics);
     await pullAndWait(modelsForTopics(topics));
     return NextResponse.json({ ok: true });
 }

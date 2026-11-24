@@ -130,8 +130,10 @@ if (typeof window !== "undefined") {
  * every caller is deliberate: the leader tab keeping a listener live, or a
  * publish that must go out right now regardless of leadership.
  */
-function connect(): Promise<ReturnType<typeof supabase.channel> | null> {
-    if (replicaOnly()) return Promise.resolve(null);
+function connect(forSend = false): Promise<ReturnType<typeof supabase.channel> | null> {
+    // A replica-reading counter does not LISTEN (its worker does, and wakes screens
+    // with `sync:applied`), but it still SENDS: its saves must reach other tills now.
+    if (replicaOnly() && !forSend) return Promise.resolve(null);
     if (joining) return joining;
     joining = realtimeReady.then(() => new Promise<ReturnType<typeof supabase.channel>>((resolve) => {
         const ch = supabase
@@ -204,8 +206,8 @@ function flush() {
     if (topics.length === 0) return;
     void (async () => {
         try {
-            const ch = await connect(); // any tab may publish, leader or not
-            if (!ch) return; // a replica-reading counter: the outbox flusher announces
+            const ch = await connect(true); // any tab may publish, leader or not
+            if (!ch) return;
             await ch.send({
                 type:    "broadcast",
                 event:   EVENT_NAME,
@@ -213,9 +215,9 @@ function flush() {
             });
         } catch { /* a missed nudge is not an error — every surface still has Refresh */
         } finally {
-            // Only the leader keeps the socket open on purpose; anyone else
-            // was just borrowing it to send, so let it go again.
-            if (!wantsLive) disconnect();
+            // Only the leader keeps the socket open on purpose, and never on a
+            // replica-reading counter; anyone else was just borrowing it to send.
+            if (!wantsLive || replicaOnly()) disconnect();
         }
     })();
 }
@@ -263,9 +265,10 @@ let readsGoLocal = false;
 
 export function setReadsGoLocal(local: boolean) {
     readsGoLocal = local;
-    // A counter reading its replica hears only `sync:applied`; a socket opened before
-    // the status answered is dropped (owner, 2026-11-18: screens need no Supabase,
-    // chat aside — the worker and the outbox flusher own realtime on a counter).
+    // A counter reading its replica LISTENS only to `sync:applied`; a listening socket
+    // opened before the status answered is dropped. It still announces its own saves
+    // (connect on send, drop after) — owner, 2026-11-24: the 2026-11-18 "no Supabase
+    // on a counter" reading had silenced every live / v_live save to the other tills.
     if (replicaOnly()) disconnect();
     else if (wantsLive && !channel && !joining) void connect();
 }
@@ -298,10 +301,9 @@ export function getWritesHeldUntilApplied(): boolean {
 
 /**
  * True on a till that reads its replica but writes Supabase itself (`WRITE_MODE=live`).
- * Its own save is in Supabase, not here, and this window cannot announce it (its
- * socket is off, see `replicaOnly`). So after each successful write the publisher
- * below calls `/api/counter/pull`, which announces from the server and pulls the
- * touched models into the replica, and only then hands the response on — the same
+ * Its own save is in Supabase, not here. So after each successful write the publisher
+ * below announces it as usual, then calls `/api/counter/pull`, which pulls the touched
+ * models into the replica, and only then hands the response on — the same
  * read-your-write `v_live` gets from writeRelay.ts. Set by `useCounterMode`.
  */
 let pullAfterOwnWrite = false;
@@ -347,6 +349,7 @@ export function attachChangePublisher(instance: AxiosInstance): number {
             if (url.origin !== window.location.origin) return res;
 
             const topics = topicsForApiPath(url.pathname);
+            publishChange(topics);
             if (pullAfterOwnWrite && topics.length > 0 && url.pathname !== OWN_PULL_PATH) {
                 // Hold the response until the replica has the rows. Plain fetch, not
                 // axios, so it never re-enters this interceptor; never rejects.
@@ -356,7 +359,6 @@ export function attachChangePublisher(instance: AxiosInstance): number {
                     body: JSON.stringify({ topics }),
                 }).then(() => res, () => res);
             }
-            publishChange(topics);
         } catch { /* publishing must never break the response it rode in on */ }
         return res;
     });
