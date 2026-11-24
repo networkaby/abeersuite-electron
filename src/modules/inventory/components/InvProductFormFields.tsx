@@ -66,8 +66,9 @@ export type InvProductFormState = {
     mrpRupees:   string;
     /** Print (barcode) price. Blank = automatic. */
     barcodeRupees: string;
-    /** Helper boxes that work out the print price — never saved. */
-    actualSaleRupees: string;
+    /** Helper boxes that work out the print price — never saved.
+     *  null = not typed, read back from the print price. */
+    actualSaleRupees: string | null;
     /** null = not touched, shows the tier discount. */
     safetyPct: string | null;
     // Opening stock — written directly to InvProduct.openingStock /
@@ -124,7 +125,7 @@ export const emptyInvProductForm: InvProductFormState = {
     priceRupees: "",
     mrpRupees:   "",
     barcodeRupees: "",
-    actualSaleRupees: "",
+    actualSaleRupees: null,
     safetyPct: null,
     openingQty:  "",
     openingRate: "",
@@ -185,6 +186,19 @@ function printPriceFrom(f: InvProductFormState, pct: string): { rupees: string; 
     if (price < lowest) { price = lowest; note = ", raised to lowest price"; }
     const rupees = price.toFixed(2);
     return { rupees, hint: `${actual} + ${Number(pct) || 0}% = ₹${rupees}${note}` };
+}
+
+/** Print price less Safety % — the reverse of printPriceFrom. */
+function actualSaleOf(f: InvProductFormState, pct: string): string {
+    if (f.actualSaleRupees != null) return f.actualSaleRupees;
+    const print = Number(f.barcodeRupees);
+    return print > 0 ? round2(print / (1 + (Number(pct) || 0) / 100)).toFixed(2) : "";
+}
+
+/** Re-work the print price, only when the Actual sale is the typed one. */
+function withPrintPrice(f: InvProductFormState, pct: string): InvProductFormState {
+    const price = f.actualSaleRupees != null ? printPriceFrom(f, pct) : null;
+    return price ? { ...f, barcodeRupees: price.rupees } : f;
 }
 
 export function InvProductFormFields({
@@ -251,19 +265,25 @@ export function InvProductFormFields({
     // Actual sale + Safety % → Print price. An assumption only (the real tier
     // discount is a % of cost, which a new product does not have yet).
     const safetyPct = form.safetyPct ?? (tierPct != null ? String(tierPct) : "");
-    const workedOut = printPriceFrom(form, safetyPct);
+    // The price typed last stays; the other one follows. No typed Actual sale →
+    // it is read back from the print price (typed or loaded).
+    const actualSale = actualSaleOf(form, safetyPct);
+    const workedOut = form.actualSaleRupees != null ? printPriceFrom(form, safetyPct) : null;
     const printHint = workedOut && Number(form.barcodeRupees) === Number(workedOut.rupees)
         ? workedOut.hint : "Price on the label. Blank = automatic.";
-    function setPrintHelper(change: { actualSaleRupees?: string; safetyPct?: string }) {
-        setForm((f) => {
-            const next = { ...f, ...change };
-            const pct = next.safetyPct ?? safetyPct;
-            // Leaving a box without changing it must not undo a hand-typed print price.
-            const same = Number(next.actualSaleRupees) === Number(f.actualSaleRupees)
-                && Number(pct) === Number(f.safetyPct ?? safetyPct);
-            const price = same ? null : printPriceFrom(next, pct);
-            return price ? { ...next, barcodeRupees: price.rupees } : next;
-        });
+    // A box left without a change reports its value again — that must not turn
+    // the other price into the one that follows.
+    function setActualSale(v: string) {
+        if (Number(v) === Number(actualSale)) return;
+        setForm((f) => withPrintPrice({ ...f, actualSaleRupees: v }, f.safetyPct ?? safetyPct));
+    }
+    function setSafetyPct(v: string) {
+        if (Number(v) === Number(safetyPct)) return;
+        setForm((f) => withPrintPrice({ ...f, safetyPct: v }, v));
+    }
+    function setPrintPrice(v: string) {
+        if (Number(v) === Number(form.barcodeRupees)) return;
+        setForm((f) => ({ ...f, barcodeRupees: v, actualSaleRupees: null }));
     }
 
     const onlineNameDirty = useRef(isEditMode);
@@ -659,12 +679,14 @@ export function InvProductFormFields({
                         <NumericInput
                             id="inv-product-actual-sale"
                             mode="decimal"
-                            value={form.actualSaleRupees}
-                            onValueChange={(v) => setPrintHelper({ actualSaleRupees: v })}
+                            value={actualSale}
+                            onValueChange={setActualSale}
                             disabled={limited}
                             placeholder="0.00"
                         />
-                        <p className="text-[11px] text-muted-foreground">Price you expect to get. Not saved.</p>
+                        <p className="text-[11px] text-muted-foreground">
+                            {form.actualSaleRupees == null && actualSale ? "Worked out from print price. Not saved." : "Price you expect to get. Not saved."}
+                        </p>
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="inv-product-safety-pct">Safety %</Label>
@@ -673,7 +695,7 @@ export function InvProductFormFields({
                             mode="decimal"
                             max={100}
                             value={safetyPct}
-                            onValueChange={(v) => setPrintHelper({ safetyPct: v })}
+                            onValueChange={setSafetyPct}
                             disabled={limited}
                             placeholder="0"
                         />
@@ -685,7 +707,7 @@ export function InvProductFormFields({
                             id="inv-product-print-price"
                             mode="decimal"
                             value={form.barcodeRupees}
-                            onValueChange={(v) => setForm((f) => ({ ...f, barcodeRupees: v }))}
+                            onValueChange={setPrintPrice}
                             disabled={limited}
                             placeholder="Auto"
                         />

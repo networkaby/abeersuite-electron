@@ -127,7 +127,7 @@ function rowToForm(p: InvProductRow): InvProductFormState {
         priceRupees: paiseToRupees(p.savedSalePricePaise ?? null),
         mrpRupees:   paiseToRupees(p.mrpPaise),
         barcodeRupees: paiseToRupees(p.barcodeManualPaise ?? null),
-        actualSaleRupees: "",
+        actualSaleRupees: null,
         safetyPct: null,
         openingQty:  p.openingStock != null ? String(p.openingStock) : "",
         openingRate: p.openingRate  != null ? String(p.openingRate)  : "",
