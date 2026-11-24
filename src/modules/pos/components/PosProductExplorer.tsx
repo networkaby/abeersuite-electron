@@ -33,25 +33,10 @@ const NO_PRODUCTS: ProductOption[] = [];
 /** Number of products to show in the grid before the next scroll-triggered batch. */
 const PAGE_SIZE = 50;
 
-/**
- * Best-effort thumbnail cache via the browser Cache API. Each product image URL
- * is fetched once, stored in a named cache, and served from there on subsequent
- * mounts. Falls back silently when the API is unavailable (private browsing, etc.).
- */
-const IMAGE_CACHE = typeof caches !== "undefined" ? caches.open("pos-product-thumbs") : null;
-
-async function cacheThumbnail(url: string): Promise<void> {
-    try {
-        const cache = await IMAGE_CACHE;
-        if (!cache) return;
-        const hit = await cache.match(url);
-        if (hit) return; // already cached
-        const res = await fetch(url, { mode: "cors", credentials: "omit" });
-        if (res.ok) await cache.put(url, res);
-    } catch {
-        // Non-critical — image still loads via normal HTTP cache.
-    }
-}
+// The old "pos-product-thumbs" Cache API store was written but never read (every
+// photo was fetched twice for nothing). Removed 2026-11-24; this drops what older
+// builds left in the browser. Best-effort, once per page load.
+if (typeof caches !== "undefined") void caches.delete("pos-product-thumbs").catch(() => {});
 
 /** Loose shape shared by the cached brand/category/group master rows —
  *  matching the `Opt`-style cast other master consumers already use. */
@@ -407,7 +392,7 @@ export const PosProductExplorer = memo(function PosProductExplorer({
                                         >
                                             {p.imageUrl ? (
                                                 // eslint-disable-next-line @next/next/no-img-element -- small, arbitrary-host catalogue photo; not worth next/image's remote-pattern config here
-                                                <img src={cloudinaryThumb(p.imageUrl, 64)} alt="" loading="lazy" decoding="async" onLoad={() => { void cacheThumbnail(cloudinaryThumb(p.imageUrl!, 64)); }} className="h-8 w-8 shrink-0 rounded border border-violet-200/70 object-cover dark:border-violet-500/30" />
+                                                <img src={cloudinaryThumb(p.imageUrl, 64)} alt="" loading="lazy" decoding="async" className="h-8 w-8 shrink-0 rounded border border-violet-200/70 object-cover dark:border-violet-500/30" />
                                             ) : (
                                                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-dashed border-violet-300/60 bg-violet-50/50 text-violet-400 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-400/70">
                                                     <PackageSearch size={12} />
