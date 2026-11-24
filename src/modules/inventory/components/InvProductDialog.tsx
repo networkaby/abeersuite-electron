@@ -191,6 +191,9 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
     // Attribute keys the OTHER variants have filled, and which product the form
     // was last loaded for — rows are offered only once the form holds that product.
     const [siblingAttrKeys, setSiblingAttrKeys] = useState<string[]>([]);
+    // The form holds what was opened (new form ready / product loaded). Save stays
+    // off until then, so the previous product's details can never be saved here.
+    const [ready, setReady] = useState(false);
     const [loadedFor, setLoadedFor] = useState<number | null>(null);
     const offerSiblingAttrs = useCallback(
         (members: VariantMember[]) => {
@@ -277,14 +280,22 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
 
     // Initialise form whenever the dialog opens (different mode or same mode
     // with a different editId). The tax preview clears while rendering.
-    if (useValueChange(open ? String(editId) : null, null) && open) setEffectiveTax(undefined);
+    if (useValueChange(open ? String(editId) : null, null) && open) {
+        setEffectiveTax(undefined);
+        setReady(false);
+    }
     useEffect(() => {
         if (!open) return;
+        // A late answer for a product that is no longer open is dropped.
+        let stale = false;
+        const drop = () => { stale = true; };
         if (editId == null) {
             // Fetch org defaults to pre-fill unit; explicit defaultValues always win.
             // GST fields are intentionally NOT prefilled — user must explicitly set them.
             getOrgDefaults()
                 .then((d) => {
+                    if (stale) return;
+                    setReady(true);
                     setForm({
                         ...emptyInvProductForm,
                         sku: generateSku(),
@@ -293,9 +304,11 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
                     });
                 })
                 .catch(() => {
+                    if (stale) return;
+                    setReady(true);
                     setForm({ ...emptyInvProductForm, sku: generateSku(), ...defaultValues });
                 });
-            return;
+            return drop;
         }
         // eslint-disable-next-line react-hooks/set-state-in-effect -- reset per opened product, before its load
         setLoadedFor(null);
@@ -303,18 +316,22 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
         axios
             .get<InvProductRow>(`/api/inventory/products/${editId}`)
             .then((r) => {
+                if (stale) return null;
                 const loaded = rowToForm(r.data);
                 setForm(loaded);
                 loadedPayload.current = formToPayload(loaded);
                 setLoadedFor(editId);
+                setReady(true);
                 // Load cascade preview for edit mode.
                 return axios.get<EffectiveTax>(`/api/inventory/products/${editId}/resolved-tax`);
             })
-            .then((r) => setEffectiveTax(r.data))
+            .then((r) => { if (r && !stale) setEffectiveTax(r.data); })
             .catch(() => {
+                if (stale) return;
                 toast.error("Failed to load product");
                 onOpenChange(false);
             });
+        return drop;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed the form when the dialog opens, not on every defaultValues change
     }, [open, editId, onOpenChange]);
 
@@ -409,7 +426,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
                     <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                         Cancel
                     </Button>
-                    <Button type="button" onClick={save} disabled={saving || !refsLoaded}>
+                    <Button type="button" onClick={save} disabled={saving || !refsLoaded || !ready}>
                         {saving ? "Saving…" : "Save"}
                     </Button>
                 </div>
