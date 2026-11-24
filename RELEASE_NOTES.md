@@ -1,13 +1,13 @@
-# v1.17.15
+# v1.17.16
 
-A small office update. Counters can install it whenever convenient — nothing changes at the billing counter.
+A maintenance and performance update for POS and office operations. Counters can install it whenever convenient.
 
-## Staff positions
+## Billing & Customer Panel
 
-- The Positions form now has its own **Department** box. Pick the department first, and the role list shows only that department's roles (plus the all-access ones).
-- The department you choose is saved as chosen — it no longer gets worked out from the roles. The Department choice in the Org Chart dialog now sticks too.
-- Counters still on an older version keep saving positions as before, so nothing breaks while they update.
+- **Warranties ending soon**: The POS customer panel now automatically checks recent bills and highlights products whose warranty is ending within the next 90 days.
+- **Faster image loading**: Product thumbnails now load much faster using optimized Cloudinary preview sizes instead of downloading heavy full-size images.
+- **Consistent API responses**: Offline errors, voucher year mismatches, and branch validations now display clear, uniform error messages.
 
-## Accounts
+## Office & Reports
 
-- The voucher page and the Open Bills panel are wider, so long party names and bill lists are easier to read.
+- Reorder report calculations and price label printing refactored for smoother performance and cleaner separation.
