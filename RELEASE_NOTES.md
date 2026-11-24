@@ -1,25 +1,22 @@
-# v1.17.17
+# v1.17.16
 
-An important update for every counter. Saves made on one counter now show up on the other counters and in the office within a second or two, instead of only after the next timed refresh. Please install it on every counter. It also brings the warranty, sale return, print price and printing improvements below.
+Every counter should install this. After you save something, the screen no longer goes back to the old data, and the other counters see your save sooner. It also brings a bigger Sale Return window and better price boxes in the product form.
 
-## Sync between counters
+## Saving and refreshing
 
-- **Saves reach other counters quickly again**: a bill, payment, ticket or customer saved on a counter is announced at once, so the other counters and the office update within a second or two.
-- **Your own save shows straight away**: after you save, the screen shows the new data at once, without briefly going back to the old values.
+- After a save, the counter brings the change into its own copy before the screen reloads. Make primary and Delete on product photos should no longer bounce back.
+- A save made on one counter is announced to the other counters and the office at once, so they need not wait for the next timed refresh.
 
 ## Billing
 
-- **Big Sale Return window**: Sale Return now opens in a large window like other vouchers, and the return slip prints like a normal POS bill.
-- **Warranties ending soon**: the customer panel lists products from recent bills whose warranty ends in the next 90 days.
-- **Clearer error messages**: offline, wrong voucher year, branch and phone number errors now show the same plain message on every screen.
+- The Sale Return window is bigger, and the return slip prints like a POS sale.
+- The customer panel shows **Warranties ending soon**, worked out from the bill date and the warranty term.
+- Barcodes on thermal slips now fit the paper even when the voucher number is long.
+- Known errors (offline, voucher year, branch, phone) show the same clear message in more places.
 
-## Products and pricing
+## Products and prices
 
-- **Print price box**: the product form has a Print price (barcode) box next to Sale price and MRP. Enter the Actual sale price and Safety %, and the print price is worked out for you.
-- **Sale price is now called Lowest price** in the product form and in the quick New product box.
-- **Product form is safer**: Save waits for the product to finish loading, sends only what you changed, and keeps what you typed if the page refreshes.
-- **Faster photos**: small product pictures load a light copy, so lists open faster.
-
-## Printing
-
-- **Barcode fits the slip**: the voucher number barcode on thermal slips no longer runs past the paper edge for long numbers (checked on the RETSOL TP806).
+- The product form has a **Print price** box. Actual sale and Safety % work out the print price, and typing the print price works back to Actual sale.
+- The **Sale price** box is now called **Lowest price**, also in the quick New product box.
+- Saving a product sends only what you changed, waits for the product to finish loading, and keeps what you are typing when the page refreshes.
+- Small product photos load a smaller copy, so lists open faster.
