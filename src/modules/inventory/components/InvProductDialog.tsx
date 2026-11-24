@@ -32,7 +32,7 @@ import {
 } from "@/modules/inventory/components/InvProductFormFields";
 import { InventoryMasterDropdownQuickDialog, type MasterKind } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
 import { generateSku } from "@/modules/inventory/lib/sku";
-import { deepEditPayload } from "@/modules/inventory/lib/productDeepEdit";
+import { changedFields, onlyDeepEditFields } from "@/modules/inventory/lib/productDeepEdit";
 import ProductVariantsSection from "@/modules/inventory/components/ProductVariantsSection";
 import type { VariantMember } from "@/modules/inventory/lib/variants";
 import {
@@ -185,7 +185,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
     const activeBranchId = useActiveBranchStore((st) => st.activeBranchId);
     const [effectiveTax, setEffectiveTax] = useState<EffectiveTax | null | undefined>(undefined);
     const [saving, setSaving] = useState(false);
-    // The product as loaded — limited saves send only what changed from it.
+    // The product as loaded — an edit sends only what changed from it.
     const loadedPayload = useRef<ReturnType<typeof formToPayload> | null>(null);
     const [refsLoaded, setRefsLoaded] = useState(false);
     // Attribute keys the OTHER variants have filled, and which product the form
@@ -332,8 +332,8 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
                 onOpenChange(false);
             });
         return drop;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed the form when the dialog opens, not on every defaultValues change
-    }, [open, editId, onOpenChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed the form when the dialog opens, not on every defaultValues / inline onOpenChange change (a reload loses typing)
+    }, [open, editId]);
 
     // Stock location default, once the branches and the product are in: the saved
     // branch (rowToForm), else the working branch from the top bar, else Head
@@ -355,16 +355,29 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
             return;
         }
 
-        const full: Omit<ReturnType<typeof formToPayload>, "barcodeManualPaise"> & { barcodeManualPaise?: number | null } = formToPayload(form);
-        // Every print-price save stamps the label date, so an untouched box is not sent.
-        const savedPrint = editId == null ? null : loadedPayload.current?.barcodeManualPaise ?? null;
-        if (full.barcodeManualPaise === savedPrint) delete full.barcodeManualPaise;
-        const typedPrint = full.barcodeManualPaise ?? null;
-        // Deep edit from E-Commerce: only the allowed fields the user changed.
-        const payload = limited && editId != null ? deepEditPayload(full, loadedPayload.current) : full;
-        if (limited && editId != null && Object.keys(payload).length === 0) {
+        const payload: Partial<ReturnType<typeof formToPayload>> = editPayload();
+        const typedPrint = payload.barcodeManualPaise ?? null;
+        if (editId != null && Object.keys(payload).length === 0) {
             onOpenChange(false);
             return;
+        }
+
+        /** Edit sends only what changed, so a save never puts back a value someone
+         *  else changed meanwhile, and an untouched print price keeps its label date. */
+        function editPayload() {
+            const full = formToPayload(form);
+            const loaded = loadedPayload.current;
+            if (editId == null || !loaded) {
+                const { barcodeManualPaise, ...rest } = full;
+                return barcodeManualPaise == null ? rest : full;
+            }
+            // The Stock location box fills itself when the product has none —
+            // that is not a change by the user.
+            const baseBranch = loaded.openingBranchId ?? (defaultOpeningBranchId(branches, activeBranchId) || null);
+            const changed = changedFields(full, { ...loaded, openingBranchId: baseBranch });
+            // A new opening quantity goes with the place it is lying at.
+            if ("openingStock" in changed) changed.openingBranchId = full.openingBranchId;
+            return limited ? onlyDeepEditFields(changed) : changed;
         }
 
         setSaving(true);
@@ -386,7 +399,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
         } finally {
             setSaving(false);
         }
-    }, [editId, form, limited, onOpenChange, onSaved, onCreatedProduct]);
+    }, [editId, form, limited, branches, activeBranchId, onOpenChange, onSaved, onCreatedProduct]);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
