@@ -126,3 +126,33 @@ export async function resolveTierForAccount(
 
     return { tierPeriodInputs, tierCapPct, totalCapPct, couponCapPct, invoiceCount, isNewCustomer, tier };
 }
+
+/**
+ * The highest tier % any customer can get today: every title held at its top
+ * level, after the caps. New and returning customers earn different periods, so
+ * the better of the two. An assumption for pricing screens — no bill uses it.
+ */
+export async function maxTierPct(db: Db): Promise<number> {
+    const [periods, config] = await Promise.all([
+        db.customerTierPeriod.findMany({
+            where: { enabled: true },
+            select: {
+                id: true, name: true, currentSaleScope: true, currentSaleOnly: true, fromDay: true, toDay: true,
+                levels: { where: { enabled: true }, orderBy: { minSpend: "desc" }, select: { name: true, minSpend: true, discountPct: true } },
+            },
+        }),
+        db.couponConfig.findUnique({ where: { id: 1 }, select: { maxTotalDiscountPct: true, maxTierDiscountPct: true } }),
+    ]);
+    const caps = [config?.maxTotalDiscountPct, config?.maxTierDiscountPct].filter((c) => c != null).map(Number);
+    const pctFor = (isNewCustomer: boolean) => resolveTierTitles({
+        periods: periods.map((p) => ({
+            ...p,
+            spend: isNewCustomer ? 0 : Infinity,
+            levels: p.levels.map((l) => ({ name: l.name, minSpend: Number(l.minSpend), discountPct: Number(l.discountPct) })),
+        })),
+        currentSaleValue: Infinity,
+        isNewCustomer,
+        capPct: caps.length ? Math.min(...caps) : null,
+    }).discountPct;
+    return Math.max(pctFor(true), pctFor(false));
+}

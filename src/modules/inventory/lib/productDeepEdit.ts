@@ -33,13 +33,14 @@ export function isDeepEditBody(keys: readonly string[]): boolean {
     return keys.length > 0 && keys.every((k) => allowed.has(k));
 }
 
-/** Keep only allowed fields whose value differs from the loaded product. */
-export function deepEditPayload<T extends Record<string, unknown>>(payload: T, loaded: T | null): Partial<T> {
-    const out: Partial<T> = {};
-    for (const k of DEEP_EDIT_FIELDS) {
-        if (!(k in payload)) continue;
-        if (loaded && JSON.stringify(payload[k]) === JSON.stringify(loaded[k])) continue;
-        (out as Record<string, unknown>)[k] = payload[k];
-    }
-    return out;
+/** Keep only the fields whose value differs from the loaded product. */
+export function changedFields<T extends Record<string, unknown>>(payload: T, loaded: T): Partial<T> {
+    return Object.fromEntries(
+        Object.entries(payload).filter(([k, v]) => JSON.stringify(v) !== JSON.stringify(loaded[k])),
+    ) as Partial<T>;
+}
+
+/** Keep only the fields the deep-edit permission may change. */
+export function onlyDeepEditFields<T extends Record<string, unknown>>(payload: T): Partial<T> {
+    return Object.fromEntries(Object.entries(payload).filter(([k]) => allowed.has(k))) as Partial<T>;
 }

@@ -69,6 +69,33 @@ export async function printVoucherThermal(source: VoucherSource, rawId: number, 
 }
 
 /**
+ * Print a voucher the POS just saved, by the POS sale's rule: bridge there → the
+ * slip goes straight to it and a failure is only a toast; no bridge → the 80mm
+ * page. `payload` is the slip from the save's own answer; an older server sends
+ * none, and then it is read from the print API.
+ */
+export async function printSavedVoucherThermal(
+    source: VoucherSource, rawId: number, kind: string, payload: object | null | undefined, opts: ThermalPrintOpts = {},
+): Promise<void> {
+    if (!await bridgeOk("thermal", 1200)) {
+        window.open(`${receiptHref(source, rawId, kind, "pdf")}&paper=THERMAL_80MM`, "_blank", "noopener");
+        return;
+    }
+    if (payload) {
+        try {
+            await bridgeRequest("thermal", "print/voucher", opts.openDrawer ? { ...payload, openDrawer: true } : payload);
+            return;
+        } catch { /* reported below */ }
+    } else if (await printVoucherThermalSilently(source, rawId, opts)) {
+        return;
+    }
+    if (opts.openDrawer) void openCashDrawer();
+    toast.error("Saved, but thermal print failed", {
+        action: { label: "Reprint", onClick: () => void printVoucherThermal(source, rawId, kind) },
+    });
+}
+
+/**
  * "Print after save" for the voucher forms, per the form's Thermal tick:
  *   • Thermal ON  → silent thermal print, like a POS sale (no tab). Only when
  *     the counter cannot print silently does the format-selection page open,

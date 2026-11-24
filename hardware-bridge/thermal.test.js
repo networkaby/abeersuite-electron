@@ -394,3 +394,17 @@ test("rupee: ₹ prints as Rs. by default, as the drawn slot when the PC says so
     assert.equal(drawn.indexOf(rest.RUPEE_DEFINE), 3);
     assert.equal(rest.RUPEE_DEFINE.length, 6 + 36 + 3);
 });
+
+test("barcode: never wider than the head, long voucher numbers get thinner bars", async () => {
+    const width = rest.barcodeModuleWidth;
+    assert.equal(width("SR-1001", 48), 3);
+    assert.equal(width("SR-10787-26/27", 48), 2);
+    assert.equal(width("SR-10787-26/27", 32), 2);
+    for (const cols of [48, 32]) for (let len = 1; len <= 20; len++) {
+        assert.ok((11 * len + 35) * width("X".repeat(len), cols) <= (cols === 48 ? 576 : 384), `${len} chars, ${cols} cols`);
+    }
+    const payload = { ...posPayload({ showBarcode: true }), invoiceNumber: "POS-940787-26/27" };
+    const slip = await buildPosBuffer(payload);
+    assert.ok(slip.includes(Buffer.from([0x1d, 0x77, 0x02])), "GS w 2 reaches the slip");
+    assert.ok(slip.includes(Buffer.from([0x1d, 0x6b, 0x49, 18, 0x7b, 0x42])), "CODE128 command");
+});

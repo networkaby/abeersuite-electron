@@ -280,6 +280,19 @@ async function printHeader(printer, t, branchAddress, tag) {
     printer.alignLeft();
 }
 
+// CODE128 bar thickness in dots (GS w). A head prints nothing at all for a code
+// wider than its line — the number under it still prints — so pick the thickest
+// that fits. Code set B: 11 modules per character, plus start, checksum (11 each)
+// and stop (13). The blank margin scanners need is 10 modules a side; on a
+// 58mm roll it may come from the unprintable edge, so 2 dots without it still
+// beats 1 dot, which many scanners cannot read.
+function barcodeModuleWidth(reference, cols) {
+    const dots    = cols >= 48 ? 576 : 384;
+    const modules = 11 * String(reference).length + 35;
+    if ((modules + 20) * 3 <= dots) return 3;
+    return modules * 2 <= dots ? 2 : 1;
+}
+
 // Footer chrome — mirrors ThermalFooter: [divider + terms] → [bank block] →
 // [signature] → divider → footer line → disclaimer → barcode → cut.
 async function printFooter(printer, t, reference, tag) {
@@ -310,10 +323,10 @@ async function printFooter(printer, t, reference, tag) {
     // Scannable CODE128 of the voucher number (matches the browser slip's
     // BarcodeSvg) — gated by the template. Best-effort: never block the slip.
     if (t.showBarcode && reference) {
-        // HRI text (`text: 2`) is ignored by some heads (RETSOL TP806), so the
-        // number is printed as a plain centred line under the bars, like the
+        // The printer's own HRI text is ignored by some heads (RETSOL TP806), so
+        // the number is printed as a plain centred line under the bars, like the
         // preview's BarcodeSvg caption.
-        try { printer.code128(String(reference), { height: 60, text: 0 }); printer.println(String(reference)); }
+        try { printer.code128(String(reference), { height: 60, width: barcodeModuleWidth(reference, t._cols) }); printer.println(String(reference)); }
         catch (err) { console.warn(`[thermal:${tag}] barcode skipped:`, err.message); }
     }
     printer.cut();
@@ -1580,4 +1593,4 @@ function start({ getConfig, setConfig }) {
     if (cfg.connectionType === "windows") console.log(`[thermal] windows printer: ${cfg.windowsPrinterName}`);
 }
 
-module.exports = { start, buildPosBuffer, rupeeText, RUPEE_DEFINE, buildVoucherBuffer, withDrawerKick, DRAWER_KICK };
+module.exports = { start, barcodeModuleWidth, buildPosBuffer, rupeeText, RUPEE_DEFINE, buildVoucherBuffer, withDrawerKick, DRAWER_KICK };

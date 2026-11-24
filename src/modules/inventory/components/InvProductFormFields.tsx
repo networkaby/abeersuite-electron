@@ -28,6 +28,8 @@ import {
     type NamingConfigShape,
     type NamingMasters,
 } from "@/modules/inventory/lib/productName";
+import { round2 } from "@/shared/lib/format";
+import { NumericInput } from "@/shared/components/NumericInput";
 import { PRODUCT_CODE_KINDS, type ProductCode, type ProductCodeKind } from "@/shared/lib/inventory";
 import type { BranchOption } from "@/shared/hooks";
 
@@ -62,6 +64,13 @@ export type InvProductFormState = {
     costRupees:  string;
     priceRupees: string;
     mrpRupees:   string;
+    /** Print (barcode) price. Blank = automatic. */
+    barcodeRupees: string;
+    /** Helper boxes that work out the print price — never saved.
+     *  null = not typed, read back from the print price. */
+    actualSaleRupees: string | null;
+    /** null = not touched, shows the tier discount. */
+    safetyPct: string | null;
     // Opening stock — written directly to InvProduct.openingStock /
     // openingRate / openingValue. Tally-style: this is qty held at
     // books-beginning, NOT a transactional movement — universal, no date.
@@ -115,6 +124,9 @@ export const emptyInvProductForm: InvProductFormState = {
     costRupees:  "",
     priceRupees: "",
     mrpRupees:   "",
+    barcodeRupees: "",
+    actualSaleRupees: null,
+    safetyPct: null,
     openingQty:  "",
     openingRate: "",
     openingBranchId: "",
@@ -162,6 +174,33 @@ function taxSourceLabel(src: EffectiveTax["gstSource"]): string {
  *  not here — this dialog owns the inventory master only. */
 export type InvProductFormTab = "basics" | "pricing" | "tax" | "variants";
 
+/** Actual sale + Safety %, kept between the lowest price and MRP. */
+function printPriceFrom(f: InvProductFormState, pct: string): { rupees: string; hint: string } | null {
+    const actual = Number(f.actualSaleRupees);
+    if (!(actual > 0)) return null;
+    const mrp = Number(f.mrpRupees) || 0;
+    const lowest = Number(f.priceRupees) || 0;
+    let price = round2(actual * (1 + (Number(pct) || 0) / 100));
+    let note = "";
+    if (mrp > 0 && price > mrp) { price = mrp; note = ", limited to MRP"; }
+    if (price < lowest) { price = lowest; note = ", raised to lowest price"; }
+    const rupees = price.toFixed(2);
+    return { rupees, hint: `${actual} + ${Number(pct) || 0}% = ₹${rupees}${note}` };
+}
+
+/** Print price less Safety % — the reverse of printPriceFrom. */
+function actualSaleOf(f: InvProductFormState, pct: string): string {
+    if (f.actualSaleRupees != null) return f.actualSaleRupees;
+    const print = Number(f.barcodeRupees);
+    return print > 0 ? round2(print / (1 + (Number(pct) || 0) / 100)).toFixed(2) : "";
+}
+
+/** Re-work the print price, only when the Actual sale is the typed one. */
+function withPrintPrice(f: InvProductFormState, pct: string): InvProductFormState {
+    const price = f.actualSaleRupees != null ? printPriceFrom(f, pct) : null;
+    return price ? { ...f, barcodeRupees: price.rupees } : f;
+}
+
 export function InvProductFormFields({
     form,
     setForm,
@@ -178,6 +217,7 @@ export function InvProductFormFields({
     branches = [],
     /** true = edit mode; all dirty flags start true so existing values aren't clobbered. */
     isEditMode = false,
+    tierPct = null,
     defaultTab = "basics",
     onCreateMaster,
     variantsSlot,
@@ -200,6 +240,8 @@ export function InvProductFormFields({
     /** Active branches for the opening's Stock location picker. */
     branches?: BranchOption[];
     isEditMode?: boolean;
+    /** Highest tier discount % — what Safety % starts at. */
+    tierPct?: number | null;
     /** Initial tab. Callers that deep-link into a specific concern (e.g. Tax
      * Classification report → pencil) pass "tax" so the dialog opens on it. */
     defaultTab?: InvProductFormTab;
@@ -220,6 +262,30 @@ export function InvProductFormFields({
     // Per-field dirty flags: once the user hand-edits Online name / Slug,
     // master changes stop auto-filling that field. Edit mode opens with the
     // flags `true` so existing saved values are preserved.
+    // Actual sale + Safety % → Print price. An assumption only (the real tier
+    // discount is a % of cost, which a new product does not have yet).
+    const safetyPct = form.safetyPct ?? (tierPct != null ? String(tierPct) : "");
+    // The price typed last stays; the other one follows. No typed Actual sale →
+    // it is read back from the print price (typed or loaded).
+    const actualSale = actualSaleOf(form, safetyPct);
+    const workedOut = form.actualSaleRupees != null ? printPriceFrom(form, safetyPct) : null;
+    const printHint = workedOut && Number(form.barcodeRupees) === Number(workedOut.rupees)
+        ? workedOut.hint : "Price on the label. Blank = automatic.";
+    // A box left without a change reports its value again — that must not turn
+    // the other price into the one that follows.
+    function setActualSale(v: string) {
+        if (Number(v) === Number(actualSale)) return;
+        setForm((f) => withPrintPrice({ ...f, actualSaleRupees: v }, f.safetyPct ?? safetyPct));
+    }
+    function setSafetyPct(v: string) {
+        if (Number(v) === Number(safetyPct)) return;
+        setForm((f) => withPrintPrice({ ...f, safetyPct: v }, v));
+    }
+    function setPrintPrice(v: string) {
+        if (Number(v) === Number(form.barcodeRupees)) return;
+        setForm((f) => ({ ...f, barcodeRupees: v, actualSaleRupees: null }));
+    }
+
     const onlineNameDirty = useRef(isEditMode);
     const slugDirty = useRef(isEditMode);
 
@@ -584,7 +650,7 @@ export function InvProductFormFields({
                 </p>
                 <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                        <Label>Sale price (₹)</Label>
+                        <Label>Lowest price (₹)</Label>
                         <Input
                             type="text" inputMode="decimal"
                             value={form.priceRupees}
@@ -593,7 +659,7 @@ export function InvProductFormFields({
                             placeholder="0.00"
                         />
                         <p className="text-[11px] text-muted-foreground">
-                            {limited ? "Locked — needs Inventory “Edit products”." : "Default sale rate (shop / retail)."}
+                            {limited ? "Locked — needs Inventory “Edit products”." : "Lowest price you sell at."}
                         </p>
                     </div>
                     <div className="space-y-2">
@@ -604,7 +670,50 @@ export function InvProductFormFields({
                             onChange={(e) => setForm((f) => ({ ...f, mrpRupees: e.target.value }))}
                             placeholder="0.00"
                         />
-                        <p className="text-[11px] text-muted-foreground">Maximum retail price (printed).</p>
+                        <p className="text-[11px] text-muted-foreground">Maximum price. Print price cannot go above it.</p>
+                    </div>
+                </div>
+                <div className="mt-4 grid gap-4 border-t border-border pt-4 sm:grid-cols-3">
+                    <div className="space-y-2">
+                        <Label htmlFor="inv-product-actual-sale">Actual sale (₹)</Label>
+                        <NumericInput
+                            id="inv-product-actual-sale"
+                            mode="decimal"
+                            value={actualSale}
+                            onValueChange={setActualSale}
+                            disabled={limited}
+                            placeholder="0.00"
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                            {form.actualSaleRupees == null && actualSale ? "Worked out from print price. Not saved." : "Price you expect to get. Not saved."}
+                        </p>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="inv-product-safety-pct">Safety %</Label>
+                        <NumericInput
+                            id="inv-product-safety-pct"
+                            mode="decimal"
+                            max={100}
+                            value={safetyPct}
+                            onValueChange={setSafetyPct}
+                            disabled={limited}
+                            placeholder="0"
+                        />
+                        <p className="text-[11px] text-muted-foreground">Same as the tier discount. Not saved.</p>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="inv-product-print-price">Print price (₹)</Label>
+                        <NumericInput
+                            id="inv-product-print-price"
+                            mode="decimal"
+                            value={form.barcodeRupees}
+                            onValueChange={setPrintPrice}
+                            disabled={limited}
+                            placeholder="Auto"
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                            {limited ? "Locked — needs Inventory “Edit products”." : printHint}
+                        </p>
                     </div>
                 </div>
 

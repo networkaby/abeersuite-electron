@@ -43,19 +43,19 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
-import {
-    ChevronDown, ChevronRight, Filter, Loader2, RefreshCw, TriangleAlert,
-} from "lucide-react";
+import { ChevronDown, ChevronRight, Filter, Loader2, RefreshCw, TriangleAlert } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import {
-    Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
-    BreadcrumbPage, BreadcrumbSeparator,
+    Breadcrumb,
+    BreadcrumbItem,
+    BreadcrumbLink,
+    BreadcrumbList,
+    BreadcrumbPage,
+    BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
 import { SortHeader } from "@/shared/components/SortHeader";
@@ -63,178 +63,29 @@ import { useTableSort, useEscape } from "@/shared/hooks";
 import { extractApiError } from "@/shared/lib/api";
 import { gridRowClass } from "@/shared/lib/format";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
-import { fmt } from "@/shared/lib/format/moneyInr";
 import { productMatchesSearch } from "@/shared/lib/inventory";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { useValueChange } from "@/shared/hooks/useValueChange";
-
-type MovementClass = "NEW" | "REGULAR" | "SLOW" | "NON_MOVING" | "DEAD";
-type Signal = "buy" | "review" | "ok" | "untouched" | "skipped";
-
-interface ReorderRow {
-    id: number;
-    sku: string;
-    name: string;
-    codes: { kind: string; value: string }[];
-    /** BOM output — made in-house; hidden from Smart bands, badged here. */
-    inHouse: boolean;
-    /** Never transacted, no stock, no opening, no floor — its own section. */
-    untouched: boolean;
-    movementClass: MovementClass;
-    daysSinceLastSale: number | null;
-    activeDays: number;
-    clearanceDays: number;
-    blip: boolean;
-    usageWindowDays: number;
-    bandSource: string;
-    signal: Signal;
-    skipReason: string | null;
-    unit: string | null;
-    group: string | null;
-    groupId: number | null;
-    brand: string | null;
-    category: string | null;
-    stock: number;
-    reserved: number;
-    available: number;
-    avgDailyUsage: number;
-    leadTimeDays: number;
-    ownLeadTimeDays: number | null;
-    reorderLevel: number;
-    lowStockThreshold: number;
-    threshold: number;
-    isLow: boolean;
-    shortfall: number;
-    orderPackQty: number | null;
-    minOrderQty: number | null;
-    orderQty: number;
-    packs: number | null;
-    costPaise: number | null;
-    marginPct: number | null;
-}
-
-interface Band {
-    key: string;
-    groupName: string | null;
-    costMinPaise: number | null;
-    costMaxPaise: number | null;
-    productIds: number[];
-    available: number;
-    avgDailyUsage: number;
-    leadTimeDays: number;
-    reorderLevel: number;
-    threshold: number;
-    isLow: boolean;
-    shortfall: number;
-}
-
-interface Report {
-    defaultLeadTimeDays: number;
-    tolerancePct: number;
-    branches: { id: string; name: string }[];
-    counts: { buy: number; review: number; untouched: number; skipped: number };
-    lowCount: number;
-    rows: ReorderRow[];
-    bands: Band[] | null;
-}
-
-type FilterField = "group" | "category" | "brand";
-type View = "item" | FilterField;
-
-/** "signal" is the table default — the server's buy → review → ok triage. */
-type SortKey =
-    | "signal" | "name" | "group" | "brand"
-    | "stock" | "reserved" | "available" | "avgDailyUsage"
-    | "leadTimeDays" | "reorderLevel" | "lowStockThreshold"
-    | "shortfall" | "minOrderQty" | "orderQty";
-
-/** Rank for the "signal" sort — mirrors the server's own ordering. */
-const SIGNAL_RANK: Record<Signal, number> = { buy: 0, review: 1, ok: 2, untouched: 3, skipped: 4 };
-
-const ALL_BRANCHES = "__all__";
-const NONE_KEY = "__none__";
-
-const fmtQty = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
-const fmtCost = (paise: number | null) => (paise == null ? "—" : fmt(paise / 100));
-
-const FIELD_LABELS: Record<FilterField, string> = { group: "Group", category: "Collection", brand: "Brand" };
-const NONE_LABELS: Record<FilterField, string> = { group: "Ungrouped", category: "No collection", brand: "No brand" };
-
-/// Movement-class badges — Regular stays silent (only exceptions get ink).
-const CLASS_BADGES: Record<MovementClass, { label: string; cls: string } | null> = {
-    REGULAR: null,
-    NEW: { label: "New", cls: "bg-blue-500/15 text-blue-600" },
-    SLOW: { label: "Slow", cls: "bg-amber-500/15 text-amber-600" },
-    NON_MOVING: { label: "Non-moving", cls: "bg-orange-500/15 text-orange-600" },
-    DEAD: { label: "Dead", cls: "bg-red-500/15 text-red-600" },
-};
-
-function ClassBadge({ movementClass, blip }: { movementClass: MovementClass; blip?: boolean }) {
-    const b = CLASS_BADGES[movementClass];
-    if (!b) return null;
-    return (
-        <span className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-medium ${b.cls}`}>
-            {b.label}{blip ? " · blip" : ""}
-        </span>
-    );
-}
-
-/// One checklist box inside the Filters panel (Strategies-page pattern):
-/// searchable multi-select of unique values derived from the rows, with a
-/// "(none)" entry when any row lacks the relation.
-function FilterBox({
-    field, values, hasNone, selected, onToggle, onClear,
-}: {
-    field: FilterField;
-    values: string[];
-    hasNone: boolean;
-    selected: Set<string>;
-    onToggle: (field: FilterField, key: string) => void;
-    onClear: (field: FilterField) => void;
-}) {
-    const [query, setQuery] = useState("");
-    const items: { key: string; label: string }[] = [
-        ...(hasNone ? [{ key: NONE_KEY, label: `(${NONE_LABELS[field].toLowerCase()})` }] : []),
-        ...values.map((v) => ({ key: v, label: v })),
-    ];
-    const q = query.trim().toLowerCase();
-    const visible = !q ? items : items.filter((it) => it.label.toLowerCase().includes(q));
-
-    return (
-        <div className="rounded-md border border-border bg-background p-2">
-            <div className="flex items-center justify-between text-xs mb-1.5">
-                <span className="font-medium text-foreground">{FIELD_LABELS[field]}s</span>
-                {selected.size > 0 && (
-                    <button type="button" className="text-muted-foreground hover:underline" onClick={() => onClear(field)}>
-                        clear ({selected.size})
-                    </button>
-                )}
-            </div>
-            <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={`Filter ${FIELD_LABELS[field].toLowerCase()}s…`}
-                className="mb-1.5 h-7 w-full rounded border border-input bg-transparent px-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            />
-            <ul className="max-h-44 overflow-auto space-y-1">
-                {visible.length === 0 ? (
-                    <li className="px-1 py-0.5 text-xs text-muted-foreground">No matches</li>
-                ) : visible.map((it) => (
-                    <li key={it.key}>
-                        <label className="flex items-center gap-2 text-sm cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={selected.has(it.key)}
-                                onChange={() => onToggle(field, it.key)}
-                            />
-                            <span className="truncate">{it.label}</span>
-                        </label>
-                    </li>
-                ))}
-            </ul>
-        </div>
-    );
-}
+import {
+    ReorderRow,
+    Band,
+    Report,
+    FilterField,
+    View,
+    SortKey,
+    ALL_BRANCHES,
+    NONE_KEY,
+    fmtQty,
+    fmtCost,
+    FIELD_LABELS,
+    NONE_LABELS,
+    fieldValue,
+    buildFilterOptions,
+    compareReorderRows,
+    groupItemRows,
+    buildBandSections,
+} from "./_components/reorderMath";
+import { ClassBadge, FilterBox } from "./_components/ReorderParts";
 
 export default function ReorderPage() {
     const router = useRouter();
@@ -336,22 +187,8 @@ export default function ReorderPage() {
         });
     const anyFilter = filters.size > 0;
 
-    const fieldValue = (r: ReorderRow, field: FilterField): string | null =>
-        field === "group" ? r.group : field === "category" ? r.category : r.brand;
 
-    const filterOptions = useMemo(() => {
-        const out = {} as Record<FilterField, { values: string[]; hasNone: boolean }>;
-        for (const field of ["group", "category", "brand"] as FilterField[]) {
-            const set = new Set<string>();
-            let hasNone = false;
-            for (const r of data?.rows ?? []) {
-                const v = fieldValue(r, field);
-                if (v) set.add(v); else hasNone = true;
-            }
-            out[field] = { values: [...set].sort((a, b) => a.localeCompare(b)), hasNone };
-        }
-        return out;
-    }, [data]);
+    const filterOptions = useMemo(() => buildFilterOptions(data?.rows ?? []), [data]);
 
     const rowById = useMemo(() => new Map((data?.rows ?? []).map((r) => [r.id, r])), [data]);
 
@@ -373,27 +210,7 @@ export default function ReorderPage() {
     // outrank one that has a brand just because "" < "A"); numbers sort
     // numerically. Ties fall back to name so the order is stable across
     // renders — without that, equal rows can swap places on every re-render.
-    const compareRows = useCallback((a: ReorderRow, b: ReorderRow): number => {
-        const dir = sortDir === "asc" ? 1 : -1;
-        const text = (x: string | null, y: string | null) =>
-            x == null && y == null ? 0 : x == null ? 1 : y == null ? -1
-                : x.localeCompare(y, undefined, { sensitivity: "base" }) * dir;
-        const num = (x: number | null, y: number | null) =>
-            ((x ?? -Infinity) - (y ?? -Infinity)) * dir;
-
-        let d = 0;
-        switch (sortKey) {
-            // Default view: triage order, biggest shortfall first inside each band.
-            case "signal": d = (SIGNAL_RANK[b.signal] - SIGNAL_RANK[a.signal]) * dir
-                || (a.shortfall - b.shortfall) * dir; break;
-            case "name": d = text(a.name, b.name); break;
-            case "group": d = text(a.group, b.group); break;
-            case "brand": d = text(a.brand, b.brand); break;
-            case "minOrderQty": d = num(a.minOrderQty, b.minOrderQty); break;
-            default: d = num(a[sortKey] as number, b[sortKey] as number); break;
-        }
-        return d || a.name.localeCompare(b.name);
-    }, [sortKey, sortDir]);
+    const compareRows = useCallback((a: ReorderRow, b: ReorderRow): number => compareReorderRows(a, b, sortKey, sortDir), [sortKey, sortDir]);
 
     // Sorted HERE rather than per-view, so the Group/Category/Brand section
     // views inherit the active header sort instead of overriding it.
@@ -483,26 +300,7 @@ export default function ReorderPage() {
         });
 
     // ── Hierarchy sections (Item tab, view ≠ item) — stock-summary pattern ────
-    const grouped = useMemo(() => {
-        if (view === "item") return [];
-        const map = new Map<string, ReorderRow[]>();
-        for (const r of itemRows) {
-            const k = fieldValue(r, view) ?? NONE_LABELS[view];
-            const arr = map.get(k);
-            if (arr) arr.push(r); else map.set(k, [r]);
-        }
-        return [...map.entries()]
-            .map(([name, items]) => ({
-                name,
-                // Already ordered by the active header sort (itemRows is sorted
-                // upstream) — re-sorting here would silently override whichever
-                // column the user clicked.
-                items,
-                lowCount: items.filter((r) => r.isLow).length,
-                totalShortfall: items.reduce((s, r) => s + r.shortfall, 0),
-            }))
-            .sort((a, b) => b.lowCount - a.lowCount || a.name.localeCompare(b.name));
-    }, [itemRows, view]);
+    const grouped = useMemo(() => groupItemRows(itemRows, view), [itemRows, view]);
 
     const bandRows = useMemo(
         () => (data?.bands ?? []).filter((b) =>
@@ -518,34 +316,7 @@ export default function ReorderPage() {
     // carry — deliberate duplication, the supplier-order view ("ordering
     // Frontech today: which shortfalls can that order fill?"). Never sum
     // shortfall across sections — the same band repeats.
-    const bandSections = useMemo(() => {
-        if (tab !== "smart" || view === "item") return [];
-        const map = new Map<string, Band[]>();
-        const add = (name: string, b: Band) => {
-            const arr = map.get(name);
-            if (arr) arr.push(b); else map.set(name, [b]);
-        };
-        for (const b of bandRows) {
-            if (view === "group") {
-                add(b.groupName ?? NONE_LABELS.group, b);
-            } else {
-                const names = new Set<string>();
-                for (const id of b.productIds) {
-                    const r = rowById.get(id);
-                    if (r) names.add(fieldValue(r, view) ?? NONE_LABELS[view]);
-                }
-                for (const n of names) add(n, b);
-            }
-        }
-        return [...map.entries()]
-            .map(([name, bands]) => ({
-                name,
-                bands,
-                lowCount: bands.filter((x) => x.isLow).length,
-                totalShortfall: bands.reduce((s, x) => s + x.shortfall, 0),
-            }))
-            .sort((a, b) => b.lowCount - a.lowCount || b.totalShortfall - a.totalShortfall || a.name.localeCompare(b.name));
-    }, [tab, view, bandRows, rowById]);
+    const bandSections = useMemo(() => (tab !== "smart" ? [] : buildBandSections(bandRows, view, rowById)), [tab, view, bandRows, rowById]);
 
     // Auto-expand every section whenever the active section set changes
     // (stock-summary pattern) — collapse individually or via the global toggle.
