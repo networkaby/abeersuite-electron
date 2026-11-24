@@ -29,3 +29,37 @@ test("screen total matches the server total for the same line", () => {
     const server = calcLineTotals({ quantity: 3, rate: 249.99, discountPct: 7, discountAmt: 0, taxRate: 18 }).amount;
     assert.equal(screen, server);
 });
+
+// ── Paired-field editors (moved out of TradingVoucherPage.tsx) ──────────────
+import { withDiscountPct, withDiscountAmt, withTaxAmount, withLineAmount, withTaxFromRate } from "./tradingVoucherKinds";
+
+test("discount %: 2 x ₹100 at 18%, 10% off -> ₹20 off, tax ₹32.40", () => {
+    const l = withDiscountPct(line({ quantity: "2", rate: "100", taxRate: "18" }), "10", false);
+    assert.equal(l.discountAmt, "20.00");
+    assert.equal(l.taxAmount, "32.40");
+});
+
+test("discount ₹: ₹20 off ₹200 -> 10%", () => {
+    const l = withDiscountAmt(line({ quantity: "2", rate: "100", taxRate: "18" }), "20", false);
+    assert.equal(l.discountPct, "10.00");
+    assert.equal(l.taxAmount, "32.40");
+});
+
+test("zero results stay blank, not 0.00", () => {
+    const l = withDiscountPct(line({ quantity: "1", rate: "100" }), "0", false);
+    assert.equal(l.discountAmt, "");
+    assert.equal(withTaxFromRate(line({ quantity: "1", rate: "100" }), false).taxAmount, "");
+});
+
+test("tax ₹ typed solves the GST % (excl and incl price)", () => {
+    assert.equal(withTaxAmount(line({ quantity: "1", rate: "100" }), "18", false).taxRate, "18.00");
+    // ₹118 incl, ₹18 tax -> 18%
+    assert.equal(withTaxAmount(line({ quantity: "1", rate: "118" }), "18", true).taxRate, "18.00");
+});
+
+test("amount typed solves the rate: ₹236 for 2 at 18% -> ₹100 each", () => {
+    const l = withLineAmount(line({ quantity: "2", taxRate: "18" }), "236", false);
+    assert.equal(l.rate, "100");
+    assert.equal(l.taxAmount, "36.00");
+    assert.equal(withLineAmount(line({ quantity: "2", taxRate: "18" }), "236", true).rate, "118");
+});

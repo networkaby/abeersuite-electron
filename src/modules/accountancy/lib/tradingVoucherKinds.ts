@@ -116,6 +116,70 @@ export function reprice(l: LineState, rateInclTax: boolean): LineState {
     };
 }
 
+// ── Paired-field recompute (the line editors) ──────────────────────────────
+// Moved out of TradingVoucherPage.tsx unchanged. When the derived value is zero
+// we write "" so the cell stays blank (no noisy "0.00" prefills). The other
+// recompute functions delegate to withTaxFromRate for tax.
+
+/** Tax ₹ re-derived from the line's GST %, on (gross − discount). */
+export function withTaxFromRate(l: LineState, rateInclTax: boolean): LineState {
+    const tRate = parseFloat(l.taxRate) || 0;
+    const gross = (parseFloat(l.quantity) || 0) * exclusiveRate(l, rateInclTax);
+    const discAmt = parseFloat(l.discountAmt) || 0;
+    const taxable = gross - discAmt;
+    const newTaxAmt = taxable * (tRate / 100);
+    return { ...l, taxAmount: newTaxAmt > 0 ? newTaxAmt.toFixed(2) : "" };
+}
+
+/** Discount % typed → discount ₹ and tax follow. */
+export function withDiscountPct(l: LineState, pct: string, rateInclTax: boolean): LineState {
+    const gross = (parseFloat(l.quantity) || 0) * exclusiveRate(l, rateInclTax);
+    const p = parseFloat(pct) || 0;
+    const amt = gross * (p / 100);
+    return withTaxFromRate({ ...l, discountPct: pct, discountAmt: amt > 0 ? amt.toFixed(2) : "" }, rateInclTax);
+}
+
+/** Discount ₹ typed → discount % and tax follow. */
+export function withDiscountAmt(l: LineState, amt: string, rateInclTax: boolean): LineState {
+    const gross = (parseFloat(l.quantity) || 0) * exclusiveRate(l, rateInclTax);
+    const a = parseFloat(amt) || 0;
+    const pct = gross > 0 ? (a / gross) * 100 : 0;
+    return withTaxFromRate({ ...l, discountAmt: amt, discountPct: pct > 0 ? pct.toFixed(2) : "" }, rateInclTax);
+}
+
+/** Tax ₹ typed → the GST % is solved for. */
+export function withTaxAmount(l: LineState, amt: string, rateInclTax: boolean): LineState {
+    const a = parseFloat(amt) || 0;
+    if (rateInclTax) {
+        // The exclusive price itself depends on the GST % being solved for,
+        // so solve it off the inclusive gross with discount % held:
+        //   a = r · G(1−p)/(1+r)  →  r = a / (G(1−p) − a)
+        const inclNet = (parseFloat(l.quantity) || 0) * (parseFloat(l.rate) || 0)
+            * (1 - (parseFloat(l.discountPct) || 0) / 100);
+        const r = a > 0 && inclNet > a ? (a / (inclNet - a)) * 100 : 0;
+        if (r <= 0) return { ...l, taxAmount: amt, taxRate: "" };
+        return { ...reprice({ ...l, taxRate: r.toFixed(2) }, true), taxAmount: amt };
+    }
+    const gross = (parseFloat(l.quantity) || 0) * (parseFloat(l.rate) || 0);
+    const discAmt = parseFloat(l.discountAmt) || 0;
+    const taxable = gross - discAmt;
+    const r = taxable > 0 ? (a / taxable) * 100 : 0;
+    return { ...l, taxAmount: amt, taxRate: r > 0 ? r.toFixed(2) : "" };
+}
+
+/** Line amount typed → the rate is solved for (six decimals, see serviceLine). */
+export function withLineAmount(l: LineState, amt: string, rateInclTax: boolean): LineState {
+    const a = parseFloat(amt) || 0;
+    const qty = parseFloat(l.quantity) || 1;
+    const tRate = parseFloat(l.taxRate) || 0;
+    // exclusive: amount = qty * rate * (1 + tax/100) → rate = amount / (qty * (1 + tax/100))
+    // inclusive: amount = qty * inclusiveRate → inclusiveRate = amount / qty
+    const newRate = rateInclTax && tRate > 0
+        ? a / qty
+        : (tRate > 0 ? a / (qty * (1 + tRate / 100)) : a / qty);
+    return withTaxFromRate({ ...l, rate: newRate > 0 ? String(Number(newRate.toFixed(6))) : "", amountInput: amt }, rateInclTax);
+}
+
 /** Build a voucher line from a catalogue service.
  *
  * The catalogue price is TAX-INCLUSIVE — ₹300 on a service at 18% means the

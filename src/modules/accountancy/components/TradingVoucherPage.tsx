@@ -91,7 +91,8 @@ import type { CreditLimitDetail } from "@/shared/lib/accountancy/checkCreditLimi
 // Per-kind config + pure line math — extracted to lib/tradingVoucherKinds.ts.
 import {
     type LineState, type SelectedService, newLine, nextLineId, calcLine, numSigned,
-    reprice, serviceLine, exclusiveRate,
+    reprice, serviceLine,
+    withTaxFromRate, withDiscountPct, withDiscountAmt, withTaxAmount, withLineAmount,
     type TradingKind, PER_KIND,
 } from "@/modules/accountancy/lib/tradingVoucherKinds";
 import { SERVICE_VOUCHER_TYPES } from "@/shared/lib/accountancy/serviceCharges";
@@ -1004,66 +1005,17 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         });
     };
 
-    // Recompute helpers — when the derived value is zero we write "" so the
-    // cell stays blank (no noisy "0.00" prefills). The other recompute
-    // functions delegate to this for tax.
-    const withTaxFromRate = (l: LineState): LineState => {
-        const tRate = parseFloat(l.taxRate) || 0;
-        const gross = (parseFloat(l.quantity) || 0) * exclusiveRate(l, prefs.rateInclTax);
-        const discAmt = parseFloat(l.discountAmt) || 0;
-        const taxable = gross - discAmt;
-        const newTaxAmt = taxable * (tRate / 100);
-        return { ...l, taxAmount: newTaxAmt > 0 ? newTaxAmt.toFixed(2) : "" };
-    };
-    const setLineDiscountPct = (id: number, pct: string) => setLines((ls) => ls.map((l) => {
-        if (l.id !== id) return l;
-        const gross = (parseFloat(l.quantity) || 0) * exclusiveRate(l, prefs.rateInclTax);
-        const p = parseFloat(pct) || 0;
-        const amt = gross * (p / 100);
-        return withTaxFromRate({ ...l, discountPct: pct, discountAmt: amt > 0 ? amt.toFixed(2) : "" });
-    }));
-    const setLineDiscountAmt = (id: number, amt: string) => setLines((ls) => ls.map((l) => {
-        if (l.id !== id) return l;
-        const gross = (parseFloat(l.quantity) || 0) * exclusiveRate(l, prefs.rateInclTax);
-        const a = parseFloat(amt) || 0;
-        const pct = gross > 0 ? (a / gross) * 100 : 0;
-        return withTaxFromRate({ ...l, discountAmt: amt, discountPct: pct > 0 ? pct.toFixed(2) : "" });
-    }));
-    const setLineTaxRate = (id: number, rate: string) => setLines((ls) => ls.map((l) => {
-        if (l.id !== id) return l;
-        return withTaxFromRate({ ...l, taxRate: rate });
-    }));
-    const setLineTaxAmount = (id: number, amt: string) => setLines((ls) => ls.map((l) => {
-        if (l.id !== id) return l;
-        const a = parseFloat(amt) || 0;
-        if (prefs.rateInclTax) {
-            // The exclusive price itself depends on the GST % being solved for,
-            // so solve it off the inclusive gross with discount % held:
-            //   a = r · G(1−p)/(1+r)  →  r = a / (G(1−p) − a)
-            const inclNet = (parseFloat(l.quantity) || 0) * (parseFloat(l.rate) || 0)
-                * (1 - (parseFloat(l.discountPct) || 0) / 100);
-            const r = a > 0 && inclNet > a ? (a / (inclNet - a)) * 100 : 0;
-            if (r <= 0) return { ...l, taxAmount: amt, taxRate: "" };
-            return { ...reprice({ ...l, taxRate: r.toFixed(2) }, true), taxAmount: amt };
-        }
-        const gross = (parseFloat(l.quantity) || 0) * (parseFloat(l.rate) || 0);
-        const discAmt = parseFloat(l.discountAmt) || 0;
-        const taxable = gross - discAmt;
-        const r = taxable > 0 ? (a / taxable) * 100 : 0;
-        return { ...l, taxAmount: amt, taxRate: r > 0 ? r.toFixed(2) : "" };
-    }));
-    const setLineAmount = (id: number, amt: string) => setLines((ls) => ls.map((l) => {
-        if (l.id !== id) return l;
-        const a = parseFloat(amt) || 0;
-        const qty = parseFloat(l.quantity) || 1;
-        const tRate = parseFloat(l.taxRate) || 0;
-        // exclusive: amount = qty * rate * (1 + tax/100) → rate = amount / (qty * (1 + tax/100))
-        // inclusive: amount = qty * inclusiveRate → inclusiveRate = amount / qty
-        const newRate = prefs.rateInclTax && tRate > 0
-            ? a / qty
-            : (tRate > 0 ? a / (qty * (1 + tRate / 100)) : a / qty);
-        return withTaxFromRate({ ...l, rate: newRate > 0 ? String(Number(newRate.toFixed(6))) : "", amountInput: amt });
-    }));
+    // Recompute helpers live in tradingVoucherKinds.ts (pure, unit-tested).
+    const setLineDiscountPct = (id: number, pct: string) =>
+        setLines((ls) => ls.map((l) => (l.id === id ? withDiscountPct(l, pct, prefs.rateInclTax) : l)));
+    const setLineDiscountAmt = (id: number, amt: string) =>
+        setLines((ls) => ls.map((l) => (l.id === id ? withDiscountAmt(l, amt, prefs.rateInclTax) : l)));
+    const setLineTaxRate = (id: number, rate: string) =>
+        setLines((ls) => ls.map((l) => (l.id === id ? withTaxFromRate({ ...l, taxRate: rate }, prefs.rateInclTax) : l)));
+    const setLineTaxAmount = (id: number, amt: string) =>
+        setLines((ls) => ls.map((l) => (l.id === id ? withTaxAmount(l, amt, prefs.rateInclTax) : l)));
+    const setLineAmount = (id: number, amt: string) =>
+        setLines((ls) => ls.map((l) => (l.id === id ? withLineAmount(l, amt, prefs.rateInclTax) : l)));
     const setLineQtyOrRate = (id: number, patch: { quantity?: string; rate?: string }) =>
         setLines((ls) => ls.map((l) => (l.id === id ? reprice({ ...l, ...patch }, prefs.rateInclTax) : l)));
 
