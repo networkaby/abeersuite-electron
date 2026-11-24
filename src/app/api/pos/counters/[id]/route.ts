@@ -198,8 +198,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         // and the push sees the server still naming a device and RESTORES the binding
         // (reconcileCounterBinding in sync/push.ts). The admin would see "released"
         // while the counter kept billing, until the next pull put the binding back on
-        // screen too. Same rule, and the same reasoning, as release-mine/route.ts and
-        // claim-number/route.ts: a device lock is decided in the DB or not at all. If
+        // screen too. Same rule, and the same reasoning, as claim-number/route.ts: a
+        // device lock is decided in the DB or not at all. If
         // Supabase is unreachable the caller gets the error rather than a local write
         // that will be reverted.
         //

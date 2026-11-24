@@ -82,7 +82,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         }
         const idRangeStart = blockStartFor(counter.counterNumber);
 
-        // Authoritative, like the read above and like release-mine: a device lock is
+        // Authoritative, like the read above and like the admin release: a device lock is
         // decided in the DB or not at all. Written through `prisma` this went into the
         // replica and out through the outbox — and on a PC that holds no counter the
         // replica is empty (replicaWipe.ts), so there is no row there to update. The
