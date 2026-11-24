@@ -41,7 +41,7 @@ import {
 } from "@/modules/inventory/lib/productName";
 import type { ProductCode, Masters } from "@/shared/lib/inventory";
 import { syncMasters, invalidateMasters } from "@/shared/lib/inventory";
-import { parseRupeesToPaise } from "@/shared/lib/format";
+import { formatRupeesFromPaise, parseRupeesToPaise } from "@/shared/lib/format";
 import { useActiveBranchStore } from "@/store/activeBranchStore";
 import { useBranchOptions, defaultOpeningBranchId } from "@/shared/hooks";
 import { useValueChange } from "@/shared/hooks/useValueChange";
@@ -74,6 +74,8 @@ export type InvProductRow = {
     /** Human SAVED sale price (paise) — what the "Sale price" field edits. */
     savedSalePricePaise?: number | null;
     mrpPaise: number | null;
+    /** Saved print (barcode) price. */
+    barcodeManualPaise?: number | null;
     openingStock: number | string | null;
     openingRate: number | string | null;
     openingStockDate: string | null;
@@ -124,6 +126,7 @@ function rowToForm(p: InvProductRow): InvProductFormState {
         costRupees:  "",
         priceRupees: paiseToRupees(p.savedSalePricePaise ?? null),
         mrpRupees:   paiseToRupees(p.mrpPaise),
+        barcodeRupees: paiseToRupees(p.barcodeManualPaise ?? null),
         openingQty:  p.openingStock != null ? String(p.openingStock) : "",
         openingRate: p.openingRate  != null ? String(p.openingRate)  : "",
         openingBranchId: p.openingBranchId ?? "",
@@ -142,6 +145,7 @@ export type InvProductCreatedRow = {
     id: number; sku: string; name: string;
     stock: number | null; lowStockThreshold: number;
     effectiveSalePricePaise: number | null; mrpPaise: number | null;
+    barcodeManualPaise: number | null;
     /** PR 4 enriches the products POST response with this from a LAST_INWARD walk. */
     lastPurchasePaise: number | null;
     unit: { code: string }; brand: { name: string } | null; codes: ProductCode[];
@@ -334,7 +338,11 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
             return;
         }
 
-        const full = formToPayload(form);
+        const full: Omit<ReturnType<typeof formToPayload>, "barcodeManualPaise"> & { barcodeManualPaise?: number | null } = formToPayload(form);
+        // Every print-price save stamps the label date, so an untouched box is not sent.
+        const savedPrint = editId == null ? null : loadedPayload.current?.barcodeManualPaise ?? null;
+        if (full.barcodeManualPaise === savedPrint) delete full.barcodeManualPaise;
+        const typedPrint = full.barcodeManualPaise ?? null;
         // Deep edit from E-Commerce: only the allowed fields the user changed.
         const payload = limited && editId != null ? deepEditPayload(full, loadedPayload.current) : full;
         if (limited && editId != null && Object.keys(payload).length === 0) {
@@ -347,10 +355,12 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
             if (editId == null) {
                 const res = await axios.post<InvProductCreatedRow>("/api/inventory/products", payload);
                 toast.success("Product created");
+                warnPrintPrice(typedPrint, res.data.barcodeManualPaise);
                 onCreatedProduct?.(res.data);
             } else {
-                await axios.patch(`/api/inventory/products/${editId}`, payload);
+                const res = await axios.patch<InvProductRow>(`/api/inventory/products/${editId}`, payload);
                 toast.success("Product updated");
+                warnPrintPrice(typedPrint, res.data.barcodeManualPaise ?? null);
             }
             onOpenChange(false);
             onSaved?.();
@@ -433,6 +443,13 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
     );
 }
 
+/** The server keeps a typed print price between the lowest price and MRP — say so when it moved. */
+function warnPrintPrice(typed: number | null, saved: number | null) {
+    if (typed == null || typed === saved) return;
+    if (saved == null) toast.error("Print price could not be saved. Open the product and save it again.");
+    else toast.warning(`Print price saved as ${formatRupeesFromPaise(saved)} — it must stay between the lowest price and MRP.`);
+}
+
 /** The PATCH / POST body for a form state. */
 function formToPayload(form: InvProductFormState) {
     const filledAttrs = form.attrs.filter((a) => a.key.trim() && a.value.trim());
@@ -462,6 +479,7 @@ function formToPayload(form: InvProductFormState) {
         // the engine-materialized effectiveSalePricePaise.
         savedSalePricePaise: parseRupeesToPaise(form.priceRupees),
         mrpPaise:   parseRupeesToPaise(form.mrpRupees),
+        barcodeManualPaise: parseRupeesToPaise(form.barcodeRupees) || null,
         openingStock:     form.openingQty.trim()  === "" ? null : Number(form.openingQty),
         openingRate:      form.openingRate.trim() === "" ? null : Number(form.openingRate),
         openingBranchId:  form.openingBranchId || null,

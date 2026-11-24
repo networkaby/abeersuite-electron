@@ -138,6 +138,9 @@ const productPricing = {
     // this; the recompute engine never overwrites it (unlike effectiveSalePricePaise).
     savedSalePricePaise: z.number().int().nonnegative().nullish(),
     mrpPaise:   z.number().int().nonnegative().nullish(),
+    // Print (barcode) price typed on the product form — saved through
+    // barcodeStore.ts. null = the AUTO one; absent = leave it alone.
+    barcodeManualPaise: z.number().int().min(1).nullish(),
 };
 
 // Books-beginning opening stock — written directly to the InvProduct row, no

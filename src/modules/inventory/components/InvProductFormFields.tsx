@@ -28,6 +28,7 @@ import {
     type NamingConfigShape,
     type NamingMasters,
 } from "@/modules/inventory/lib/productName";
+import { NumericInput } from "@/shared/components/NumericInput";
 import { PRODUCT_CODE_KINDS, type ProductCode, type ProductCodeKind } from "@/shared/lib/inventory";
 import type { BranchOption } from "@/shared/hooks";
 
@@ -62,6 +63,8 @@ export type InvProductFormState = {
     costRupees:  string;
     priceRupees: string;
     mrpRupees:   string;
+    /** Print (barcode) price. Blank = automatic. */
+    barcodeRupees: string;
     // Opening stock — written directly to InvProduct.openingStock /
     // openingRate / openingValue. Tally-style: this is qty held at
     // books-beginning, NOT a transactional movement — universal, no date.
@@ -115,6 +118,7 @@ export const emptyInvProductForm: InvProductFormState = {
     costRupees:  "",
     priceRupees: "",
     mrpRupees:   "",
+    barcodeRupees: "",
     openingQty:  "",
     openingRate: "",
     openingBranchId: "",
@@ -582,7 +586,7 @@ export function InvProductFormFields({
                     All amounts in rupees (₹). Cost is derived from the Tax &amp; opening tab&apos;s
                     opening rate + subsequent Purchase vouchers — set it there, not here.
                 </p>
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-3">
                     <div className="space-y-2">
                         <Label>Sale price (₹)</Label>
                         <Input
@@ -593,7 +597,7 @@ export function InvProductFormFields({
                             placeholder="0.00"
                         />
                         <p className="text-[11px] text-muted-foreground">
-                            {limited ? "Locked — needs Inventory “Edit products”." : "Default sale rate (shop / retail)."}
+                            {limited ? "Locked — needs Inventory “Edit products”." : "Lowest price you sell at."}
                         </p>
                     </div>
                     <div className="space-y-2">
@@ -604,7 +608,21 @@ export function InvProductFormFields({
                             onChange={(e) => setForm((f) => ({ ...f, mrpRupees: e.target.value }))}
                             placeholder="0.00"
                         />
-                        <p className="text-[11px] text-muted-foreground">Maximum retail price (printed).</p>
+                        <p className="text-[11px] text-muted-foreground">Maximum price. Print price cannot go above it.</p>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="inv-product-print-price">Print price (₹)</Label>
+                        <NumericInput
+                            id="inv-product-print-price"
+                            mode="decimal"
+                            value={form.barcodeRupees}
+                            onValueChange={(v) => setForm((f) => ({ ...f, barcodeRupees: v }))}
+                            disabled={limited}
+                            placeholder="Auto"
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                            {limited ? "Locked — needs Inventory “Edit products”." : "Price on the label. Blank = automatic."}
+                        </p>
                     </div>
                 </div>
 

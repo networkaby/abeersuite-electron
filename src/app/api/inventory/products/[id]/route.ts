@@ -16,6 +16,7 @@ import { productOpeningValue } from "@/modules/inventory/lib/stockValue";
 import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { loadLastInwardCostMap } from "@/modules/inventory/lib/valuation";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
+import { rebaseBarcodeGap, saveAutoBarcodes, saveManualBarcode } from "@/modules/pricing-strategy/lib/barcodeStore";
 import { openingBranchForSave } from "@/modules/inventory/lib/liveStock";
 import { requireWritableBranchId } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
@@ -235,6 +236,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 Sentry.captureException(err, { tags: { source: "price-recompute", productId: String(id) } });
                 console.error("[price-recompute] failed for product", id, err);
             });
+        }
+        // Print price — after the recompute, same rules as Pricing Strategy:
+        // typed → saved as manual; null → the auto one. Otherwise a Sale Price
+        // change while it is the selling voice only re-measures the gap.
+        if (b.barcodeManualPaise != null) await saveManualBarcode(id, b.barcodeManualPaise);
+        else if (b.barcodeManualPaise === null) await saveAutoBarcodes([id]);
+        else if (current.effectiveSalePriceSource === "SAVED" && b.savedSalePricePaise !== undefined
+            && b.savedSalePricePaise !== current.savedSalePricePaise) await rebaseBarcodeGap([id]);
+        if (b.barcodeManualPaise !== undefined) {
+            const fresh = await prisma.invProduct.findUnique({ where: { id }, select: { barcodeManualPaise: true } });
+            if (fresh) row.barcodeManualPaise = fresh.barcodeManualPaise;
         }
         // A naming source changed → rebuild this product's name on the server, so
         // every caller (grid, dialog, e-commerce form, AI, bulk) gets the same name.
