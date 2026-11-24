@@ -7,7 +7,7 @@
  *
  * Captures only the bare minimum to make a usable product line on a sale:
  *   Name (pre-filled from the typed query) · SKU (auto-generated, editable)
- *   · Unit (required FK) · Sale Price ₹ (optional) · Cost Price ₹ (optional)
+ *   · Unit (required FK) · Lowest price ₹ (optional) · Cost Price ₹ (optional)
  *
  * On success, returns a lookup-shaped product so the parent combobox can
  * append it to its in-memory list and auto-select it without a full re-fetch.
@@ -261,7 +261,7 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
                         </div>
                     </div>
                     <div className="grid gap-1.5">
-                        <Label htmlFor="np-sale">Sale Price (₹) <span className="text-muted-foreground">opt</span></Label>
+                        <Label htmlFor="np-sale">Lowest price (₹) <span className="text-muted-foreground">opt</span></Label>
                         <Input
                             id="np-sale"
                             type="text"
