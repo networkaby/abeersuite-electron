@@ -1,5 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
-import { resolveEffectiveCreditLimit } from "./creditLimit";
+import { creditLimitRefusal, resolveEffectiveCreditLimit } from "./creditLimit";
 import { closingForAccounts } from "@/modules/accountancy/lib/aggregateLedger";
 
 // ── CreditLimitError ─────────────────────────────────────────────────────────
@@ -118,28 +118,9 @@ export async function checkCreditLimit(
         required:    current + additionalDebit,
     };
 
-    // An advance covers the unpaid part: the sale's debit only eats into money
-    // the customer already left with us, so no credit is extended at all —
-    // whatever the limit, a zero one included. Sub-paise residue is rounding.
-    if (current + additionalDebit <= 0.005) return;
-
-    if (limit === 0) {
-        throw new CreditLimitError(
-            "No credit facility — the sale must be paid in full.",
-            "NO_CREDIT_ALLOWED",
-            detail,
-        );
-    }
-
-    if (current + additionalDebit > limit) {
-        throw new CreditLimitError(
-            `Credit limit ₹${limit.toLocaleString("en-IN")} exceeded. ` +
-            `Outstanding: ₹${Math.max(0, current).toLocaleString("en-IN")}, ` +
-            `this sale adds: ₹${additionalDebit.toLocaleString("en-IN")} on credit.`,
-            "CREDIT_LIMIT_EXCEEDED",
-            detail,
-        );
-    }
+    // The decision itself is pure (creditLimit.ts, unit-tested).
+    const refusal = creditLimitRefusal({ limit, balance: current, onCredit: additionalDebit });
+    if (refusal) throw new CreditLimitError(refusal.reason, refusal.code, detail);
 }
 
 // ── checkSaleCreditLimit ─────────────────────────────────────────────────────

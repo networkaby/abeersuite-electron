@@ -34,6 +34,35 @@ export function computeAutoCreditLimit(salesInWindow: number, cfg: CreditLimitCo
     return Math.max(0, limit);
 }
 
+/**
+ * Pure — may this sale put `onCredit` on the customer's account? null = yes.
+ * `limit` is the effective one (max(manual, auto)); `balance` is what the
+ * customer owes before the sale (signed, an advance is negative).
+ *
+ *   • An advance covers the unpaid part: the debit only eats into money the
+ *     customer already left with us, so no credit is extended at all — whatever
+ *     the limit, a zero one included. Sub-paise residue is rounding.
+ *   • Limit 0 → no credit facility.
+ *   • Otherwise refused when balance + onCredit goes over the limit.
+ */
+export function creditLimitRefusal(args: { limit: number; balance: number; onCredit: number }):
+    { code: "NO_CREDIT_ALLOWED" | "CREDIT_LIMIT_EXCEEDED"; reason: string } | null {
+    const { limit, balance, onCredit } = args;
+    if (onCredit <= 0) return null;
+    if (balance + onCredit <= 0.005) return null;
+    if (limit === 0) return { code: "NO_CREDIT_ALLOWED", reason: "No credit facility — the sale must be paid in full." };
+    if (balance + onCredit > limit) {
+        return {
+            code: "CREDIT_LIMIT_EXCEEDED",
+            reason:
+                `Credit limit ₹${limit.toLocaleString("en-IN")} exceeded. ` +
+                `Outstanding: ₹${Math.max(0, balance).toLocaleString("en-IN")}, ` +
+                `this sale adds: ₹${onCredit.toLocaleString("en-IN")} on credit.`,
+        };
+    }
+    return null;
+}
+
 const AUTO_OFF: CreditLimitConfigLite = { autoEnabled: false, windowDays: 90, pctOfSales: 0, maxAutoLimit: null, roundToStep: 0 };
 
 // Load the singleton config as plain numbers (Prisma Decimals flattened).
