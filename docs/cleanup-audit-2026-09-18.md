@@ -288,7 +288,7 @@ Expect no output.
 This is a product decision, not clean-up: wire the button, or remove the endpoint **and** correct the
 tooltip wording.
 
-### D2 · Three superseded endpoints
+### D2 · Three superseded endpoints — **done 2026-11-24, all three deleted**
 
 | Route | Lines | Superseded by |
 |---|---|---|
