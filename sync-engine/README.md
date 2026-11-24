@@ -513,11 +513,15 @@ post a purchase on Vercel, this worker hears it for free and syncs only what mov
 Polling every table on a schedule is the expensive way to notice a change, and
 egress is the whole reason this project exists.
 
-**Its own echo is skipped.** A signal whose `origin` is this PC's own
+**Its own echo waits a minute.** A signal whose `origin` is this PC's own
 `COUNTER_SIGNAL_ORIGIN` (minted by `electron/syncManager.ts`, shared with the Next
-server) announces rows this replica already holds — a save it pulled itself, or an
-outbox push of its own rows — so no cycle runs for it. One naming `deleted` tables
-still runs: a delete made on Supabase is not here until a reconcile.
+server) announces a save this replica already pulled, or an outbox push of its own
+rows. Instead of a cycle per save, index.js runs one sweep `SWEEP_MS` (60 s) later —
+any whole-table cycle before then cancels it — so a busy till pays one cycle a minute
+for its own saves, and a table the save's targeted pull did not name still arrives
+within that minute. A burst counts as "own" only if every signal in it was; one naming
+`deleted` tables never does. Signals still sync every table: per-topic narrowing was
+removed on 2026-09-01 (see lib/signal.js) and stays removed.
 
 **The signal is a hint, never the source of truth.** It is published by an axios
 interceptor running *in a browser*, so a write made by a script, a seed, a

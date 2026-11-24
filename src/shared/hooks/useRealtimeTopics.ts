@@ -14,8 +14,8 @@
  *    the instant it is looked at again — unconditionally, not only when a signal
  *    happened to arrive while it was away. A quiet channel is ambiguous: it could
  *    mean nothing changed, or it could mean this machine's connection was down
- *    the whole time (the browser minimized, the leader tab's timers throttled —
- *    see `appChannel.ts`'s `msSinceLastLive`). Silence can't be trusted to mean
+ *    the whole time (the browser minimized, the leader tab's timers throttled).
+ *    Silence can't be trusted to mean
  *    "nothing to do," so the read on return isn't conditional on remembering a
  *    signal; it is exactly `usePolling`'s own "fires once immediately on becoming
  *    visible again," just triggered by a change channel instead of a timer.

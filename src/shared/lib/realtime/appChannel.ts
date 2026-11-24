@@ -45,32 +45,27 @@
  * VM's socket instead. The payload, the topic vocabulary and every listener
  * stay as they are.
  *
- * PROVING THE CONNECTION IS ACTUALLY ALIVE. A quiet channel is ambiguous —
- * "nothing arrived in 20 minutes" could mean nothing changed, or it could mean
- * the leader tab's WebSocket silently died, or the whole browser was minimized
- * and its timers throttled to a crawl. The leader stamps `LIVE_KEY` in
- * `localStorage` on its own clock (`LIVE_STAMP_MS`, independent of Supabase
- * traffic) as well as on every real signal it receives — a JS timer that has
- * stopped ticking IS the browser having gone away, which is a fact a stamp's
- * absence records directly rather than something inferred from message
- * sparsity. Any tab, leader or not, can read `msSinceLastLive()` to ask "was
- * anyone actually here recently" — `useRealtimeTopics` uses it to decide
- * whether a quiet spell can be trusted or needs a real re-read once the tab is
- * looked at again.
+ * A SLEPT TAB RECONNECTS. A quiet channel is ambiguous — nothing changed, or the
+ * leader's WebSocket died while the browser was minimized and its timers throttled.
+ * The leader ticks on its own clock (`TICK_MS`); a tick that comes late proves the
+ * tab was paused, and the socket is re-joined rather than trusted. (A proof-of-life
+ * stamp in `localStorage`, `msSinceLastLive`, once sat beside this; nothing ever read
+ * it, and it was removed 2026-11-24. A screen re-reads on becoming visible anyway —
+ * see `useRealtimeTopics`.)
  */
 
 import type { AxiosInstance } from "axios";
 import { realtimeReady, supabase } from "@/shared/lib/supabase/supabaseClient";
 import { topicsForApiPath, type Topic } from "./topics";
 import type { WritePreference } from "@/shared/lib/prisma/counterMode";
-import { writeCache, readCache, subscribeToCache } from "@/shared/lib/browser/pollCache";
+import { writeCache, subscribeToCache } from "@/shared/lib/browser/pollCache";
 import { isTabLeader, onBecomeLeader } from "./tabLeader";
 import { CHANGE_CHANNEL_NAME as CHANNEL_NAME, CHANGE_EVENT_NAME as EVENT_NAME } from "./channel";
 import { ensureSyncAppliedBridge } from "./syncApplied";
 
 /** What travels on the wire: which buckets moved, and when. Nothing else. */
-/** `origin`: the sending PC, set only when its own replica already holds the save
- *  (see `ownOrigin`), so that PC's worker can skip the echo. */
+/** `origin`: the sending PC, set only when its own replica already pulled the save
+ *  (see `ownOrigin`), so that PC's worker can defer its echo. */
 export type ChangeSignal = { topics: Topic[]; at: string; origin?: string };
 
 /** A single save can fire several requests (post, then allocate, then print).
@@ -85,14 +80,11 @@ const JOIN_TIMEOUT_MS = 5_000;
  *  per computer" section. Org-wide, not per-user, so a plain key is fine. */
 const MIRROR_KEY = "app-changes:v1";
 
-/** Leader's proof-of-life stamp — see the module doc's "proving the connection
- *  is actually alive" section. */
-const LIVE_KEY = "app-changes-live:v1";
-/** How often the leader stamps on its own clock, Supabase traffic or not. */
-const LIVE_STAMP_MS = 60_000;
-/** A gap wider than this many stamp intervals means the tab that should have
- *  been ticking wasn't — treat it as a possible miss, not a quiet spell. */
-const LIVE_GAP_TOLERANCE = 2.5;
+/** How often the leader's own clock ticks, Supabase traffic or not. */
+const TICK_MS = 60_000;
+/** A gap wider than this many ticks means the tab that should have been ticking
+ *  wasn't — its socket may have died under it. */
+const LATE_TICKS = 2.5;
 
 type Listener = (sig: ChangeSignal) => void;
 
@@ -101,17 +93,6 @@ let channel: ReturnType<typeof supabase.channel> | null = null;
 let joining: Promise<ReturnType<typeof supabase.channel>> | null = null;
 let wantsLive = false;
 let liveTimer: ReturnType<typeof setInterval> | null = null;
-
-function stampLive() {
-    writeCache(LIVE_KEY, {}, new Date().toISOString());
-}
-
-/** Milliseconds since the last proof-of-life stamp, or `null` if there has
- *  never been one (a fresh profile, or Realtime has never run here). */
-export function msSinceLastLive(): number | null {
-    const at = readCache<Record<string, never>>(LIVE_KEY)?.computedAt;
-    return at ? Date.now() - new Date(at).getTime() : null;
-}
 
 function notify(sig: ChangeSignal) {
     if (!sig || !Array.isArray(sig.topics) || sig.topics.length === 0) return;
@@ -145,13 +126,10 @@ function connect(forSend = false): Promise<ReturnType<typeof supabase.channel> |
                 const sig = payload as ChangeSignal | undefined;
                 if (!sig) return;
                 notify(sig);
-                // A replica-reading counter only borrows the socket to send; it is not
-                // listening, so it must not claim to be (see msSinceLastLive).
-                if (!replicaOnly()) stampLive();
                 // Hand it to every other tab on this machine for free — see MIRROR_KEY.
                 writeCache(MIRROR_KEY, sig, sig.at);
             })
-            .subscribe((status) => { if (status === "SUBSCRIBED") { if (!replicaOnly()) stampLive(); resolve(ch); } });
+            .subscribe((status) => { if (status === "SUBSCRIBED") resolve(ch); });
 
         // Never leave a publish waiting forever on a join that is not coming;
         // a send on an unjoined channel simply fails, which is what we want.
@@ -161,25 +139,18 @@ function connect(forSend = false): Promise<ReturnType<typeof supabase.channel> |
     return joining;
 }
 
-/**
- * The leader's own clock, independent of whatever Supabase does or doesn't
- * send. Ticking on schedule IS the tab being alive; a late tick reveals the
- * gap directly (the OS throttled/suspended this tab's timers) rather than
- * leaving it to be inferred from how long it has been since the last business
- * signal, which a merely QUIET connection would look identical to.
- */
+/** The leader's own clock — see the module doc's "a slept tab reconnects". */
 function startLiveTicker() {
     if (liveTimer) return;
     let lastTick = Date.now();
     liveTimer = setInterval(() => {
-        const late = Date.now() - lastTick > LIVE_STAMP_MS * LIVE_GAP_TOLERANCE;
+        const late = Date.now() - lastTick > TICK_MS * LATE_TICKS;
         lastTick = Date.now();
-        stampLive();
         // This tab's own timer just proved it was paused for a while — the
         // channel object may be holding a connection that died under it, so
         // don't trust it silently; force a fresh join.
         if (late) { disconnect(); void connect(); }
-    }, LIVE_STAMP_MS);
+    }, TICK_MS);
 }
 
 /** Drop the socket. Safe to call whether connected, still joining, or already
@@ -324,7 +295,7 @@ export function setSignalOrigin(origin: string | null) {
 /**
  * Tag the announcement with this PC's name when THIS replica already pulled the save
  * (`v_live`: writeRelay.ts; `live` + replica: `/api/counter/pull`) — this PC's worker
- * then skips the echo rather than running a full cycle for rows it has (egress). Any
+ * then folds the echo into one deferred sweep instead of a cycle per save. Any
  * other machine, or a save not pulled here, sends no origin, so every worker syncs.
  */
 function ownOrigin(): { origin?: string } {

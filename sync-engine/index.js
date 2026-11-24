@@ -198,6 +198,18 @@ function getResident() {
     return proc;
 }
 
+/** How long this PC's own echo waits before its sweep. See the signal listener. */
+const SWEEP_MS = 60 * 1000;
+let sweepTimer = null;
+
+function scheduleSweep() {
+    if (sweepTimer || shuttingDown) return;
+    sweepTimer = setTimeout(() => {
+        sweepTimer = null;
+        runCycle("change signal");
+    }, SWEEP_MS);
+}
+
 function scheduleNext(ms) {
     if (shuttingDown) return;
     if (timer) clearTimeout(timer);
@@ -228,6 +240,8 @@ function runCycle(reason, targeted = null, opts = {}) {
     running = true;
     reading = false;
     inFlight = targeted;
+    // Any whole-table cycle covers what a pending sweep would have.
+    if (!targeted && sweepTimer) { clearTimeout(sweepTimer); sweepTimer = null; }
     protectedCycle = !!opts.protected;
     log(`cycle start (${reason}${targeted ? `: ${targeted.models.length} model(s)` : ""}${opts.protected ? ", resumed" : ""})`);
 
@@ -368,8 +382,12 @@ function onRelayPull(request) {
 
 // A signal only ever makes a sync happen SOONER. Correctness lives in the
 // watermarks and the reconcile pass, which run on the interval regardless.
-stopSignal = signal.listen(cfg, (deleted) => {
+// This PC's own echo (a save its replica already pulled) folds into one sweep a
+// minute later: a busy till runs one cycle a minute for its own saves instead of one
+// per save, and a table its pull did not name still arrives within that minute.
+stopSignal = signal.listen(cfg, (deleted, ownEcho) => {
     for (const m of deleted) pendingVerify.add(m);
+    if (ownEcho) { scheduleSweep(); return; }
     runCycle("change signal");
 }, log);
 stopLocalSignal = localSignal.listen(cfg, onRelayPull, log);

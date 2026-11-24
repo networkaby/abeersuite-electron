@@ -162,11 +162,12 @@ export function topicsForApiPath(pathname: string): Topic[] {
  * new rows in the replica. Names are `prisma/sync-tables.json` model names; a `child`
  * table comes along with its parent, so only parents are listed.
  *
- * This is NOT the worker's old topic map, which silently NARROWED what a signal synced
- * and rotted to 60-of-113 coverage. A model missing here degrades softly: the browser's
- * own change signal makes the worker pull everything a moment later, exactly as it does
- * today. So the list only has to name what a screen shows immediately after its own
- * save — and adding one line here is the whole fix when a screen turns out to lag.
+ * This is NOT the worker's old topic map, which NARROWED what a signal synced and
+ * rotted to 60-of-113 coverage (signals still sync every table). A model missing here,
+ * or a route writing a table its topic does not list, degrades softly: the till's own
+ * worker sweeps every table within a minute of its own save (SWEEP_MS in
+ * sync-engine/index.js). Every synced root table must still appear somewhere —
+ * `topics.test.ts` fails when one does not — so the own-save pull stays complete.
  */
 export const TOPIC_MODELS: Readonly<Record<Topic, readonly string[]>> = {
     ledger: [
@@ -174,6 +175,8 @@ export const TOPIC_MODELS: Readonly<Record<Topic, readonly string[]>> = {
         "Account", "PosShift", "PosHandover", "GiftCard", "LoyaltyAccount", "CouponRedemption",
         "RedemptionHold", "AdditionalCostAllocation", "AuditLog",
         "BankStatementImport", "BankStatementLine", "BankStatementMatch",
+        "CommissionEntry", "BillNotification", "EmailNotification", "LoyaltyMilestoneAward",
+        "BiGstPlanningConfig", "BiGstPlanningFy", "BiGstPlanningMonth",
     ],
     stock: ["InvProduct", "InvProductBranch", "UniversalVoucher"],
     tickets: [
@@ -182,12 +185,13 @@ export const TOPIC_MODELS: Readonly<Record<Topic, readonly string[]>> = {
     ],
     parties: [
         "Person", "Company", "PersonCompany", "Phone", "Email", "SocialConnection", "CustomerGroup",
-        "CustomerTier", "CustomerTierPeriod", "CreditLimitConfig", "Account",
+        "CustomerTier", "CustomerTierPeriod", "CreditLimitConfig", "Account", "ShopCart",
     ],
     catalogue: [
         "InvProduct", "InvBrand", "InvCategory", "InvProductGroup", "InvAttributeMaster", "InvUnit",
         "InvBom", "InvWarrantyTerm", "InvNamingConfig", "GstRate", "Coupon", "CouponConfig",
         "StrategyPoint", "PosService", "LoyaltyConfig", "LoyaltyEarnRule", "LoyaltyMilestone",
+        "InvAttributeMasterGroup", "InvProductCollection",
     ],
     tasks: ["TaskRecurrence", "WallPost", "User"],
     settings: [
@@ -196,9 +200,13 @@ export const TOPIC_MODELS: Readonly<Record<Topic, readonly string[]>> = {
         "PosCounter", "PaymentGateway", "AccountGroup", "OfflinePolicy", "BackupConfig",
         "VoucherPrintTemplate", "VoucherSeries", "Device", "CustomerGroup",
         "CreditLimitConfig", "StaffProfile", "StaffSalary", "AiKey", "AiChainStep",
+        "AiKeyUsage", "CommissionHead", "CommissionOverride", "Holiday", "LeaveType", "PayrollRun",
+        "IncomingApi", "UserCounterPin", "DueReminderRule", "DueReminderSettings", "DueReminderLog",
+        "Campaign", "Post", "Review", "EmailTemplate", "EmailOptOut", "FacebookPageLink",
+        "GoogleBusinessLink", "WhatsAppNumber", "WhatsAppTemplate", "WhatsAppTemplateApproval",
     ],
     chat: ["ChatRoom", "ChatRoomMember"],
-    messages: ["Message", "MessageClaim"],
+    messages: ["Message", "MessageClaim", "MessageConversation"],
 };
 
 /** The union of `TOPIC_MODELS` for `topics`, de-duplicated. */

@@ -25,7 +25,7 @@ import { primaryRealtimePair } from "@/shared/lib/db/dbPrimary";
 export type ServerSignalExtras = {
     deleted?: readonly string[];
     /** This PC's name (electron/syncManager.ts), for rows this replica already holds —
-     *  its own worker skips the echo. See appChannel `ownOrigin`. */
+     *  its own worker defers the echo. See appChannel `ownOrigin`. */
     origin?: string;
 };
 

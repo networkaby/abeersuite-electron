@@ -201,7 +201,7 @@ export async function flushOnce(localUrl: string): Promise<number> {
             //
             // Best-effort by contract — a missed announcement costs latency, never data,
             // because every consumer still has its own interval and reconcile pass.
-            // These rows came FROM this replica, so this PC's own worker skips the echo.
+            // These rows came FROM this replica, so this PC's own worker defers the echo.
             const origin = process.env.COUNTER_SIGNAL_ORIGIN;
             void publishChangeServer(ALL_TOPICS, origin ? { origin } : {});
         }

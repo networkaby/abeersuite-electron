@@ -22,8 +22,8 @@
  * whether a single signal is ever received.
  *
  * Payload is `{ topics, at }` (+ `deleted`, `origin`) -- never a row -- so a forged or
- * duplicated message costs a wasted cycle (or, with a copied `origin`, one skipped
- * hint the timer still covers) and can leak nothing.
+ * duplicated message costs a wasted cycle (or, with a copied `origin`, a cycle put off
+ * by a minute) and can leak nothing.
  *
  * ── Why the topics themselves are ignored ────────────────────────────────────
  * This module used to expand the payload's topics into a model list through a
@@ -65,7 +65,8 @@ const EVENT = "changed";
 const SETTLE_MS = 750;
 
 /**
- * Subscribe and call `onChange(deleted)` once per settled burst of signals.
+ * Subscribe and call `onChange(deleted, ownEcho)` once per settled burst of signals.
+ * `ownEcho` is true when every signal in the burst was this PC's own (see ownOrigin).
  *
  * `deleted` is the union of every `payload.deleted` seen in the burst: Prisma model
  * names the office server reports after a hard delete (src/shared/lib/realtime/
@@ -100,9 +101,11 @@ function listen(cfg, onChange, log) {
     const flush = () => {
         timer = null;
         const models = [...deleted];
+        const ownEcho = allOwn;
         deleted = new Set();
+        allOwn = true;
         try {
-            onChange(models);
+            onChange(models, ownEcho);
         } catch (e) {
             log(`realtime: sync from signal failed: ${e.message}`);
         }
@@ -110,15 +113,16 @@ function listen(cfg, onChange, log) {
 
     const channel = client.channel(CHANNEL);
     // This PC's name for this run (electron/syncManager.ts). A signal carrying it
-    // announces rows this replica already holds — a save it pulled itself, or an
-    // outbox push of its own rows — so a full cycle would only re-read them (egress).
-    // Never skipped when it names deleted tables: a hard delete made on Supabase is
-    // NOT in this replica until a reconcile, and that is what the signal is for.
+    // announces rows this replica already pulled — its own save, or an outbox push of
+    // its own rows — so index.js defers it into one sweep instead of a cycle now. Not
+    // when it names deleted tables: a delete made on Supabase is not here until a
+    // reconcile. A burst is "own" only if EVERY signal in it was.
     const ownOrigin = process.env.COUNTER_SIGNAL_ORIGIN || null;
+    let allOwn = true;
 
     channel.on("broadcast", { event: EVENT }, ({ payload }) => {
         const named = payload && Array.isArray(payload.deleted) ? payload.deleted : [];
-        if (ownOrigin && payload && payload.origin === ownOrigin && named.length === 0) return;
+        if (!(ownOrigin && payload && payload.origin === ownOrigin && named.length === 0)) allOwn = false;
         for (const m of named) if (typeof m === "string" && m) deleted.add(m);
         if (timer) clearTimeout(timer);
         timer = setTimeout(flush, SETTLE_MS);
@@ -134,6 +138,7 @@ function listen(cfg, onChange, log) {
         if (status === "SUBSCRIBED") {
             log(`realtime: listening on ${CHANNEL}${subscribedBefore ? " (reconnected - catching up)" : ""}`);
             if (subscribedBefore) {
+                allOwn = false; // a reconnect may have missed anything
                 if (timer) clearTimeout(timer);
                 timer = setTimeout(flush, SETTLE_MS);
             }

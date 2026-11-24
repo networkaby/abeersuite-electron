@@ -9,10 +9,15 @@
 // ── Three triggers, none of them a timer ────────────────────────────────────
 //   1. Mount (boot) — replica.
 //   2. The `settings` change signal — the moment an admin's release is announced, ASKED
-//      OF THE CLOUD (see below). This is the one that makes a release land in seconds.
+//      OF THE CLOUD (see below). This is the one that makes a release land in seconds —
+//      on a counter whose window LISTENS to Supabase, i.e. one reading live. A counter
+//      reading its replica does not listen (its worker does; appChannel `replicaOnly`),
+//      so this never fires there and the handler ignores a stray one.
 //   3. The sync worker reporting it pulled rows into PosCounter — replica. The safety
 //      net for a signal that never arrived (the socket was down, the release was made
-//      by a script), and the only trigger that works offline.
+//      by a script), the only trigger that works offline, and on a replica-reading
+//      counter THE trigger: the worker hears the same signal, pulls PosCounter within
+//      a second or two and reports it.
 //
 // This used to poll Supabase every five minutes and on every window focus; both are
 // gone, they cost egress for a question an event answers.
@@ -58,7 +63,7 @@ import { signOutTo } from "@/shared/lib/auth/signOutTo";
 import { toast } from "sonner";
 import { reconcileCounterSetup } from "@/shared/lib/counter/setupGate";
 import { ensureSyncAppliedBridge, SYNC_APPLIED_EVENT, type SyncAppliedInfo } from "@/shared/lib/realtime/syncApplied";
-import { onChangeSignal } from "@/shared/lib/realtime/appChannel";
+import { getReadsGoLocal, onChangeSignal } from "@/shared/lib/realtime/appChannel";
 import { isElectronEnvironment } from "@/shared/lib/bridge/bridgeHealth";
 
 /** The only model whose pull can change this PC's binding. */
@@ -115,6 +120,8 @@ export default function CounterReconciler() {
         // that short-circuits to "not-set-up" every time.
         let settle: ReturnType<typeof setTimeout> | null = null;
         const offSignal = !isElectronEnvironment() ? null : onChangeSignal((sig) => {
+            // A replica-reading counter waits for trigger 3 (see the header).
+            if (getReadsGoLocal()) return;
             if (!sig.topics.includes(COUNTER_TOPIC) || settle || releasing.current) return;
             settle = setTimeout(() => { settle = null; void run(true); }, SETTLE_MS);
         });

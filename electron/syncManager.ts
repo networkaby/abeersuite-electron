@@ -38,8 +38,8 @@ import { HelperSupervisor } from "./helperSupervisor";
  * This PC's name on the change channel, for this run. Called before the Next server is
  * forked (main.ts) and before the worker is spawned (below) — whichever comes first
  * mints it, so both inherit the same value through `...process.env`. The announcements
- * of saves already in this replica carry it, and this PC's own worker skips them
- * instead of running a full cycle for rows it already has (sync-engine/lib/signal.js).
+ * of saves already in this replica carry it, and this PC's own worker folds them into
+ * one sweep a minute later instead of a cycle per save (sync-engine/lib/signal.js).
  * A random id, not the installation id: it names nothing.
  */
 export function ensureSignalOrigin(): void {
