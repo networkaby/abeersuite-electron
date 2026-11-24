@@ -77,6 +77,7 @@ import { isThisPcReleased, isThisPcWithoutCounter, readCounterSetup } from "@/sh
 import { modelsForTopics, topicsForApiPath } from "@/shared/lib/realtime/topics";
 import { RELAY_ACTIVE, RELAY_HEADER, UncertainBillKeys, billKeyOf, contentLengthOf, decideRelay } from "./relayPolicy";
 import { pullAndWait } from "./replicaPull";
+import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { getToken } from "next-auth/jwt";
 import { isStaffTokenRevoked, SESSION_COOKIE_NAME } from "@/auth";
 import { ACTING_USER_HEADER, COUNTER_KEY_REFUSED } from "@/shared/lib/auth/counterRelayAuth";
@@ -362,7 +363,12 @@ export async function relayWrite(req: NextRequest): Promise<Response | null> {
         // error answer keeps it — a 403 or a 400 comes from the sign-in or body checks
         // that run before the route's key check, so it proves nothing about the earlier try.
         uncertainKeys.forget(billKey);
-        await pullAndWait(modelsForTopics(topicsForApiPath(pathname)));
+        const topics = topicsForApiPath(pathname);
+        // The office announces nothing for a relayed save (it has no browser in the
+        // path) and this till's browser is silent while it reads the replica — so the
+        // relay is the one place that knows the save landed. Best-effort, not awaited.
+        void publishChangeServer(topics);
+        await pullAndWait(modelsForTopics(topics));
     }
     return toResponse(reply);
 }

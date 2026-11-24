@@ -296,6 +296,22 @@ export function getWritesHeldUntilApplied(): boolean {
     return writesHeldUntilApplied;
 }
 
+/**
+ * True on a till that reads its replica but writes Supabase itself (`WRITE_MODE=live`).
+ * Its own save is in Supabase, not here, and this window cannot announce it (its
+ * socket is off, see `replicaOnly`). So after each successful write the publisher
+ * below calls `/api/counter/pull`, which announces from the server and pulls the
+ * touched models into the replica, and only then hands the response on — the same
+ * read-your-write `v_live` gets from writeRelay.ts. Set by `useCounterMode`.
+ */
+let pullAfterOwnWrite = false;
+
+export function setPullAfterOwnWrite(on: boolean) {
+    pullAfterOwnWrite = on;
+}
+
+const OWN_PULL_PATH = "/api/counter/pull";
+
 /** Announce that these topics changed. Coalesced; safe to call as often as you like.
  *  Supabase broadcast does not echo to the sender, so the acting tab is untouched —
  *  it already knows, and updates through its own save path. */
@@ -330,7 +346,17 @@ export function attachChangePublisher(instance: AxiosInstance): number {
             // vocabulary to one either.
             if (url.origin !== window.location.origin) return res;
 
-            publishChange(topicsForApiPath(url.pathname));
+            const topics = topicsForApiPath(url.pathname);
+            if (pullAfterOwnWrite && topics.length > 0 && url.pathname !== OWN_PULL_PATH) {
+                // Hold the response until the replica has the rows. Plain fetch, not
+                // axios, so it never re-enters this interceptor; never rejects.
+                return fetch(OWN_PULL_PATH, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ topics }),
+                }).then(() => res, () => res);
+            }
+            publishChange(topics);
         } catch { /* publishing must never break the response it rode in on */ }
         return res;
     });

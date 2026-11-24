@@ -27,7 +27,7 @@
 
 import { useSyncExternalStore } from "react";
 import axios from "axios";
-import { setWritesGoLocal, setReadsGoLocal, setWritesHeldUntilApplied } from "@/shared/lib/realtime/appChannel";
+import { setWritesGoLocal, setReadsGoLocal, setWritesHeldUntilApplied, setPullAfterOwnWrite } from "@/shared/lib/realtime/appChannel";
 import { setServedByReplica } from "@/shared/lib/browser/localDb";
 import { COUNTER_STATUS_POLL_MS, COUNTER_STATUS_IDLE_POLL_MS } from "@/shared/lib/constants/polling";
 
@@ -121,10 +121,15 @@ function refresh(): Promise<void> {
             setWritesGoLocal(data.writePreference === "local");
             // Where reads come from decides which signal a screen waits for: the
             // replica's "rows applied" line rather than the early Supabase nudge.
-            setReadsGoLocal(data.isCounter && data.preference !== "live");
+            const readsLocal = data.isCounter && data.preference !== "live";
+            setReadsGoLocal(readsLocal);
+            // A replica-reading till that writes Supabase itself pulls its own save in
+            // before the screen sees the response. See setPullAfterOwnWrite.
+            const pullOwn = readsLocal && data.writePreference === "live";
+            setPullAfterOwnWrite(pullOwn);
             // Whether a screen may re-read right after its own save, or must wait for
             // the replica to say the rows have landed. See setWritesHeldUntilApplied.
-            setWritesHeldUntilApplied(data.writePreference === "v_live");
+            setWritesHeldUntilApplied(data.writePreference === "v_live" || pullOwn);
             // Whether the browser's Dexie cache is worth keeping at all. The
             // exact mirror of `shouldReadLocal()` in prisma/counterMode.ts —
             // stricter than setReadsGoLocal above, which deliberately leaves
