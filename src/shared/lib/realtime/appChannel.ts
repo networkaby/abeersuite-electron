@@ -302,14 +302,16 @@ function pullsAfterOwnWrite(): boolean {
 }
 
 /**
- * Whether this machine's writes are HELD until its replica has the rows: `v_live`
- * (writeRelay.ts) and the live + replica case above. On such a till a screen may
- * re-read straight after its own save. Otherwise, on a replica-reading till, it may
- * not: the row is still in flight, and the read would show the old state AND stamp the
- * cache past the row (see `useTicketsDelta.afterOwnWrite`).
+ * Whether this machine's own save is already in its replica when the response arrives:
+ * `local` (the write IS the replica — the worker never pulls it, so waiting for its
+ * `sync:applied` only ran out the fallback timer), `v_live` (writeRelay.ts holds the
+ * response for the pull) and the live + replica case above. On such a till a screen
+ * may re-read straight after its own save. Otherwise, on a replica-reading till, it
+ * may not: the row is still in flight, and the read would show the old state AND stamp
+ * the cache past the row (see `useTicketsDelta.afterOwnWrite`).
  */
 export function getWritesHeldUntilApplied(): boolean {
-    return writePreference === "v_live" || pullsAfterOwnWrite();
+    return writePreference !== "live" || pullsAfterOwnWrite();
 }
 
 /** Announce that these topics changed. Coalesced; safe to call as often as you like.

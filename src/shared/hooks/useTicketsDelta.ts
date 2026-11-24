@@ -312,8 +312,8 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
     }, [key, search, cacheable, reload, applyPins]);
 
     /** The board's OWN write just succeeded. Off a counter, or on a till whose writes
-     *  are held until its replica has the rows (`v_live`, or `live` with the publisher's
-     *  `/api/counter/pull` — see appChannel `getWritesHeldUntilApplied`), that is a
+     *  are held until its replica has the rows (`local`, `v_live`, or `live` with the
+     *  publisher's `/api/counter/pull` — see appChannel `getWritesHeldUntilApplied`), that is a
      *  silent `syncNow`. On any other replica-reading till the row may not be here yet:
      *  reading now would show the old state — snapping an optimistic move back — and
      *  stamp the cache past the row. So nothing is read until the worker's
