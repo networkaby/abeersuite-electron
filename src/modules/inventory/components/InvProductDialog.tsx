@@ -127,6 +127,8 @@ function rowToForm(p: InvProductRow): InvProductFormState {
         priceRupees: paiseToRupees(p.savedSalePricePaise ?? null),
         mrpRupees:   paiseToRupees(p.mrpPaise),
         barcodeRupees: paiseToRupees(p.barcodeManualPaise ?? null),
+        actualSaleRupees: "",
+        safetyPct: null,
         openingQty:  p.openingStock != null ? String(p.openingStock) : "",
         openingRate: p.openingRate  != null ? String(p.openingRate)  : "",
         openingBranchId: p.openingBranchId ?? "",
@@ -184,6 +186,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
     const { branches } = useBranchOptions();
     const activeBranchId = useActiveBranchStore((st) => st.activeBranchId);
     const [effectiveTax, setEffectiveTax] = useState<EffectiveTax | null | undefined>(undefined);
+    const [tierPct, setTierPct] = useState<number | null>(null);
     const [saving, setSaving] = useState(false);
     // The product as loaded — an edit sends only what changed from it.
     const loadedPayload = useRef<ReturnType<typeof formToPayload> | null>(null);
@@ -249,6 +252,8 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
     // Lazy-load reference data once, on first open.
     useEffect(() => {
         if (!open || refsLoaded) return;
+        // Only a starting value for Safety % — the form works without it.
+        axios.get<{ pct: number }>("/api/customer-tier-periods/max-pct").then((r) => setTierPct(r.data.pct)).catch(() => {});
         Promise.all([
             // Units / categories / groups / brands used to be four unconditional
             // GETs here. They are replicated now, so this is one delta request
@@ -423,6 +428,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
                         attrMasters={attrMasters}
                         branches={branches}
                         isEditMode={editId != null}
+                        tierPct={tierPct}
                         defaultTab={defaultTab}
                         onCreateMaster={createMaster}
                         siblingAttrKeys={siblingAttrKeys}
