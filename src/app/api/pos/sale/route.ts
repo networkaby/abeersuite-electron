@@ -1,13 +1,13 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, after } from "next/server";
 import { createSchema, alreadySavedReply } from "@/modules/pos/lib/saleSchema";
+import { priceFloorAndTier, lineDiscountIncl, mdrStep, freeGrantLines, giftCardStep, refused, type ComputedLine } from "@/modules/pos/lib/saleSteps";
 import { notifyBill } from "@/shared/lib/whatsapp/notifyBill";
 import { requirePosVoucher } from "@/shared/lib/auth/permissions";
 import { cleanLineNote } from "@/shared/lib/print/lineDescription";
 import { invNextRef, calcVoucherTotals, calcLineTotals, resolveShippingGstRate } from "@/modules/inventory/lib/stock";
 import { recordStockMovementsBatch } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
-import { resolveEffectiveCostMap } from "@/modules/pricing-strategy/lib/resolveCost";
 import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
 import { buildSettlementJson, type ChargeInput } from "@/shared/lib/accountancy/settlement";
 import { resolveServiceCharges, chargesNetTotal } from "@/shared/lib/accountancy/serviceCharges";
@@ -47,23 +47,17 @@ import {
     finalizeCouponAmount,
     couponExclusionMask,
     recordCouponRedemption,
-    lookupActiveGiftCard,
     redeemGiftCard,
     GiftCardBalanceChangedError,
     type CartLineLite,
     type EvalInput,
     type CouponSelection,
 } from "@/modules/coupons/lib";
-import { resolveProductTax } from "@/modules/inventory/lib/gstResolver";
-import { loadProtectedProductIds } from "@/modules/retention/lib/protection";
 import { touchPosShift } from "@/modules/pos/lib/touchShift";
 import { convertSourceError } from "@/modules/pos/lib/convertSource";
 import { findHeldRedemptions, executeRedemptions, RedemptionHoldChangedError } from "@/modules/order/lib/redemptionHold";
 import { loadPartyPricing } from "@/modules/pricing-strategy/lib/groupPricingServer";
 import { groupRebatesExcl, rebatedRate, ruleForGroup } from "@/modules/pricing-strategy/lib/groupPricing";
-import { capToFloorExcl, floorExclFromPaise, floorRoomIncl } from "@/modules/pricing-strategy/lib/priceFloor";
-import { payAccountMdr } from "@/modules/pos/lib/paymentGateways";
-import { mdrRecovery, upliftedRates } from "@/modules/pos/lib/paymentMdr";
 // Note: branch context comes from the cashier's active shift, NOT from the
 // session cookie. This allows multiple browsers / users to bill in parallel
 // from different counters without their active-branch cookie interfering.
@@ -272,66 +266,10 @@ export async function POST(req: Request) {
     const goodsValue = body.lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
     const grossTaxAmount = body.lines.reduce((s, l) => s + (l.quantity * l.unitPrice * l.taxRate) / 100, 0);
 
-    // ── Spend-tier discount: % of COST (incl. tax), applied per line BEFORE tax ──
-    // Margin is a % of cost-incl (additivePrice), so the discount is too → margin%
-    // and discount% at the same rate are the identical rupee amount (exact break-even).
-    // The server RE-RESOLVES each line's cost from the ledger (never trusts the
-    // client) via the product's effective cost method, then cuts each line's taxable
-    // by `discount% × costExcl × qty` and lets calcLineTotals recompute GST on the
-    // reduced base. Clamp to the line gross, and on a floored line (applyFloor) to
-    // the gap above its effective sale price — the safety wall (priceFloor.ts).
-    // No cost basis → no discount on that line. The per-line discount
-    // nets into line.amount, so the voucher-level discountAmt is 0 (no separate
-    // "Discount Allowed" leg — Sales + GST post net).
-    const costPaiseById = await resolveEffectiveCostMap(body.lines.map((l) => l.productId));
-    const costExclById = new Map<number, number | null>(
-        [...costPaiseById].map(([id, paise]) => [id, paise == null ? null : paise / 100]),
-    );
-    // Discount-protection blacklist (Retention → Protection) — protected lines are
-    // excluded from the tier discount, coupon eligibility, and loyalty entirely.
-    const protectedProductIds = await loadProtectedProductIds(prisma);
-    // Safety wall: a flagged line bills from barcode and no discount may take it
-    // below its effective sale price — read here, never from the client.
-    // A new bill's typed price is checked on EVERY line, not just flagged ones —
-    // an old counter or a hand-made request sends no applyFloor. A convert keeps
-    // its source's prices (lines arrive unflagged), so it is checked flagged-only.
-    const priceChecked = (l: { applyFloor?: boolean }) => !!l.applyFloor || !body.sourceVoucherId;
-    const floorIds = [...new Set(body.lines.filter(priceChecked).map((l) => l.productId))];
-    const floorPaiseById = new Map(floorIds.length === 0 ? [] : (await prisma.invProduct.findMany({
-        where: { id: { in: floorIds } }, select: { id: true, effectiveSalePricePaise: true },
-    })).map((p) => [p.id, p.effectiveSalePricePaise]));
-    const lineFloorExcl = body.lines.map((l) => (l.applyFloor ? floorExclFromPaise(floorPaiseById.get(l.productId), l.taxRate) : null));
-    // The wall on the typed price itself (the screen enforces it too): a line
-    // under its lowest price is refused, never quietly raised.
-    const underFloor = body.lines.find((l) => {
-        if (!priceChecked(l)) return false;
-        const f = floorExclFromPaise(floorPaiseById.get(l.productId), l.taxRate);
-        return f != null && l.unitPrice < f - 0.005;
-    });
-    if (underFloor) {
-        return NextResponse.json(
-            { error: "A line is priced below its lowest price. Refresh the bill and check the prices.", code: "BELOW_LOWEST_PRICE", productId: underFloor.productId },
-            { status: 422 },
-        );
-    }
-    // Incl ₹ the bill may drop before a floored line hits its wall; undefined = no wall on this bill.
-    const floorRoom = lineFloorExcl.some((f) => f != null)
-        ? floorRoomIncl(body.lines.map((l, i) => ({ qty: l.quantity, unitPrice: l.unitPrice, taxRate: l.taxRate, floorExcl: lineFloorExcl[i] })))
-        : undefined;
-    // Per-line pre-tax discount IF the tier applies (before the coupon-drop decision).
-    const lineTierDiscExclRaw = body.lines.map((l, i) => {
-        const c = costExclById.get(l.productId) ?? null;
-        if (c == null || body.discountPct <= 0 || protectedProductIds.has(l.productId)) return 0;
-        return capToFloorExcl(Math.min((body.discountPct / 100) * c * l.quantity, l.quantity * l.unitPrice), l.quantity, l.unitPrice, lineFloorExcl[i]);
-    });
-    // Inclusive rupee effect (gross incl − net incl) — kept as the tier's voucher-level
-    // number for the loyalty floors + coupon-stacking math (which reason about the
-    // customer-facing discount), even though the discount now lives on the lines.
-    const tierDiscount = body.lines.reduce((s, l, i) => {
-        const gross = calcLineTotals({ quantity: l.quantity, rate: l.unitPrice, discountPct: 0, discountAmt: 0, taxRate: l.taxRate }).amount;
-        const net = calcLineTotals({ quantity: l.quantity, rate: l.unitPrice, discountPct: 0, discountAmt: lineTierDiscExclRaw[i], taxRate: l.taxRate }).amount;
-        return s + (gross - net);
-    }, 0);
+    // ── Spend-tier discount + lowest-price wall (saleSteps.ts) ─────────────
+    const tier = await priceFloorAndTier(body);
+    if (refused(tier)) return tier.response;
+    const { costExclById, protectedProductIds, lineFloorExcl, floorRoom, lineTierDiscExclRaw, tierDiscount } = tier;
 
     // Pre-redemption invoice value — drives the min-invoice-to-earn and
     // min-invoice-to-redeem floors (the bill the customer would pay before any
@@ -574,11 +512,7 @@ export async function POST(req: Request) {
     // old single bill-wide scalar, this is exact per-line so LINE scope only
     // zeroes the lines the coupon itself matches.
     const lineTierDiscAfterCoupon = lineTierDiscExclRaw.map((v, i) => (exclusionMask[i] ? 0 : v));
-    const tierDiscountAfterCoupon = body.lines.reduce((s, l, i) => {
-        const gross = calcLineTotals({ quantity: l.quantity, rate: l.unitPrice, discountPct: 0, discountAmt: 0, taxRate: l.taxRate }).amount;
-        const net = calcLineTotals({ quantity: l.quantity, rate: l.unitPrice, discountPct: 0, discountAmt: lineTierDiscAfterCoupon[i], taxRate: l.taxRate }).amount;
-        return s + (gross - net);
-    }, 0);
+    const tierDiscountAfterCoupon = lineDiscountIncl(body.lines, lineTierDiscAfterCoupon);
     // Money slot: a ₹ coupon (rule 4) is guard-finalized; a money-grant (rule
     // 3) has no ₹ (its item is granted as free lines instead). The on-top slot
     // (rule 2) adds its ₹ on top of the money ₹ — never guard-clamped.
@@ -634,43 +568,11 @@ export async function POST(req: Request) {
             floorExcl: lineFloorExcl[i],
         })), billDiscountIncl);
     }
-    // ── Payment-method MDR (Settings → Payment Methods) ─────────────────────
-    // What the counter rang is the CASH price. A payment on a method with a bank
-    // charge (card; UPI above its free limit) raises the line rates toward each
-    // line's public tag by that charge, so the customer's "Today's discount"
-    // comes out smaller — never past a tag; no room left and the shop bears it.
-    // Worked out last, after the rebate, and by the same paymentMdr.ts helpers
-    // the POS screen runs on the same payments, so the total collected is the
-    // total posted. A UPI payment taken in parts arrives as one payment line per
-    // part, each under the free limit, so it costs nothing here.
-    // A cash-only bill, or a client that does not do MDR, never reads the methods.
-    const methodRows = body.mdrRecovery !== undefined && body.payments.some((p) => p.paymentAccountId != null)
-        ? await prisma.paymentGateway.findMany({ select: { id: true, provider: true, configJson: true } })
-        : [];
-    const mdrRecoveryRs = mdrRecovery(body.payments.flatMap((p) => {
-        const acct = p.paymentAccountId == null ? undefined : payAcctById.get(p.paymentAccountId);
-        return acct ? [{ amount: p.amount, rule: payAccountMdr(acct, methodRows).mdr }] : [];
-    }));
-    if (body.mdrRecovery !== undefined && Math.abs(body.mdrRecovery - mdrRecoveryRs) > 0.005) {
-        return NextResponse.json(
-            { error: "The bank-charge (MDR) settings changed since this counter loaded them. Close checkout and open it again.", code: "MDR_RULES_CHANGED" },
-            { status: 409 },
-        );
-    }
-    const lineRates = mdrRecoveryRs > 0
-        ? upliftedRates(body.lines.map((l, i) => ({
-            quantity: l.quantity,
-            rate: rebatedRate(l.unitPrice, l.quantity, lineRebateExcl[i]),
-            taxRate: l.taxRate,
-            tagPaise: l.savedSalePricePaise ?? l.mrpPaise ?? null,
-            fixed: protectedProductIds.has(l.productId),
-        })), mdrRecoveryRs)
-        : null;
-    const computedLines: Array<{
-        productId: number; description: string; note: string | null; quantity: number; freeQty: number;
-        unitPrice: number; taxRate: number; discountAmt: number; discountPct: number;
-        taxAmount: number; amount: number; mrpPaise: number | null; savedSalePricePaise: number | null;
-    }> = body.lines.map((l, i) => {
+    // ── Payment-method MDR (saleSteps.ts) ───────────────────────────────────
+    const mdr = await mdrStep({ body, payAcctById, lineRebateExcl, protectedProductIds });
+    if (refused(mdr)) return mdr.response;
+    const { lineRates } = mdr;
+    const computedLines: ComputedLine[] = body.lines.map((l, i) => {
         const discountAmt = round2(lineTierDiscAfterCoupon[i]);
         const unitPrice = lineRates?.[i] ?? rebatedRate(l.unitPrice, l.quantity, lineRebateExcl[i]);
         const { taxAmount: lineTax, amount } = calcLineTotals({
@@ -703,37 +605,14 @@ export async function POST(req: Request) {
         const lineAt = (rate: number) => calcLineTotals({ quantity: l.quantity, rate, discountPct: 0, discountAmt: round2(lineTierDiscAfterCoupon[i]), taxRate: l.taxRate }).amount;
         return s + lineAt(l.unitPrice) - lineAt(rebatedRate(l.unitPrice, l.quantity, lineRebateExcl[i]));
     }, 0);
-    // Free-grant lines (rule 1 on-top grant + rule 3 money-grant): the granted
-    // item rides the bill as a zero-price line — quantity 0 + freeQty, so stock
-    // and COGS move (the margin engine counts free units as real cost given
-    // away) but the bill math (subtotal / tax / totals) is untouched. No
-    // discount charge, no guard — grants are ₹-less by design.
-    const freeLinesOut: { productId: number; freeQty: number; productName: string }[] = [];
+    // Free-grant lines (zero-price, stock moves) — saleSteps.ts.
     const grantWinners: Array<{ grant: { productId: number; freeQty: number }; couponName: string }> = [
         ...(freeSelected ? [{ grant: freeSelected.grant, couponName: freeSelected.coupon.name }] : []),
         ...(selected.kind === "money-grant" ? [{ grant: selected.grant, couponName: selected.coupon.name }] : []),
     ];
-    for (const { grant, couponName } of grantWinners) {
-        const tax = await resolveProductTax(grant.productId);
-        const rate = tax.taxability == null || tax.taxability === "TAXABLE" ? (tax.gstRate ?? 0) : 0;
-        const freeProduct = await prisma.invProduct.findUnique({ where: { id: grant.productId }, select: { name: true } });
-        computedLines.push({
-            productId: grant.productId,
-            description: `FREE · ${couponName}`,
-            note: null,
-            quantity: 0,
-            freeQty: grant.freeQty,
-            unitPrice: 0,
-            taxRate: rate,
-            discountAmt: 0,
-            discountPct: 0,
-            taxAmount: 0,
-            amount: 0,
-            mrpPaise: null,
-            savedSalePricePaise: null,
-        });
-        freeLinesOut.push({ productId: grant.productId, freeQty: grant.freeQty, productName: freeProduct?.name ?? "Item" });
-    }
+    const free = await freeGrantLines(grantWinners);
+    computedLines.push(...free.lines);
+    const freeLinesOut = free.freeLinesOut;
     // Net GST after the per-line tier discount — what actually posts + prints.
     const taxAmount = computedLines.reduce((s, l) => s + l.taxAmount, 0);
 
@@ -782,28 +661,9 @@ export async function POST(req: Request) {
     const totalAmount = netTotals.totalAmount;
 
     // ── Gift card (payment tender, NOT a discount) ─────────────────────────
-    // Server owns the ₹ drawn: min(balance, bill). It posts Dr "Gift Card
-    // Liability" via the existing tender path (postInvVoucherToGl untouched).
-    let giftCardRedeem = 0;
-    let giftCardId: number | null = null;
-    let giftCardLiabilityAccountId: number | null = null;
-    if (body.giftCardCode) {
-        const couponConfig = await prisma.couponConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
-        giftCardLiabilityAccountId = couponConfig.giftCardLiabilityAccountId;
-        const gc = await lookupActiveGiftCard(prisma, body.giftCardCode, new Date());
-        if (!gc || gc.status !== "ACTIVE" || gc.balance <= 0 || !gc.enabled) {
-            const reason = !gc ? "Gift card not found" : (!gc.enabled && gc.status === "ACTIVE") ? "Gift card is disabled" : `Gift card is ${gc.status.toLowerCase()}`;
-            return NextResponse.json({ error: reason, code: "GIFT_CARD_REJECTED" }, { status: 422 });
-        }
-        if (giftCardLiabilityAccountId == null) {
-            return NextResponse.json({ error: "Gift Card Liability ledger not configured. Re-run the bootstrap seed.", code: "GIFT_CARD_LEDGER_MISSING" }, { status: 422 });
-        }
-        if (giftCardHold && gc.balance < giftCardHold.amount - 0.005) {
-            return NextResponse.json({ error: `Gift card balance (₹${gc.balance}) no longer covers the ₹${giftCardHold.amount} held on this order. Edit the order before converting.`, code: "GIFT_CARD_REJECTED" }, { status: 422 });
-        }
-        giftCardRedeem = Math.min(gc.balance, totalAmount);
-        giftCardId = gc.id;
-    }
+    const gift = await giftCardStep({ giftCardCode: body.giftCardCode, totalAmount, giftCardHold });
+    if (refused(gift)) return gift.response;
+    const { giftCardRedeem, giftCardId, giftCardLiabilityAccountId } = gift;
 
     // Cash/UPI/etc. payments + the gift-card tender vs the bill. Three arms:
     //   • exact (|surplus| ≤ 1p) → the plain paid-in-full counter sale.
