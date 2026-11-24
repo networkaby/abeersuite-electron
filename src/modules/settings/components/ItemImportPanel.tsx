@@ -10,6 +10,8 @@ import { parseCsv } from "@/shared/lib/import/csvParse";
 import { type ProductImportField } from "@/shared/lib/import/productImportFields";
 import { toCsv } from "@/shared/lib/import/csvSerialize";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { http } from "@/shared/lib/http";
+import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { useActiveBranchStore } from "@/store/activeBranchStore";
 import { HEAD_OFFICE_BRANCH_ID } from "@/shared/lib/org/systemBranch";
 
@@ -379,13 +381,10 @@ export function ItemImportPanel() {
         if (!(await confirmAction({ title: `Commit ${total} rows?`, body: `This writes to the products table.`, confirmLabel: "Commit", destructive: false }))) return;
         setCommitting(true);
         try {
-            const res = await fetch("/api/settings/item-import/commit", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ rows: buildRowsPayload(), mode, autoCreateMasters, openingBranchId: openingBranchId || null }),
-            });
-            const json = (await res.json()) as PreviewResult & { error?: string };
-            if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+            // Through `http`, not fetch: its change publisher announces the import, so
+            // other tills and the office reload products at once (topics.ts).
+            const { data: json } = await http.post<PreviewResult>("/api/settings/item-import/commit",
+                { rows: buildRowsPayload(), mode, autoCreateMasters, openingBranchId: openingBranchId || null });
             setCommitResult(json);
             toast.success(`Committed: ${json.willCreate} created · ${json.willUpdate} updated`);
             if (json.errorCount > 0) {
@@ -393,7 +392,7 @@ export function ItemImportPanel() {
                 toast.info(`Downloaded ${json.errorCount} error rows — fix and re-import.`);
             }
         } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Commit failed");
+            toast.error(extractApiError(err, "Commit failed"));
         } finally {
             setCommitting(false);
         }

@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
+import { http } from "@/shared/lib/http";
 import { resolveMachineIdentity, matchesThisMachine, type MachineIdentity } from "@/shared/lib/counter/identity";
 
 import { bridgeRequest } from "@/shared/lib/bridge/hardwareBridge";
@@ -216,12 +217,8 @@ export default function PrinterSettingsPage() {
         const releaseId = identity?.machineId;
         if (!releaseId) return;
         try {
-            const r = await fetch(`/api/pos/counters/release-mine`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ deviceId: releaseId }),
-            });
-            if (!r.ok) throw new Error();
+            // `http` announces the release to the other tills (topics.ts: pos/counters).
+            await http.post(`/api/pos/counters/release-mine`, { deviceId: releaseId });
             toast.success("Counter lock cleared for this PC");
             setBoundCounter(null);
         } catch {

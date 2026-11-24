@@ -102,6 +102,11 @@ const RULES: ReadonlyArray<readonly [RegExp, readonly Topic[]]> = [
     // pull anything at all, which is why the till looked live and the web looked stuck.
     [/^\/api\/admin-tasks/,                         ["tickets"]],
 
+    // Imports live under /api/settings but write master data: products (+ opening
+    // stock) and customers (+ opening balances), so they wake those screens too.
+    [/^\/api\/settings\/item-import\/commit/,         ["catalogue", "stock"]],
+    [/^\/api\/settings\/customer-import\/commit/,     ["parties", "ledger"]],
+
     // ── Configuration ────────────────────────────────────────────────────────
     [/^\/api\/(settings|roles|permissions|users|positions|departments|branches|org-chart)/, ["settings"]],
     // HR & People — the staff record is org config like users and positions.
