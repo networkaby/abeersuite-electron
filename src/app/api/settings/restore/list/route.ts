@@ -2,6 +2,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { listBackups } from "@/shared/lib/backup/dropbox";
 import { backupAvailability } from "@/shared/lib/backup/availability";
+import { knownApiError } from "@/shared/lib/api";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,6 +31,8 @@ export async function GET() {
         const backups = await listBackups();
         return Response.json({ backups, ...availability });
     } catch (err) {
+        const known = knownApiError(err);
+        if (known) return known;
         return Response.json({ error: (err as Error).message }, { status: 500 });
     }
 }

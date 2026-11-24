@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest } from "@/shared/lib/api";
 import { runProductImport } from "@/shared/lib/import/productImport";
+import { knownApiError } from "@/shared/lib/api";
 
 // `z.record(enum, ...)` in Zod 4 enforces every enum key — not what we want
 // here since most CSV rows fill only a subset. Use plain string keys; the
@@ -45,6 +46,8 @@ export async function POST(req: Request) {
         });
         return NextResponse.json(result);
     } catch (err) {
+        const known = knownApiError(err);
+        if (known) return known;
         return NextResponse.json({ error: (err as Error).message }, { status: 500 });
     }
 }

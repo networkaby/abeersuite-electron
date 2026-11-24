@@ -1,7 +1,7 @@
 export { validateRequest } from "./validateRequest";
 export { parsePagination, parseCursor } from "./parsePagination";
 export { prismaUniqueError } from "./prismaUniqueError";
-export { handleApiError } from "./handleApiError";
+export { handleApiError, knownApiError } from "./handleApiError";
 export { branchAccessResponse } from "./branchAccessResponse";
 export { extractApiError, creditLimitDetailOf } from "./extractApiError";
 export { parseIdParam } from "./parseIdParam";

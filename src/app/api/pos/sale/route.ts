@@ -57,6 +57,7 @@ import { convertSourceError } from "@/modules/pos/lib/convertSource";
 import { findHeldRedemptions, executeRedemptions, RedemptionHoldChangedError } from "@/modules/order/lib/redemptionHold";
 import { loadPartyPricing } from "@/modules/pricing-strategy/lib/groupPricingServer";
 import { groupRebatesExcl, rebatedRate, ruleForGroup } from "@/modules/pricing-strategy/lib/groupPricing";
+import { knownApiError } from "@/shared/lib/api";
 // Note: branch context comes from the cashier's active shift, NOT from the
 // session cookie. This allows multiple browsers / users to bill in parallel
 // from different counters without their active-branch cookie interfering.
@@ -1185,6 +1186,9 @@ export async function POST(req: Request) {
             const saved = await alreadySavedReply(body.requestKey);
             if (saved) return saved;
         }
+        // Offline counter, wrong voucher year, branch, phone — the shared answer.
+        const known = knownApiError(err);
+        if (known) return known;
         console.error("[pos sale]", err);
         const msg = err instanceof Error ? err.message : "Failed to create POS sale";
         return NextResponse.json({ error: msg }, { status: 500 });

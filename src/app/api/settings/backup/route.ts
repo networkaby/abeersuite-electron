@@ -5,6 +5,7 @@ import { makeBackupFileName } from "@/shared/lib/backup/dropbox";
 import { projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
 import { backupAvailability, COUNTER_ONLY_MESSAGE } from "@/shared/lib/backup/availability";
 import { primaryAndStaging, realtimePrimary } from "@/shared/lib/db/dbPrimary";
+import { knownApiError } from "@/shared/lib/api";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,6 +51,8 @@ export async function POST(req: Request) {
     try {
         await triggerWorkflow(await backupWorkflowFile(), inputs);
     } catch (err) {
+        const known = knownApiError(err);
+        if (known) return known;
         return Response.json({ error: (err as Error).message }, { status: 500 });
     }
 

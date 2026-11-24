@@ -6,14 +6,12 @@ import { branchAccessResponse } from "./branchAccessResponse";
 import { PhoneFormatError } from "@/shared/lib/format/phone";
 
 /**
- * Generic API error envelope. Logs server-side, returns a 500 NextResponse with
- * the supplied fallback message (the actual error stays in server logs only).
- *
- * Usage:
- *   try { … }
- *   catch (e) { return handleApiError(e, "Failed to fetch invoices"); }
+ * The answer for an error the app KNOWS — the user's situation, not a fault — or
+ * null for anything else. handleApiError starts with it; a route that keeps its
+ * own reply for unknown errors (the POS sale, imports, backups) calls it first,
+ * so an offline counter or a wrong voucher year reads the same everywhere.
  */
-export function handleApiError(e: unknown, fallback = "Internal server error"): NextResponse {
+export function knownApiError(e: unknown): NextResponse | null {
     // A counter PC with no internet refusing a write is an EXPECTED state, not a
     // fault: 503 (temporarily unavailable, try later) rather than 500, and logged at
     // warn so a shop with a flaky line doesn't bury real errors under its own noise.
@@ -46,6 +44,20 @@ export function handleApiError(e: unknown, fallback = "Internal server error"): 
     if (e instanceof PhoneFormatError) {
         return NextResponse.json({ error: e.message, field: "phone" }, { status: 400 });
     }
+    return null;
+}
+
+/**
+ * Generic API error envelope. Logs server-side, returns a 500 NextResponse with
+ * the supplied fallback message (the actual error stays in server logs only).
+ *
+ * Usage:
+ *   try { … }
+ *   catch (e) { return handleApiError(e, "Failed to fetch invoices"); }
+ */
+export function handleApiError(e: unknown, fallback = "Internal server error"): NextResponse {
+    const known = knownApiError(e);
+    if (known) return known;
     console.error("[api]", e);
     return NextResponse.json({ error: fallback }, { status: 500 });
 }

@@ -4,6 +4,7 @@ import { restoreWorkflowFile, triggerWorkflow } from "@/shared/lib/backup/github
 import { backupFolder, isUnderBackupFolder } from "@/shared/lib/backup/dropbox";
 import { backupAvailability, COUNTER_ONLY_MESSAGE } from "@/shared/lib/backup/availability";
 import { isDbId } from "@/shared/lib/db/dbTargets";
+import { knownApiError } from "@/shared/lib/api";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,6 +55,8 @@ export async function POST(req: Request) {
             target_db: body.targetDb,
         });
     } catch (err) {
+        const known = knownApiError(err);
+        if (known) return known;
         return Response.json({ error: (err as Error).message }, { status: 500 });
     }
 

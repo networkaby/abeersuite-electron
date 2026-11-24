@@ -4,6 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { runCustomerImport } from "@/shared/lib/import/customerImport";
+import { knownApiError } from "@/shared/lib/api";
 
 const rowSchema = z.object({
     rowIndex: z.number().int().min(0),
@@ -35,6 +36,8 @@ export async function POST(req: Request) {
         });
         return NextResponse.json(result);
     } catch (err) {
+        const known = knownApiError(err);
+        if (known) return known;
         return NextResponse.json({ error: (err as Error).message }, { status: 500 });
     }
 }
