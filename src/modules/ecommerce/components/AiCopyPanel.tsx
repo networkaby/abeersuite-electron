@@ -253,17 +253,19 @@ export default function AiCopyPanel({
     // Nothing to show before the first save while the in-app AI is hidden.
     if (!IN_APP_PRODUCT_AI && !prep) return null;
 
-    const descDiffers = draft && description.trim() && description.trim() !== draft.shopDescription.trim();
-    const titleDiffers = draft && subheading.trim() && subheading.trim() !== draft.title.trim();
+    // What Claude wrote is already on the product: its leftover "Use" rows hide with the in-app AI (owner, 2026-11-25).
+    const offer = IN_APP_PRODUCT_AI ? draft : null;
+    const descDiffers = offer && description.trim() && description.trim() !== offer.shopDescription.trim();
+    const titleDiffers = offer && subheading.trim() && subheading.trim() !== offer.title.trim();
     // AI spec rows whose label the product doesn't have yet — the only ones Use can add.
     const haveSpec = new Set(specPairs.map((r) => r.k.trim().toLowerCase()).filter(Boolean));
-    const specsMissing = draft
-        ? Object.entries(draft.specs).filter(([k, v]) => k.trim() && v.trim() && !haveSpec.has(k.trim().toLowerCase()))
+    const specsMissing = offer
+        ? Object.entries(offer.specs).filter(([k, v]) => k.trim() && v.trim() && !haveSpec.has(k.trim().toLowerCase()))
         : [];
-    const brandDiffers = draft?.brandPick && onBrand && brandId != null && brandId !== draft.brandPick.id ? draft.brandPick : null;
+    const brandDiffers = offer?.brandPick && onBrand && brandId != null && brandId !== offer.brandPick.id ? offer.brandPick : null;
     // AI collection picks the product is not in yet.
-    const collectionsMissing = draft?.collectionPicks && collectionIds && onCollections
-        ? draft.collectionPicks.filter((c) => !collectionIds.includes(c.id))
+    const collectionsMissing = offer?.collectionPicks && collectionIds && onCollections
+        ? offer.collectionPicks.filter((c) => !collectionIds.includes(c.id))
         : [];
 
     return (
