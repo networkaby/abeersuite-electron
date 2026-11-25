@@ -2,7 +2,7 @@ import "server-only";
 import { Prisma } from "@/generated/prisma/client";
 import type { ShopStatus } from "@/generated/prisma/enums";
 import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
-import { readShopDraft, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
+import { attentionAgain, attentionText, draftOf, raiseProblems, type PrepProblem, type RaisedProblem, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
 
 // Attention stage (owner, 2026-11-11): a Draft blocked on a manual check — name
 // and photo clash, verify the unit in the warehouse — is parked here with the
@@ -11,27 +11,27 @@ import { readShopDraft, type ShopDraft } from "@/modules/ecommerce/lib/productAd
 
 /**
  * Park products in Attention. Staff park from Draft only (`from: ["DRAFT"]`);
- * Claude's review notes may park from any stage. A product already in Attention
- * gets the new reason. The stage it came from is remembered for Discard draft.
+ * Claude may park from any stage. `raise.problems` join the product's one problem list;
+ * the Attention reason is a summary made from that list (owner, 2026-11-25). The stage it came from is remembered for Discard draft.
  * Returns how many were parked and the names of those skipped.
  */
 export async function parkInAttention(
     ids: number[],
-    reason: string,
+    raise: { problems: RaisedProblem[]; replaces?: (p: PrepProblem) => boolean; more?: string[] },
     by: string,
     from: ShopStatus[] | "any",
 ): Promise<{ parked: number; skipped: string[] }> {
     const rows = await prismaWhereSaved().invProduct.findMany({
         where: { id: { in: ids } },
-        select: { id: true, name: true, shopStatus: true, shopDraftJson: true },
+        select: { id: true, name: true, shopStatus: true, shopDraftJson: true, shopAttention: true, shopAttentionAt: true },
     });
     const ok = rows.filter((r) => r.shopStatus === "ATTENTION" || from === "any" || from.includes(r.shopStatus));
     const now = new Date();
     await prisma.$transaction(
         ok.map((r) => {
-            const info = readShopDraft(r.shopDraftJson);
+            const info = draftOf(r);
             const stageBefore = r.shopStatus === "DRAFT" || r.shopStatus === "ATTENTION" || r.shopStatus === "WAITING" ? info?.stageBefore : r.shopStatus;
-            const next: ShopDraft = { ...info, ...(stageBefore && { stageBefore }) };
+            const next: ShopDraft = raiseProblems({ ...info, ...(stageBefore && { stageBefore }) }, raise.problems, { replaces: raise.replaces, by });
             return prisma.invProduct.update({
                 where: { id: r.id },
                 data: {
@@ -39,7 +39,7 @@ export async function parkInAttention(
                     isListedInShop: false,
                     shopDraftJson: next as unknown as Prisma.InputJsonValue,
                     shopDraftAt: now,
-                    shopAttention: reason || null,
+                    shopAttention: (raise.more ? attentionText(next, raise.more) : r.shopStatus === "ATTENTION" && r.shopAttention ? attentionAgain(r.shopAttention, info, next) : attentionText(next, [])) || null,
                     shopAttentionAt: now,
                     shopAttentionBy: by,
                 },

@@ -256,7 +256,8 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
 - `photos` = gallery advice with `photoKinds` keys: what we **have**, what we **must** add (most important first), **nice** to add, and our photos to **remove** (`{ url, why: one of photoRemoveReasons, note }`; duplicates: list only the weaker). Each one shows staff a **Remove** button under *Shop readiness → AI suggests removing* — so never tell staff to delete photos by hand; say "press Remove". Give each wrong photo its own entry with a short `note` ("personal family photo", "Citizen calculator").
 - `notes` holds up to 40 lines — one problem per line; never squash several into one.
 - Full example of `photos`: `{ "have": ["box_front"], "must": ["front", "ports"], "nice": ["in_use"], "remove": [{ "url": "…/9.jpg", "why": "irrelevant", "note": "personal family photo" }], "order": ["…/2.jpg", "…/1.jpg", "…/3.jpg"], "look": [{ "url": "…/1.jpg", "crop": "pad", "fixes": ["trim", "auto_color"], "rotate": 0, "background": "white", "why": "yellow tint, wide border" }] }`
-- Answer: `{ result: "draft", shopStatus, kept, unsure, flags, note, sources }`. `422` → fix as the message says and resend.
+- Every line in `notes` and `dataFlags` becomes an **open problem** in the product's AI notes and the product goes to **Attention**; nothing to fix → **Draft**. So send only what staff must do, never information.
+- Answer: `{ result: "draft" | "attention", shopStatus, kept, unsure, flags, note, sources }`. `422` → fix as the message says and resend.
 - It goes straight onto the product: description, online name, specs (your rows replace ours with the same label; other rows stay), brand, collections (added), shipping. The product moves to Draft.
 
 ---
@@ -312,4 +313,4 @@ In Review mode, add **Minor, not sent** — the small points held back for Publi
 Then: **stopped products** with the exact clash (staff must fix the data or the photos), and the next step for the owner:
 
 > **Attention** tab: the stopped products, parked with the clash as the reason — check the real unit, fix the data or photos, then **Save as draft** (and run product copy again) or **Save as ready**.
-> **Draft** tab: the finished ones — read "Notes for you", add the suggested photos, fix what the notes say, then **Save as ready**. Publish when the time is right.
+> **Draft** tab: the finished ones — read the AI notes, add the suggested photos, fix what the notes say, then **Save as ready**. Publish when the time is right.

@@ -17,7 +17,7 @@ import ProductVariantsSection from "@/modules/inventory/components/ProductVarian
 import AiCopyPanel from "@/modules/ecommerce/components/AiCopyPanel";
 import type { ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
 import { PhotoChecklistRows } from "@/modules/ecommerce/components/AiPhotoPicker";
-import { isEnough, mustPhotoGaps, type PhotoChecklist, type PhotoKind } from "@/modules/ecommerce/lib/photoChecklist";
+import { isEnough, isKept, mustPhotoGaps, type PhotoChecklist, type PhotoKind } from "@/modules/ecommerce/lib/photoChecklist";
 import ProductCard from "@/modules/external/shop/ProductCard";
 import {
     shopQualification,
@@ -826,12 +826,6 @@ export default function ProductForm({
                         tickPhotoKinds(kinds);
                     }}
                     onParked={initial?.id ? () => void reloadRow() : undefined}
-                    attention={initial?.id && attention ? {
-                        text: attention, by: row?.shopAttentionBy ?? null, at: row?.shopAttentionAt ?? null, parked: shopStatus === "ATTENTION",
-                    } : null}
-                    review={row?.shopDraft?.notes?.length ? {
-                        notes: row.shopDraft.notes, at: row.shopDraft.notesAt, kept: row.shopDraft.kept,
-                    } : null}
                     photoOffers={row?.shopDraft?.photoOffers}
                     prep={initial?.id ? {
                         productId: initial.id, runs: row?.shopDraft?.runs ?? [], problems: row?.shopDraft?.problems ?? [], staffNote: row?.shopDraft?.staffNote ?? null, closed: row?.shopDraft?.closed ?? [], onChanged: () => void reloadRow(),
@@ -1207,6 +1201,10 @@ export default function ProductForm({
                                             setSelectedImage(0);
                                             savePhotoChecklist({ ...photoChecklist, remove: photoChecklist.remove.filter((r) => r.url !== url) });
                                         }}
+                                        onKeep={(url) => savePhotoChecklist({
+                                            ...photoChecklist, remove: photoChecklist.remove.filter((r) => r.url !== url),
+                                            keep: [...(photoChecklist.keep ?? []).filter((u) => u !== url), url].filter((u) => galleryUrls.some((g) => isKept([u], g))),
+                                        })}
                                     />
                                 )}
                             </li>

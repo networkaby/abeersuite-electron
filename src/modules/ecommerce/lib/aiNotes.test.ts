@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { splitRemovals } from "./photoChecklist";
-import { nextStep, openList } from "./productAdmin";
+import { isKept, splitRemovals } from "./photoChecklist";
+import { attentionAgain, draftOf, nextStep, prepHistory, raiseProblems, raisedLine, withProblems } from "./productAdmin";
 
 const r = (url: string, why: string, kind?: string) => ({ url, why, kind });
 const urls = (xs: { url: string }[]) => xs.map((x) => x.url);
@@ -22,13 +22,49 @@ test("removals: a replacement added in the same run counts", () => {
     assert.deepEqual(urls(splitRemovals(["a"], [r("a", "quality", "front")], new Map([["n", "front"]]), ["n"]).gone), ["a"]);
 });
 
-test("open list: reason, flags, closed and temporary pass", () => {
-    const saved = [{ text: "Old brand", level: "fix" as const, part: 4, at: "x", asideAt: "y" }];
-    const closed = [{ text: "Done flag", level: "fix" as const, raisedBy: "AI", at: "x", by: "AI", how: "fixed" as const }];
-    const out = openList(saved, "STOPPED (Part 1) — No label\nLast run: Part 1", ["New flag", "Done flag", "Old brand."], closed);
-    assert.deepEqual(out.map((p) => p.text), ["No label", "New flag", "Old brand"]);
-    assert.deepEqual(openList([], "PENDING (Part 5) — No photo — take it", []), [{ text: "No photo — take it", level: "stop", part: 5, at: "" }]);
-    assert.deepEqual(openList([], "Check the unit\nWas Unpublished before this check.", []).map((p) => p.text), ["Check the unit"]);
+const row = (shopDraftJson: unknown, shopAttention: string | null) => ({ shopDraftJson, shopStatus: "ATTENTION" as const, shopAttention });
+const texts = (x: ReturnType<typeof draftOf>) => (x?.problems ?? []).map((p) => p.text);
+
+test("an old row: reason and flags join the one list, dated; closed and passed ones are not raised again", () => {
+    const old = {
+        problems: [{ text: "Old brand", level: "fix", part: 4, at: "x", asideAt: "y" }],
+        closed: [{ text: "Done flag", level: "fix", raisedBy: "AI", at: "x", by: "AI", how: "fixed" }],
+        aiCopy: { flags: ["New flag", "Done flag", "Old brand."], notes: ["n"] }, notes: ["old"],
+    };
+    const x = draftOf(row(old, "STOPPED (Part 1) — No label\nLast run: Part 1"));
+    assert.deepEqual(texts(x), ["No label", "New flag", "Old brand"]);
+    assert.ok(x?.problems?.every((p) => p.at));
+    assert.equal(x?.problems?.[0].part, 1);
+    assert.deepEqual(x?.aiCopy?.flags, []);
+    assert.deepEqual(texts(draftOf(row(null, "Check the unit\nWas Unpublished before this check."))), ["Check the unit"]);
+});
+
+test("a new row's reason is never read back as problems", () => {
+    assert.deepEqual(texts(draftOf(row({ v: 2 }, "NOTE (Part 5) — x\nsmall print"))), []);
+});
+
+test("raise: no doubles, a pass holds, what the run no longer raises is history", () => {
+    const a = raiseProblems(null, [raisedLine("A", 1), raisedLine("NOTE (Part 3) — B", 5)], { by: "AI part 1" });
+    assert.deepEqual(a.problems?.map((p) => [p.text, p.level, p.part]), [["A", "stop", 1], ["B", "fix", 3]]);
+    const passed = withProblems(a, a.problems!.map((p) => (p.text === "B" ? { ...p, asideAt: "t" } : p)));
+    const b = raiseProblems(passed, [raisedLine("b.", 4), raisedLine("C", 4)], { replaces: () => true, by: "AI part 4" });
+    assert.deepEqual(texts(b), ["C", "B"]);
+    assert.deepEqual(b.closed?.map((c) => [c.text, c.by]), [["A", "AI part 4"]]);
+    assert.equal(b.asideCount, 1);
+    assert.equal(attentionAgain("x\nNOTE (Part 1) — A", a, b), "PENDING (Part 4) — C\nx");
+});
+
+test("Ready: open AI problems go to the history, passed ones stay", () => {
+    const x = raiseProblems(null, [raisedLine("A", 1)], { by: "AI" });
+    const h = prepHistory(withProblems(x, [...x.problems!, { text: "P", level: "fix", part: 4, at: "x", asideAt: "y" }]), "Save as ready");
+    assert.deepEqual([texts(h), h?.closed?.map((c) => c.text)], [["P"], ["A"]]);
+});
+
+test("Keep survives a new framing", () => {
+    const u = "https://res.cloudinary.com/x/image/upload/v1/shop/products/a.jpg";
+    assert.equal(isKept([u], u), true);
+    assert.equal(isKept([u], u.replace("a.jpg", "b.jpg")), false);
+    assert.equal(isKept(undefined, u), false);
 });
 
 test("next step in Attention follows the reason, not only the run list", () => {

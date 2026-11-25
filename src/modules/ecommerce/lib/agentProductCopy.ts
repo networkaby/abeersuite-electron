@@ -7,7 +7,7 @@ import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
 import { photosForAi } from "@/shared/lib/shop/photoMark";
 import { AI_PHOTO_LIMITS } from "@/shared/lib/constants/ai";
 import { OUTPUT_KEYS, type ProductCopy } from "@/modules/ecommerce/lib/aiProductCopy";
-import { prepHistory, readShopDraft, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
+import { draftOf, photoCopy, problemKey, raisedLine, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
 import { updateShopProduct, type ShopProductPatch } from "@/modules/ecommerce/lib/updateShopProduct";
 import { parkInAttention } from "@/modules/ecommerce/lib/shopAttention";
 import { PHOTO_LOOK_OPTIONS, arrangeFrom, checkWrittenCopy, writtenCopySchema } from "@/modules/ecommerce/lib/aiVerifiedCopy";
@@ -365,9 +365,8 @@ export async function saveAgentCopy(id: number, body: z.infer<typeof agentCopySc
     if (!body.pages.length) notes.push("No maker or seller page was read for this draft — the copy is from the label and photos only.");
 
     const draft: ProductCopy = {
-        ...checked.copy,
+        ...photoCopy(checked.copy),
         note: `Written by Claude; ${checked.copy.note}`,
-        ...(notes.length && { notes }),
         ...(body.photos && {
             photoChecklist: checklistFrom(
                 kinds(body.photos.have), kinds(body.photos.must), kinds(body.photos.nice),
@@ -418,11 +417,14 @@ export async function saveAgentCopy(id: number, body: z.infer<typeof agentCopySc
         }
     }
     const shopStatus = await writeAsDraft(id, { ...masterPatch, ...copyPatch }, (info) => ({
+        ...info,
         aiCopy: draft,
-        // A fresh run replaces the notes kept from the last review.
-        ...(info?.kept && { notes: undefined, notesAt: undefined, kept: undefined }),
     }));
-    return { draft, shopStatus };
+    // What staff must fix is on the one problem list; any → Attention (owner, 2026-11-25).
+    const aside = new Set(((await draftRow(id))?.problems ?? []).filter((x) => x.asideAt).map((x) => problemKey(x.text)));
+    const open = [...body.notes, ...checked.copy.flags].map((l) => raisedLine(l, 0, "fix", "product-copy")).filter((x) => !aside.has(problemKey(x.text)));
+    if (open.length) await parkInAttention([id], { problems: open, replaces: (x) => x.by === "product-copy" }, "product-copy", "any");
+    return { draft: { ...draft, flags: checked.copy.flags, notes }, shopStatus: open.length ? "ATTENTION" : shopStatus };
 }
 
 /**
@@ -430,14 +432,17 @@ export async function saveAgentCopy(id: number, body: z.infer<typeof agentCopySc
  * (owner, 2026-11-10) — off the shop until staff Save as ready; Discard draft
  * puts the stage back. `extra` adds Claude's notes / copy beside it.
  */
+async function draftRow(id: number): Promise<ShopDraft | null> {
+    const r = await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { shopStatus: true, shopAttention: true, shopAttentionAt: true, shopDraftJson: true } });
+    return r && draftOf(r);
+}
 export async function writeAsDraft(id: number, fields: ShopProductPatch, extra: (info: ShopDraft | null) => Partial<ShopDraft>): Promise<ShopStatus> {
     const saved = await updateShopProduct(id, { ...fields, draft: "save" });
     if (saved.response) {
         const err = (await saved.response.json().catch(() => null)) as { error?: string } | null;
         throw new AgentCopyError(err?.error ?? "Could not save the product");
     }
-    const row = await prismaWhereSaved().invProduct.findUniqueOrThrow({ where: { id }, select: { shopDraftJson: true } });
-    const info = readShopDraft(row.shopDraftJson);
+    const info = await draftRow(id);
     const next: ShopDraft = { ...info, ...extra(info) };
     await prisma.invProduct.update({ where: { id }, data: { shopDraftJson: next as unknown as Prisma.InputJsonValue } });
     return saved.product.shopStatus;
@@ -509,24 +514,19 @@ export const notesSchema = z.object({
 
 /**
  * Claude reviewed a product (or stopped on a clash) and only leaves notes — no
- * field changes. The product is parked in Attention with the notes as its
- * reason (owner, 2026-11-11), off the shop, until staff check it and Save as
+ * field changes. Each note is an open problem; the product is parked in
+ * Attention (owner, 2026-11-11), off the shop, until staff check it and Save as
  * draft or Save as ready. One note per line.
  */
 export async function addReviewNotes(id: number, b: z.infer<typeof notesSchema>) {
-    const p = await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { shopAttention: true } });
+    const p = await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { id: true } });
     if (!p) throw new AgentCopyError("Product not found");
-    const before = b.replace ? [] : (p.shopAttention ?? "").split("\n").map((x) => x.trim()).filter(Boolean);
-    const notes = [...new Set([...before, ...b.notes])].slice(-30);
-    await parkInAttention([id], notes.join("\n").slice(0, 10000), "Claude", "any");
-    // A new review replaces the notes kept from the last one.
-    const row = await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { shopDraftJson: true } });
-    const info = readShopDraft(row?.shopDraftJson);
-    if (info?.kept) {
-        const { stageBefore, aiCopy } = info;
-        await prisma.invProduct.update({ where: { id }, data: { shopDraftJson: { ...(stageBefore && { stageBefore }), ...(aiCopy && { aiCopy }), ...prepHistory(info) } as unknown as Prisma.InputJsonValue } });
-    }
-    return { notes: notes.length };
+    const problems = b.notes.map((n) => {
+        const stop = /^STOPPED\s+—\s+/i.exec(n);
+        return raisedLine(stop ? n.slice(stop[0].length) : n, 0, stop ? "stop" : "fix", "Claude review");
+    });
+    await parkInAttention([id], { problems, ...(b.replace && { replaces: (x) => x.by === "Claude review" }) }, "Claude review", "any");
+    return { notes: problems.length };
 }
 
 // ── Compatibility only ────────────────────────────────────────────────────────
@@ -568,8 +568,6 @@ export async function saveCompatibility(id: number, b: z.infer<typeof compatSche
     const specs = Object.fromEntries(Object.entries(base).filter(([k]) => !/^compatib/i.test(k.trim())));
     specs[COMPATIBLE_SPEC] = kept.join(", ");
     const note = `Compatible models refreshed from ${accepted.map((pg) => pg.site).join(", ")}: ${kept.length} kept${dropped.length ? `, ${dropped.length} dropped (not on the page): ${dropped.slice(0, 10).join(", ")}${dropped.length > 10 ? "…" : ""}` : ""}.`;
-    await writeAsDraft(id, { specs }, (open) => ({
-        notes: [...(open?.notes ?? []).filter((n) => !n.startsWith("Compatible models refreshed")), note],
-    }));
-    return { kept, dropped, sources: accepted.map((pg) => ({ site: pg.site, url: pg.url, codeMatch: pg.codeMatch })) };
+    await writeAsDraft(id, { specs }, () => ({}));
+    return { kept, dropped, note, sources: accepted.map((pg) => ({ site: pg.site, url: pg.url, codeMatch: pg.codeMatch })) };
 }

@@ -3,7 +3,7 @@ import { shopSlugClash } from "@/shared/lib/shop/shopSlug";
 import { syncMainCollections } from "@/modules/inventory/lib/productCollections";
 import { NextResponse } from "next/server";
 import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
-import { invProductToAdmin, readShopDraft, rowProblems } from "@/modules/ecommerce/lib/productAdmin";
+import { invProductToAdmin, draftOf, rowProblems } from "@/modules/ecommerce/lib/productAdmin";
 import { nextShopStatus, resolveShopListing, SHOP_STATUSES } from "@/modules/ecommerce/lib/shopListing";
 import { loadVariantAttrGaps } from "@/modules/ecommerce/lib/applyPublished";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
@@ -87,9 +87,9 @@ export async function GET(req: Request) {
         // with a set-aside problem read their notes — the rest of the list never does.
         const withProblems = await prisma.invProduct.findMany({
             where: { OR: [{ shopStatus: "ATTENTION" }, { shopDraftJson: { path: ["asideCount"], gt: 0 } }, { shopDraftJson: { path: ["noteCount"], gt: 0 } }] },
-            select: { id: true, shopAttention: true, shopDraftJson: true },
+            select: { id: true, shopStatus: true, shopAttention: true, shopAttentionAt: true, shopDraftJson: true },
         });
-        const problemsOf = new Map(withProblems.map((r) => [r.id, rowProblems(readShopDraft(r.shopDraftJson), r.shopAttention)]));
+        const problemsOf = new Map(withProblems.map((r) => [r.id, rowProblems(draftOf(r))]));
         return NextResponse.json(
             products.map((p) => {
                 const problems = problemsOf.get(p.id) ?? [];

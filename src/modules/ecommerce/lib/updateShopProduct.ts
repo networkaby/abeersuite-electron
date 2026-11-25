@@ -7,7 +7,7 @@ import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError, prismaUniqueError } from "@/shared/lib/api";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
-import { invProductToAdmin, keptReviewNotes, prepHistory, readShopDraft, type ShopDraft, type ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
+import { invProductToAdmin, prepHistory, draftOf, type ShopDraft, type ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { nextShopStatus, resolveShopListing, SHOP_STATUSES } from "@/modules/ecommerce/lib/shopListing";
 import type { ShopStatus } from "@/generated/prisma/enums";
 import { loadVariantAttrGaps } from "@/modules/ecommerce/lib/applyPublished";
@@ -44,10 +44,11 @@ export const shopProductPatchSchema = z.object({
     specs: z.record(z.string(), z.string()).optional(),
     // Photo checklist under Product image (photoChecklist.ts); null clears it.
     photoChecklist: z.object({
-        items: z.array(z.object({ kind: z.enum(PHOTO_KIND_KEYS as [string, ...string[]]), done: z.boolean(), must: z.boolean().default(false), waived: z.boolean().optional() })).max(PHOTO_KIND_KEYS.length),
+        items: z.array(z.object({ kind: z.enum(PHOTO_KIND_KEYS as [string, ...string[]]), done: z.boolean(), must: z.boolean().default(false), waived: z.boolean().optional(), passed: z.boolean().optional() })).max(PHOTO_KIND_KEYS.length),
         enough: z.boolean(),
         at: z.string().max(40),
         remove: z.array(z.object({ url: z.string().url(), why: z.enum(["duplicate", "irrelevant", "quality"]), note: z.string().max(200) })).max(30).default([]),
+        keep: z.array(z.string().url()).max(60).optional(),
         box: z.enum(BOX_TYPE_KEYS as [string, ...string[]]).optional(),
         shape: z.string().max(120).optional(),
         mainClean: z.boolean().optional(),
@@ -164,10 +165,10 @@ export async function updateShopProduct(
         // and Discard leave Draft and drop Claude's notes with it. Attention (a
         // parked Draft, shopAttention.ts) leaves only by Save as draft — back to
         // work, the reason kept so it shows — or Save as ready, which clears it.
-        const info = readShopDraft(existing.shopDraftJson);
-        // Publishing without acting on every note is allowed — the notes stay, dated (owner, 2026-11-12).
-        const keepNotes = () => {
-            const kept = keptReviewNotes(info, existing.shopAttention, existing.shopAttentionAt ?? existing.shopDraftAt);
+        const info = draftOf(existing);
+        // What outlives the work: passed and staff problems, runs, history (owner, 2026-11-25).
+        const keepHistory = (by: string) => {
+            const kept = prepHistory(info, by);
             return kept ? (kept as unknown as Prisma.InputJsonValue) : Prisma.DbNull;
         };
         const inWork = existing.shopStatus === "DRAFT" || existing.shopStatus === "ATTENTION" || existing.shopStatus === "WAITING";
@@ -183,13 +184,11 @@ export async function updateShopProduct(
             data.shopDraftAt = new Date();
         } else if (b.draft === "ready" || b.draft === "discard") {
             status = b.draft === "ready" ? "READY" : inWork ? info?.stageBefore ?? "UNPUBLISHED" : existing.shopStatus;
-            // Ready keeps the AI's notes (dated) until the next review; Discard drops them.
-            const history = prepHistory(info);
-            data.shopDraftJson = b.draft === "ready" ? keepNotes() : Object.keys(history).length ? (history as unknown as Prisma.InputJsonValue) : Prisma.DbNull;
+            data.shopDraftJson = keepHistory(b.draft === "ready" ? "Save as ready" : "Discard draft");
             data.shopDraftAt = null;
         } else if (b.shopStatus && b.shopStatus !== "DRAFT" && existing.shopStatus === "DRAFT") {
             // Leaving Draft by a stage button (Mark ready / Publish / Unpublish).
-            data.shopDraftJson = keepNotes();
+            data.shopDraftJson = keepHistory("stage change");
             data.shopDraftAt = null;
         }
         const shopStatus = nextShopStatus(existing.shopStatus, { status, listed: b.isListedInShop });

@@ -2,7 +2,7 @@ import "server-only";
 import { Prisma } from "@/generated/prisma/client";
 import type { ShopStatus } from "@/generated/prisma/enums";
 import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
-import { readShopDraft, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
+import { draftOf, readShopDraft, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
 
 // Waiting stage (owner, 2026-11-17): staff shortlist products for the AI run
 // (the product-prep skill), or send an Attention product back once fixed — Start
@@ -16,11 +16,12 @@ const IN_WORK: ShopStatus[] = ["DRAFT", "ATTENTION", "WAITING"];
 export async function startAi(ids: number[]): Promise<{ queued: number; published: string[] }> {
     const rows = await prismaWhereSaved().invProduct.findMany({
         where: { id: { in: ids }, shopStatus: { not: "WAITING" } },
-        select: { id: true, name: true, shopStatus: true, shopDraftJson: true },
+        select: { id: true, name: true, shopStatus: true, shopDraftJson: true, shopAttention: true, shopAttentionAt: true },
     });
     await prisma.$transaction(
         rows.map((r) => {
-            const info = readShopDraft(r.shopDraftJson);
+            // The open problems stay on the list; only the reason's text goes.
+            const info = draftOf(r);
             const stageBefore = IN_WORK.includes(r.shopStatus) ? info?.stageBefore : r.shopStatus;
             const next: ShopDraft = { ...info, ...(stageBefore && { stageBefore }) };
             return prisma.invProduct.update({

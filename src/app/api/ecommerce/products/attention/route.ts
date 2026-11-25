@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
@@ -12,7 +12,7 @@ import { readShopDraft } from "@/modules/ecommerce/lib/productAdmin";
 // the Attention stage (owner, 2026-11-11): work blocked until something is
 // checked by hand. Draft, and since 2026-11-22 Published / Pending too (a big
 // mistake found on a live product — it leaves the shop). The rest are named back.
-// The reason is optional and joins the product's manual note; the move joins
+// The reason is optional and joins the product's manual note as a {…} problem; the move joins
 // the run list as a staff line (owner, 2026-11-22).
 // Leaving Attention is Save as draft / Save as ready on the product (PATCH).
 
@@ -29,15 +29,16 @@ export async function POST(req: Request) {
     try {
         const by = await staffName(mod.user.id);
         const before = await stagesNow(data.ids);
-        const out = await parkInAttention(data.ids, data.reason, by, ["DRAFT", "PUBLISHED"]);
+        const out = await parkInAttention(data.ids, { problems: [] }, by, ["DRAFT", "PUBLISHED"]);
         const after = await stagesNow(data.ids);
         const parked = [...after].filter(([id, s]) => s === "ATTENTION" && before.get(id) !== "ATTENTION").map(([id]) => id);
-        if (data.reason) {
-            const notes = await prisma.invProduct.findMany({ where: { id: { in: parked } }, select: { id: true, shopDraftJson: true } });
+        // As a {…} item it is one open problem like any other: it has a tick, the AI sees it, staff edit it in the note.
+        const reason = data.reason.replace(/[{}]/g, "").replace(/\s+/g, " ").trim();
+        if (reason) {
+            const notes = await prismaWhereSaved().invProduct.findMany({ where: { id: { in: parked } }, select: { id: true, shopDraftJson: true } });
             for (const n of notes) {
                 const old = readShopDraft(n.shopDraftJson)?.staffNote?.text?.trim();
-                await saveStaffNote(n.id, old ? `${old}
-${data.reason}` : data.reason, by);
+                await saveStaffNote(n.id, old ? `${old}\n- {${reason}}` : `- {${reason}}`, by);
             }
         }
         await recordStaffMoves(before, by);

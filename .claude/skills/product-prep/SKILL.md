@@ -102,7 +102,7 @@ curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$PRODUCT_COPY_READ_URL/api/agent
 ```
 
 Answer = product-copy's read (`name, brand, modelNo, barcodes, typedSpecs, photos, writing, masters …`) **plus**
-`title` (online name), `group`, `shipping`, `attention` (Attention reason now), `draftNotes`, `processNotes`, and
+`title` (online name), `group`, `shipping`, `attention` (a summary of the open problems and the last run — work from `prep.problems`), and
 `prep: { runs, changedSinceRun, problems, staffNote, partDone, path, photosDoneAt, photoStatus, next, nextStep, identityChanged, searchAllowed, searchedAt, pages, dropped, labelFacts, seen, labelWebsite }`.
 
 **Run records first — never run the same thing twice for nothing** (owner, 2026-11-20). `prep.runs` = the last 10 runs (`{ skill, part, at, from, to, found?, fixed? }`, oldest first); the server writes one after every call — you never send it. `prep.changedSinceRun: false` and the last run is the same path you are about to run (`"1+5"`, `"1+2+3"`, `"1+3"`) → **skip the product** ("already ran on <date>, nothing changed since"), unless the owner said **"redo"** or named this SKU. `changedSinceRun: true` (staff saved it after the run) → go on.
@@ -116,6 +116,7 @@ Answer = product-copy's read (`name, brand, modelNo, barcodes, typedSpecs, photo
 curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json"   "$PRODUCT_COPY_WRITE_URL/api/agent/prep/<id>/fixed" -d '{ "fixed": ["Must photo missing: Box back", "Add one more photo of the side ports"] }'
 ```
   Send each `text` exactly as in `prep.problems`. The server removes them from the list and the Attention reason, and a staff one turns into `✓ …` in the note. Could not do a staff one (needs a person) → leave it open and say why in your part's `notes`.
+- **`photoList.keep`** = staff pressed **Keep**: those photos are correct. Never send them in `remove` / `suggestRemove` and never call them wrong (the server ignores it).
 - A new problem you find goes in the part's `staff` / `pending` as before — the server adds it to the same list. Every run, refused ones included, leaves its one-line history record (`prep.runs`, last 10, `{ skill, part, at, from, to, found?, fixed? }`) by itself; you never send one.
 
 **"Check the open problems that say xyz"** (the owner's words, any product): `GET $PRODUCT_COPY_READ_URL/api/agent/prep/problems?q=<words>` → `{ count, products: [{ sku, id, name, stage, problems: [{ text, level, source, aside }] }] }` — all words must match, any order; no `q` = every product with an open problem. Report by SKU; work on them only if the owner says so.

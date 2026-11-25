@@ -4,8 +4,7 @@ import { z } from "zod";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { AiDataCheckError, aiErrorMessage, generateProductCopy, isAiConfigured, type ProductCopy } from "@/modules/ecommerce/lib/aiProductCopy";
-import { problemKey } from "@/modules/ecommerce/lib/agentProductPrep";
-import { readShopDraft } from "@/modules/ecommerce/lib/productAdmin";
+import { draftOf, problemKey, raisedLine } from "@/modules/ecommerce/lib/productAdmin";
 import { parkInAttention } from "@/modules/ecommerce/lib/shopAttention";
 import { generatePhotoAdvice, generateVerifiedCopy } from "@/modules/ecommerce/lib/aiVerifiedCopy";
 import { type AiCopyFlow } from "@/shared/lib/constants/ai";
@@ -166,14 +165,11 @@ async function applyInAppExtras(productId: number, copy: ProductCopy) {
  * temporary pass is not raised again, and a reason already there is kept.
  */
 async function parkInApp(productId: number, lines: string[]): Promise<boolean> {
-    const r = await prismaWhereSaved().invProduct.findUnique({ where: { id: productId }, select: { shopStatus: true, shopAttention: true, shopDraftJson: true } });
-    const aside = new Set((readShopDraft(r?.shopDraftJson)?.problems ?? []).filter((p) => p.asideAt).map((p) => problemKey(p.text)));
-    const fresh = lines.map((l) => l.replace(/\s+/g, " ").trim()).filter((l) => !aside.has(problemKey(l)));
+    const r = await prismaWhereSaved().invProduct.findUnique({ where: { id: productId }, select: { shopStatus: true, shopAttention: true, shopAttentionAt: true, shopDraftJson: true } });
+    const aside = new Set(((r && draftOf(r))?.problems ?? []).filter((p) => p.asideAt).map((p) => problemKey(p.text)));
+    const fresh = lines.filter((l) => !aside.has(problemKey(l))).map((l) => raisedLine(l, 0, "stop", "In-app AI"));
     if (!fresh.length) return false;
-    const before = r?.shopStatus === "ATTENTION" ? (r.shopAttention ?? "").split("\n").filter((l) => l.trim()) : [];
-    const have = new Set(before.map(problemKey));
-    const reason = [...before, ...fresh.filter((l) => !have.has(problemKey(l)))].join("\n").slice(0, 10000);
-    return (await parkInAttention([productId], reason, "In-app AI", "any")).parked > 0;
+    return (await parkInAttention([productId], { problems: fresh }, "In-app AI", "any")).parked > 0;
 }
 
 /** InvProduct.specsJson as label → text, or null. */

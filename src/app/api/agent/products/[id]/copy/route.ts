@@ -7,7 +7,8 @@ import { AgentCopyError, agentCopySchema, saveAgentCopy } from "@/modules/ecomme
 // The server reads Claude's pages itself and checks every fact (Step 4); what
 // fails goes to "unsure". Written straight onto the product, which moves to
 // Draft (off the shop) for staff to Save as ready. Never publishes.
-// Answer: { result: "draft", shopStatus, kept: { specs, highlights }, unsure, flags, note, sources }.
+// What staff must fix (notes, flags) is on the problem list → Attention.
+// Answer: { result: "draft" | "attention", shopStatus, kept: { specs, highlights }, unsure, flags, note, sources }.
 
 export const maxDuration = 120; // reads up to 8 pages
 
@@ -20,7 +21,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     try {
         const { draft, shopStatus } = await saveAgentCopy(id, data);
         return NextResponse.json({
-            result: "draft",
+            result: shopStatus === "ATTENTION" ? "attention" : "draft",
             shopStatus,
             kept: { specs: draft.specs, highlights: draft.highlights, warranty: draft.warranty },
             unsure: draft.unsure,

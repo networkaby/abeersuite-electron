@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { uploadImageToCloudinary } from "@/shared/lib/uploadToCloudinary";
 import { IMAGE_FIXES, PAD_BACKGROUNDS, cloudinaryThumb, readAdjust, withoutAdjust } from "@/shared/lib/cloudinaryImage";
-import { BOX_TYPES, PHOTO_GROUPS, PHOTO_KINDS, PHOTO_REMOVE_REASONS, photoKindLabel, type PhotoArrange, type PhotoChecklist, type PhotoGroup, type PhotoKind, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
+import { BOX_TYPES, PHOTO_GROUPS, PHOTO_KINDS, PHOTO_REMOVE_REASONS, isKept, photoKindLabel, type PhotoArrange, type PhotoChecklist, type PhotoGroup, type PhotoKind, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
 
 // Verified's photo suggestions (owner, 2026-10-22): shown while the draft is
 // open, never added on their own. A gallery the AI calls enough keeps them
@@ -128,7 +128,7 @@ export function AiPhotoPicker({
 }
 
 /** The rows under Product image in Shop readiness, by group; must rows in bold. Staff tick a kind once the gallery has it. */
-export function PhotoChecklistRows({ checklist, gallery, onToggle, onWaive, onRemove }: {
+export function PhotoChecklistRows({ checklist, gallery, onToggle, onWaive, onRemove, onKeep }: {
     checklist: PhotoChecklist;
     /** The form's current gallery — advice about a photo no longer there is not shown. */
     gallery: string[];
@@ -136,8 +136,10 @@ export function PhotoChecklistRows({ checklist, gallery, onToggle, onWaive, onRe
     /** "Not applicable" on a missing must photo (owner, 2026-11-18): it stops blocking the AI parts; the search looks for it online instead. */
     onWaive: (kind: PhotoKind) => void;
     onRemove: (url: string) => void;
+    /** Staff say the photo is correct — the AI never asks to remove it again. */
+    onKeep: (url: string) => void;
 }) {
-    const removals = checklist.remove.filter((r) => gallery.includes(r.url));
+    const removals = checklist.remove.filter((r) => gallery.includes(r.url) && !isKept(checklist.keep, r.url));
     const groups = (Object.keys(PHOTO_GROUPS) as PhotoGroup[])
         .map((g) => ({ g, items: checklist.items.filter((i) => PHOTO_KINDS[i.kind].group === g) }))
         .filter((x) => x.items.length);
@@ -163,6 +165,7 @@ export function PhotoChecklistRows({ checklist, gallery, onToggle, onWaive, onRe
                                     {r.note ? <span className="text-muted-foreground"> — {r.note}</span> : null}
                                 </span>
                                 <Button type="button" size="sm" variant="outline" onClick={() => onRemove(r.url)}>Remove</Button>
+                                <Button type="button" size="sm" variant="outline" title="This photo is correct — the AI will not ask to remove it again" onClick={() => onKeep(r.url)}>Keep</Button>
                             </li>
                         ))}
                     </ul>

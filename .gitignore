@@ -230,3 +230,4 @@ certificates
 
 # Retired "this PC only" AI keys file (2026-10-22) — kept ignored so an old dev copy is never committed
 .ai-keys.local.json
+ai-notes-report.csv

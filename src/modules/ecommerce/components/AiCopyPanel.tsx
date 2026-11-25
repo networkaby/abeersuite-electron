@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useValueChange } from "@/shared/hooks/useValueChange";
 import axios from "axios";
 import { toast } from "sonner";
-import { ExternalLink, Images, Sparkles } from "lucide-react";
+import { Images, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { IN_APP_PRODUCT_AI } from "@/shared/lib/constants/ai";
 import { extractApiError } from "@/shared/lib/api";
@@ -45,39 +45,6 @@ export function AiDraftNotes({ draft }: { draft: ProductCopy }) {
                 </div>
             )}
         </>
-    );
-}
-
-/** Proof and review points of a draft, folded: nothing here blocks. Problems are in AI notes. */
-function DraftSources({ draft }: { draft: ProductCopy }) {
-    const notes = (draft.notes ?? []).filter((n) => !n.startsWith("ATTENTION — "));
-    const sourced = Object.entries(draft.specSources ?? {});
-    const list = (items: string[]) => <ul className="ml-4 list-disc">{items.map((x) => <li key={x}>{x}</li>)}</ul>;
-    return (
-        <details className="text-muted-foreground text-xs">
-            <summary className="cursor-pointer">Sources{draft.unsure.length ? ` · ${draft.unsure.length} to check by hand` : ""}</summary>
-            <div className="mt-1 space-y-1">
-                <p>{draft.note}</p>
-                {sourced.length > 0 && <p>Spec sources: {sourced.map(([k, v]) => `${k} — ${v}`).join(" · ")}</p>}
-                {draft.unsure.length > 0 && <div><p className="font-medium">Check / add by hand:</p>{list(draft.unsure)}</div>}
-                {notes.length > 0 && <div><p className="font-medium">Notes:</p>{list(notes)}</div>}
-                {draft.sources.length > 0 && (
-                    <div>
-                        <p className="font-medium">Pages read:</p>
-                        <ul className="space-y-0.5">
-                            {draft.sources.map((s) => (
-                                <li key={s.url}>
-                                    <a href={s.url} target="_blank" rel="noreferrer" className="text-primary inline-flex items-center gap-1 hover:underline">
-                                        <ExternalLink className="size-3" />
-                                        {s.title}
-                                    </a>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                )}
-            </div>
-        </details>
     );
 }
 
@@ -127,8 +94,6 @@ export default function AiCopyPanel({
     onAddPhotos,
     onParked,
     onGallery,
-    attention,
-    review,
     prep,
     photoOffers,
 }: {
@@ -162,9 +127,6 @@ export default function AiCopyPanel({
     onParked?: () => void;
     /** Photo AI's order / look, applied to the gallery. */
     onGallery: (next: (g: string[]) => string[]) => void;
-    /** Attention reason and Claude's review notes — shown in the one AI notes box with the copy run's notes. */
-    attention?: AiNotesBoxProps["attention"];
-    review?: AiNotesBoxProps["review"];
     prep?: AiNotesBoxProps["prep"];
     /** Part 5's web photos for a product with no AI copy. */
     photoOffers?: PhotoSuggestion[];
@@ -253,8 +215,8 @@ export default function AiCopyPanel({
     // Nothing to show before the first save while the in-app AI is hidden.
     if (!IN_APP_PRODUCT_AI && !prep) return null;
 
-    // What Claude wrote is already on the product: its leftover "Use" rows hide with the in-app AI (owner, 2026-11-25).
-    const offer = IN_APP_PRODUCT_AI ? draft : null;
+    // What Claude wrote is already on the product: its leftover "Use" rows are only for a draft made here (owner, 2026-11-25).
+    const offer = fromSaved ? null : draft;
     const descDiffers = offer && description.trim() && description.trim() !== offer.shopDescription.trim();
     const titleDiffers = offer && subheading.trim() && subheading.trim() !== offer.title.trim();
     // AI spec rows whose label the product doesn't have yet — the only ones Use can add.
@@ -270,12 +232,7 @@ export default function AiCopyPanel({
 
     return (
         <div className="space-y-3 rounded-md border border-dashed border-border p-3">
-            <AiNotesBox
-                attention={attention}
-                review={review}
-                prep={prep}
-                copy={draft ? { notes: draft.notes ?? [], flags: draft.flags } : null}
-            />
+            <AiNotesBox prep={prep} />
             {IN_APP_PRODUCT_AI && (
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void run(false)}>
@@ -312,8 +269,6 @@ export default function AiCopyPanel({
                             onUse={() => onCollections?.([...(collectionIds ?? []), ...collectionsMissing.map((c) => c.id)])} />
                     )}
                     {brandDiffers && <DraftRow label="Brand" text={brandDiffers.name} onUse={() => onBrand?.(brandDiffers.id)} />}
-                    {/* A draft made here only; what Claude wrote is already on the product, its problems in AI notes (owner, 2026-11-25). */}
-                    {!fromSaved && <DraftSources draft={draft} />}
                     {titleDiffers && (
                         <DraftRow label="Online name" text={draft.title} onUse={() => onSubheading(draft.title)} />
                     )}

@@ -4,6 +4,7 @@ import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { requireIncomingKey } from "@/modules/incoming/lib/incomingApi";
 import { AgentCopyError } from "@/modules/ecommerce/lib/agentProductCopy";
 import { prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
+import { draftOf } from "@/modules/ecommerce/lib/productAdmin";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { z as zod } from "zod";
 import { galleryOf, markFixed, part1Schema, part2Schema, part3Schema, part4Schema, part5Schema, recordRun, runParts, runSchema, savePart1, savePart2, savePart3, savePart4, savePart5 } from "@/modules/ecommerce/lib/agentProductPrep";
@@ -49,20 +50,20 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string; pa
     const asked = [b, b.part1, b.part3, b.part5].flatMap((x) => [...(x?.remove ?? []), ...(x?.photos?.remove ?? [])]);
     const label = part === "run" ? (b.part5 ? "1+5" : b.part2 ? "1+2+3" : "1+3") : part.slice(4);
     const skill = part === "part4" ? "product-recheck" : "product-prep";
-    const before = isRun ? await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { shopStatus: true, imageUrl: true, galleryJson: true } }) : null;
-    const photos = before ? { before: galleryOf(before), why: new Map(asked.map((r) => [r.url, r.note || r.why])) } : undefined;
+    const before = isRun ? await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { shopStatus: true, shopAttention: true, shopAttentionAt: true, shopDraftJson: true, imageUrl: true, galleryJson: true } }) : null;
+    const was = before ? { info: draftOf(before), gallery: galleryOf(before), why: new Map(asked.map((r) => [r.url, r.note || r.why])) } : undefined;
     try {
         const out = await (def.run as (id: number, b: unknown) => Promise<unknown>)(id, data);
         if (before) {
             const stopped = (out as { stoppedAt?: number })?.stoppedAt;
-            await recordRun(id, skill, stopped ? `${label} (stopped at ${stopped})` : label, before.shopStatus, photos);
+            await recordRun(id, skill, stopped ? `${label} (stopped at ${stopped})` : label, before.shopStatus, was && { ...was, next: (out as { next?: string })?.next });
         }
         // The AI writes from outside any browser, so nothing announces it (owner, 2026-11-18):
         // an open product form would keep an old photo list and a staff tick would overwrite Part 4.
         void publishChangeServer(["catalogue"]);
         return NextResponse.json(out);
     } catch (e) {
-        if (before) await recordRun(id, skill, `${label} · refused: ${e instanceof Error ? e.message.slice(0, 120) : "error"}`, before.shopStatus, photos).catch(() => {});
+        if (before) await recordRun(id, skill, `${label} · refused: ${e instanceof Error ? e.message.slice(0, 120) : "error"}`, before.shopStatus, was).catch(() => {});
         if (e instanceof AgentCopyError) return NextResponse.json({ error: e.message }, { status: e.message === "Product not found" ? 404 : 422 });
         return handleApiError(e, "Product prep failed");
     }

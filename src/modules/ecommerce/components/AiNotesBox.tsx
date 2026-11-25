@@ -6,15 +6,11 @@ import { toast } from "sonner";
 import { cloudinaryThumb } from "@/shared/lib/cloudinaryImage";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { extractApiError } from "@/shared/lib/api";
-import { openList, problemText, type ClosedProblem, type PrepProblem, type PrepRun, type StaffNote, type NextAct, type NextStep } from "@/modules/ecommerce/lib/productAdmin";
+import { problemText, type ClosedProblem, type PrepProblem, type PrepRun, type StaffNote, type NextAct, type NextStep } from "@/modules/ecommerce/lib/productAdmin";
 
-/** One place for every AI note on a product (owner, 2026-11-12): the Attention reason,
- *  Claude's review notes (kept, dated, after publishing) and the latest copy run's notes. */
+/** One place for every AI note on a product: the runs, the one open-problem list, the manual note and the history. */
 export type AiNotesBoxProps = {
-    attention?: { text: string; by?: string | null; at?: string | Date | null; parked: boolean } | null;
-    review?: { notes: string[]; at?: string | null; kept?: boolean } | null;
-    copy?: { notes: string[]; flags: string[] } | null;
-    /** Product prep's runs and open problems (owner, 2026-11-20) — when there are any, the box shows only these. */
+    /** The runs and the one problem list. */
     prep?: {
         productId: number; runs: PrepRun[]; problems: PrepProblem[]; staffNote?: StaffNote | null; closed?: ClosedProblem[]; onChanged: () => void;
         /** The last line (owner, 2026-11-22): where to go from here; `onAct` makes the move when staff press it. */
@@ -31,18 +27,6 @@ function runLine(r: PrepRun) {
     const counts = [r.found ? `found ${r.found}` : "", r.fixed ? `fixed ${r.fixed}` : ""].filter(Boolean).join(", ");
     if (r.skill === "staff") return `staff ${r.part} · ${formatDate(r.at)} · ${STAGE[r.from] ?? r.from} → ${STAGE[r.to] ?? r.to}`;
     return `${r.skill} part ${r.part} · ${formatDate(r.at)} · ${STAGE[r.from] ?? r.from} → ${STAGE[r.to] ?? r.to}${counts ? ` · ${counts}` : ""}`;
-}
-
-/**
- * An old "Last run: Part 5 · 20 Nov 2026, 11:27 am · photos done → Draft" line in
- * the same shape as a run record (owner, 2026-11-20: one format). The stage it
- * came from was never saved, so only where it went is shown.
- */
-function oldRunLine(line: string) {
-    const m = /^Last run: Part (\d) · (\d{1,2} \w{3} \d{4})[^·]*·.*?(?:→\s*(\w+))?\s*$/.exec(line);
-    if (!m) return line.slice("Last run: ".length);
-    const skill = m[1] === "4" ? "product-recheck" : "product-prep";
-    return `${skill} part ${m[1]} · ${m[2]}${m[3] ? ` · → ${m[3]}` : ""}`;
 }
 
 /**
@@ -96,12 +80,10 @@ function ManualNote({ productId, staffNote, onChanged }: NonNullable<AiNotesBoxP
 
 /**
  * The latest run, the one shared open list, the manual note and the short history
- * (owner, 2026-11-20). A product run before run records existed keeps only what
- * fits: its old "Last run" lines join the history, its Attention lines the open
- * list; the old free-text notes are not shown.
+ * (owner, 2026-11-20).
  */
-function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]> & { oldRuns?: string[] }) {
-    const { productId, runs, problems, onChanged, oldRuns = [] } = props;
+function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]>) {
+    const { productId, runs, problems, onChanged } = props;
     const [busy, setBusy] = useState<string | null>(null);
     const tick = async (p: PrepProblem, aside: boolean) => {
         setBusy(p.text);
@@ -121,11 +103,6 @@ function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]> & { oldRuns?: str
     for (const r of [...runs].reverse()) if (r.skill !== "staff" && !perPart.has(partOf(r.part))) perPart.set(partOf(r.part), r);
     const shown = [...perPart.values(), ...runs.filter((r) => r.skill === "staff").slice(-3)].sort((a, b) => b.at.localeCompare(a.at));
     const recent = shown.map(runLine);
-    for (const l of oldRuns) {
-        const k = /part (\S+)/.exec(l)?.[1] ?? l;
-        // "1+2+3" covers an old "part 3" line too.
-        if (![...perPart.keys()].some((p) => p.split("+").includes(k))) recent.push(l);
-    }
     const removed = [...new Map(runs.flatMap((r) => r.removed ?? []).map((x) => [x.url, x])).values()].filter((x) => !props.gallery?.includes(x.url));
     // History = the closed problems (owner, 2026-11-20): what left the open list, who closed it, when.
     const closed = [...(props.closed ?? [])].reverse();
@@ -152,7 +129,7 @@ function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]> & { oldRuns?: str
                                         <span className={`mr-1.5 inline-block size-2 rounded-full ${dot}`} />
                                         {i + 1}. {problemText(p.text)}
                                         <span className="ml-1 text-muted-foreground">
-                                            · {staff ? (p.by ?? "staff") : !(p.parts ?? [p.part]).some(Boolean) ? "AI / Attention" : `AI part ${(p.parts ?? [p.part]).join(", ")}`}
+                                            · {staff ? (p.by ?? "staff") : !(p.parts ?? [p.part]).some(Boolean) ? (p.by ?? "AI") : `AI part ${(p.parts ?? [p.part]).join(", ")}`}
                                             {aside && ` · temporary pass${p.asideBy ? ` (${p.asideBy}, ${formatDate(p.asideAt!)})` : ""} — not blocking, stays until fixed`}
                                         </span>
                                     </span>
@@ -210,10 +187,7 @@ function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]> & { oldRuns?: str
     );
 }
 
-export function AiNotesBox({ attention, review, copy, prep }: AiNotesBoxProps) {
+export function AiNotesBox({ prep }: AiNotesBoxProps) {
     // An unsaved product has no AI run yet.
-    if (!prep) return null;
-    const lines = [...(attention?.text.split("\n") ?? []), ...(review?.notes ?? []), ...(copy?.notes ?? [])].map((l) => l.trim());
-    const oldRuns = [...new Set(lines.filter((l) => l.startsWith("Last run: ")).map(oldRunLine))];
-    return <PrepNotes {...prep} oldRuns={oldRuns} problems={openList(prep.problems, attention?.parked ? attention.text : null, copy?.flags ?? [], prep.closed)} />;
+    return prep ? <PrepNotes {...prep} /> : null;
 }

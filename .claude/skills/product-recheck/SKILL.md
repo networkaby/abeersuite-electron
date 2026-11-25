@@ -52,7 +52,7 @@ Usually the Draft tab: `GET /api/agent/products?stage=draft&limit=20` (or `sku=`
 curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$PRODUCT_COPY_READ_URL/api/agent/prep/<id>"
 ```
 
-Use: the product fields, every photo (open each — `GET /api/agent/products/<id>/photos/<n>` if blocked), `draftNotes`, `processNotes`, `attention`, and `prep.pages` / `prep.labelFacts` (the saved search — the only outside source allowed).
+Use: the product fields, every photo (open each — `GET /api/agent/products/<id>/photos/<n>` if blocked), `prep.problems` (the one open list), `photoList.keep` (staff's Keep — correct photos, never doubt them), and `prep.pages` / `prep.labelFacts` (the saved search — the only outside source allowed).
 `prep.identityChanged: true` → staff changed brand / model / barcode after the search: **pending** "Identity changed after the search — run product prep from Part 1".
 `prep.runs` (last 10 runs, `{ skill, part, at, from, to, found?, fixed? }`) and `prep.changedSinceRun` (owner, 2026-11-20): the last run was a product-recheck and `changedSinceRun: false` → **skip** ("verified / checked on <date>, nothing changed since") unless the owner said **"redo"** or named the SKU.
 
@@ -125,7 +125,7 @@ The server tags each line with its part ("Part 3 · …") and **a part that runs
 
 | Area | Pending when |
 |---|---|
-| **Earlier notes** | Each line in `processNotes` / `draftNotes` (Remove this photo, copy model no. X, create brand Y, fix group…) — not carried out |
+| **Earlier notes** | Each line in `prep.problems` (Remove this photo, copy model no. X, create brand Y, fix group…) — not carried out |
 | **Text** | Title / description / specs say something not on the label or an accepted saved page; a spec contradicts a photo; our support period shown as the maker's warranty |
 | **Brand** | Empty or wrong while the label shows a brand that is now in `masters.brands` |
 | **Collections** | None, or plainly wrong for who buys it |

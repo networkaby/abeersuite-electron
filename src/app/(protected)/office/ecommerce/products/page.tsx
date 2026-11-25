@@ -9,7 +9,7 @@ import { LinkContextMenu, useLinkContextMenu } from "@/shared/components/LinkCon
 import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { toast } from "sonner";
-import { splitAttention, type RowProblem, type ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
+import { attentionInfo, type RowProblem, type ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { DEFAULT_SHOP_PUBLISH_RULES, recheckMessage, type RecheckResult, type ShopPublishRules } from "@/modules/ecommerce/lib/shopQualification";
 import { extractApiError } from "@/shared/lib/api";
 import {
@@ -171,8 +171,8 @@ function ProblemLines({ problems, full }: { problems: RowProblem[]; full?: boole
     );
 }
 
-function StatusBadge({ status, attention, problems }: { status: ProductStatus; attention?: string | null; problems?: RowProblem[] }) {
-    const list = problems ?? (status.kind === "attention" ? splitAttention(attention).problems : []);
+function StatusBadge({ status, problems }: { status: ProductStatus; problems?: RowProblem[] }) {
+    const list = problems ?? [];
     const badge = status.kind === "attention" ? (
         <Badge variant="outline" className="gap-1 border-orange-200 bg-orange-50 text-orange-700">
             <AlertTriangle className="size-3" /> Attention
@@ -781,7 +781,7 @@ export default function EcommerceProductsPage() {
                                             {p.groupName ?? "—"}
                                         </TableCell>
                                         <TableCell>
-                                            <StatusBadge status={status} attention={p.shopAttention} problems={p.problems} />
+                                            <StatusBadge status={status} problems={p.problems} />
                                         </TableCell>
                                         <TableCell className="text-right tabular-nums">
                                             {shopPricePaise ? formatRupeesFromPaise(shopPricePaise) : "—"}
@@ -1009,14 +1009,14 @@ const STAGE_LINE: Partial<Record<ProductStatus["kind"], string>> = {
 
 /** Attention, expanded: who parked it, the problems (numbered, coloured), then the small print. */
 function AttentionDetail({ p }: { p: ShopProductAdmin }) {
-    const { problems, rest } = splitAttention(p.shopAttention);
-    const list = p.problems ?? problems;
+    const rest = attentionInfo(p.shopAttention);
+    const list = p.problems ?? [];
     return (
         <span className="flex flex-col gap-1">
             <span className="font-medium text-orange-700 dark:text-orange-400">
                 Attention — parked{p.shopAttentionBy ? ` by ${p.shopAttentionBy}` : ""}{p.shopAttentionAt ? ` on ${formatDate(p.shopAttentionAt)}` : ""}
             </span>
-            {list.length ? <ProblemLines problems={list} full /> : <span>{p.shopAttention ?? "—"}</span>}
+            {list.length > 0 && <ProblemLines problems={list} full />}
             {rest.length > 0 && (
                 <span className="flex flex-col text-[11px] text-muted-foreground">
                     {rest.map((l) => <span key={l}>{l.replace(/\.\.$/, ".")}</span>)}

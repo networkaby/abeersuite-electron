@@ -8,6 +8,8 @@
 // size, real-life use, cinematic — that let the buyer feel the product and buy
 // on impulse. Size is one kind: any photo that lets the buyer gauge size.
 
+import { withoutAdjust } from "@/shared/lib/cloudinaryImage";
+
 export const PHOTO_GROUPS = { product: "Product", box: "Box", feel: "Feel & experience" } as const;
 export type PhotoGroup = keyof typeof PHOTO_GROUPS;
 
@@ -79,6 +81,8 @@ export type PhotoRemoval = { url: string; why: PhotoRemoveReason; note: string }
 /** `enough` = every must row is done (worked out, not the AI's word). */
 export type PhotoChecklist = {
     items: PhotoChecklistItem[]; enough: boolean; at: string; remove: PhotoRemoval[];
+    /** Staff pressed Keep (owner, 2026-11-25): the photo is correct — no AI part removes or doubts it again. */
+    keep?: string[];
     /** Set by product prep: the packing, and the AI's word on the product's shape / size. */
     box?: BoxType;
     shape?: string;
@@ -125,6 +129,9 @@ export function splitRemovals<T extends { url: string; why: string; kind?: strin
     }
     return { gone, held };
 }
+
+/** Same photo whatever framing staff gave it — a Keep survives an Adjust. */
+export const isKept = (keep: string[] | undefined, url: string) => !!keep?.some((k) => withoutAdjust(k) === withoutAdjust(url));
 
 /** A web photo from a page Verified kept, with the kind the AI says it shows. */
 export type PhotoSuggestion = { url: string; site: string; kind: PhotoKind | null };
@@ -182,6 +189,7 @@ export function readPhotoChecklist(raw: unknown): PhotoChecklist | null {
     });
     return {
         items, enough: isEnough(items), at: typeof r.at === "string" ? r.at : "", remove,
+        ...(Array.isArray(r.keep) && r.keep.length > 0 && { keep: r.keep.filter((x): x is string => typeof x === "string") }),
         ...(isBoxType(r.box) && { box: r.box }),
         ...(typeof r.shape === "string" && r.shape && { shape: r.shape }),
         ...(typeof r.mainClean === "boolean" && { mainClean: r.mainClean }),
