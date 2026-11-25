@@ -13,23 +13,13 @@
  * Safe to run again: a product already in the new format is skipped. A row that
  * changed after it was read is skipped too, and named.
  */
-import { PrismaClient } from "../src/generated/prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
-import * as dotenv from "dotenv";
+import { pool, prisma, rawUrl } from "../src/shared/lib/db/scriptPrisma";
 import { writeFileSync } from "node:fs";
 import { attentionAgain, draftOf, problemKey, readShopDraft } from "../src/modules/ecommerce/lib/productAdmin";
 
-dotenv.config({ path: ".env.local" });
-dotenv.config({ path: ".env" });
-
 const APPLY = process.argv.includes("--apply");
-const url = process.env.DIRECT_URL || process.env.DATABASE_URL;
-if (!url) throw new Error("DIRECT_URL / DATABASE_URL is not set");
-console.log(`${APPLY ? "APPLY" : "Report only"} — database host: ${new URL(url).hostname}`);
-
-const pool = new Pool({ connectionString: url });
-const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
+if (!rawUrl) throw new Error("No DIRECT_URL_n / DATABASE_URL_n for the primary database");
+console.log(`${APPLY ? "APPLY" : "Report only"} — database host: ${new URL(rawUrl).hostname}`);
 const cell = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
 
 async function main() {
