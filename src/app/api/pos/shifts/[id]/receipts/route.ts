@@ -10,7 +10,7 @@
 // Funding destination is always the shift's counter till (cash into the drawer),
 // mirroring the per-counter routing at /office/admin/counters.
 
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, after } from "next/server";
 import { notifyBill } from "@/shared/lib/whatsapp/notifyBill";
 import { z } from "zod";
@@ -20,7 +20,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
 import { autoLinkSettlement } from "@/modules/accountancy/lib/autoLinkSettlement";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
-import { touchPosShift } from "@/modules/pos/lib/touchShift";
+import { touchPosShift, ShiftNotOpenError } from "@/modules/pos/lib/touchShift";
 
 const receiptSchema = z.object({
     accountId: z.number().int().positive(),   // party AR ledger to credit
@@ -47,7 +47,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (error) return error;
 
     try {
-        const shift = await prisma.posShift.findUnique({
+        const shift = await prismaWhereSaved().posShift.findUnique({
             where:  { id: shiftId },
             select: {
                 id: true, userId: true, status: true, branchId: true,
@@ -90,7 +90,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const totalPaise = data.tenders.reduce((s, t) => s + t.amountPaise, 0);
 
         const result = await prisma.$transaction(async (tx) => {
-            const r = await postReceiptVoucher(tx, {
+            await touchPosShift(tx, shiftId);
+            return postReceiptVoucher(tx, {
                 customerAccountId: party.id,
                 tenders,
                 date:      requestBusinessDate(req),
@@ -102,8 +103,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 // side row used to survive and haunt the Payment/Receipt tab.
                 shiftId,
             });
-            await touchPosShift(tx, shiftId);
-            return r;
         });
 
         // Settle this money against the party's open bills — AFTER the receipt is
@@ -135,6 +134,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             { status: 201 },
         );
     } catch (e) {
+        if (e instanceof ShiftNotOpenError) return NextResponse.json({ error: "Cannot record a receipt on a closed shift" }, { status: 409 });
         return handleApiError(e, "Failed to record receipt");
     }
 }

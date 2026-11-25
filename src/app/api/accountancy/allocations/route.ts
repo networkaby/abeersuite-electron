@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
@@ -102,7 +102,7 @@ export async function POST(req: Request) {
 
     try {
         const ids = [data.voucherId, ...data.links.map((l) => l.voucherId)];
-        const vouchers = await prisma.universalVoucher.findMany({
+        const vouchers = await prismaWhereSaved().universalVoucher.findMany({
             where:  { id: { in: [...new Set(ids)] } },
             select: { id: true, type: true },
         });

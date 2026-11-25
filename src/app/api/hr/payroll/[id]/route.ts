@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
@@ -26,8 +26,8 @@ function parseId(v: string): number | null {
 }
 
 /** The run, plus the names the DTO needs — one extra query each, never per row. */
-async function loadDetail(id: number) {
-    const run = await prisma.payrollRun.findUnique({ where: { id }, include: PAYROLL_RUN_INCLUDE });
+async function loadDetail(id: number, db: typeof prisma = prisma) {
+    const run = await db.payrollRun.findUnique({ where: { id }, include: PAYROLL_RUN_INCLUDE });
     if (!run) return null;
 
     const userIds = [...new Set([
@@ -80,7 +80,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (error) return error;
 
     try {
-        const run = await prisma.payrollRun.findUnique({
+        const run = await prismaWhereSaved().payrollRun.findUnique({
             where: { id },
             select: { id: true, status: true, periodFrom: true, periodTo: true },
         });
@@ -100,7 +100,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             }
         }
 
-        await prisma.$transaction(async (tx) => {
+        const changed = await prisma.$transaction(async (tx) => {
+            // Takes the run's row, so Post and this edit cannot both pass the check.
+            const { count } = await tx.payrollRun.updateMany({ where: { id, status: "DRAFT" }, data: { updatedAt: new Date() } });
+            if (count !== 1) return false;
+
             // Excluding is always allowed. Including is not: a line the
             // generator could not pay (no ledger, no structure) carries a
             // skipReason, and ticking it would post a broken journal.
@@ -130,9 +134,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     ...candidateTotals(lines),
                 },
             });
+            return true;
         });
+        if (!changed) return NextResponse.json({ error: "Only a draft run can be changed" }, { status: 422 });
 
-        const detail = await loadDetail(id);
+        const detail = await loadDetail(id, prismaWhereSaved());
         return NextResponse.json(detail);
     } catch (e) {
         return handleApiError(e, "Failed to update the payroll run");
@@ -147,7 +153,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     if (!id) return NextResponse.json({ error: "Invalid run id" }, { status: 400 });
 
     try {
-        const run = await prisma.payrollRun.findUnique({
+        const run = await prismaWhereSaved().payrollRun.findUnique({
             where:  { id },
             select: { status: true, voucherId: true, voucherRef: true, voucher: PAYROLL_VOUCHER_SELECT },
         });
@@ -169,7 +175,8 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
             );
         }
         // The lines go with it — PayrollRunLine.run is onDelete: Cascade.
-        await prisma.payrollRun.delete({ where: { id } });
+        const { count } = await prisma.payrollRun.deleteMany({ where: { id, status: run.status, voucherId: run.voucherId } });
+        if (count === 0) return NextResponse.json({ error: "This run was just posted or deleted. Refresh to see it." }, { status: 409 });
         return NextResponse.json({ ok: true });
     } catch (e) {
         return handleApiError(e, "Failed to delete the payroll run");

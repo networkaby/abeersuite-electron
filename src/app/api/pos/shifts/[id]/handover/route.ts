@@ -12,7 +12,7 @@
 // A came back before anybody took over — the shift is OPEN again, as if the
 // handover had never been asked for.
 
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -44,7 +44,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (error) return error;
 
     try {
-        const shift = await prisma.posShift.findUnique({
+        const shift = await prismaWhereSaved().posShift.findUnique({
             where:  { id: shiftId },
             select: { id: true, status: true, userId: true },
         });
@@ -105,7 +105,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     if (!Number.isFinite(shiftId)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
     try {
-        const shift = await prisma.posShift.findUnique({
+        const shift = await prismaWhereSaved().posShift.findUnique({
             where:  { id: shiftId },
             select: { id: true, status: true, userId: true },
         });
