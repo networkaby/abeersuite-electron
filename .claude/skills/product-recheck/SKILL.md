@@ -107,6 +107,7 @@ The server keeps the list on the product (staff see it under Product image), **n
 ```
 
 - A dropped photo becomes **optional**: staff need not upload it. The reason goes to staff as a note.
+- **A photo of a similar but different model is another product's**: Part 4 cannot change photos, so send the pending line naming the photo, and `next: "part5"` — Part 5 removes it or offers staff Remove / Keep.
 - **Dropping is never a reason to remove the photo.** Other sellers not showing a view does not mean we cannot. If staff already added it, look at it: keep it unless it is ugly, low quality or adds nothing (then `remove` / `suggestRemove` with the usual reason).
 - The fixed floor (clean product photo; box front + back when boxed) can never be dropped. Part 1's drops are ignored.
 - Staff's "Not applicable" tick is cleared by the server once that photo is dropped or is in the gallery — it only means something on a must photo still missing.

@@ -224,12 +224,13 @@ The server tags each line with its part ("Part 3 · …") and **a part that runs
 1. **Read everything**: name (the custom part is usually the most reliable), brand, group, collections, SKU, barcodes, model no., specs, title, description, shipping, warranty — and **open every photo**. Never use your own memory of the product.
 2. **Find what is wrong**:
    - **Self-contradiction**: fields disagree with each other or with what is *printed* on the item / box (brand, model, capacity, wattage, size, count). Unbranded / Premium Unbranded with a small printed name is **not** a conflict.
-   - **Wrong photos**: another product, old box version, someone else's watermark (our own stamp is not one).
+   - **Wrong photos**: another product — **a similar model is another product** (DG-GS1008D is not DG-GS1008DGE, unless the unit or the maker says they are the same) —, old box version, someone else's watermark (our own stamp is not one).
    - **Poor photos**: blurry, dark, low resolution, bad angle, duplicates.
    - **Wrong text**: a wrong spec row, our support period written as the maker's warranty, a wrong weight / size, a description of another product.
 3. **Decide what is sure**:
-   - Sure wrong → `remove` (photos) / `clear` (fields). The server does it now. Give every removed photo its **`kind`** (the view it shows). The server holds back the last photo, the only photo of a view and one with no `kind` — staff get a Remove button (another product's photo, `irrelevant`, needs no `kind`). Box colour alone is never a reason.
-   - Not so confident → `suggestRemove` (staff get a Remove button; never blocks).
+   - Sure wrong → `remove` (photos) / `clear` (fields). The server does it now. Give every removed photo its **`kind`** (the view it shows). The server holds back the last photo, the only photo of a view and one with no `kind` — staff get a Remove button (another product's photo, `irrelevant`, is removed even when it is the only one of its view — still send its `kind`: the server unticks that view unless another photo shows it). Box colour alone is never a reason.
+   - Not so confident → `suggestRemove` (staff get Remove / Keep buttons; never blocks).
+   - **A wrong-model photo is never only a text line**: it always goes in `remove` (sure) or `suggestRemove` (not sure). Do not write "Removed photo N" as a `staff` / `fix` line.
    - Cannot decide → leave it to staff: a `fix` line ("Photo 3: check if this is our model"); Part 3 / 5: a `staff` line.
    - **Never clear the group** — `fix` line "Group looks wrong — should be X (GST!)".
 4. **Major or minor?**

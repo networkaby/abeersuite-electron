@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isKept, splitRemovals } from "./photoChecklist";
+import { isKept, splitRemovals, stillInGallery, viewsLost } from "./photoChecklist";
 import { attentionAgain, draftOf, nextStep, prepHistory, raiseProblems, raisedLine, withProblems } from "./productAdmin";
 
 const r = (url: string, why: string, kind?: string) => ({ url, why, kind });
@@ -16,6 +16,17 @@ test("removals: only with another photo of the view; last and untagged are held"
 test("removals: two copies of one view never both go", () => {
     const x = splitRemovals(["a", "b"], [r("a", "duplicate", "front"), r("b", "duplicate", "front")], new Map());
     assert.deepEqual([urls(x.gone), urls(x.held)], [["a"], ["b"]]);
+});
+
+test("a wrong product's photo takes its view's tick away, unless another photo shows it", () => {
+    const tags = new Map([["a", "front"], ["b", "front"], ["c", "back"]]);
+    assert.deepEqual([...viewsLost([r("a", "irrelevant"), r("c", "irrelevant")], ["a", "b", "c"], tags)], ["back"]);
+    assert.deepEqual([...viewsLost([r("x", "irrelevant", "front")], ["c"], tags)], ["front"]);
+    assert.deepEqual([...viewsLost([r("x", "irrelevant")], ["c"], tags)], []);
+});
+
+test("a removed photo found in the gallery again is offered for Remove, a kept one is not", () => {
+    assert.deepEqual(urls(stillInGallery([r("a", "irrelevant"), r("b", "irrelevant"), r("z", "quality")], ["a", "b", "c"], ["b"])), ["a"]);
 });
 
 test("removals: a replacement added in the same run counts", () => {

@@ -130,6 +130,21 @@ export function splitRemovals<T extends { url: string; why: string; kind?: strin
     return { gone, held };
 }
 
+/**
+ * Views whose tick must go (owner, 2026-11-26): the AI said the photo is another
+ * product's (a similar model counts) and no photo that stays shows that view.
+ * `tags`: photo link → view, the photos that stay and the wrong ones alike.
+ */
+export function viewsLost(wrong: { url: string; kind?: string }[], gallery: string[], tags: Map<string, string>): Set<PhotoKind> {
+    const bad = new Set(wrong.map((r) => r.url));
+    const have = new Set(gallery.filter((u) => !bad.has(u)).map((u) => tags.get(u)));
+    return new Set(wrong.map((r) => r.kind ?? tags.get(r.url)).filter((k): k is PhotoKind => isPhotoKind(k) && !have.has(k)));
+}
+
+/** Photos the AI removed that are in the gallery all the same — they become Remove advice. */
+export const stillInGallery = <T extends { url: string }>(removed: T[], gallery: string[], keep: string[] | undefined) =>
+    removed.flatMap((r) => gallery.filter((u) => withoutAdjust(u) === withoutAdjust(r.url) && !isKept(keep, u)).map((url) => ({ ...r, url })));
+
 /** Same photo whatever framing staff gave it — a Keep survives an Adjust. */
 export const isKept = (keep: string[] | undefined, url: string) => !!keep?.some((k) => withoutAdjust(k) === withoutAdjust(url));
 

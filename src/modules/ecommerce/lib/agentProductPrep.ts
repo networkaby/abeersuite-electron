@@ -15,7 +15,7 @@ import { parkInAttention } from "@/modules/ecommerce/lib/shopAttention";
 import { arrangeFrom, checkWrittenCopy, writtenCopySchema } from "@/modules/ecommerce/lib/aiVerifiedCopy";
 import { readGivenPages, type PageRead, type PageSearch } from "@/modules/ecommerce/lib/aiPageReader";
 import { checkFact, cmOf, gramsOf, normForCheck } from "@/modules/ecommerce/lib/aiFactCheck";
-import { BOX_TYPES, BOX_TYPE_KEYS, PHOTO_KINDS, PHOTO_REMOVE_REASONS, isEnough, isPhotoKind, kindsInMustLine, missingMust, photoFloor, photoKindLabel, readPhotoChecklist, isKept, splitRemovals, type BoxType, type PhotoChecklist, type PhotoChecklistItem, type PhotoKind, type PhotoRemoval, type PhotoRemoveReason, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
+import { BOX_TYPES, BOX_TYPE_KEYS, PHOTO_KINDS, PHOTO_REMOVE_REASONS, isEnough, isPhotoKind, kindsInMustLine, missingMust, photoFloor, photoKindLabel, readPhotoChecklist, isKept, splitRemovals, stillInGallery, viewsLost, type BoxType, type PhotoChecklist, type PhotoChecklistItem, type PhotoKind, type PhotoRemoval, type PhotoRemoveReason, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
 import { applyPublished } from "@/modules/ecommerce/lib/applyPublished";
 import { cloudinarySignature } from "@/shared/lib/cloudinary";
 import { isCloudinaryUrl } from "@/shared/lib/cloudinaryImage";
@@ -213,7 +213,7 @@ async function readState(id: number): Promise<PrepState | null> {
  * read once at the start and written once at the end — in between the parts
  * pass it along here instead of going back to R2.
  */
-type RunCtx = { state: PrepState | null; identityChanged: boolean };
+type RunCtx = { state: PrepState | null; identityChanged: boolean; /** Photos an earlier part of this run removed. */ removed?: Removal[] };
 
 async function writeState(id: number, s: PrepState, run?: RunCtx) {
     if (run) { run.state = s; run.identityChanged = false; return; }
@@ -478,12 +478,15 @@ const PRODUCT_KINDS = new Set<string>(Object.entries(PHOTO_KINDS).filter(([, v])
  * The product's photo list from a part's check, against `gallery` (the photos as
  * saved after this part). `alias` maps a page photo url to its copy in our storage.
  */
-async function photoListOf(part: 1 | 3 | 4 | 5, id: number, c: PhotoCheck, gallery: string[], remove: PhotoRemoval[] = [], alias = new Map<string, string>()) {
+async function photoListOf(part: 1 | 3 | 4 | 5, id: number, c: PhotoCheck, gallery: string[], remove: PhotoRemoval[] = [], alias = new Map<string, string>(), wrong: Removal[] = []) {
     const row = await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { photoChecklistJson: true } });
     const prev = readPhotoChecklist(row?.photoChecklistJson);
     const kinds = (xs: string[]) => xs.filter(isPhotoKind) as PhotoKind[];
     const tagOf = new Map(c.tags.map((t) => [alias.get(t.url) ?? t.url, t.kind]));
-    const have = new Set(kinds(gallery.map((u) => tagOf.get(u) ?? "")));
+    // Another product's photo shows no view of ours, even while it is still in the gallery.
+    const notOurs = new Set(wrong.map((r) => r.url));
+    const have = new Set(kinds(gallery.filter((u) => !notOurs.has(u)).map((u) => tagOf.get(u) ?? "")));
+    const lost = viewsLost(wrong, gallery, tagOf);
     const floor = new Set<PhotoKind>(photoFloor(c.box));
     // Part 1 knows least — it only adds. A later part's drop wins over an earlier must, never over the floor.
     const drops = part === 1 ? [] : c.drop.filter((d) => isPhotoKind(d.kind) && !floor.has(d.kind as PhotoKind));
@@ -492,8 +495,8 @@ async function photoListOf(part: 1 | 3 | 4 | 5, id: number, c: PhotoCheck, galle
     const prevOf = new Map(prev?.items.map((i) => [i.kind, i]) ?? []);
     const order = [...have, ...must, ...kinds(c.nice), ...(prev?.items.map((i) => i.kind) ?? [])];
     const items: PhotoChecklistItem[] = [...new Set([...order, ...dropped])].map((kind) => {
-        // Staff's own tick that the gallery has it stays.
-        const done = have.has(kind) || prevOf.get(kind)?.done === true;
+        // Staff's own tick that the gallery has it stays, unless its photo turned out to be another product's.
+        const done = have.has(kind) || (prevOf.get(kind)?.done === true && !lost.has(kind));
         // "Not applicable" only means something on a must photo still missing — cleared once it is dropped or there.
         const waived = prevOf.get(kind)?.waived && must.has(kind) && !done;
         // A staff temporary pass survives a re-run until the photo is added (owner, 2026-11-22).
@@ -551,6 +554,18 @@ const afterRemovals = (gallery: string[], gone: Set<string>, held: Removal[]) =>
     const last = new Set(held.map((r) => r.url));
     return [...gallery.filter((u) => !gone.has(u) && !last.has(u)), ...gallery.filter((u) => last.has(u))];
 };
+/** The ones said to be another product's: the only removals that take a view's tick away. */
+const notOurProduct = (rs: Removal[]) => rs.filter((r) => r.why === "irrelevant");
+/** After the save: a removed photo that is in the gallery all the same gets a Remove / Keep button (owner, 2026-11-26). */
+async function adviseLeftovers(id: number, removed: Removal[]) {
+    if (!removed.length) return;
+    const p = await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { imageUrl: true, galleryJson: true, photoChecklistJson: true } });
+    const c = readPhotoChecklist(p?.photoChecklistJson);
+    if (!p || !c) return;
+    const gallery = galleryOf(p);
+    const left = asAdvice(stillInGallery(removed, gallery, c.keep), gallery).filter((r) => !c.remove.some((x) => x.url === r.url));
+    if (left.length) await prisma.invProduct.update({ where: { id }, data: { photoChecklistJson: { ...c, remove: [...c.remove, ...left] } as never } });
+}
 const noteLine = (part: number) => (x: string) => `NOTE (Part ${part}) — ${x.replace(/\s+/g, " ").trim()}`;
 const lines = z.array(z.string().trim().min(1).max(300)).max(40).default([]);
 
@@ -626,7 +641,7 @@ export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?
         done.push("Shipping weight / size cleared (wrong).");
     }
     const left = patch.galleryUrls ?? gallery;
-    const list = await photoListOf(1, id, b.photos, left, asAdvice([...held, ...b.suggestRemove], left));
+    const list = await photoListOf(1, id, b.photos, left, asAdvice([...held, ...b.suggestRemove], left), undefined, notOurProduct([...sure, ...held]));
     patch.photoChecklist = list.checklist;
     const searchStop = !photosNext && !b.enough;
     const aside = notAside(await asideKeys(id));
@@ -641,9 +656,12 @@ export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?
         await leaveAt(id, "attention", patch, undefined, {
             problems, replaces: earlyAi(1), by: "AI part 1", more: [AFTER_FIX.start, lastRun(1, "stopped → Attention"), await originLine(id)],
         });
+        await adviseLeftovers(id, sure);
         return { result: "attention" as const, removed: gone.size, notes: problems.length };
     }
     await leaveAt(id, b.then ?? "same", patch);
+    await adviseLeftovers(id, sure);
+    if (run) run.removed = sure;
     // A search saved for this same identity is kept (one search per lifecycle).
     const { state: prev } = await liveState(id, run);
     await writeState(id, { ...(prev?.search && { search: prev.search }), ...(prev?.photosDone && { photosDone: prev.photosDone }), ...(prev?.edits && { edits: prev.edits }), ...(fix.length && { fix }), part: prev?.search ? Math.max(prev.part, 1) as PrepState["part"] : 1, at: new Date().toISOString(), identity: await currentIdentity(id) }, run);
@@ -825,7 +843,7 @@ async function applyPhotos(ph: PhotoPlan, p: ProductRow, trusted: PageRead[], pa
     const nOf = (u: string) => ours.indexOf(u) + 1;
     const arrange = arrangeFrom({ order: [], look: ph.look.filter((x) => nOf(x.url) > 0).map((x) => ({ ...x, photo: nOf(x.url), crop: x.crop, focus: x.focus, background: x.background })) }, ours, new Set());
     const remove = asAdvice([...held, ...ph.suggestRemove], next);
-    return { removed: gone.size, added: added.length, ordered: ordered.length > 0, suggested, arrange, gallery: next, remove, alias: copyOf };
+    return { removed: gone.size, added: added.length, ordered: ordered.length > 0, suggested, arrange, gallery: next, remove, alias: copyOf, sure, wrong: notOurProduct([...sure, ...held]) };
 }
 
 // ── Part 3: process from the saved pages ──────────────────────────────────────
@@ -929,7 +947,7 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
     applyShipping(b.shipping, p, facts, checked.trusted, patch, notes);
     const fillModelNo = modelNoToFill(b.modelNo, p, facts, checked.trusted, notes, fix);
     const ph = await applyPhotos(b.photos, p, checked.trusted, patch, notes, b.photoCheck.tags);
-    const list = await photoListOf(3, id, b.photoCheck, ph.gallery, ph.remove, ph.alias);
+    const list = await photoListOf(3, id, b.photoCheck, ph.gallery, ph.remove, ph.alias, ph.wrong);
     patch.photoChecklist = list.checklist;
     notes.push(...list.dropNotes);
     const own3 = staff.filter(notPhotoRestatement(list.lines));
@@ -948,6 +966,7 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
         () => ({ aiCopy: draft, photoOffers: undefined }),
         open.length ? await forStaff(id, 3, open, AFTER_FIX.recheck) : undefined, "AI part 3",
     );
+    await adviseLeftovers(id, [...(run?.removed ?? []), ...ph.sure]);
     if (fillModelNo) await writeModelNo(id, p, fillModelNo);
     // Model No is part of the identity the search was saved for — keep it matching.
     await writeState(id, { ...state, fix: undefined, part: 3, at: new Date().toISOString(), ...(fillModelNo && { identity: await currentIdentity(id) }) }, run);
@@ -1015,7 +1034,7 @@ export async function savePart5(id: number, b: z.infer<typeof part5Schema>, run?
 
     const ph = await applyPhotos(b.photos, p, trusted, patch, notes, b.photoCheck.tags);
     if (!trusted.length && (b.photos.add.length || b.photos.suggest.length)) notes.push("No saved search for this product — photos can only be added by hand.");
-    const list = await photoListOf(5, id, b.photoCheck, ph.gallery, ph.remove, ph.alias);
+    const list = await photoListOf(5, id, b.photoCheck, ph.gallery, ph.remove, ph.alias, ph.wrong);
     patch.photoChecklist = list.checklist;
     notes.push(...list.dropNotes, ...editLines(state, ph.gallery));
 
@@ -1043,6 +1062,7 @@ export async function savePart5(id: number, b: z.infer<typeof part5Schema>, run?
             }),
         };
     }, open.length ? await forStaff(id, 5, open, AFTER_FIX.recheck) : undefined, "AI part 5");
+    await adviseLeftovers(id, [...(run?.removed ?? []), ...ph.sure]);
     await writeState(id, { ...state, fix: undefined, photosDone: { at: new Date().toISOString(), urls: ph.gallery } }, run);
     return {
         result: open.length ? ("attention" as const) : ("part5" as const),
