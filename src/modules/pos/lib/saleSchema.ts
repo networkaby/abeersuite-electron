@@ -4,7 +4,7 @@
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { isoDateSchema } from "@/shared/lib/schemas";
 import { POS_MAX_ROUND_OFF } from "@/shared/lib/constants/inventory";
 
@@ -143,7 +143,8 @@ export const createSchema = z.object({
  */
 export async function alreadySavedReply(requestKey: string | undefined): Promise<NextResponse | null> {
     if (!requestKey) return null;
-    const uv = await prisma.universalVoucher.findUnique({
+    // Where it saves: under W:Live the replica does not have a bill saved a moment ago.
+    const uv = await prismaWhereSaved().universalVoucher.findUnique({
         where: { requestKey },
         select: { id: true, type: true, voucherNo: true, voucherDetail: { select: { id: true } } },
     });

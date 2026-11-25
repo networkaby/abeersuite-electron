@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, after } from "next/server";
 import { createSchema, alreadySavedReply } from "@/modules/pos/lib/saleSchema";
 import { priceFloorAndTier, lineDiscountIncl, mdrStep, freeGrantLines, giftCardStep, refused, logTicketBill, type ComputedLine } from "@/modules/pos/lib/saleSteps";
@@ -52,8 +52,8 @@ import {
     type EvalInput,
     type CouponSelection,
 } from "@/modules/coupons/lib";
-import { touchPosShift } from "@/modules/pos/lib/touchShift";
-import { convertSourceError } from "@/modules/pos/lib/convertSource";
+import { touchPosShift, ShiftNotOpenError } from "@/modules/pos/lib/touchShift";
+import { convertSourceError, lockConvertSource, ConvertSourceError } from "@/modules/pos/lib/convertSource";
 import { findHeldRedemptions, executeRedemptions, RedemptionHoldChangedError } from "@/modules/order/lib/redemptionHold";
 import { loadPartyPricing } from "@/modules/pricing-strategy/lib/groupPricingServer";
 import { groupRebatesExcl, rebatedRate, ruleForGroup } from "@/modules/pricing-strategy/lib/groupPricing";
@@ -97,18 +97,18 @@ export async function POST(req: Request) {
     const body = data;
     const _t0 = performance.now(); // perf timing — see [pos-timing] log before the response
 
-    // A retried Save of a bill that already committed — answered before any work.
-    const saved = await alreadySavedReply(body.requestKey);
-    if (saved) return saved;
-
     // ── Active shift requirement ──────────────────────────────────────────
     // Branch context comes from the shift, not the session cookie.
     // This lets multiple users bill in parallel from different browsers
     // without their active-branch cookie interfering.
     // Independent reads — fetch in parallel (separate pooled connections) instead
-    // of three serial round-trips. Guards run after, in the same order + messages.
-    const [shift, customerAccount, loyaltyConfig, partyPricing] = await Promise.all([
-        prisma.posShift.findFirst({
+    // of serial round-trips. Guards run after, in the same order + messages.
+    // The bill key, shift and customer decide whether this saves, so they are read
+    // where it saves: the replica may not have what was made a moment ago.
+    const db = prismaWhereSaved();
+    const [saved, shift, customerAccount, loyaltyConfig, partyPricing] = await Promise.all([
+        alreadySavedReply(body.requestKey),
+        db.posShift.findFirst({
             where: { userId: user!.id, status: "OPEN" },
             select: {
                 id: true, branchId: true,
@@ -125,7 +125,7 @@ export async function POST(req: Request) {
                 },
             },
         }),
-        prisma.account.findUnique({
+        db.account.findUnique({
             where: { id: body.accountId },
             select: {
                 id: true, name: true, personId: true, companyId: true,
@@ -138,6 +138,8 @@ export async function POST(req: Request) {
         // (Pricing Strategy → Group pricing) — see groupPricingServer.ts.
         loadPartyPricing(prisma, body.accountId),
     ]);
+    // A retried Save of a bill that already committed — answered before any check.
+    if (saved) return saved;
     if (!shift) {
         return NextResponse.json(
             { error: "Open a shift before billing.", code: "NO_OPEN_SHIFT" },
@@ -147,13 +149,13 @@ export async function POST(req: Request) {
     // Convert-to-sale: refuse a source that is already converted (another till,
     // or the Daybook ⋮ convert, got there first).
     if (body.sourceVoucherId) {
-        const convertErr = await convertSourceError(prisma, body.sourceVoucherId);
+        const convertErr = await convertSourceError(db, body.sourceVoucherId);
         if (convertErr) return NextResponse.json({ error: convertErr, code: "ALREADY_CONVERTED" }, { status: 409 });
     }
     // Rewards HELD on the order being converted (redemptionHold.ts). This sale burns
     // them through its normal loyalty / coupon / gift-card path below, so the bill
     // must carry exactly what was held — a mismatch is refused, never quietly changed.
-    const orderHolds = body.sourceVoucherId ? await findHeldRedemptions({ source: "inv", id: body.sourceVoucherId }) : [];
+    const orderHolds = body.sourceVoucherId ? await findHeldRedemptions({ source: "inv", id: body.sourceVoucherId }, db) : [];
     const holdsOf = (t: string) => orderHolds.filter((h) => h.rewardType === t);
     if (["LOYALTY", "COUPON", "GIFT_CARD"].some((t) => holdsOf(t).length > 1)) {
         return NextResponse.json({ error: "This order holds more than one reward of the same kind — it cannot be converted here.", code: "REDEMPTION_HOLD_MISMATCH" }, { status: 422 });
@@ -745,6 +747,10 @@ export async function POST(req: Request) {
     try {
         const _tPreTx = performance.now();
         const result = await prisma.$transaction(async (tx) => {
+            // Locks first, before the ledger and number rows (see touchPosShift).
+            if (collectingSurplus) await touchPosShift(tx, shift.id);
+            if (body.sourceVoucherId) await lockConvertSource(tx, body.sourceVoucherId);
+
             // ── Credit limit check (inside tx so balance read is fresh) ────
             await checkCreditLimit(tx, body.accountId, onCredit);
 
@@ -1074,8 +1080,6 @@ export async function POST(req: Request) {
                 });
                 receiptVoucherId = receipt.voucherId;
                 receiptVoucherRef = receipt.voucherRef;
-
-                await touchPosShift(tx, shift.id);
             }
 
             return {
@@ -1168,6 +1172,15 @@ export async function POST(req: Request) {
     } catch (err) {
         if (err instanceof CreditLimitError) {
             return NextResponse.json({ error: err.message, code: err.code }, { status: 422 });
+        }
+        if (err instanceof ConvertSourceError) {
+            // The same bill saved twice at once: the first press converted the source.
+            const saved = await alreadySavedReply(body.requestKey);
+            if (saved) return saved;
+            return NextResponse.json({ error: err.message, code: "ALREADY_CONVERTED" }, { status: 409 });
+        }
+        if (err instanceof ShiftNotOpenError) {
+            return NextResponse.json({ error: "Open a shift before billing.", code: "NO_OPEN_SHIFT" }, { status: 400 });
         }
         if (err instanceof GlPostFailedError) {
             return NextResponse.json({ error: err.message, notes: err.notes }, { status: 500 });

@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
@@ -16,13 +16,13 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
 
     const { id } = await params;
     try {
-        const link = await prisma.voucherAllocation.findUnique({
+        const link = await prismaWhereSaved().voucherAllocation.findUnique({
             where:  { id: Number(id) },
             select: { id: true, targetId: true, sourceId: true },
         });
         if (!link) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-        const vouchers = await prisma.universalVoucher.findMany({
+        const vouchers = await prismaWhereSaved().universalVoucher.findMany({
             where:  { id: { in: [link.targetId, link.sourceId] } },
             select: { type: true },
         });

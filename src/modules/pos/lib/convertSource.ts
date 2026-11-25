@@ -10,7 +10,7 @@ import type { Prisma } from "@/generated/prisma/client";
 /** Thrown by a creator when its convert source is refused — the route answers 409. */
 export class ConvertSourceError extends Error {}
 
-type Db =Pick<Prisma.TransactionClient, "voucherDetail">;
+type Db = Pick<Prisma.TransactionClient, "voucherDetail">;
 
 /** The live voucher this source was converted into, or null. */
 export async function findLiveConversion(db: Db, sourceId: number): Promise<{ id: number; ref: string } | null> {
@@ -38,4 +38,15 @@ export async function convertSourceError(db: Db, sourceId: number, allowedTypes?
     }
     const done = await findLiveConversion(db, sourceId);
     return done ? `Already converted to ${done.ref}. Delete that voucher to convert this again.` : null;
+}
+
+/**
+ * The same check inside the save. Takes the source's spine row first (the row a
+ * cancel takes first too), so two tills converting one source cannot both pass.
+ * Call it before anything else in the transaction.
+ */
+export async function lockConvertSource(tx: Prisma.TransactionClient, sourceId: number): Promise<void> {
+    await tx.$queryRaw`SELECT uv.id FROM "UniversalVoucher" uv JOIN "VoucherDetail" d ON d."universalVoucherId" = uv.id WHERE d.id = ${sourceId} FOR NO KEY UPDATE OF uv`;
+    const err = await convertSourceError(tx, sourceId);
+    if (err) throw new ConvertSourceError(err);
 }

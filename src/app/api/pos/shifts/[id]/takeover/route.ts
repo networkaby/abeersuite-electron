@@ -25,7 +25,7 @@
 //
 // Body: { deviceId? } — this PC's identity, for the counter's device lock only.
 
-import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaAuthoritative, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -58,7 +58,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (error) return error;
 
     try {
-        const shift = await prisma.posShift.findUnique({
+        const shift = await prismaWhereSaved().posShift.findUnique({
             where:   { id: shiftId },
             include: {
                 user:     { select: { id: true, name: true } },
@@ -130,9 +130,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const voucherDate = requestBusinessDate(req);
 
         const result = await prisma.$transaction(async (tx) => {
-            // 1. Claim A's shift. The status check and the write are one statement.
+            // 1. Claim A's shift. The status check and the write are one statement, and
+            // `updatedAt` refuses a drop or expense saved since the figures were read.
             const claimed = await tx.posShift.updateMany({
-                where: { id: shift.id, status: shift.status },
+                where: { id: shift.id, status: shift.status, updatedAt: shift.updatedAt },
                 data:  { status: "CLOSED", closedAt, closedById: user!.id },
             });
             if (claimed.count !== 1) throw new TakeoverRefused("This counter changed while you were looking at it — open the POS again to see it as it is now.");

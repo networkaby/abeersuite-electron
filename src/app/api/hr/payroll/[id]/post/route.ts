@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/auth";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { requirePermission, requireVoucherPermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError } from "@/shared/lib/api";
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     try {
-        const run = await prisma.payrollRun.findUnique({
+        const run = await prismaWhereSaved().payrollRun.findUnique({
             where: { id },
             include: { lines: { orderBy: { staffName: "asc" } } },
         });
@@ -91,10 +91,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const headcount = run.lines.filter((l) => l.included).length;
 
         const result = await prisma.$transaction(async (tx) => {
-            // Re-read the status inside the transaction: two people clicking
-            // Post at the same moment must not produce two journals.
-            const fresh = await tx.payrollRun.findUnique({ where: { id }, select: { status: true } });
-            if (fresh?.status !== "DRAFT") throw new Error("ALREADY_POSTED");
+            // Claim the run first — the status check and the write are one statement,
+            // so two people clicking Post cannot both find a draft. `updatedAt` also
+            // refuses an edit saved since the lines were read.
+            const { count } = await tx.payrollRun.updateMany({
+                where: { id, status: "DRAFT", updatedAt: run.updatedAt },
+                data:  { status: "POSTED", postedById: caller!.id, postedAt: new Date() },
+            });
+            if (count !== 1) throw new Error("ALREADY_POSTED");
 
             const voucher = await engineCreateVoucher(tx, {
                 type:            "JOURNAL",
@@ -109,13 +113,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
             await tx.payrollRun.update({
                 where: { id },
-                data: {
-                    status:     "POSTED",
-                    voucherId:  voucher.id,
-                    voucherRef: voucher.reference,
-                    postedById: caller!.id,
-                    postedAt:   new Date(),
-                },
+                data:  { voucherId: voucher.id, voucherRef: voucher.reference },
             });
 
             return { voucherId: voucher.id, voucherRef: voucher.reference };
@@ -124,7 +122,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         return NextResponse.json({ ok: true, headcount, ...result });
     } catch (e) {
         if (e instanceof Error && e.message === "ALREADY_POSTED") {
-            return NextResponse.json({ error: "This run was posted a moment ago by someone else" }, { status: 409 });
+            return NextResponse.json({ error: "This run was posted or changed a moment ago by someone else. Refresh to see it." }, { status: 409 });
         }
         return handleApiError(e, "Failed to post the payroll run");
     }

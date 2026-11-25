@@ -13,7 +13,7 @@
 // only spend from their own counter, mirroring the per-counter account routing
 // configured at /office/admin/counters.
 
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePosVoucher } from "@/shared/lib/auth/permissions";
@@ -21,7 +21,7 @@ import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { engineCreateVoucher } from "@/modules/accountancy/lib/transactionEngine";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
-import { touchPosShift } from "@/modules/pos/lib/touchShift";
+import { touchPosShift, ShiftNotOpenError } from "@/modules/pos/lib/touchShift";
 
 const expenditureSchema = z.object({
     amountPaise:      z.number().int().positive(),
@@ -43,7 +43,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (error) return error;
 
     try {
-        const shift = await prisma.posShift.findUnique({
+        const shift = await prismaWhereSaved().posShift.findUnique({
             where:  { id: shiftId },
             select: { id: true, userId: true, status: true, branchId: true, counter: { select: { tillAccountId: true, name: true, allowedExpenseAccountIds: true } } },
         });
@@ -82,6 +82,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const rupees = data.amountPaise / 100;
 
         const created = await prisma.$transaction(async (tx) => {
+            await touchPosShift(tx, shiftId);
+
             // PAYMENT voucher (Dr expense / Cr counter till) via the Transaction Engine
             // — created + posted (mirror JE + balance deltas), branch-stamped to the shift.
             const voucher = await engineCreateVoucher(tx, {
@@ -101,8 +103,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 // outlived the voucher whenever one was deleted.
                 shiftId,
             });
-
-            await touchPosShift(tx, shiftId);
             return { voucherId: voucher.id, voucherRef: voucher.reference };
         });
 
@@ -111,6 +111,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             { status: 201 },
         );
     } catch (e) {
+        if (e instanceof ShiftNotOpenError) return NextResponse.json({ error: "Cannot record an expenditure on a closed shift" }, { status: 409 });
         return handleApiError(e, "Failed to record expenditure");
     }
 }

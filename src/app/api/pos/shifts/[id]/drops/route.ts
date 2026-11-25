@@ -6,11 +6,11 @@
 // shift close). The closing Contra at end-of-shift moves the entire till
 // balance to the vault in one go.
 
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePermission } from "@/shared/lib/auth/permissions";
-import { touchPosShift } from "@/modules/pos/lib/touchShift";
+import { touchPosShift, ShiftNotOpenError } from "@/modules/pos/lib/touchShift";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
@@ -31,7 +31,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (error) return error;
 
     try {
-        const shift = await prisma.posShift.findUnique({
+        const shift = await prismaWhereSaved().posShift.findUnique({
             where:  { id: shiftId },
             select: { id: true, userId: true, status: true },
         });
@@ -45,19 +45,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             return NextResponse.json({ error: "Not your shift" }, { status: 403 });
         }
 
-        const drop = await prisma.posCashDrop.create({
-            data: {
-                shiftId,
-                amountPaise: BigInt(data.amountPaise),
-                droppedById: user!.id,
-                notes:       data.notes ?? null,
-            },
-            include: { droppedBy: { select: { id: true, name: true } } },
+        const drop = await prisma.$transaction(async (tx) => {
+            await touchPosShift(tx, shiftId);
+            return tx.posCashDrop.create({
+                data: {
+                    shiftId,
+                    amountPaise: BigInt(data.amountPaise),
+                    droppedById: user!.id,
+                    notes:       data.notes ?? null,
+                },
+                include: { droppedBy: { select: { id: true, name: true } } },
+            });
         });
-        await touchPosShift(prisma, shiftId);
 
         return NextResponse.json({ ...drop, amountPaise: drop.amountPaise.toString() }, { status: 201 });
     } catch (e) {
+        if (e instanceof ShiftNotOpenError) return NextResponse.json({ error: "Cannot drop on a closed shift" }, { status: 409 });
         return handleApiError(e, "Failed to record drop");
     }
 }

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError, parseIdParam } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -18,7 +18,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (error) return error;
 
     try {
-        const card = await prisma.giftCard.findUnique({ where: { id }, select: { status: true } });
+        const card = await prismaWhereSaved().giftCard.findUnique({ where: { id }, select: { status: true } });
         if (!card) return NextResponse.json({ error: "Gift card not found" }, { status: 404 });
 
         const { enabled, ...content } = data;
@@ -34,12 +34,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         }
 
         if (content.code) {
-            const clash = await prisma.giftCard.findFirst({ where: { code: content.code.trim(), id: { not: id } }, select: { id: true } });
+            const clash = await prismaWhereSaved().giftCard.findFirst({ where: { code: content.code.trim(), id: { not: id } }, select: { id: true } });
             if (clash) return NextResponse.json({ error: "Gift-card code already exists", code: "GC_DUP" }, { status: 422 });
         }
 
-        const updated = await prisma.giftCard.update({
-            where: { id },
+        // The status check IS the write: a card sold since the look-up is not edited.
+        const { count } = await prisma.giftCard.updateMany({
+            where: { id, status: card.status },
             data: {
                 ...(content.code !== undefined ? { code: content.code.trim() } : {}),
                 ...(content.initialValue !== undefined ? { initialValue: content.initialValue, balance: content.initialValue } : {}),
@@ -47,6 +48,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(content.expiresAt !== undefined ? { expiresAt: content.expiresAt } : {}),
                 ...(enabled !== undefined ? { enabled } : {}),
             },
+        });
+        if (count === 0) {
+            return NextResponse.json({ error: "This gift card was just changed by someone else. Refresh to see it.", code: "GC_CHANGED" }, { status: 409 });
+        }
+        const updated = await prismaWhereSaved().giftCard.findUniqueOrThrow({
+            where: { id },
             include: { ownerAccount: { select: { name: true } } },
         });
         return NextResponse.json(updated);
@@ -65,7 +72,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     if (error) return error;
 
     try {
-        const card = await prisma.giftCard.findUnique({ where: { id }, select: { status: true } });
+        const card = await prismaWhereSaved().giftCard.findUnique({ where: { id }, select: { status: true } });
         if (!card) return NextResponse.json({ error: "Gift card not found" }, { status: 404 });
         if (card.status !== "DRAFT") {
             return NextResponse.json(
@@ -73,7 +80,10 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
                 { status: 409 },
             );
         }
-        await prisma.giftCard.delete({ where: { id } });
+        const { count } = await prisma.giftCard.deleteMany({ where: { id, status: "DRAFT" } });
+        if (count === 0) {
+            return NextResponse.json({ error: "This gift card was just sold or deleted. Refresh to see it.", code: "GC_CHANGED" }, { status: 409 });
+        }
         return NextResponse.json({ ok: true });
     } catch (e) {
         return handleApiError(e, "Failed to delete gift card");
