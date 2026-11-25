@@ -1,5 +1,5 @@
 import { regenerateProductNamesSafe, touchesName } from "@/modules/inventory/lib/regenerateNames";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { shopSlugClash } from "@/shared/lib/shop/shopSlug";
 import { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
@@ -86,7 +86,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const { data, error } = await validateRequest(req, invProductUpdateSchema);
         if (error) return error;
         const b = data;
-        const current = await prisma.invProduct.findUnique({ where: { id } });
+        const current = await prismaWhereSaved().invProduct.findUnique({ where: { id } });
         if (!current) return NextResponse.json({ error: "Product not found" }, { status: 404 });
 
         const unitId = b.unitId ?? current.unitId;
@@ -125,7 +125,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (b.sku !== undefined) {
             sku = b.sku.trim().toUpperCase();
             if (sku !== current.sku) {
-                const clash = await prisma.invProduct.findFirst({ where: { sku, NOT: { id } } });
+                const clash = await prismaWhereSaved().invProduct.findFirst({ where: { sku, NOT: { id } } });
                 if (clash) return NextResponse.json({ error: "SKU already exists" }, { status: 409 });
             }
         }
@@ -245,14 +245,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         else if (current.effectiveSalePriceSource === "SAVED" && b.savedSalePricePaise !== undefined
             && b.savedSalePricePaise !== current.savedSalePricePaise) await rebaseBarcodeGap([id]);
         if (b.barcodeManualPaise !== undefined) {
-            const fresh = await prisma.invProduct.findUnique({ where: { id }, select: { barcodeManualPaise: true } });
+            const fresh = await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { barcodeManualPaise: true } });
             if (fresh) row.barcodeManualPaise = fresh.barcodeManualPaise;
         }
         // A naming source changed → rebuild this product's name on the server, so
         // every caller (grid, dialog, e-commerce form, AI, bulk) gets the same name.
         if (touchesName(b)) {
             await regenerateProductNamesSafe({ ids: [id] });
-            const fresh = await prisma.invProduct.findUnique({ where: { id }, select: { name: true } });
+            const fresh = await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { name: true } });
             if (fresh) row.name = fresh.name;
         }
         return NextResponse.json(row);

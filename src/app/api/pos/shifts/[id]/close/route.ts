@@ -34,7 +34,7 @@
 // there is no ledger effect, no print and nothing for an audit snapshot to
 // protect. See parkVoucherInTx.ts.
 
-import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaAuthoritative, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { shouldWriteLocal } from "@/shared/lib/prisma/counterMode";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
@@ -69,7 +69,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (error) return error;
 
     try {
-        const shift = await prisma.posShift.findUnique({
+        const shift = await prismaWhereSaved().posShift.findUnique({
             where: { id: shiftId },
             include: {
                 counter: {
@@ -123,7 +123,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const dropsPaise        = sumPaise(shift.drops);
         // Paid out of the drawer this shift — read off the vouchers that carry the
         // shift, so a deleted expenditure stops counting the moment it is deleted.
-        const expendituresPaise = sumPaise((await listShiftMovements(prisma, shift.id)).expenditures);
+        const expendituresPaise = sumPaise((await listShiftMovements(prismaWhereSaved(), shift.id)).expenditures);
         // Sweep BOTH the counted drawer surplus AND the cash dropped to the safe
         // this shift — both physically leave the counter for the vault, so the
         // till GL closes at exactly the carry-over. (Drops were log-only until
@@ -144,7 +144,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const expectedPaise = computeExpectedCash(tillBookBalancePaise, dropsPaise);
         const variancePaise = computeVariance(declaredPaise, expectedPaise);
 
-        const movementBreakdown = await buildShiftMovementBreakdown(prisma, {
+        const movementBreakdown = await buildShiftMovementBreakdown(prismaWhereSaved(), {
             shiftId: shift.id,
             tillAccountId: shift.counter.tillAccountId,
             tillBookBalancePaise,
@@ -292,13 +292,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         // Per-method tally of everything collected this shift (cash + digital),
         // for the closing report. Uses the real closedAt window.
-        const tenderBreakdown = await buildShiftTenderBreakdown(prisma, {
+        const tenderBreakdown = await buildShiftTenderBreakdown(prismaWhereSaved(), {
             shiftId: result.id,
             counter: result.counter,
         });
 
         // Breakdown of all collections across all tenders (sales, receipts, returns)
-        const collectionsBreakdown = await buildShiftCollectionsBreakdown(prisma, {
+        const collectionsBreakdown = await buildShiftCollectionsBreakdown(prismaWhereSaved(), {
             shiftId: result.id,
             counter: result.counter,
         });
@@ -350,7 +350,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             branch:              result.branch,
             // Phase 5 5E: the closing contra IS a spine now — resolve by id.
             closingContraVoucher: result.closingContraVoucherId != null
-                ? await prisma.universalVoucher.findUnique({ where: { id: result.closingContraVoucherId }, select: { id: true, voucherNo: true } })
+                ? await prismaWhereSaved().universalVoucher.findUnique({ where: { id: result.closingContraVoucherId }, select: { id: true, voucherNo: true } })
                     .then((c) => c ? { id: c.id, reference: c.voucherNo ?? formatUvNo(c.id) } : null)
                 : null,
             varianceUniversalVoucherId: result.varianceJournalEntryId,   // spine id (JE dropped)

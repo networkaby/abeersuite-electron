@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { enginePostSpine } from "@/modules/accountancy/lib/transactionEngine";
@@ -13,7 +13,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     if (response) return response;
 
     const { id } = await params;
-    const voucher = await prisma.universalVoucher.findUnique({ where: { id: Number(id) } });
+    const voucher = await prismaWhereSaved().universalVoucher.findUnique({ where: { id: Number(id) } });
     if (!voucher) return NextResponse.json({ error: "Not found" }, { status: 404 });
     // Per-kind post gate (falls back to generic finance:voucher:post).
     if (!userCanVoucher(user, voucher.type, "post")) {
@@ -28,7 +28,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             await enginePostSpine(tx, voucher.id, { postedAt: new Date() });
         }, { timeout: 30_000, maxWait: 10_000 });
 
-        const posted = await prisma.universalVoucher.findUnique({ where: { id: Number(id) } });
+        const posted = await prismaWhereSaved().universalVoucher.findUnique({ where: { id: Number(id) } });
         return NextResponse.json(posted);
     } catch (e) {
         return handleApiError(e, "Failed to post voucher");

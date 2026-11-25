@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { ContactConflictError, contactValueSchema, createEmail } from "@/modules/customer/lib/contactWrite";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -17,7 +17,7 @@ export async function POST(
         return NextResponse.json({ error: "Invalid company id" }, { status: 400 });
     }
 
-    const exists = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true } });
+    const exists = await prismaWhereSaved().company.findUnique({ where: { id: companyId }, select: { id: true } });
     if (!exists) return NextResponse.json({ error: "Company not found" }, { status: 404 });
 
     const { data, error } = await validateRequest(req, contactValueSchema);

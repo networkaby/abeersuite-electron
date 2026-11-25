@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
@@ -19,7 +19,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const { data, error } = await validateRequest(req, schema);
     if (error) return error;
 
-    const voucher = await prisma.universalVoucher.findUnique({
+    const voucher = await prismaWhereSaved().universalVoucher.findUnique({
         where:  { id: Number(id) },
         select: { type: true },
     });
@@ -36,7 +36,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             await cancelVoucherInTx(tx, Number(id), user!.id, data.reason);
         }, { timeout: 30_000, maxWait: 10_000 });
 
-        const cancelled = await prisma.universalVoucher.findUnique({ where: { id: Number(id) } });
+        const cancelled = await prismaWhereSaved().universalVoucher.findUnique({ where: { id: Number(id) } });
         return NextResponse.json(cancelled);
     } catch (e) {
         const lifecycle = lifecycleErrorResponse(e);

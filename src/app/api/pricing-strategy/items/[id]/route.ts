@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
@@ -24,7 +24,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         // ledger walk (which picks up openingRate as a synthetic first lot).
         let openingPatch: Record<string, unknown> = {};
         if (data.openingRatePaise !== undefined) {
-            const existing = await prisma.invProduct.findUnique({
+            const existing = await prismaWhereSaved().invProduct.findUnique({
                 where:  { id },
                 select: { openingStock: true },
             });
@@ -40,7 +40,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         // Barcode price / date / gap are NOT written by this PATCH directly — they
         // go through barcodeStore.ts after the recompute below.
         const before = data.marginPercent !== undefined
-            ? await prisma.invProduct.findUnique({ where: { id }, select: { effectiveSalePriceSource: true } })
+            ? await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { effectiveSalePriceSource: true } })
             : null;
 
         const row = await prisma.invProduct.update({
@@ -85,7 +85,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         }
         if (before?.effectiveSalePriceSource === "COMPUTED") await rebaseBarcodeGap([id]);
 
-        const after = await prisma.invProduct.findUnique({
+        const after = await prismaWhereSaved().invProduct.findUnique({
             where:  { id },
             select: { barcodeManualPaise: true, barcodeIsManual: true, salePriceFrozenAt: true, effectiveSalePricePaise: true },
         });

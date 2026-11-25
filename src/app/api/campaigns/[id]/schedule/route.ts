@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError, parseIdParam, validateRequest } from "@/shared/lib/api";
 import { hasPermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -35,14 +35,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             data: at ? { status: "SCHEDULED", scheduledAt: at } : { status: "READY", scheduledAt: null },
         });
         if (count === 0) {
-            const row = await prisma.campaign.findUnique({ where: { id }, select: { status: true } });
+            const row = await prismaWhereSaved().campaign.findUnique({ where: { id }, select: { status: true } });
             if (!row) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
             return NextResponse.json(
                 { error: row.status === "SENT" ? "This campaign was already sent." : "This campaign is not scheduled." },
                 { status: 409 },
             );
         }
-        return NextResponse.json(await prisma.campaign.findUnique({ where: { id }, select: CAMPAIGN_SELECT }));
+        return NextResponse.json(await prismaWhereSaved().campaign.findUnique({ where: { id }, select: CAMPAIGN_SELECT }));
     } catch (e) {
         return handleApiError(e, "Failed to schedule the campaign");
     }

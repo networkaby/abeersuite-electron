@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { after } from "next/server";
 import { notifyBill, autoKindForVoucherType } from "@/shared/lib/whatsapp/notifyBill";
@@ -36,7 +36,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     // separately was a second round trip to Supabase for rows the first query could
     // have carried. `sku`/`name` come along too, so the response at the end does
     // not have to read the same rows a third time.
-    const voucherRow = await prisma.voucherDetail.findUnique({
+    const voucherRow = await prismaWhereSaved().voucherDetail.findUnique({
         where: { id: Number(id) },
         include: {
             // 5D-5 description + 5D-6 ref + 5D-8 status + 5D-10 date + 5D-11 type + 5D-12 branch(+state) live on the spine — needed for saleToSpec / messages / the DRAFT gate / stock rows / direction / the CGST/SGST-vs-IGST split.

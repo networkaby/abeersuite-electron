@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
@@ -61,7 +61,7 @@ export async function POST(
     const { personId, role } = data;
     const companyId = Number(id);
 
-    const existing = await prisma.personCompany.findFirst({
+    const existing = await prismaWhereSaved().personCompany.findFirst({
         where: { personId, companyId },
     });
 
@@ -97,7 +97,7 @@ export async function DELETE(
         return NextResponse.json({ error: "personId is required" }, { status: 400 });
     }
 
-    const link = await prisma.personCompany.findFirst({
+    const link = await prismaWhereSaved().personCompany.findFirst({
         where: { companyId: Number(id), personId, unlinkedAt: null },
     });
     if (!link) {

@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { PRE_EDIT_ACTION } from "@/shared/lib/accountancy/auditSnapshotKind";
 import { voucherDisplayNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
@@ -198,11 +198,11 @@ export async function PATCH(req: Request, { params }: Params) {
     const id = Number(idStr);
     if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
-    const existing = await prisma.voucherDetail.findUnique({ where: { id }, include: { universalVoucher: { select: { voucherNo: true, status: true, type: true, date: true, partyAccountId: true, sourceShiftId: true } } } });   // 5D-6/5D-8/5D-11
+    const existing = await prismaWhereSaved().voucherDetail.findUnique({ where: { id }, include: { universalVoucher: { select: { voucherNo: true, status: true, type: true, date: true, partyAccountId: true, sourceShiftId: true } } } });   // 5D-6/5D-8/5D-11
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
     // Phase 5 5C: capture old line product ids (goods hang off the spine) for the
     // after-commit pricing recompute — the lines themselves are rewritten below.
-    const existingLineProductIds = (await prisma.voucherInventoryLine.findMany({
+    const existingLineProductIds = (await prismaWhereSaved().voucherInventoryLine.findMany({
         where: { universalVoucherId: existing.universalVoucherId ?? -1 }, select: { productId: true },
     })).map((l) => l.productId);
     if (existing.universalVoucher?.status === "CANCELLED") {
@@ -349,7 +349,7 @@ export async function PATCH(req: Request, { params }: Params) {
     // the points it redeems now (never taken from the browser).
     const posCtx = posEdit !== undefined
         ? (voucherType === "POS" && lines && charges !== undefined
-            ? await loadPosEditContext(prisma, {
+            ? await loadPosEditContext(prismaWhereSaved(), {
                 settlementJson:     existing.settlementJson,
                 discountPct:        existing.discountPct,
                 universalVoucherId: existing.universalVoucherId,
@@ -372,7 +372,7 @@ export async function PATCH(req: Request, { params }: Params) {
     // the client omits them on a partial save. This keeps the ladder/receipt
     // display consistent after the voucher is rewritten.
     const existingLineSnapshot = lines?.length
-        ? await prisma.voucherInventoryLine.findMany({
+        ? await prismaWhereSaved().voucherInventoryLine.findMany({
             where: { universalVoucherId: existing.universalVoucherId ?? -1 },
             select: { productId: true, mrpPaise: true, savedSalePricePaise: true, quantity: true, rate: true, discountAmt: true },
         })
@@ -471,7 +471,7 @@ export async function PATCH(req: Request, { params }: Params) {
     let tenders: TenderInput[] | undefined = bodyTenders;
     let posPlan: PosEditPlan | null = null;
     if (posCtx && posRedeem && computedLines) {
-        const plan = await planSettlement(prisma, posCtx, {
+        const plan = await planSettlement(prismaWhereSaved(), posCtx, {
             input:           posEdit!,
             redeemedNow:     posRedeem.redeemed,
             redeemRupeesNow: posRedeem.row ? Math.abs(posRedeem.row.amount) : 0,
@@ -495,7 +495,7 @@ export async function PATCH(req: Request, { params }: Params) {
     let closedShiftCorrection: { shiftId: number; deltaPaise: bigint } | null = null;
     const saleShiftId = existing.universalVoucher?.sourceShiftId ?? null;
     if (posPlan && saleShiftId != null) {
-        const saleShift = await prisma.posShift.findUnique({ where: { id: saleShiftId }, select: { status: true, counter: { select: { tillAccountId: true } } } });
+        const saleShift = await prismaWhereSaved().posShift.findUnique({ where: { id: saleShiftId }, select: { status: true, counter: { select: { tillAccountId: true } } } });
         if (saleShift?.status === "CLOSED") {
             const deltaPaise = tillPaiseOf(posPlan.tenders, saleShift.counter.tillAccountId)
                 - tillPaiseOf(readSettlement(existing.settlementJson).tenders, saleShift.counter.tillAccountId);
@@ -796,7 +796,7 @@ export async function DELETE(_req: Request, { params }: Params) {
     if (response) return response;
 
     const { id } = await params;
-    const existing = await prisma.voucherDetail.findUnique({ where: { id: Number(id) }, include: { universalVoucher: { select: { status: true, type: true } } } });   // 5D-8
+    const existing = await prismaWhereSaved().voucherDetail.findUnique({ where: { id: Number(id) }, include: { universalVoucher: { select: { status: true, type: true } } } });   // 5D-8
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (existing.universalVoucher?.status !== "DRAFT") {
         return NextResponse.json({ error: "Only DRAFT vouchers can be deleted via this route. Use /cancel or /delete for lifecycle." }, { status: 409 });

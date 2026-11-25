@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@/generated/prisma/client";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { revokeUserSessions } from "@/shared/lib/auth/revokeSessions";
@@ -156,7 +156,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ userId
 
         if (result.signOut) await revokeUserSessions(userId);
 
-        const fresh = await prisma.user.findUnique({ where: { id: userId }, select: DETAIL_SELECT });
+        const fresh = await prismaWhereSaved().user.findUnique({ where: { id: userId }, select: DETAIL_SELECT });
         if (!fresh) return NextResponse.json({ error: "User not found" }, { status: 404 });
         return NextResponse.json({ ...(await toDetail(fresh)), vacatedSeats: result.vacatedSeats });
     } catch (e) {

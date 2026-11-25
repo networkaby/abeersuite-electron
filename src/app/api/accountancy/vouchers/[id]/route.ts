@@ -1,6 +1,6 @@
 import { PAYMENT_INSTRUMENT_VALUES } from "@/shared/lib/constants/accounting";
 import { PRE_EDIT_ACTION } from "@/shared/lib/accountancy/auditSnapshotKind";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { Prisma } from "@/generated/prisma/client";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { parseDenomJson } from "@/shared/lib/accountancy/denomJson";
@@ -95,7 +95,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const { id } = await params;
     const voucherId = Number(id);
 
-    const existing = await prisma.universalVoucher.findUnique({
+    const existing = await prismaWhereSaved().universalVoucher.findUnique({
         where:   { id: voucherId },
         include: { lines: true },
     });
@@ -191,7 +191,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             }
         }, { timeout: 30_000, maxWait: 10_000 });
 
-        const updated = await prisma.universalVoucher.findUnique({ where: { id: voucherId }, include: { lines: true } });
+        const updated = await prismaWhereSaved().universalVoucher.findUnique({ where: { id: voucherId }, include: { lines: true } });
         return NextResponse.json(updated ? await enrichVoucher(updated) : null);
     } catch (e) {
         // A refusal the user can act on ("unlink it first"), not a server fault.

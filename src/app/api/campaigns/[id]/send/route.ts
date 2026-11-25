@@ -1,5 +1,5 @@
 import { NextResponse, after } from "next/server";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { parseIdParam } from "@/shared/lib/api";
 import { hasPermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -32,7 +32,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         data: { status: "SENT", sentAt: new Date() },
     });
     if (count === 0) {
-        const exists = await prisma.campaign.findUnique({ where: { id }, select: { id: true } });
+        const exists = await prismaWhereSaved().campaign.findUnique({ where: { id }, select: { id: true } });
         return exists
             ? NextResponse.json({ error: "This campaign was already sent." }, { status: 409 })
             : NextResponse.json({ error: "Campaign not found" }, { status: 404 });

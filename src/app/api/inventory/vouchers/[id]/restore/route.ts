@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { after } from "next/server";
 import { requireAuth, userCanActOnVoucher } from "@/shared/lib/auth/permissions";
@@ -39,7 +39,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const userId = user!.id;
 
-    const voucherRow = await prisma.voucherDetail.findUnique({
+    const voucherRow = await prismaWhereSaved().voucherDetail.findUnique({
         where:   { id: Number(id) },
         include: { universalVoucher: { select: { voucherNo: true, status: true, type: true, branchId: true, partyAccountId: true } } },
     });
@@ -65,7 +65,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         // Warn before touching anything — unless the caller has already seen the
         // warning and said go ahead.
         if (spineId && !force) {
-            const conflicts = await findRestoreConflicts(prisma, { universalVoucherId: spineId, partyAccountId });
+            const conflicts = await findRestoreConflicts(prismaWhereSaved(), { universalVoucherId: spineId, partyAccountId });
             if (conflicts.length > 0) {
                 return NextResponse.json({ error: "Restore needs confirmation", conflicts }, { status: 409 });
             }
@@ -127,7 +127,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             reason: reason.trim(), actorId: userId,
         });
 
-        const updatedRow = await prisma.voucherDetail.findUnique({
+        const updatedRow = await prismaWhereSaved().voucherDetail.findUnique({
             where:   { id: Number(id) },
             include: { universalVoucher: { select: { createdById: true } } },
         });
@@ -137,7 +137,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const updated = updatedRow ? {
             ...updatedRow,
             createdBy: creator,
-            lines: await prisma.voucherInventoryLine.findMany({
+            lines: await prismaWhereSaved().voucherInventoryLine.findMany({
                 where:   { universalVoucherId: updatedRow.universalVoucherId ?? -1 },
                 include: { product: { select: { id: true, sku: true, name: true } } },
             }),
