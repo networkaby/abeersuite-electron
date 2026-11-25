@@ -389,7 +389,11 @@ party screen's bottom tab.
 - **Product** ([`MobileProductPhotos`](../src/modules/mobile/components/MobileProductPhotos.tsx)):
   the gallery in the shop card's frame, Main first; add (one at a time, each saved as it
   lands, failed ones keep a Retry that does not re-upload), **Make main**, **Remove** (tap
-  twice). Up to `MAX_PRODUCT_PHOTOS` (12) from the phone. [`/api/mobile/photos/product/[id]`](../src/app/api/mobile/photos/product/[id]/route.ts)
+  twice). Above the photos, [`MobilePhotoGuide`](../src/modules/mobile/components/MobilePhotoGuide.tsx)
+  shows the shop **stage** badge, the **Attention** reason (who / when), a **Shoot these**
+  list (AI / staff notes that mention photos, label, box, MRP… — else a general tip) and the
+  other notes folded — built server-side by [`photoGuide`](../src/modules/mobile/lib/photoGuide.ts)
+  and sent on GET only (a PATCH answer keeps the loaded guide). Up to `MAX_PRODUCT_PHOTOS` (12) from the phone. [`/api/mobile/photos/product/[id]`](../src/app/api/mobile/photos/product/[id]/route.ts)
   applies `{ add }` / `{ remove }` / `{ makeMain }` to the gallery **as saved now** (never
   the phone's stale copy) and writes through
   [`updateShopProduct`](../src/modules/ecommerce/lib/updateShopProduct.ts) — the office
