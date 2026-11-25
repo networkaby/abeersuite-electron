@@ -4,6 +4,8 @@ import { z } from "zod";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { AiDataCheckError, aiErrorMessage, generateProductCopy, isAiConfigured, type ProductCopy } from "@/modules/ecommerce/lib/aiProductCopy";
+import { problemKey } from "@/modules/ecommerce/lib/agentProductPrep";
+import { readShopDraft } from "@/modules/ecommerce/lib/productAdmin";
 import { parkInAttention } from "@/modules/ecommerce/lib/shopAttention";
 import { generatePhotoAdvice, generateVerifiedCopy } from "@/modules/ecommerce/lib/aiVerifiedCopy";
 import { type AiCopyFlow } from "@/shared/lib/constants/ai";
@@ -114,8 +116,7 @@ export async function POST(req: Request) {
         // 2026-11-11: both AIs give the same result) — any stage, off the shop
         // until someone checks the real unit. Never blocks the answer.
         if (e instanceof AiDataCheckError) {
-            const parked = await parkInAttention([data.productId], e.flags.join("\n"), "In-app AI", "any")
-                .then((r) => r.parked > 0)
+            const parked = await parkInApp(data.productId, e.flags.map((f) => `PENDING (Part 0) — ${f}`))
                 .catch(() => false);
             return NextResponse.json(
                 { error: parked ? `Parked in Attention — ${e.message}` : e.message, flags: e.flags, parked },
@@ -152,12 +153,27 @@ async function applyInAppExtras(productId: number, copy: ProductCopy) {
             notes.push(`Barcode ${pick.barcode} added — printed on the box.`);
         }
     }
+    // Our own data looks wrong → an open problem too (owner, 2026-11-25).
+    const open = [...attention.map((a) => `PENDING (Part 0) — ${a}`), ...copy.flags.map((f) => `NOTE (Part 0) — ${f}`)];
+    if (open.length) copy.parked = await parkInApp(productId, open).catch(() => false);
     if (attention.length) {
-        copy.parked = await parkInAttention([productId], attention.join("\n"), "In-app AI", "any")
-            .then((r) => r.parked > 0)
-            .catch(() => false);
         notes.unshift(...attention.map((a) => `ATTENTION — ${a}`));
     }
+}
+
+/**
+ * Park on the in-app AI's problems ("Part 0" = not a prep part). One staff gave a
+ * temporary pass is not raised again, and a reason already there is kept.
+ */
+async function parkInApp(productId: number, lines: string[]): Promise<boolean> {
+    const r = await prisma.invProduct.findUnique({ where: { id: productId }, select: { shopStatus: true, shopAttention: true, shopDraftJson: true } });
+    const aside = new Set((readShopDraft(r?.shopDraftJson)?.problems ?? []).filter((p) => p.asideAt).map((p) => problemKey(p.text)));
+    const fresh = lines.map((l) => l.replace(/\s+/g, " ").trim()).filter((l) => !aside.has(problemKey(l)));
+    if (!fresh.length) return false;
+    const before = r?.shopStatus === "ATTENTION" ? (r.shopAttention ?? "").split("\n").filter((l) => l.trim()) : [];
+    const have = new Set(before.map(problemKey));
+    const reason = [...before, ...fresh.filter((l) => !have.has(problemKey(l)))].join("\n").slice(0, 10000);
+    return (await parkInAttention([productId], reason, "In-app AI", "any")).parked > 0;
 }
 
 /** InvProduct.specsJson as label → text, or null. */

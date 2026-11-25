@@ -212,6 +212,7 @@ The server keeps the list on the product (staff see it under Product image), **n
 The server tags each line with its part ("Part 3 · …") and **a part that runs again replaces its own earlier lines** — so write the full set each run, never "as before".
 - **One point per line, about 20 words.** Say **what, where, what to do**: "Photo 3 shows the 2-port model — remove it", not "Some photos may be wrong".
 - **`staff`** = a human must act. **`notes`** = information staff gain from (where a fact came from, what you changed). Nothing else.
+- **The server raises by itself** as open problems: data warnings (`dataFlags`) and a Model No that differs from the box or page — do not repeat them in `staff`.
 - **Shipping never blocks** (owner, 2026-11-23): fill weight / parcel size when the box or a kept page gives it (Part 3 / Part 5 `shipping`); empty or doubtful → no `staff` / `pending` line. The shop readiness gate already holds a product without shipping. An old shipping line left on a product → clear it with `/fixed`.
 - **No "OK" / "no problem" / "looks good" lines**, no repeating what the server writes itself (photo list lines, Model No filled, weight source, Last run).
 - Our own stamp on a non-main photo is never a note (see "The photo list").
@@ -225,12 +226,14 @@ The server tags each line with its part ("Part 3 · …") and **a part that runs
    - **Poor photos**: blurry, dark, low resolution, bad angle, duplicates.
    - **Wrong text**: a wrong spec row, our support period written as the maker's warranty, a wrong weight / size, a description of another product.
 3. **Decide what is sure**:
-   - Sure wrong → `remove` (photos) / `clear` (fields). The server does it now.
-   - Not sure → `suggestRemove` (photos, staff get a Remove button) or a note.
-   - **Never clear the group** — note "Group looks wrong — should be X (GST!)".
+   - Sure wrong → `remove` (photos) / `clear` (fields). The server does it now. Give every removed photo its **`kind`** (the view it shows). The server holds back the last photo, the only photo of a view and one with no `kind` — staff get a Remove button (another product's photo, `irrelevant`, needs no `kind`). Box colour alone is never a reason.
+   - Not so confident → `suggestRemove` (staff get a Remove button; never blocks).
+   - Cannot decide → leave it to staff: a `fix` line ("Photo 3: check if this is our model"); Part 3 / 5: a `staff` line.
+   - **Never clear the group** — `fix` line "Group looks wrong — should be X (GST!)".
 4. **Major or minor?**
    - **Major** (`major`): photos show two different products and you cannot tell which is ours; the custom part and the photos point to different products.
-   - Everything else is a minor `notes` line.
+   - **`fix`**: a real mistake in our data staff must correct (wrong group, misspelt name). It does not stop the loop; it becomes a yellow open problem, so the product ends in Attention. Only real mistakes — not small remarks.
+   - Everything else is a `notes` line (staff do not see notes).
 5. **Enough to search?** After the clean-up, is there a brand + model, a part code, a barcode, or clear box wording to search with? No → `enough: false` and `need` = what staff must add ("a box / label photo", "the model no. printed on the back").
 6. **Photo list** → `photos` (see "The photo list" above): packing, shape, your must / optional list for this product, a tag for each photo left after the clean-up, and whether photo 1 is clean. A must photo missing (not ticked "Not applicable") or an unclean main photo stops Part 1 before a search — that is on purpose. With Part 5 in the same call it does not stop: Part 5 fixes the photos and the server checks after.
 
@@ -241,11 +244,12 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
 
 ```json
 {
-  "remove": [ { "url": "…/7.jpg", "why": "irrelevant", "note": "a different hub (4 ports)" } ],
+  "remove": [ { "url": "…/7.jpg", "why": "duplicate", "kind": "front", "note": "same as photo 1" } ],
   "suggestRemove": [ { "url": "…/3.jpg", "why": "quality", "note": "blurry, label unreadable" } ],
   "clear": { "brand": false, "title": true, "description": false, "collections": false, "specs": ["Capacity"], "shipping": false },
   "major": [],
-  "notes": ["Model No is empty — sticker prints HS-SSD-E1000.", "Group looks wrong — should be SSD (GST!)"],
+  "fix": ["Group looks wrong — should be SSD (GST!)"],
+  "notes": ["Model No is empty — sticker prints HS-SSD-E1000."],
   "enough": true,
   "need": "",
   "photos": { "box": "carton", "shape": "4-port USB hub", "tags": [ { "url": "…/1.jpg", "kind": "front" }, { "url": "…/2.jpg", "kind": "box_front" }, { "url": "…/4.jpg", "kind": "box_back" } ], "must": ["front", "ports", "box_front", "box_back"], "nice": ["in_use", "size"], "mainClean": true }

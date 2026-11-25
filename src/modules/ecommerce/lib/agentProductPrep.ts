@@ -15,7 +15,7 @@ import { parkInAttention } from "@/modules/ecommerce/lib/shopAttention";
 import { arrangeFrom, checkWrittenCopy, writtenCopySchema } from "@/modules/ecommerce/lib/aiVerifiedCopy";
 import { readGivenPages, type PageRead, type PageSearch } from "@/modules/ecommerce/lib/aiPageReader";
 import { checkFact, cmOf, gramsOf, normForCheck } from "@/modules/ecommerce/lib/aiFactCheck";
-import { BOX_TYPES, BOX_TYPE_KEYS, PHOTO_KINDS, PHOTO_REMOVE_REASONS, isEnough, isPhotoKind, kindsInMustLine, missingMust, photoFloor, photoKindLabel, readPhotoChecklist, type BoxType, type PhotoChecklist, type PhotoChecklistItem, type PhotoKind, type PhotoRemoval, type PhotoRemoveReason, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
+import { BOX_TYPES, BOX_TYPE_KEYS, PHOTO_KINDS, PHOTO_REMOVE_REASONS, isEnough, isPhotoKind, kindsInMustLine, missingMust, photoFloor, photoKindLabel, readPhotoChecklist, splitRemovals, type BoxType, type PhotoChecklist, type PhotoChecklistItem, type PhotoKind, type PhotoRemoval, type PhotoRemoveReason, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
 import { applyPublished } from "@/modules/ecommerce/lib/applyPublished";
 import { cloudinarySignature } from "@/shared/lib/cloudinary";
 import { isCloudinaryUrl } from "@/shared/lib/cloudinaryImage";
@@ -39,7 +39,7 @@ import { AgentCopyError, pickableMasters, productForAgent, specsOf } from "@/mod
  * Skills: .claude/skills/product-prep, .claude/skills/product-recheck.
  */
 
-const galleryOf = (p: { galleryJson: unknown; imageUrl: string | null }) => productGalleryUrls(p.galleryJson as never, p.imageUrl);
+export const galleryOf = (p: { galleryJson: unknown; imageUrl: string | null }) => productGalleryUrls(p.galleryJson as never, p.imageUrl);
 const keyOf = (id: number) => `ai-prep/${id}.json`;
 /**
  * One "Last run" line per product (owner, 2026-11-17): which part ran, when (India
@@ -93,6 +93,8 @@ async function asideKeys(id: number): Promise<Set<string>> {
     const r = await prisma.invProduct.findUnique({ where: { id }, select: { shopDraftJson: true } });
     return new Set((readShopDraft(r?.shopDraftJson)?.problems ?? []).filter((p) => p.asideAt).map((p) => problemKey(p.text)));
 }
+/** The same point once, whichever part or level wrote it — the first (stronger) one stays. */
+const oneEach = (ls: string[]) => ls.filter((l, i) => ls.findIndex((x) => problemKey(x) === problemKey(l)) === i);
 const notAside = (aside: Set<string>) => (l: string) => !aside.has(problemKey(l));
 
 /**
@@ -113,8 +115,8 @@ const notPhotoRestatement = (serverLines: string[]) => {
  * PENDING, yellow = NOTE. Staff {…} problems and set-aside ones stay until a run
  * reports them fixed (POST /fixed); an AI problem no longer in the reason was fixed and goes.
  */
-export async function recordRun(id: number, skill: PrepRun["skill"], part: string, from: ShopStatus) {
-    const r = await prisma.invProduct.findUnique({ where: { id }, select: { shopStatus: true, shopAttention: true, shopDraftJson: true } });
+export async function recordRun(id: number, skill: PrepRun["skill"], part: string, from: ShopStatus, photos?: { before: string[]; why: Map<string, string> }) {
+    const r = await prisma.invProduct.findUnique({ where: { id }, select: { shopStatus: true, shopAttention: true, shopDraftJson: true, imageUrl: true, galleryJson: true } });
     if (!r) return;
     const info = readShopDraft(r.shopDraftJson);
     const now = new Date().toISOString();
@@ -143,7 +145,10 @@ export async function recordRun(id: number, skill: PrepRun["skill"], part: strin
     const wasOpen = new Set(before.filter((p) => !p.asideAt && p.source !== "staff").map((p) => problemKey(p.text)));
     const found = open.filter((p) => !wasOpen.has(problemKey(p.text))).length;
     const fixed = [...wasOpen].filter((k) => !open.some((p) => problemKey(p.text) === k)).length;
-    const runs = trimRuns([...(info?.runs ?? []), { skill, part, at: now, from, to: r.shopStatus, ...(found && { found }), ...(fixed && { fixed }) }]);
+    // Photos this run took off, so staff can put one back; the saved link also keeps the file from the photo cleanup.
+    const ours = new Set(galleryOf(r));
+    const removed = (photos?.before ?? []).filter((u) => !ours.has(u)).map((url) => ({ url, why: photos?.why.get(url) ?? "" }));
+    const runs = trimRuns([...(info?.runs ?? []), { skill, part, at: now, from, to: r.shopStatus, ...(found && { found }), ...(fixed && { fixed }), ...(removed.length && { removed }) }]);
     // AI problems this run no longer raises: closed by this run.
     const gone = before.filter((p) => !p.asideAt && p.source !== "staff" && !open.some((o) => problemKey(o.text) === problemKey(p.text)));
     const closed = gone.length ? withClosed(info, gone, `AI part ${part.split(" ")[0]}`, "fixed") : info?.closed;
@@ -222,6 +227,8 @@ type PrepState = {
      * later run never loses the way back to the original.
      */
     edits?: { url: string; original: string; edit: string; at: string }[];
+    /** Part 1's real data mistakes (owner, 2026-11-25), waiting for Part 3 / 5 to list them as problems. */
+    fix?: string[];
 };
 
 function requireR2() {
@@ -576,8 +583,10 @@ async function photoListOf(part: 1 | 3 | 4 | 5, id: number, c: PhotoCheck, galle
     // still stops it blocking, so nothing passed earlier blocks again; a clean main photo clears it.
     const mainWaived = !!mainProblem && prev?.mainWaived === true;
     const mainBlock = mainWaived ? null : mainProblem;
+    // Remove advice waits for staff: a later part adds to it, only a photo that is gone takes its line away.
+    const removeList = [...remove, ...(prev?.remove ?? []).filter((r) => !remove.some((x) => x.url === r.url))].filter((r) => gallery.includes(r.url));
     const checklist: PhotoChecklist = {
-        items, enough: isEnough(items), at: new Date().toISOString(), remove, box: c.box, ...(c.shape && { shape: c.shape }),
+        items, enough: isEnough(items), at: new Date().toISOString(), remove: removeList, box: c.box, ...(c.shape && { shape: c.shape }),
         mainClean: !mainProblem, ...(mainWaived && { mainWaived: true }),
     };
     const missing = missingMust(checklist);
@@ -597,7 +606,14 @@ function photosToFind(c: PhotoChecklist | null) {
 
 // ── Part 1: prepare the seed (remove wrong data only) ─────────────────────────
 
-const removal = z.object({ url: z.string().url(), why: z.string(), note: z.string().max(200).default("") });
+/** `kind` = the view it shows — without it only "irrelevant" is removed by itself (splitRemovals). */
+const removal = z.object({ url: z.string().url(), why: z.string(), note: z.string().max(200).default(""), kind: z.string().optional() });
+type Removal = z.infer<typeof removal>;
+/** Remove advice for staff — a Remove button under Product image. */
+const asAdvice = (rs: Removal[], gallery: string[]): PhotoRemoval[] =>
+    rs.filter((r) => gallery.includes(r.url)).map((r) => ({ url: r.url, why: r.why in PHOTO_REMOVE_REASONS ? (r.why as PhotoRemoveReason) : "quality", note: r.note }));
+const tagMap = (tags: PhotoCheck["tags"], alias = new Map<string, string>()) => new Map(tags.map((t) => [alias.get(t.url) ?? t.url, t.kind]));
+const noteLine = (part: number) => (x: string) => `NOTE (Part ${part}) — ${x.replace(/\s+/g, " ").trim()}`;
 const lines = z.array(z.string().trim().min(1).max(300)).max(40).default([]);
 
 export const part1Schema = z.object({
@@ -617,7 +633,9 @@ export const part1Schema = z.object({
     }).default({ brand: false, title: false, description: false, collections: false, specs: [], shipping: false }),
     /** MAJOR problems: any → the product stops in Attention. */
     major: lines,
-    /** Minor problems — notes, the loop goes on. */
+    /** Real mistakes in our data staff must correct (wrong group, misspelt name) or a photo you cannot decide on — open problems once Part 3 / 5 ends. */
+    fix: lines,
+    /** Information only — the loop goes on. */
     notes: lines,
     /** After the clean-up, is what is left enough to search (brand + model, part code, barcode or clear box text)? */
     enough: z.boolean(),
@@ -645,13 +663,14 @@ export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?
     const p = await prisma.invProduct.findUnique({ where: { id }, select: { imageUrl: true, galleryJson: true, specsJson: true } });
     if (!p) throw new AgentCopyError("Product not found");
     const gallery = galleryOf(p);
-    const gone = new Set(b.remove.map((r) => r.url).filter((u) => gallery.includes(u)));
+    const { gone: sure, held } = splitRemovals(gallery, b.remove, tagMap(b.photos.tags));
+    const gone = new Set(sure.map((r) => r.url));
     const patch: ShopProductPatch = {};
     const done: string[] = [];
     if (gone.size) {
         patch.galleryUrls = gallery.filter((u) => !gone.has(u));
         patch.imageUrl = patch.galleryUrls[0] ?? null;
-        done.push(`Removed ${gone.size} wrong photo(s): ${b.remove.filter((r) => gone.has(r.url)).map((r) => r.note || r.why).join("; ")}.`);
+        done.push(`Removed ${gone.size} wrong photo(s): ${sure.map((r) => r.note || r.why).join("; ")}.`);
     }
     if (b.clear.brand) { patch.brandId = null; done.push("Brand cleared (wrong)."); }
     if (b.clear.title) { patch.shopSubheading = null; done.push("Online name cleared (wrong)."); }
@@ -666,22 +685,21 @@ export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?
         Object.assign(patch, { weightGrams: null, lengthCm: null, breadthCm: null, heightCm: null });
         done.push("Shipping weight / size cleared (wrong).");
     }
-    const unsure = b.suggestRemove
-        .filter((r) => gallery.includes(r.url) && !gone.has(r.url))
-        .map((r) => `Check photo ${gallery.indexOf(r.url) + 1}: ${r.note || r.why} — remove it if it is wrong.`);
-
-    const list = await photoListOf(1, id, b.photos, patch.galleryUrls ?? gallery);
+    const left = patch.galleryUrls ?? gallery;
+    const list = await photoListOf(1, id, b.photos, left, asAdvice([...held, ...b.suggestRemove], left));
     patch.photoChecklist = list.checklist;
     const searchStop = !photosNext && !b.enough;
     const aside = notAside(await asideKeys(id));
     const photoStop = (photosNext ? [] : next === "part3" ? list.lines.filter((l) => l !== list.mainProblem) : list.lines).filter(aside);
     const major = b.major.filter(aside);
+    const fix = b.fix.filter(aside);
     if (major.length > 0 || searchStop || photoStop.length > 0) {
         const reason = [
             ...major.map((m) => `STOPPED (Part 1) — ${m}`),
             ...photoStop.map((m) => `STOPPED (Part 1) — ${m}`),
             ...(searchStop ? [`STOPPED (Part 1) — not enough to search${b.need ? `: ${b.need}` : ""}.`] : []),
-            ...done, ...unsure, ...b.notes,
+            ...fix.map(noteLine(1)),
+            ...done, ...b.notes,
             AFTER_FIX.start,
             lastRun(1, "stopped → Attention"),
             await originLine(id),
@@ -692,13 +710,13 @@ export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?
     await leaveAt(id, b.then ?? "same", patch);
     // A search saved for this same identity is kept (one search per lifecycle).
     const { state: prev } = await liveState(id, run);
-    await writeState(id, { ...(prev?.search && { search: prev.search }), ...(prev?.photosDone && { photosDone: prev.photosDone }), ...(prev?.edits && { edits: prev.edits }), part: prev?.search ? Math.max(prev.part, 1) as PrepState["part"] : 1, at: new Date().toISOString(), identity: await currentIdentity(id) }, run);
+    await writeState(id, { ...(prev?.search && { search: prev.search }), ...(prev?.photosDone && { photosDone: prev.photosDone }), ...(prev?.edits && { edits: prev.edits }), ...(fix.length && { fix }), part: prev?.search ? Math.max(prev.part, 1) as PrepState["part"] : 1, at: new Date().toISOString(), identity: await currentIdentity(id) }, run);
     const find = photosToFind(list.checklist);
     const findNote = !find.length || photosNext ? [] : prev?.search
         ? [`Not applicable (staff): ${find.join(", ")} — already searched once, so they stay missing unless they are on a saved page or the owner asks for a new search.`]
         : [`Not applicable (staff): ${find.join(", ")} — the search looks for them online.`];
-    await addDraftNotes(id, 1, [...done, ...unsure, ...b.notes, ...findNote], "done");
-    return { result: "part1" as const, removed: gone.size, notes: done.length + unsure.length + b.notes.length, findOnline: find };
+    await addDraftNotes(id, 1, [...done, ...b.notes, ...findNote], "done");
+    return { result: "part1" as const, removed: gone.size, notes: done.length + b.notes.length, findOnline: find };
 }
 
 // ── Part 2: the one search, saved ─────────────────────────────────────────────
@@ -761,6 +779,7 @@ export async function savePart2(id: number, b: z.infer<typeof part2Schema>, run?
         search: { at: new Date().toISOString(), found, verdicts, labelFacts: b.labelFacts, seen: b.seen, labelWebsite: b.labelWebsite },
         ...(state.photosDone && { photosDone: state.photosDone }),
         ...(state.edits && { edits: state.edits }),
+        ...(state.fix && { fix: state.fix }),
     };
     await writeState(id, next, run);
     await addDraftNotes(id, 2, [
@@ -817,13 +836,13 @@ function applyShipping(sh: Shipping | undefined, p: ProductRow, facts: Facts, tr
 }
 
 /** Model No to fill: only when ours is empty, the code is really on the source, and the product is not local (unbranded) goods. */
-function modelNoToFill(m: ModelNoFix | undefined, p: ProductRow, facts: Facts, trusted: PageRead[], notes: string[]): string | null {
+function modelNoToFill(m: ModelNoFix | undefined, p: ProductRow, facts: Facts, trusted: PageRead[], notes: string[], fix: string[]): string | null {
     // Local (unbranded) goods carry one-off codes — their Model No is left to staff (owner, 2026-11-17).
     if (!m || /unbranded|special|generic/i.test(p.brand?.name ?? "")) return null;
     const src = sourceOf(m.source, facts, trusted);
     if (!src || !src.norm.includes(normForCheck(m.value))) { notes.push(`Model No "${m.value}" not found on the label or a kept page — not filled.`); return null; }
     if (p.modelNo?.trim()) {
-        if (normForCheck(p.modelNo) !== normForCheck(m.value)) notes.push(`Model No is "${p.modelNo}", the ${m.source.trim().toLowerCase() === "label" ? "box" : "maker"} says "${m.value}" — check.`);
+        if (normForCheck(p.modelNo) !== normForCheck(m.value)) fix.push(`Model No is "${p.modelNo}", the ${m.source.trim().toLowerCase() === "label" ? "box" : "maker"} says "${m.value}" — check.`);
         return null;
     }
     return m.value;
@@ -844,10 +863,9 @@ async function writeModelNo(id: number, p: ProductRow, value: string) {
 }
 
 /** Photos: sure ones applied to `patch` now (added ones copied into our storage first), the rest offered to staff. */
-async function applyPhotos(ph: PhotoPlan, p: ProductRow, trusted: PageRead[], patch: ShopProductPatch, notes: string[]) {
+async function applyPhotos(ph: PhotoPlan, p: ProductRow, trusted: PageRead[], patch: ShopProductPatch, notes: string[], tags: PhotoCheck["tags"]) {
     const gallery = galleryOf(p);
     const onPage = new Map(trusted.flatMap((pg) => pg.photos.map((u) => [u, pg] as const)));
-    const gone = new Set(ph.remove.map((r) => r.url).filter((u) => gallery.includes(u)));
     const wanted = ph.add.filter((x) => onPage.has(x.url) && !gallery.includes(x.url)).slice(0, AI_PHOTO_LIMITS.total);
     for (const x of ph.add) if (!onPage.has(x.url)) notes.push(`Photo not on a kept page — not added: ${x.url}`);
     // Copied into our Cloudinary first, as staff's Add does (AiPhotoPicker): the
@@ -860,13 +878,15 @@ async function applyPhotos(ph: PhotoPlan, p: ProductRow, trusted: PageRead[], pa
     }
     if (failed.length) notes.push(`${failed.length} photo(s) could not be copied to our storage — offered to add by hand instead.`);
     const added = wanted.filter((x) => copyOf.has(x.url));
+    const { gone: sure, held } = splitRemovals(gallery, ph.remove, tagMap(tags, copyOf), [...copyOf.values()]);
+    const gone = new Set(sure.map((r) => r.url));
     let next = [...gallery.filter((u) => !gone.has(u)), ...added.map((x) => copyOf.get(x.url)!)];
     const ordered = [...new Set(ph.order.map((u) => copyOf.get(u) ?? u).filter((u) => next.includes(u)))];
     if (ordered.length) next = [...ordered, ...next.filter((u) => !ordered.includes(u))];
     if (gone.size || added.length || ordered.length) {
         patch.galleryUrls = next;
         patch.imageUrl = next[0] ?? null;
-        if (gone.size) notes.push(`Removed ${gone.size} wrong photo(s): ${ph.remove.filter((r) => gone.has(r.url)).map((r) => r.note || r.why).join("; ")}.`);
+        if (gone.size) notes.push(`Removed ${gone.size} wrong photo(s): ${sure.map((r) => r.note || r.why).join("; ")}.`);
         if (added.length) notes.push(`Added ${added.length} photo(s) from ${[...new Set(added.map((x) => onPage.get(x.url)!.site))].join(", ")} — check they show this exact model and colour.`);
     }
     if (added.some((x) => !onPage.get(x.url)?.maker)) notes.push("Some added photos are from a seller's page, not the maker's.");
@@ -876,7 +896,7 @@ async function applyPhotos(ph: PhotoPlan, p: ProductRow, trusted: PageRead[], pa
     const ours = photosForAi(next);
     const nOf = (u: string) => ours.indexOf(u) + 1;
     const arrange = arrangeFrom({ order: [], look: ph.look.filter((x) => nOf(x.url) > 0).map((x) => ({ ...x, photo: nOf(x.url), crop: x.crop, focus: x.focus, background: x.background })) }, ours, new Set());
-    const remove = ph.suggestRemove.filter((r) => next.includes(r.url) && r.why in PHOTO_REMOVE_REASONS).map((r) => ({ url: r.url, why: r.why as PhotoRemoveReason, note: r.note }));
+    const remove = asAdvice([...held, ...ph.suggestRemove], next);
     return { removed: gone.size, added: added.length, ordered: ordered.length > 0, suggested, arrange, gallery: next, remove, alias: copyOf };
 }
 
@@ -981,14 +1001,16 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
     if (cols.length) patch.collectionIds = [...new Set(cols)];
 
     const facts = { labelFacts: s.labelFacts, seen: s.seen };
+    // Our own data looks wrong — open problems staff correct (owner, 2026-11-25), not hidden notes.
+    const fix = [...checked.copy.flags];
     applyShipping(b.shipping, p, facts, checked.trusted, patch, notes);
-    const fillModelNo = modelNoToFill(b.modelNo, p, facts, checked.trusted, notes);
-    const ph = await applyPhotos(b.photos, p, checked.trusted, patch, notes);
+    const fillModelNo = modelNoToFill(b.modelNo, p, facts, checked.trusted, notes, fix);
+    const ph = await applyPhotos(b.photos, p, checked.trusted, patch, notes, b.photoCheck.tags);
     const list = await photoListOf(3, id, b.photoCheck, ph.gallery, ph.remove, ph.alias);
     patch.photoChecklist = list.checklist;
     notes.push(...list.dropNotes);
     const own3 = staff.filter(notPhotoRestatement(list.lines));
-    const open = [...new Set([...own3, ...list.lines])].filter(notAside(await asideKeys(id)));
+    const open = oneEach([...own3, ...list.lines, ...(state.fix ?? []).map(noteLine(1)), ...fix.map(noteLine(3))]).filter(notAside(await asideKeys(id)));
     const runResult = open.length ? `${open.length} for staff → Attention` : `done → ${THEN_WORDS[b.then ?? "draft"]}`;
 
     const draft: ProductCopy = {
@@ -1002,12 +1024,12 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
     if (fillModelNo) draft.notes = partNotes(earlier, 3, [...notes, `Model No filled: ${fillModelNo} (from the ${b.modelNo!.source.toLowerCase() === "label" ? "box" : "maker page"}).`], runResult);
     const shopStatus = await leaveAt(
         id, open.length ? "attention" : b.then ?? "draft", patch,
-        () => ({ aiCopy: draft, notes: undefined, notesAt: undefined, kept: undefined }),
+        () => ({ aiCopy: draft, photoOffers: undefined, notes: undefined, notesAt: undefined, kept: undefined }),
         open.length ? await attentionReason(id, 3, open, AFTER_FIX.recheck) : undefined,
     );
     if (fillModelNo) await writeModelNo(id, p, fillModelNo);
     // Model No is part of the identity the search was saved for — keep it matching.
-    await writeState(id, { ...state, part: 3, at: new Date().toISOString(), ...(fillModelNo && { identity: await currentIdentity(id) }) }, run);
+    await writeState(id, { ...state, fix: undefined, part: 3, at: new Date().toISOString(), ...(fillModelNo && { identity: await currentIdentity(id) }) }, run);
     return {
         result: open.length ? ("attention" as const) : ("part3" as const), shopStatus, staff: open,
         kept: { specs: checked.copy.specs, highlights: checked.copy.highlights, warranty: checked.copy.warranty },
@@ -1070,7 +1092,7 @@ export async function savePart5(id: number, b: z.infer<typeof part5Schema>, run?
         : {};
     applyShipping(b.shipping, p, { labelFacts: { ...(search?.labelFacts ?? {}), ...sentLabel }, seen: search?.seen ?? {} }, trusted, patch, notes);
 
-    const ph = await applyPhotos(b.photos, p, trusted, patch, notes);
+    const ph = await applyPhotos(b.photos, p, trusted, patch, notes, b.photoCheck.tags);
     if (!trusted.length && (b.photos.add.length || b.photos.suggest.length)) notes.push("No saved search for this product — photos can only be added by hand.");
     const list = await photoListOf(5, id, b.photoCheck, ph.gallery, ph.remove, ph.alias);
     patch.photoChecklist = list.checklist;
@@ -1083,18 +1105,17 @@ export async function savePart5(id: number, b: z.infer<typeof part5Schema>, run?
     const carried = (p.shopAttention ?? "").split("\n")
         .map((l) => l.trim())
         .filter((l) => OPEN_LINE.test(l) && !SERVER_PHOTO_LINE.test(openText(l)) && !fixed.has(openText(l)));
-    const open = [...new Set([...list.lines, ...carried.filter(notPhotoRestatement(list.lines)), ...b.staff.filter(notPhotoRestatement(list.lines))])].filter(notAside(await asideKeys(id)));
+    const open = oneEach([...list.lines, ...carried.filter(notPhotoRestatement(list.lines)), ...b.staff.filter(notPhotoRestatement(list.lines)), ...(state.fix ?? []).map(noteLine(1))]).filter(notAside(await asideKeys(id)));
     const runResult = open.length ? `${open.length} for staff → Attention` : `photos done → ${THEN_WORDS[b.then ?? "draft"]}`;
 
     await leaveAt(id, open.length ? "attention" : b.then ?? "draft", patch, (info) => {
         const ai = info?.aiCopy;
-        // Staff's Add buttons live on the AI copy; a product written by hand has none,
-        // so its photo offers go in the notes instead of being lost.
-        const offers = ai ? [] : ph.suggested.map((x) => `Photo to add${x.kind ? ` (${photoKindLabel(x.kind)})` : ""}, found on ${x.site} — add it if it is this exact model: ${x.url}`);
         return {
-            notes: partNotes(info?.notes ?? [], 5, [...notes, ...offers], runResult),
+            notes: partNotes(info?.notes ?? [], 5, notes, runResult),
             notesAt: new Date().toISOString(),
             kept: undefined,
+            // Staff's Add buttons read the AI copy; a product written by hand has none, so its offers sit beside it.
+            photoOffers: !ai && ph.suggested.length ? ph.suggested : undefined,
             ...(ai && {
                 aiCopy: {
                     ...ai,
@@ -1106,7 +1127,7 @@ export async function savePart5(id: number, b: z.infer<typeof part5Schema>, run?
             }),
         };
     }, open.length ? await attentionReason(id, 5, open, AFTER_FIX.recheck) : undefined);
-    await writeState(id, { ...state, photosDone: { at: new Date().toISOString(), urls: ph.gallery } }, run);
+    await writeState(id, { ...state, fix: undefined, photosDone: { at: new Date().toISOString(), urls: ph.gallery } }, run);
     return {
         result: open.length ? ("attention" as const) : ("part5" as const),
         photos: { removed: ph.removed, added: ph.added, ordered: ph.ordered, suggested: ph.suggested.length },

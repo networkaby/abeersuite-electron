@@ -99,6 +99,33 @@ export type PhotoChecklist = {
  */
 export type PhotoArrange = { order: string[]; looks: { url: string; next: string; why: string }[] };
 
+/**
+ * Which photos the AI may remove by itself (owner, 2026-11-25): the ones it is sure
+ * about, but never the last photo, the only photo of a view, or one it did not say
+ * what view it shows. Those are held — staff get a Remove button instead. A photo of
+ * another product shows no view of ours, so only the last-photo rule applies to it.
+ * `kinds`: photo link → the view it shows; `extra`: photos being added in the same run.
+ */
+export function splitRemovals<T extends { url: string; why: string; kind?: string }>(
+    gallery: string[], asked: T[], kinds: Map<string, string>, extra: string[] = [],
+): { gone: T[]; held: T[] } {
+    const gone: T[] = [];
+    const held: T[] = [];
+    let left = [...new Set([...gallery, ...extra])];
+    const seen = new Set<string>();
+    // Another product's photos go first: they never count as a photo of our view.
+    for (const r of [...asked.filter((x) => x.why === "irrelevant"), ...asked.filter((x) => x.why !== "irrelevant")]) {
+        if (!gallery.includes(r.url) || seen.has(r.url)) continue;
+        seen.add(r.url);
+        const others = left.filter((u) => u !== r.url);
+        const kind = r.kind ?? kinds.get(r.url);
+        const kindOf = (u: string) => kinds.get(u) ?? asked.find((x) => x.url === u)?.kind;
+        const sameView = isPhotoKind(kind) && others.some((u) => kindOf(u) === kind);
+        if (others.length > 0 && (r.why === "irrelevant" || sameView)) { gone.push(r); left = others; } else held.push(r);
+    }
+    return { gone, held };
+}
+
 /** A web photo from a page Verified kept, with the kind the AI says it shows. */
 export type PhotoSuggestion = { url: string; site: string; kind: PhotoKind | null };
 

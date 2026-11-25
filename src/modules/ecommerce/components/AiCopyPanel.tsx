@@ -10,19 +10,19 @@ import { extractApiError } from "@/shared/lib/api";
 import { fetchAiCopy, fetchAiPhotos, type PhotoAdvice, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
 import { FlowButtons, PhotoAiSwitch, PremiumSwitch, useCopyFlow, usePhotoAi, usePremiumAi } from "@/modules/ecommerce/components/AiCopyControls";
 import { AiPhotoArrange, AiPhotoPicker } from "@/modules/ecommerce/components/AiPhotoPicker";
-import type { PhotoChecklist, PhotoKind } from "@/modules/ecommerce/lib/photoChecklist";
+import type { PhotoChecklist, PhotoKind, PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
 import { AiNotesBox, type AiNotesBoxProps } from "@/modules/ecommerce/components/AiNotesBox";
 
 type SpecRow = { k: string; v: string };
 
 /** How the draft was made, what looks wrong in our own data, and what staff should check before saving. */
-export function AiDraftNotes({ draft, notesElsewhere = false }: { draft: ProductCopy; notesElsewhere?: boolean }) {
+export function AiDraftNotes({ draft }: { draft: ProductCopy }) {
     const sourced = Object.entries(draft.specSources ?? {});
     return (
         <>
             <p className="text-muted-foreground text-xs">{draft.note}</p>
-            {!notesElsewhere && draft.flags.length > 0 && <DataFlags flags={draft.flags} />}
-            {!notesElsewhere && (draft.notes?.length ?? 0) > 0 && (
+            {draft.flags.length > 0 && <DataFlags flags={draft.flags} />}
+            {(draft.notes?.length ?? 0) > 0 && (
                 <div className="text-xs text-sky-800 dark:text-sky-300">
                     <p className="font-medium">Notes for you:</p>
                     <ul className="ml-4 list-disc">
@@ -44,6 +44,43 @@ export function AiDraftNotes({ draft, notesElsewhere = false }: { draft: Product
                 </div>
             )}
         </>
+    );
+}
+
+/** Proof and review points of a draft, folded: nothing here blocks. Problems are in AI notes. */
+function DraftSources({ draft }: { draft: ProductCopy }) {
+    // A prep run's notes are its work record — only its shipping mismatches are for review.
+    const prep = draft.note.startsWith("Written by Claude (product prep");
+    const notes = (draft.notes ?? []).map((n) => n.replace(/^Part \d · /, ""))
+        .filter((n) => !n.startsWith("Last run: ") && !n.startsWith("ATTENTION — ") && (!prep || /^(Weight: ours|Parcel size on)/.test(n)));
+    const sourced = Object.entries(draft.specSources ?? {});
+    const list = (items: string[]) => <ul className="ml-4 list-disc">{items.map((x) => <li key={x}>{x}</li>)}</ul>;
+    if (prep && !notes.length && !sourced.length && !draft.unsure.length && !draft.sources.length) return null;
+    return (
+        <details className="text-muted-foreground text-xs">
+            <summary className="cursor-pointer">Sources{draft.unsure.length ? ` · ${draft.unsure.length} to check by hand` : ""}</summary>
+            <div className="mt-1 space-y-1">
+                {!prep && <p>{draft.note}</p>}
+                {sourced.length > 0 && <p>Spec sources: {sourced.map(([k, v]) => `${k} — ${v}`).join(" · ")}</p>}
+                {draft.unsure.length > 0 && <div><p className="font-medium">Check / add by hand:</p>{list(draft.unsure)}</div>}
+                {notes.length > 0 && <div><p className="font-medium">Notes:</p>{list(notes)}</div>}
+                {draft.sources.length > 0 && (
+                    <div>
+                        <p className="font-medium">Pages read:</p>
+                        <ul className="space-y-0.5">
+                            {draft.sources.map((s) => (
+                                <li key={s.url}>
+                                    <a href={s.url} target="_blank" rel="noreferrer" className="text-primary inline-flex items-center gap-1 hover:underline">
+                                        <ExternalLink className="size-3" />
+                                        {s.title}
+                                    </a>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+            </div>
+        </details>
     );
 }
 
@@ -74,7 +111,6 @@ export function mergeAiSpecs(rows: SpecRow[], specs: Record<string, string>): Sp
 // anything already typed gets a preview with a Use button instead.
 export default function AiCopyPanel({
     savedDraft,
-    onDiscardSaved,
     productId,
     name,
     imageUrls,
@@ -97,10 +133,10 @@ export default function AiCopyPanel({
     attention,
     review,
     prep,
+    photoOffers,
 }: {
     /** Claude's (Cowork) copy, already written onto the product — shown for its notes and photo advice. */
     savedDraft?: ProductCopy | null;
-    onDiscardSaved?: () => void;
     productId?: number;
     name: string;
     /** Whole gallery, skip marks included — the server leaves the skipped ones out. */
@@ -133,6 +169,8 @@ export default function AiCopyPanel({
     attention?: AiNotesBoxProps["attention"];
     review?: AiNotesBoxProps["review"];
     prep?: AiNotesBoxProps["prep"];
+    /** Part 5's web photos for a product with no AI copy. */
+    photoOffers?: PhotoSuggestion[];
 }) {
     const [flow, setFlow] = useCopyFlow();
     const [premium, setPremium] = usePremiumAi();
@@ -235,7 +273,7 @@ export default function AiCopyPanel({
                 attention={attention}
                 review={review}
                 prep={prep}
-                copy={draft ? { source: fromSaved ? "Claude copy" : "In-app AI", notes: draft.notes ?? [], flags: draft.flags } : null}
+                copy={draft ? { notes: draft.notes ?? [], flags: draft.flags } : null}
             />
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void run(false)}>
@@ -261,6 +299,7 @@ export default function AiCopyPanel({
                 </p>
             )}
             {checkFlags && <DataFlags flags={checkFlags} title={parked ? "Not written — parked in Attention. Check the real unit:" : "Not written — fix this product's data first:"} />}
+            {!draft && !photoRun && !!photoOffers?.length && <AiPhotoPicker suggestions={photoOffers} checklist={photoChecklist} onAdd={onAddPhotos} />}
             {photoRun && !draft && (
                 <div className="space-y-2 text-sm">
                     {photoRun.photoArrange && <AiPhotoArrange arrange={photoRun.photoArrange} gallery={imageUrls} onGallery={onGallery} />}
@@ -269,14 +308,6 @@ export default function AiCopyPanel({
             )}
             {draft && (
                 <div className="space-y-2 text-sm">
-                    {fromSaved && (
-                        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-violet-50 px-2 py-1.5 text-xs text-violet-800 dark:bg-violet-950/40 dark:text-violet-200">
-                            <span>Written onto this product by Claude (checked by the server) — the product is in Draft. Review, then Save as ready.</span>
-                            {onDiscardSaved && (
-                                <Button type="button" size="sm" variant="ghost" onClick={onDiscardSaved}>Discard draft</Button>
-                            )}
-                        </div>
-                    )}
                     {specsMissing.length > 0 && (
                         <DraftRow label="Specs" text={specsMissing.map(([k, v]) => `${k}: ${v}`).join("\n")} onUse={() => onSpecs(mergeAiSpecs(specPairs, draft.specs))} />
                     )}
@@ -285,7 +316,7 @@ export default function AiCopyPanel({
                             onUse={() => onCollections?.([...(collectionIds ?? []), ...collectionsMissing.map((c) => c.id)])} />
                     )}
                     {brandDiffers && <DraftRow label="Brand" text={brandDiffers.name} onUse={() => onBrand?.(brandDiffers.id)} />}
-                    <AiDraftNotes draft={draft} notesElsewhere />
+                    <DraftSources draft={draft} />
                     {titleDiffers && (
                         <DraftRow label="Online name" text={draft.title} onUse={() => onSubheading(draft.title)} />
                     )}
@@ -302,21 +333,6 @@ export default function AiCopyPanel({
                     )}
                     {photoView?.photoSuggestions && (
                         <AiPhotoPicker suggestions={photoView.photoSuggestions} checklist={photoChecklist} onAdd={onAddPhotos} />
-                    )}
-                    {draft.sources.length > 0 && (
-                        <div>
-                            <p className="text-muted-foreground text-xs">Sources — check specs before saving:</p>
-                            <ul className="mt-1 space-y-0.5">
-                                {draft.sources.map((s) => (
-                                    <li key={s.url}>
-                                        <a href={s.url} target="_blank" rel="noreferrer" className="text-primary inline-flex items-center gap-1 text-xs hover:underline">
-                                            <ExternalLink className="size-3" />
-                                            {s.title}
-                                        </a>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
                     )}
                 </div>
             )}

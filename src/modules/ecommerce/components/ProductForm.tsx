@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useEffectEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useEffectEvent, type ReactNode } from "react";
 import { GatedLink } from "@/shared/components/GatedLink";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
@@ -476,7 +476,9 @@ export default function ProductForm({
     const readyNote = qualified ? "" : `Marked ready — still needs ${qualification.missing.join(", ").toLowerCase()}, so publishing would wait as Pending`;
     // Stage: Unpublished → Draft → Ready → Published / Pending, one copy (owner, 2026-11-10).
     const shopStatus = row?.shopStatus ?? "UNPUBLISHED";
-    const aiDraft: ProductCopy | null = initial?.shopDraft?.aiCopy ?? null;
+    // Follows the live row (Ready drops the copy); same content keeps the same object, so a reload never replaces a draft made here.
+    const aiDraftSig = JSON.stringify(row?.shopDraft?.aiCopy ?? null);
+    const aiDraft = useMemo(() => JSON.parse(aiDraftSig) as ProductCopy | null, [aiDraftSig]);
     const editSig = JSON.stringify([
         subheading, description, slug, badge, specPairs, weightGrams, lengthCm, breadthCm, heightCm,
         allowBackorder, isActive, groupId, brandId, collectionIds,
@@ -830,6 +832,7 @@ export default function ProductForm({
                     review={row?.shopDraft?.notes?.length ? {
                         notes: row.shopDraft.notes, at: row.shopDraft.notesAt, kept: row.shopDraft.kept,
                     } : null}
+                    photoOffers={row?.shopDraft?.photoOffers}
                     prep={initial?.id ? {
                         productId: initial.id, runs: row?.shopDraft?.runs ?? [], problems: row?.shopDraft?.problems ?? [], staffNote: row?.shopDraft?.staffNote ?? null, closed: row?.shopDraft?.closed ?? [], onChanged: () => void reloadRow(),
                         next: nextStep({
@@ -838,6 +841,9 @@ export default function ProductForm({
                             openProblems: (row?.shopDraft?.problems ?? []).filter((x) => !x.asideAt).length, pendingMissing: qualification.missing,
                         }),
                         acting: busy || queueing,
+                        gallery: galleryUrls,
+                        // The gallery autosaves.
+                        onPutBack: (url) => setGalleryUrls((g) => (g.includes(url) ? g : [...g, url])),
                         // Staff may follow the suggestion (owner, 2026-11-22) — the same calls as the buttons below.
                         onAct: (act) => void (act === "start" ? saveAndStart() : submit(act)),
                     } : null}

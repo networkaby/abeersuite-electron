@@ -18,6 +18,8 @@ export type ShopDraft = {
     notesAt?: string;
     /** Notes kept after the product left Draft / Attention (owner, 2026-11-12) — shown until the next AI review replaces them. */
     kept?: boolean;
+    /** Part 5's web photos for a product with no AI copy — staff's Add buttons. */
+    photoOffers?: PhotoSuggestion[];
     /** Product prep's last 10 runs (owner, 2026-11-20) — the skills skip a part that already ran with nothing changed since. */
     runs?: PrepRun[];
     /**
@@ -38,7 +40,7 @@ export type ShopDraft = {
 
 /** found / fixed: how many open problems the run added / removed (the one-line history). */
 // skill "staff" = a stage move made by a person (owner, 2026-11-22); `part` then holds their name.
-export type PrepRun = { skill: "product-prep" | "product-recheck" | "staff"; part: string; at: string; from: ShopStatus; to: ShopStatus; found?: number; fixed?: number };
+export type PrepRun = { skill: "product-prep" | "product-recheck" | "staff"; part: string; at: string; from: ShopStatus; to: ShopStatus; found?: number; fixed?: number; removed?: { url: string; why: string }[] };
 
 /** The AI's own runs — a staff move is not a run of any part. */
 export const aiRuns = (runs: PrepRun[] | undefined) => (runs ?? []).filter((r) => r.skill !== "staff");
@@ -105,6 +107,30 @@ export function splitAttention(text: string | null | undefined): { problems: Row
     return { problems: [...problems.filter((p) => p.level === "stop"), ...problems.filter((p) => p.level === "fix")], rest };
 }
 
+/**
+ * The open list as the AI notes box shows it (owner, 2026-11-25): the saved list, plus
+ * what is parked in the Attention reason or flagged on the AI copy and is not on it yet.
+ * A reason with no tagged line at all (staff's, a review's) is problems line by line.
+ */
+export function openList(saved: PrepProblem[], attention: string | null, flags: string[], closed: ClosedProblem[] = []): PrepProblem[] {
+    const { problems, rest } = splitAttention(attention);
+    const plain = problems.length ? [] : rest.filter((l) => !/^(Last run: |Was (Published|Ready|Unpublished)|Fix it, then |Run Part )/.test(l)).map((text): RowProblem => ({ text, level: "fix" }));
+    const key = (t: string) => problemText(t).toLowerCase().replace(/\s+/g, " ");
+    const seen = new Set(saved.map((p) => key(p.text)));
+    // A flag already closed is not raised again by the old copy; a reason line is what is open now.
+    const done = new Set(closed.map((c) => key(c.text)));
+    const more: PrepProblem[] = [];
+    const add = (text: string, level: PrepProblem["level"]) => {
+        if (seen.has(key(text))) return;
+        seen.add(key(text));
+        more.push({ text, level, part: 0, at: "" });
+    };
+    for (const p of [...problems, ...plain]) add(p.text, p.level === "stop" ? "stop" : "fix");
+    for (const f of flags) if (!done.has(key(f))) add(f, "fix");
+    const ai = [...saved.filter((p) => !p.source && !p.asideAt), ...more];
+    return [...ai.filter((p) => p.level === "stop"), ...ai.filter((p) => p.level === "fix"), ...saved.filter((p) => p.source || p.asideAt)];
+}
+
 /** A row's problems: the saved list when the product has one, else read from its Attention reason. */
 export function rowProblems(info: ShopDraft | null, attention: string | null): RowProblem[] {
     const list = info?.problems ?? [];
@@ -143,7 +169,8 @@ export function prepHistory(info: ShopDraft | null): Pick<ShopDraft, "runs" | "p
 
 export function readShopDraft(raw: unknown): ShopDraft | null {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-    const r = raw as { stageBefore?: unknown; aiCopy?: unknown; notes?: unknown; notesAt?: unknown; kept?: unknown; runs?: unknown; problems?: unknown; staffNote?: unknown; staffNotes?: unknown };
+    const r = raw as { stageBefore?: unknown; aiCopy?: unknown; notes?: unknown; notesAt?: unknown; kept?: unknown; runs?: unknown; problems?: unknown; staffNote?: unknown; staffNotes?: unknown; photoOffers?: unknown };
+    const offers = Array.isArray(r.photoOffers) ? r.photoOffers.filter((x): x is PhotoSuggestion => !!x && typeof x === "object" && typeof (x as PhotoSuggestion).url === "string") : [];
     const runs = Array.isArray(r.runs) ? r.runs.filter(isRun) : [];
     const staffNote = isNote(r.staffNote) ? r.staffNote : fromOldNotes(r.staffNotes);
     let problems = Array.isArray(r.problems) ? r.problems.filter(isProblem) : [];
@@ -163,6 +190,7 @@ export function readShopDraft(raw: unknown): ShopDraft | null {
         ...(notes.length ? { notes } : {}),
         ...(notes.length && typeof r.notesAt === "string" ? { notesAt: r.notesAt } : {}),
         ...(notes.length && r.kept === true ? { kept: true } : {}),
+        ...(offers.length ? { photoOffers: offers } : {}),
         ...(runs.length ? { runs } : {}),
         ...(problems.length ? { problems } : {}),
         ...(aside ? { asideCount: aside } : {}),
@@ -190,7 +218,7 @@ export function keptReviewNotes(info: ShopDraft | null, attention: string | null
 }
 import { invProductToPublic, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { barcodeTagPaise, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
-import { readPhotoChecklist, type PhotoChecklist } from "@/modules/ecommerce/lib/photoChecklist";
+import { readPhotoChecklist, type PhotoChecklist, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
 
 /** Admin shape — storefront fields + inventory + stock management. */
 export type ShopProductAdmin = ShopProductPublic & {

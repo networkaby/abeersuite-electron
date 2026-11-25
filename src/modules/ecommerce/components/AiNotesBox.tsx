@@ -3,21 +3,24 @@
 import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { cloudinaryThumb } from "@/shared/lib/cloudinaryImage";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { extractApiError } from "@/shared/lib/api";
-import { problemText, splitAttention, type ClosedProblem, type PrepProblem, type PrepRun, type StaffNote, type NextAct, type NextStep } from "@/modules/ecommerce/lib/productAdmin";
+import { openList, problemText, type ClosedProblem, type PrepProblem, type PrepRun, type StaffNote, type NextAct, type NextStep } from "@/modules/ecommerce/lib/productAdmin";
 
 /** One place for every AI note on a product (owner, 2026-11-12): the Attention reason,
  *  Claude's review notes (kept, dated, after publishing) and the latest copy run's notes. */
 export type AiNotesBoxProps = {
     attention?: { text: string; by?: string | null; at?: string | Date | null; parked: boolean } | null;
     review?: { notes: string[]; at?: string | null; kept?: boolean } | null;
-    copy?: { source: string; notes: string[]; flags: string[] } | null;
+    copy?: { notes: string[]; flags: string[] } | null;
     /** Product prep's runs and open problems (owner, 2026-11-20) — when there are any, the box shows only these. */
     prep?: {
         productId: number; runs: PrepRun[]; problems: PrepProblem[]; staffNote?: StaffNote | null; closed?: ClosedProblem[]; onChanged: () => void;
         /** The last line (owner, 2026-11-22): where to go from here; `onAct` makes the move when staff press it. */
         next?: NextStep | null; onAct?: (act: NextAct) => void; acting?: boolean;
+        /** Puts a photo an AI run removed back into the gallery. */
+        onPutBack?: (url: string) => void; gallery?: string[];
     } | null;
 };
 
@@ -97,9 +100,8 @@ function ManualNote({ productId, staffNote, onChanged }: NonNullable<AiNotesBoxP
  * fits: its old "Last run" lines join the history, its Attention lines the open
  * list; the old free-text notes are not shown.
  */
-function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]> & { oldRuns?: string[]; oldProblems?: PrepProblem[] }) {
-    const { productId, runs, onChanged, oldRuns = [] } = props;
-    const problems = props.problems.length ? props.problems : (props.oldProblems ?? []);
+function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]> & { oldRuns?: string[] }) {
+    const { productId, runs, problems, onChanged, oldRuns = [] } = props;
     const [busy, setBusy] = useState<string | null>(null);
     const tick = async (p: PrepProblem, aside: boolean) => {
         setBusy(p.text);
@@ -121,8 +123,10 @@ function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]> & { oldRuns?: str
     const recent = shown.map(runLine);
     for (const l of oldRuns) {
         const k = /part (\S+)/.exec(l)?.[1] ?? l;
-        if (![...perPart.keys()].includes(k)) recent.push(l);
+        // "1+2+3" covers an old "part 3" line too.
+        if (![...perPart.keys()].some((p) => p.split("+").includes(k))) recent.push(l);
     }
+    const removed = [...new Map(runs.flatMap((r) => r.removed ?? []).map((x) => [x.url, x])).values()].filter((x) => !props.gallery?.includes(x.url));
     // History = the closed problems (owner, 2026-11-20): what left the open list, who closed it, when.
     const closed = [...(props.closed ?? [])].reverse();
     return (
@@ -148,7 +152,7 @@ function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]> & { oldRuns?: str
                                         <span className={`mr-1.5 inline-block size-2 rounded-full ${dot}`} />
                                         {i + 1}. {problemText(p.text)}
                                         <span className="ml-1 text-muted-foreground">
-                                            · {staff ? (p.by ?? "staff") : `AI part ${(p.parts ?? [p.part]).join(", ")}`}
+                                            · {staff ? (p.by ?? "staff") : !(p.parts ?? [p.part]).some(Boolean) ? "AI / Attention" : `AI part ${(p.parts ?? [p.part]).join(", ")}`}
                                             {aside && ` · temporary pass${p.asideBy ? ` (${p.asideBy}, ${formatDate(p.asideAt!)})` : ""} — not blocking, stays until fixed`}
                                         </span>
                                     </span>
@@ -163,6 +167,21 @@ function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]> & { oldRuns?: str
                         })}
                     </ol>
                 </div>
+            )}
+            {removed.length > 0 && props.onPutBack && (
+                <details>
+                    <summary className="cursor-pointer text-muted-foreground">Photos removed by AI ({removed.length})</summary>
+                    <ul className="mt-1 space-y-1">
+                        {removed.map((x) => (
+                            <li key={x.url} className="flex items-center gap-2">
+                                {/* eslint-disable-next-line @next/next/no-img-element -- small Cloudinary thumb */}
+                                <img src={cloudinaryThumb(x.url, 96, "square")} alt="" className="size-10 shrink-0 rounded border border-border object-cover" />
+                                <span className="flex-1 text-muted-foreground">{x.why}</span>
+                                <button type="button" onClick={() => props.onPutBack!(x.url)} className="h-7 shrink-0 rounded border border-border px-2">Put back</button>
+                            </li>
+                        ))}
+                    </ul>
+                </details>
             )}
             <ManualNote {...props} />
             {closed.length > 0 && (
@@ -193,93 +212,10 @@ function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]> & { oldRuns?: str
     );
 }
 
-const when = (at?: string | Date | null) => (at ? ` · ${formatDate(at)}` : "");
-
-/** Product prep tags each note with its part (owner, 2026-11-19); shown grouped, Part 1 → 5. */
-const PART_TITLES: Record<number, string> = {
-    1: "Part 1 · Clean seed", 2: "Part 2 · Search", 3: "Part 3 · Copy written", 4: "Part 4 · Check", 5: "Part 5 · Photos",
-};
-const TAG = /^Part (\d) · /;
-function grouped(lines: string[]) {
-    const lastRun = lines.find((n) => n.startsWith("Last run: "));
-    const groups = new Map<number, string[]>();
-    for (const n of lines) {
-        // The old "Part 3 done" signs say nothing the headings do not.
-        if (n === lastRun || /^Part \d done$/.test(n)) continue;
-        const m = TAG.exec(n);
-        const key = m ? Number(m[1]) : 0;
-        groups.set(key, [...(groups.get(key) ?? []), m ? n.slice(m[0].length) : n]);
-    }
-    return { lastRun, groups: [...groups.entries()].sort(([a], [b]) => a - b) };
-}
-
-function NoteList({ lines, hideRun }: { lines: string[]; hideRun?: boolean }) {
-    const { lastRun, groups } = grouped(lines);
-    const titled = groups.some(([k]) => k > 0);
-    return (
-        <div className="space-y-1">
-            {lastRun && !hideRun && <p className="opacity-80">{lastRun}</p>}
-            {groups.map(([k, items]) => (
-                <div key={k}>
-                    {titled && <p className="mt-1 text-[11px] font-medium uppercase opacity-70">{PART_TITLES[k] ?? "Earlier"}</p>}
-                    <ul className="ml-4 list-disc space-y-0.5">{items.map((n) => <li key={n}>{n}</li>)}</ul>
-                </div>
-            ))}
-        </div>
-    );
-}
-
 export function AiNotesBox({ attention, review, copy, prep }: AiNotesBoxProps) {
-    // A saved product always gets the one format (owner, 2026-11-20: "keep what fits, remove others").
-    if (prep) {
-        const lines = [...(attention?.text.split("\n") ?? []), ...(review?.notes ?? []), ...(copy?.notes ?? [])].map((l) => l.trim());
-        const oldRuns = [...new Set(lines.filter((l) => l.startsWith("Last run: ")).map(oldRunLine))];
-        const oldProblems: PrepProblem[] = attention?.parked
-            ? splitAttention(attention.text).problems.map((x) => ({ text: x.text, level: x.level === "stop" ? "stop" : "fix", part: 0, at: "" }))
-            : [];
-        return <PrepNotes {...prep} oldRuns={oldRuns} oldProblems={oldProblems} />;
-    }
-    const hasCopy = !!copy && (copy.notes.length > 0 || copy.flags.length > 0);
-    // The Attention reason carries its own Last run line — shown once.
-    const runShown = !!attention?.text.includes("Last run: ");
-    if (!attention && !review?.notes.length && !hasCopy) return null;
-    return (
-        <div className="space-y-2 rounded-md border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200">
-            <p className="text-sm font-medium">AI notes</p>
-            {attention && (
-                <div className="rounded border border-orange-200 bg-orange-50 p-2 text-orange-900 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-200">
-                    <p className="font-medium">
-                        {attention.parked ? "Parked in Attention" : "Was parked in Attention"}
-                        {attention.by ? ` by ${attention.by}` : ""}{when(attention.at)}
-                    </p>
-                    <p className="mt-1 whitespace-pre-line">{attention.text}</p>
-                    <p className="mt-1 opacity-80">
-                        {attention.parked
-                            ? "Check it, then Save as draft to carry on working, or Save as ready if it is done."
-                            : "Shown until Save as ready."}
-                    </p>
-                </div>
-            )}
-            {review && review.notes.length > 0 && (
-                <div>
-                    <p className="font-medium">{review.kept ? "Last AI review" : "Claude review"}{when(review.at)}</p>
-                    <NoteList lines={review.notes} hideRun={runShown} />
-                    <p className="mt-1 opacity-80">
-                        {review.kept
-                            ? "Kept after publishing — improve when you can. The next AI review replaces them."
-                            : "Fix what applies, then Save as ready — or Discard draft to drop them."}
-                    </p>
-                </div>
-            )}
-            {hasCopy && (
-                <div>
-                    <p className="font-medium">{copy!.source}</p>
-                    {copy!.flags.length > 0 && (
-                        <ul className="ml-4 list-disc text-orange-800 dark:text-orange-300">{copy!.flags.map((f) => <li key={f}>{f}</li>)}</ul>
-                    )}
-                    <NoteList lines={copy!.notes} hideRun={runShown} />
-                </div>
-            )}
-        </div>
-    );
+    // An unsaved product has no AI run yet.
+    if (!prep) return null;
+    const lines = [...(attention?.text.split("\n") ?? []), ...(review?.notes ?? []), ...(copy?.notes ?? [])].map((l) => l.trim());
+    const oldRuns = [...new Set(lines.filter((l) => l.startsWith("Last run: ")).map(oldRunLine))];
+    return <PrepNotes {...prep} oldRuns={oldRuns} problems={openList(prep.problems, attention?.parked ? attention.text : null, copy?.flags ?? [], prep.closed)} />;
 }
