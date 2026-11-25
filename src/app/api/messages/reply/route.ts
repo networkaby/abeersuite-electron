@@ -5,7 +5,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { phoneMatchKey } from "@/shared/lib/format";
 import { ReplyRefusedError, sendReply } from "@/modules/message/lib/customerMessages";
-import { MetaApiError } from "@/shared/lib/whatsapp/metaTemplates";
+import { MetaApiError } from "@/shared/lib/whatsapp/waSendOutcome";
 
 // POST /api/messages/reply — { phone, text, media? }: a staff reply on WhatsApp.
 // `media` is a file the browser/client already uploaded directly to R2 via /api/messages/upload-url (presigned PUT);

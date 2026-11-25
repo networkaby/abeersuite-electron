@@ -14,6 +14,7 @@ import { extractApiError } from "@/shared/lib/api";
 import { fmt, formatAmount } from "@/shared/lib/format/moneyInr";
 import { formatDateCompact } from "@/shared/lib/format/formatDate";
 import { fillBody } from "@/shared/lib/whatsapp/billTemplates";
+import { WA_UNCLEAR_TEXT } from "@/shared/lib/whatsapp/waSendOutcome";
 import { TONE_LABEL, waStatusText, type ReminderSendInfo, type ReminderTone } from "@/shared/lib/whatsapp/dueReminderTypes";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 
@@ -81,7 +82,8 @@ export function SendReminderDialog({
             );
             const r = data.results[0];
             if (r?.status === "sent") {
-                toast.success(`Reminder sent to ${party.name} — WhatsApp: ${waStatusText(r.waStatus ?? "")}`);
+                if (r.waStatus === "unclear") toast.warning(`${party.name}: ${WA_UNCLEAR_TEXT}`, { duration: 8000 });
+                else toast.success(`Reminder sent to ${party.name} — WhatsApp: ${waStatusText(r.waStatus ?? "")}`);
                 onSent();
                 onClose();
             } else {

@@ -4,6 +4,7 @@ import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { spawnChild } from "./spawnChild";
 import { isKnownActionType } from "./actionTypes";
 import { after } from "next/server";
+import { waProblem } from "@/shared/lib/whatsapp/waSendOutcome";
 import { notifyRepair, notifyTicketTemplate, type NotifyResult } from "@/shared/lib/whatsapp/notifyBill";
 import { notifyTicketEmail } from "@/shared/lib/email/notifyEmail";
 import { isWaKind, waKindLabel } from "@/shared/lib/whatsapp/billTemplates";
@@ -114,9 +115,11 @@ const RUN_HANDLERS: Record<string, RunHandler> = {
     },
 };
 
-async function logNotify(ctx: ActionRunContext, what: string, r: { status: string; reason?: string }) {
+async function logNotify(ctx: ActionRunContext, what: string, r: NotifyResult) {
+    const problem = waProblem(r.wa);
     const note =
-        r.status === "sent" ? `📲 Customer told: ${what} (app + WhatsApp)`
+        problem ? `📲 ${what}: ${problem}`
+            : r.status === "sent" ? `📲 Customer told: ${what} (app + WhatsApp)`
             : r.status === "already" ? `📲 ${what} message was already sent`
                 : `📲 ${what} message not sent — ${r.reason ?? "skipped"}`;
     await prisma.ticketLog.create({ data: { ticketId: ctx.ticketId, status: ctx.status, note, author: ctx.author } });
@@ -132,8 +135,10 @@ async function templateName(channel: "wa" | "email", kind: string): Promise<stri
 
 async function logTemplate(ctx: ActionRunContext, channel: string, name: string, r: NotifyResult) {
     const icon = channel === "Email" ? "📧" : "📲";
+    const problem = waProblem(r.wa);
     const note =
-        r.status === "sent" ? `${icon} ${channel} sent: "${name}"`
+        problem ? `${icon} ${channel} "${name}": ${problem}`
+            : r.status === "sent" ? `${icon} ${channel} sent: "${name}"`
             : r.status === "already" ? `${icon} ${channel} "${name}" was already sent`
                 : `${icon} ${channel} "${name}" not sent — ${r.reason ?? "skipped"}`;
     await prisma.ticketLog.create({ data: { ticketId: ctx.ticketId, status: ctx.status, note, author: ctx.author } });

@@ -31,6 +31,7 @@ import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { isAutoSend, getWaTemplateDraft } from "@/shared/lib/whatsapp/waTemplateStore";
 import { fillBody } from "@/shared/lib/whatsapp/billTemplates";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
+import { isWaRefused } from "@/shared/lib/whatsapp/waSendOutcome";
 import { isSupplierAccount, notifyDealCreated, notifyHelpCreated } from "@/shared/lib/whatsapp/notifyBill";
 import { otpWaNumber } from "@/shared/lib/whatsapp/waNumbers";
 
@@ -469,6 +470,8 @@ async function sendAutoText(args: {
             try {
                 extId = await sendInteractiveMenu(args.phone, args.menu.body, args.menu.options, fromNumberId);
             } catch (e) {
+                // Unclear: the customer may have the menu — no second one.
+                if (!isWaRefused(e)) throw e;
                 console.error("[messages] tap menu refused, sending typed menu", e);
             }
         }

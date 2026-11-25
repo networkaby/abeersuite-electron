@@ -26,6 +26,7 @@ import { notifyEmail, notifyRepairEmail } from "@/shared/lib/email/notifyEmail";
 
 export { autoKindForVoucherType };
 import { isBillSendConfigured, sendBillTemplate, sendTextMessage } from "./metaTemplates";
+import { sendWithFallback, type WaOutcome } from "./waSendOutcome";
 import { billsWaNumber, listWaNumbers } from "./waNumbers";
 
 /**
@@ -52,7 +53,10 @@ import { billsWaNumber, listWaNumbers } from "./waNumbers";
  * a REFUND to anyone outside Sundry Debtors, and a document already announced
  * under that kind.
  */
-export type NotifyResult = { status: "sent" | "already" | "skipped"; reason?: string };
+
+/** `wa` = the WhatsApp's own outcome (BillNotification.waStatus) when the
+ *  document was processed: "sent" here means announced, not that WhatsApp took it. */
+export type NotifyResult = { status: "sent" | "already" | "skipped"; reason?: string; wa?: string };
 
 type SendMode = { manual?: boolean };
 
@@ -454,7 +458,11 @@ async function deliver(d: {
             data: { kind: d.claimKind ?? d.kind, refId: d.refId, personId: d.personId, pushStatus: "pending", waStatus: "pending" },
         });
     } catch {
-        return { status: "already" };
+        // A claim left "pending" by a crash included: never resent by itself.
+        const prev = await prisma.billNotification
+            .findUnique({ where: { kind_refId: { kind: d.claimKind ?? d.kind, refId: d.refId } }, select: { waStatus: true } })
+            .catch(() => null);
+        return { status: "already", wa: prev?.waStatus };
     }
 
     const { mobile, push, wa } = await sendPushAndWhatsApp(d);
@@ -470,10 +478,8 @@ async function deliver(d: {
             waError: wa.error ?? null,
         },
     });
-    return { status: "sent" };
+    return { status: "sent", wa: wa.status };
 }
-
-export type WaOutcome = { status: string; messageId?: string; error?: string };
 
 /** App notification + WhatsApp side by side, and the WhatsApp copied into the
  *  customer's Messages thread. No claim row — `deliver` above claims one per
@@ -520,12 +526,7 @@ async function sendWhatsApp(kind: WaAnyKind, linkCode: string, mobile: string | 
             const draft = await getWaTemplateDraft(kind);
             const text = fillBody(draft.body, values);
             if (text && (await isBillSendConfigured())) {
-                try {
-                    const extId = await sendTextMessage(mobile, text);
-                    if (extId) return { status: "sent", messageId: extId };
-                } catch {
-                    // Falls through to disabled
-                }
+                return sendWithFallback(() => sendTextMessage(mobile, text));
             }
         }
         return { status: "disabled" };
@@ -533,24 +534,14 @@ async function sendWhatsApp(kind: WaAnyKind, linkCode: string, mobile: string | 
     if (!(await isBillSendConfigured())) return { status: "not-configured" };
     const send = (fromNumberId?: string) =>
         sendBillTemplate({ mobile10: mobile, name: tpl.name, approved: tpl.draft, values, linkCode, headerImage, fromNumberId });
-    let error: string;
-    try {
-        return { status: "sent", messageId: await send() };
-    } catch (e) {
-        error = (e instanceof Error ? e.message : String(e)).slice(0, 500);
-    }
-    // The bills number refused it → try each other number once (a number on
-    // the same WhatsApp account shares the template).
-    const bills = await billsWaNumber();
-    for (const n of await listWaNumbers()) {
-        if (n.id === bills?.id || n.wabaId !== bills?.wabaId) continue;
-        try {
-            return { status: "sent", messageId: await send(n.phoneNumberId) };
-        } catch {
-            // next number
-        }
-    }
-    return { status: "failed", error };
+    // Only a proven refusal tries the other numbers on the same WhatsApp account
+    // (they share the template). Unclear stops — the customer may have it.
+    return sendWithFallback(() => send(), async () => {
+        const bills = await billsWaNumber();
+        return (await listWaNumbers())
+            .filter((n) => n.id !== bills?.id && n.wabaId === bills?.wabaId)
+            .map((n) => () => send(n.phoneNumberId));
+    });
 }
 
 // ── Workflow: "Send WhatsApp / email template" on a worker ───────────────────

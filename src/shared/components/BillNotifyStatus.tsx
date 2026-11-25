@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { WA_UNCLEAR_TEXT } from "@/shared/lib/whatsapp/waSendOutcome";
+import { WA_PENDING_STALE_MS } from "@/shared/lib/constants/whatsapp";
 import { BellRing, MessageCircle } from "lucide-react";
 
 type Notification = {
@@ -11,6 +13,7 @@ type Notification = {
     waStatus: string;
     waError: string | null;
     mobile: string | null;
+    createdAt: string;
 };
 
 const GOOD = "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200";
@@ -30,7 +33,11 @@ function appChip(n: Notification): [string, string, string] {
 function waChip(n: Notification): [string, string, string] {
     switch (n.waStatus) {
         case "sent": return ["WhatsApp: sent", GOOD, n.mobile ? `To ${n.mobile}` : ""];
-        case "pending": return ["WhatsApp: sending", WAIT, ""];
+        // Long "pending" = the server stopped midway; it is never resent by itself.
+        case "pending": return Date.now() - new Date(n.createdAt).getTime() > WA_PENDING_STALE_MS
+            ? ["WhatsApp: not confirmed", WAIT, WA_UNCLEAR_TEXT]
+            : ["WhatsApp: sending", WAIT, ""];
+        case "unclear": return ["WhatsApp: not confirmed", WAIT, n.waError ?? WA_UNCLEAR_TEXT];
         case "failed": return ["WhatsApp: failed", BAD, n.waError ?? ""];
         case "no-mobile": return ["WhatsApp: no mobile", OFF, "No 10-digit mobile on this party"];
         case "disabled": return ["WhatsApp: off", OFF, "Template switched off or not approved yet"];

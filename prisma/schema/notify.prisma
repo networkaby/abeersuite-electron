@@ -112,7 +112,7 @@ model BillNotification {
   /// sent | no-subscription | failed | not-configured | no-person
   pushStatus    String
   pushMessageId String?
-  /// sent | failed | not-configured | disabled | no-mobile
+  /// sent | failed (Meta refused) | unclear (not confirmed, never resent) | not-configured | disabled | no-mobile
   waStatus      String
   waMessageId   String?
   waError       String?

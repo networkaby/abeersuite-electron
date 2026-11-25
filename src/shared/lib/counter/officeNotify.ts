@@ -69,7 +69,7 @@ async function tryOnce(job: OfficeNotifyJob, userId: string): Promise<NotifyResu
     const key = await counterAuthorization();
     if (!key) return skipped("counter");
     let res: Response;
-    let body: { status?: NotifyResult["status"]; reason?: string; error?: string; code?: string } | null;
+    let body: { status?: NotifyResult["status"]; reason?: string; wa?: string; error?: string; code?: string } | null;
     try {
         res = await fetch(new URL("/api/counter/notify", WRITE_API_URL!), {
             method: "POST",
@@ -84,7 +84,7 @@ async function tryOnce(job: OfficeNotifyJob, userId: string): Promise<NotifyResu
         console.warn(`[office-notify] ${job.what} ${job.id}:`, e instanceof Error ? e.message : e);
         return null;
     }
-    if (res.ok && body?.status) return { status: body.status, reason: body.reason };
+    if (res.ok && body?.status) return { status: body.status, reason: body.reason, wa: body.wa };
     if (res.status >= 500 || res.status === 429) return null;
     if (body?.code === COUNTER_KEY_REFUSED) forgetCounterKey();
     console.error(`[office-notify] ${job.what} ${job.id}: office answered ${res.status} ${body?.error ?? ""}`);

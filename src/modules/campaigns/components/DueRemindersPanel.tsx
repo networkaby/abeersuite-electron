@@ -406,7 +406,7 @@ export function DueRemindersPanel() {
                                 <td className="px-2 py-1.5 text-xs">{MODE_LABEL[l.mode]}</td>
                                 <td className="px-2 py-1.5 text-xs">{ACTION_LABEL[l.action]}</td>
                                 <td
-                                    className={`px-2 py-1.5 text-xs font-medium ${l.waStatus === "failed" ? "text-red-600" : l.waStatus === "sent" ? "text-emerald-600" : "text-muted-foreground"}`}
+                                    className={`px-2 py-1.5 text-xs font-medium ${l.waStatus === "failed" ? "text-red-600" : l.waStatus === "unclear" ? "text-amber-600" : l.waStatus === "sent" ? "text-emerald-600" : "text-muted-foreground"}`}
                                     title={l.waError ?? undefined}
                                 >
                                     {waStatusText(l.waStatus)}

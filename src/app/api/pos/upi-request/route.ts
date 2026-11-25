@@ -22,7 +22,7 @@ const schema = z.object({
 // Sends the approved PAY_REQUEST template from the shop's number; its Pay now
 // button opens /portal/b/p<signed> → the customer's UPI app. The answer's
 // `status` is "sent", or why not (no-mobile / disabled / not-configured /
-// failed) — the counter shows the reason; there is no WhatsApp Web fallback.
+// failed / unclear) — the counter shows the reason; there is no WhatsApp Web fallback.
 export async function POST(req: Request) {
     const { data, error } = await validateRequest(req, schema);
     if (error) return error;
@@ -55,6 +55,6 @@ export async function POST(req: Request) {
         headerImage: `${WA_BILL_LINK_BASE}${linkCode}/qr`,
         summary: `UPI payment request · ${withCurrency(amountText)}`,
     });
-    if (wa.status === "failed") console.error("[upi-request] WhatsApp send failed", wa.error);
+    if (wa.status === "failed" || wa.status === "unclear") console.error("[upi-request] WhatsApp send failed", wa.error);
     return NextResponse.json({ status: wa.status, error: wa.error ?? null });
 }

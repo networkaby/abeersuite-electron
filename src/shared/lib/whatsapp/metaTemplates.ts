@@ -15,6 +15,7 @@ import {
     type WaTemplateDraft,
     type WaAnyKind,
 } from "./billTemplates";
+import { MetaApiError, postWaMessage } from "./waSendOutcome";
 
 /**
  * Meta Cloud API calls for the bill / receipt templates: submit a template for
@@ -50,16 +51,13 @@ export async function isBillSendConfigured(): Promise<boolean> {
 
 type GraphError = { error?: { message?: string; error_user_msg?: string } };
 
-/** Meta refused a Graph call; `message` is Meta's own wording, safe to show staff. */
-export class MetaApiError extends Error {
-    override name = "MetaApiError";
-}
+const NO_TOKEN = "No WhatsApp token — App Settings → WhatsApp → Access token, or the number's own token.";
 
 /** One Graph call; throws with Meta's own wording on failure. `token` = the
  *  number's / account's token (waNumbers.ts); default the main token. */
 async function graph<T>(path: string, init?: { method?: string; body?: unknown; token?: string }): Promise<T> {
     const tok = init?.token ?? (await mainWaToken());
-    if (!tok) throw new MetaApiError("No WhatsApp token — App Settings → WhatsApp → Access token, or the number's own token.");
+    if (!tok) throw new MetaApiError(NO_TOKEN);
     const res = await fetch(`${GRAPH}/${path}`, {
         method: init?.method ?? "GET",
         headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
@@ -81,11 +79,14 @@ async function graph<T>(path: string, init?: { method?: string; body?: unknown; 
 }
 
 /** Send one message as a number — the given one, else the bills number — with
- *  that number's own token (or the main one). */
-async function sendFrom<T>(fromNumberId: string | null | undefined, body: unknown): Promise<T> {
+ *  that number's own token (or the main one). Returns Meta's message id; a
+ *  failure says whether Meta refused it or the result is unclear. */
+async function sendFrom(fromNumberId: string | null | undefined, body: unknown): Promise<string> {
     const from = fromNumberId || (await conversationNumberId());
-    if (!from) throw new MetaApiError("No WhatsApp number is switched to \"Use for bills\" — App Settings → WhatsApp numbers.");
-    return graph<T>(`${from}/messages`, { method: "POST", body, token: await waTokenForNumber(from) });
+    if (!from) throw new MetaApiError("No WhatsApp number is switched to \"Use for bills\" — App Settings → WhatsApp numbers.", "refused");
+    const token = (await waTokenForNumber(from)) ?? (await mainWaToken());
+    if (!token) throw new MetaApiError(NO_TOKEN, "refused");
+    return postWaMessage(`${GRAPH}/${from}/messages`, token, body);
 }
 
 /** The shop's Meta app (loginapi) — Settings → App Settings, else .env; read when
@@ -210,16 +211,13 @@ export async function sendBillTemplate(args: {
     if (args.approved.viewButton?.trim()) {
         comps.push({ type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: args.linkCode }] });
     }
-    const r = await sendFrom<{ messages?: { id?: string }[] }>(args.fromNumberId, {
+    return sendFrom(args.fromNumberId, {
         messaging_product: "whatsapp",
         recipient_type: "individual",
         to: `+91${args.mobile10}`,
         type: "template",
         template: { name: args.name, language: { code: LANG }, components: comps },
     });
-    const id = r.messages?.[0]?.id;
-    if (!id) throw new Error("Meta accepted the call but returned no message id");
-    return id;
 }
 
 /**
@@ -228,16 +226,13 @@ export async function sendBillTemplate(args: {
  * (customerMessages.ts `replyWindowOpen`). Returns Meta's message id.
  */
 export async function sendTextMessage(mobile10: string, text: string, fromNumberId?: string | null): Promise<string> {
-    const r = await sendFrom<{ messages?: { id?: string }[] }>(fromNumberId, {
+    return sendFrom(fromNumberId, {
         messaging_product: "whatsapp",
         recipient_type: "individual",
         to: `+91${mobile10}`,
         type: "text",
         text: { body: text, preview_url: false },
     });
-    const id = r.messages?.[0]?.id;
-    if (!id) throw new Error("Meta accepted the call but returned no message id");
-    return id;
 }
 
 export type WaMenuOption = { id: string; title: string; description?: string };
@@ -282,10 +277,7 @@ export async function sendInteractiveMenu(
                     }],
                 },
             };
-    const r = await sendFrom<{ messages?: { id?: string }[] }>(fromNumberId, { messaging_product: "whatsapp", recipient_type: "individual", to: `+91${mobile10}`, type: "interactive", interactive });
-    const id = r.messages?.[0]?.id;
-    if (!id) throw new Error("Meta accepted the call but returned no message id");
-    return id;
+    return sendFrom(fromNumberId, { messaging_product: "whatsapp", recipient_type: "individual", to: `+91${mobile10}`, type: "interactive", interactive });
 }
 
 /**
@@ -328,10 +320,7 @@ export async function sendMediaMessage(args: {
     const media: Record<string, string> = { link: args.link };
     if (args.caption && type !== "audio") media.caption = args.caption;
     if (type === "document" && args.fileName) media.filename = args.fileName;
-    const r = await sendFrom<{ messages?: { id?: string }[] }>(args.fromNumberId, { messaging_product: "whatsapp", recipient_type: "individual", to: `+91${args.mobile10}`, type, [type]: media });
-    const id = r.messages?.[0]?.id;
-    if (!id) throw new Error("Meta accepted the call but returned no message id");
-    return id;
+    return sendFrom(args.fromNumberId, { messaging_product: "whatsapp", recipient_type: "individual", to: `+91${args.mobile10}`, type, [type]: media });
 }
 
 /** A customer's attachment: Meta's media id → its bytes and type. `numberId` =

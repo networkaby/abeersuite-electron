@@ -61,5 +61,5 @@ export async function POST(req: Request) {
     if (r.status === "skipped") {
         return NextResponse.json({ error: WHY[r.reason ?? ""] ?? "Could not send." }, { status: 422 });
     }
-    return NextResponse.json({ result: r.status });
+    return NextResponse.json({ result: r.status, wa: r.wa ?? null });
 }

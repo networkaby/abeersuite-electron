@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { useApiResource } from "@/shared/hooks/useApiResource";
 
 type Channel = "WHATSAPP" | "EMAIL" | "NOTIFICATION" | "SOCIAL";
-type Item = { id: string; at: string; channel: Channel; state: "sent" | "due" | "failed"; title: string; detail: string; href: string | null };
+type Item = { id: string; at: string; channel: Channel; state: "sent" | "due" | "failed" | "unclear"; title: string; detail: string; href: string | null };
 type Data = { from: string; days: number; items: Item[] };
 
 const DAY_MS = 86_400_000;
@@ -30,6 +30,7 @@ const CHANNEL: Record<Channel, { icon: LucideIcon; label: string; tone: string }
 const STATE: Record<Item["state"], { label: string; cls: string }> = {
     sent: { label: "Sent", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300" },
     due: { label: "Scheduled", cls: "bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300" },
+    unclear: { label: "Not confirmed", cls: "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300" },
     failed: { label: "Failed", cls: "bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-300" },
 };
 

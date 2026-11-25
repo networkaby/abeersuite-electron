@@ -21,7 +21,7 @@ export type TimelineItem = {
     id: string;
     at: string;
     channel: "WHATSAPP" | "EMAIL" | "NOTIFICATION" | "SOCIAL";
-    state: "sent" | "due" | "failed";
+    state: "sent" | "due" | "failed" | "unclear";
     title: string;
     detail: string;
     href: string | null;
@@ -70,7 +70,7 @@ export async function GET(req: Request) {
         const items: TimelineItem[] = [
             ...reminders.map((l) => ({
                 id: `r${l.id}`, at: l.at, channel: "WHATSAPP" as const,
-                state: l.waStatus === "failed" ? ("failed" as const) : ("sent" as const),
+                state: l.waStatus === "failed" ? ("failed" as const) : l.waStatus === "unclear" ? ("unclear" as const) : ("sent" as const),
                 title: `Due reminder · ${l.party}`, detail: `₹${l.amount.toLocaleString("en-IN")} · ${l.mode}`, href: null,
             })),
             ...emails.map((e) => ({

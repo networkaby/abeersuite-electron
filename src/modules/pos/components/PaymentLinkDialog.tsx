@@ -29,6 +29,7 @@ import {
     paymentLinkMessage,
     type PaymentContext,
 } from "@/modules/pos/lib/paymentLink";
+import { WA_UNCLEAR_TEXT } from "@/shared/lib/whatsapp/waSendOutcome";
 import { formatInr } from "@/shared/lib/format";
 
 // Load a data-URL into an <img> so it can be drawn onto a canvas.
@@ -83,7 +84,7 @@ function waNumber(raw: string | null | undefined): string {
     return d;
 }
 
-// /api/pos/upi-request statuses → plain words. "failed" carries Meta's own error.
+// /api/pos/upi-request statuses → plain words. "unclear" = check first; "failed" carries Meta's own error.
 const UPI_SEND_REASON: Record<string, string> = {
     "no-mobile": "the mobile number is not a valid Indian number",
     disabled: "the UPI payment request template is off or not approved (Settings → WhatsApp Templates)",
@@ -247,9 +248,11 @@ export function PaymentLinkDialog({
                 toast.success(`Payment request sent to ${partyName || "the customer"} on WhatsApp`);
                 return null;
             }
+            if (j?.status === "unclear") return WA_UNCLEAR_TEXT;
             return UPI_SEND_REASON[j?.status ?? ""] ?? j?.error ?? `server answered ${res.status}`;
         } catch {
-            return "no connection to the server";
+            // The request may have reached the server and gone out.
+            return WA_UNCLEAR_TEXT;
         } finally {
             setSharing(false);
         }
@@ -261,7 +264,7 @@ export function PaymentLinkDialog({
         if (!waNum) return sendOnWhatsApp();
         const reason = await sendViaApi();
         if (reason === null) onOpenChange(false);
-        else toast.error(`UPI request not sent: ${reason}`, { duration: 8000 });
+        else toast.error(reason === WA_UNCLEAR_TEXT ? reason : `UPI request not sent: ${reason}`, { duration: 8000 });
     }
 
     // Opened with a phone, a UPI ID and an amount → send at once, no box.
@@ -276,7 +279,7 @@ export function PaymentLinkDialog({
         autoSent.current = true;
         void (async () => {
             const reason = await sendViaApi();
-            if (reason !== null) toast.error(`UPI request not sent: ${reason}`, { duration: 8000 });
+            if (reason !== null) toast.error(reason === WA_UNCLEAR_TEXT ? reason : `UPI request not sent: ${reason}`, { duration: 8000 });
             onOpenChange(false);
         })();
         // eslint-disable-next-line react-hooks/exhaustive-deps

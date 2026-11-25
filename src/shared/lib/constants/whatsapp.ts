@@ -33,3 +33,9 @@ export const WA_CONVERSATION_TIMEOUT_MS = 2 * 60 * 60 * 1000;
  *  conversation and starts a new one. */
 export const WA_CONVERSATION_NEW_COMMANDS = ["/new", "#new", "/start", "new"] as const;
 
+/** How long one message call to Meta may take. After it the result is "unclear"
+ *  and nothing is sent again by itself (waSendOutcome.ts). */
+export const WA_SEND_TIMEOUT_MS = 20_000;
+/** A bill message still "pending" after this shows as not confirmed. */
+export const WA_PENDING_STALE_MS = 5 * 60_000;
+

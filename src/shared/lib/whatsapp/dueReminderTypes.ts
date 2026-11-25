@@ -103,6 +103,7 @@ export function waStatusText(s: string): string {
         case "disabled": return "Template not approved / off";
         case "not-configured": return "WhatsApp not set up";
         case "failed": return "Failed";
+        case "unclear": return "Not confirmed — check before resending";
         case "call-list": return "On call list";
         default: return s;
     }

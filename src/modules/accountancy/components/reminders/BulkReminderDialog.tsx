@@ -18,7 +18,7 @@ import { fmt } from "@/shared/lib/format/moneyInr";
 import { EST_COST_PER_MESSAGE, SEND_BATCH, type ReminderSendInfo, type ReminderTone } from "@/shared/lib/whatsapp/dueReminderTypes";
 import { TemplateStateNote, type ReminderParty } from "./SendReminderDialog";
 
-type Progress = { sent: number; skipped: number; failed: number; total: number; done: boolean; noWa: number };
+type Progress = { sent: number; skipped: number; failed: number; unclear: number; total: number; done: boolean; noWa: number };
 
 export function BulkReminderDialog({
     open, parties, info, onClose, onSent,
@@ -61,7 +61,7 @@ export function BulkReminderDialog({
     const start = async () => {
         stop.current = false;
         const ids = picked.map((p) => p.accountId);
-        const p: Progress = { sent: 0, skipped: 0, failed: 0, noWa: 0, total: ids.length, done: false };
+        const p: Progress = { sent: 0, skipped: 0, failed: 0, unclear: 0, noWa: 0, total: ids.length, done: false };
         setProgress({ ...p });
         for (let i = 0; i < ids.length && !stop.current; i += SEND_BATCH) {
             try {
@@ -72,6 +72,7 @@ export function BulkReminderDialog({
                 for (const r of data.results) {
                     if (r.status !== "sent") p.skipped++;
                     else if (r.waStatus === "failed") p.failed++;
+                    else if (r.waStatus === "unclear") p.unclear++;
                     else { p.sent++; if (r.waStatus !== "sent") p.noWa++; }
                 }
             } catch (e) {
@@ -99,13 +100,14 @@ export function BulkReminderDialog({
                         <div className="h-3 overflow-hidden rounded-full bg-muted">
                             <div
                                 className="h-full bg-primary transition-all"
-                                style={{ width: `${progress.total ? ((progress.sent + progress.skipped + progress.failed) / progress.total) * 100 : 100}%` }}
+                                style={{ width: `${progress.total ? ((progress.sent + progress.skipped + progress.failed + progress.unclear) / progress.total) * 100 : 100}%` }}
                             />
                         </div>
                         <p className="text-sm">
                             Sent <b>{progress.sent}</b> / {progress.total}
                             {progress.skipped > 0 && <span className="text-muted-foreground"> · {progress.skipped} skipped</span>}
                             {progress.failed > 0 && <span className="text-red-600"> · {progress.failed} failed</span>}
+                            {progress.unclear > 0 && <span className="text-amber-600"> · {progress.unclear} not confirmed (check before resending)</span>}
                             {progress.done && <span className="text-emerald-600"> · Finished</span>}
                         </p>
                         {progress.noWa > 0 && (

@@ -9,6 +9,7 @@ import { phoneMatchKey } from "@/shared/lib/format";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { ReplyRefusedError, replyWindowOpen, sendReply } from "@/modules/message/lib/customerMessages";
 import { loadTicketCustomer, notifyTicketTemplate } from "@/shared/lib/whatsapp/notifyBill";
+import { MetaApiError, waProblem } from "@/shared/lib/whatsapp/waSendOutcome";
 import { getApprovedWaTemplate } from "@/shared/lib/whatsapp/waTemplateStore";
 import { fillBody, isWaKind } from "@/shared/lib/whatsapp/billTemplates";
 
@@ -86,14 +87,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         if (!isWaKind(data.template)) return NextResponse.json({ error: "Unknown template" }, { status: 400 });
         const r = await notifyTicketTemplate(data.template, id, { manual: true });
         const name = data.label || data.template;
-        const note = r.status === "sent" ? `📲 WhatsApp template sent: "${name}"`
+        const problem = waProblem(r.wa);
+        const note = problem ? `📲 WhatsApp template "${name}": ${problem}`
+            : r.status === "sent" ? `📲 WhatsApp template sent: "${name}"`
             : r.status === "already" ? `📲 WhatsApp template "${name}" was already sent on this deal`
             : `📲 WhatsApp template "${name}" not sent — ${r.reason ?? "skipped"}`;
         await prisma.ticketLog.create({ data: { ticketId: id, note, author: await buildActorSnapshot(user.id) } });
         if (r.status === "skipped") return NextResponse.json({ error: `Not sent — ${r.reason ?? "skipped"}` }, { status: 409 });
+        if (problem) return NextResponse.json({ error: problem }, { status: 502 });
         return NextResponse.json(r, { status: r.status === "sent" ? 201 : 200 });
     } catch (e) {
         if (e instanceof ReplyRefusedError) return NextResponse.json({ error: e.message }, { status: 409 });
+        if (e instanceof MetaApiError) return NextResponse.json({ error: `WhatsApp: ${e.message}` }, { status: 502 });
         return handleApiError(e, "Failed to send WhatsApp");
     }
 }

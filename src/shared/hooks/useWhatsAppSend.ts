@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
+import { waProblem } from "@/shared/lib/whatsapp/waSendOutcome";
 import type { WaSendState, WaTemplateKind } from "@/shared/lib/whatsapp/billTemplates";
 
 /**
@@ -50,7 +51,12 @@ export type WaSendTarget =
 /** Send one document; toasts the outcome. Resolves true when it went (or had already gone). */
 export async function sendOnWhatsApp(target: WaSendTarget): Promise<boolean> {
     try {
-        const { data } = await axios.post<{ result: "sent" | "already" }>("/api/bill-notifications/send", target);
+        const { data } = await axios.post<{ result: "sent" | "already"; wa: string | null }>("/api/bill-notifications/send", target);
+        const problem = waProblem(data.wa);
+        if (problem) {
+            toast.warning(data.result === "already" ? `Tried earlier: ${problem}` : problem, { duration: 8000 });
+            return false;
+        }
         if (data.result === "already") toast.info("Already sent to this customer earlier");
         else toast.success("Sent to the customer's app and WhatsApp");
         return true;
