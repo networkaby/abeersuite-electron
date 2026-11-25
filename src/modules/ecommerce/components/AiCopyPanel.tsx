@@ -49,18 +49,14 @@ export function AiDraftNotes({ draft }: { draft: ProductCopy }) {
 
 /** Proof and review points of a draft, folded: nothing here blocks. Problems are in AI notes. */
 function DraftSources({ draft }: { draft: ProductCopy }) {
-    // A prep run's notes are its work record — only its shipping mismatches are for review.
-    const prep = draft.note.startsWith("Written by Claude (product prep");
-    const notes = (draft.notes ?? []).map((n) => n.replace(/^Part \d · /, ""))
-        .filter((n) => !n.startsWith("Last run: ") && !n.startsWith("ATTENTION — ") && (!prep || /^(Weight: ours|Parcel size on)/.test(n)));
+    const notes = (draft.notes ?? []).filter((n) => !n.startsWith("ATTENTION — "));
     const sourced = Object.entries(draft.specSources ?? {});
     const list = (items: string[]) => <ul className="ml-4 list-disc">{items.map((x) => <li key={x}>{x}</li>)}</ul>;
-    if (prep && !notes.length && !sourced.length && !draft.unsure.length && !draft.sources.length) return null;
     return (
         <details className="text-muted-foreground text-xs">
             <summary className="cursor-pointer">Sources{draft.unsure.length ? ` · ${draft.unsure.length} to check by hand` : ""}</summary>
             <div className="mt-1 space-y-1">
-                {!prep && <p>{draft.note}</p>}
+                <p>{draft.note}</p>
                 {sourced.length > 0 && <p>Spec sources: {sourced.map(([k, v]) => `${k} — ${v}`).join(" · ")}</p>}
                 {draft.unsure.length > 0 && <div><p className="font-medium">Check / add by hand:</p>{list(draft.unsure)}</div>}
                 {notes.length > 0 && <div><p className="font-medium">Notes:</p>{list(notes)}</div>}
@@ -291,13 +287,6 @@ export default function AiCopyPanel({
                 )}
                 <FlowButtons value={flow} onChange={setFlow} disabled={busy} />
             </div>
-            {flow === "verified" && (
-                <p className="text-muted-foreground text-xs">
-                    {photoAi
-                        ? `Photo AI on: one extra AI call${premium ? " (paid key allowed)" : " (free keys only — skipped if none is free)"} — photo checklist, remove advice, labelled suggestions.`
-                        : "Photo AI off: photos suggested without labels, no AI cost."}
-                </p>
-            )}
             {checkFlags && <DataFlags flags={checkFlags} title={parked ? "Not written — parked in Attention. Check the real unit:" : "Not written — fix this product's data first:"} />}
             {!draft && !photoRun && !!photoOffers?.length && <AiPhotoPicker suggestions={photoOffers} checklist={photoChecklist} onAdd={onAddPhotos} />}
             {photoRun && !draft && (
@@ -316,18 +305,21 @@ export default function AiCopyPanel({
                             onUse={() => onCollections?.([...(collectionIds ?? []), ...collectionsMissing.map((c) => c.id)])} />
                     )}
                     {brandDiffers && <DraftRow label="Brand" text={brandDiffers.name} onUse={() => onBrand?.(brandDiffers.id)} />}
-                    <DraftSources draft={draft} />
+                    {/* A draft made here only; what Claude wrote is already on the product, its problems in AI notes (owner, 2026-11-25). */}
+                    {!fromSaved && <DraftSources draft={draft} />}
                     {titleDiffers && (
                         <DraftRow label="Online name" text={draft.title} onUse={() => onSubheading(draft.title)} />
                     )}
                     {descDiffers && (
                         <DraftRow label="Description" text={draft.shopDescription} onUse={() => onDescription(draft.shopDescription)} />
                     )}
-                    <div className="flex items-center gap-2">
-                        <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => void run(true)}>
-                            Ask AI fresh (new charge)
-                        </Button>
-                    </div>
+                    {!fromSaved && (
+                        <div className="flex items-center gap-2">
+                            <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => void run(true)}>
+                                Ask AI fresh (new charge)
+                            </Button>
+                        </div>
+                    )}
                     {photoView?.photoArrange && (
                         <AiPhotoArrange arrange={photoView.photoArrange} gallery={imageUrls} onGallery={onGallery} />
                     )}
