@@ -58,11 +58,12 @@ Every **GET** (reading a product, a list, a photo) goes to `$PRODUCT_COPY_READ_U
 | **2 · Local** | Owner says "local" — testing on the dev server | `http://localhost:3000` | `http://localhost:3000` | `.env.local`, else `.env` |
 | **3 · Smart local** | Owner says "smart local" — reads from the counter app's own copy, writes to the dev server | `http://localhost:786` | `http://localhost:3000` | `.env.local`, else `.env` |
 | **4 · Office** | Owner says "office" on this computer — reads from the counter app's own copy (no Supabase egress), writes to the office site | `http://localhost:786` | `https://office.networkservice.in` | `.env.local`, else `.env` |
+| **5 · Counter** | Owner says "counter" on this computer — reads from the counter app's own copy, saves through the counter app (its window title must say **W:Live**) | `http://localhost:786` | `http://localhost:786` | `.env.local`, else `.env` |
 
 - **Key from `.env.local`, else `.env`**: the line `PRODUCT_COPY_API_KEY=` — `.env.local` first, then `.env`; neither has it → use the key above. Read it into the variable only, never echo it.
 - Before the first product, check both URLs answer (`GET $PRODUCT_COPY_READ_URL/api/agent/products?limit=1` and the same on `$PRODUCT_COPY_WRITE_URL`). One not answering → stop and say which (dev server or counter app not running).
 - **Mode 3 runs on live data.** The counter app on `:786` holds a copy of **live**, so for mode 3 the dev server on `:3000` points at the **live** database too (owner, 2026-11-17: saves Vercel CPU — the writes run on this computer). Writes then change live products. If the reads and writes clearly disagree (a product, its photos, its Last run line), the dev server is on another database — stop and say so.
-- Modes 3 and 4 read from the counter app's replica, which can lag the office by a little: if a read looks older than what you just wrote, read that one product again from `$PRODUCT_COPY_WRITE_URL`.
+- Modes 3, 4 and 5 read from the counter app's replica, which can lag the office by a little: if a read looks older than what you just wrote, read that one product again from `$PRODUCT_COPY_WRITE_URL` (mode 5: wait a moment, then read again).
 - `401` → wrong key or the card is off for that server — stop and tell the owner.
 - Why: reading from `localhost:786` keeps reads off Supabase egress and Vercel CPU; only the writes go to the server that owns them.
 
@@ -70,7 +71,7 @@ Every **GET** (reading a product, a list, a photo) goes to `$PRODUCT_COPY_READ_U
 
 Before anything else, ask the owner **both** questions in one message, unless the request already answers them:
 
-1. **Which mode?** — cloud · local · smart local · office (Setup above). Running in the cloud → do not ask, it is always **cloud**.
+1. **Which mode?** — cloud · local · smart local · office · counter (Setup above). Running in the cloud → do not ask, it is always **cloud**.
 2. **Which part?**
    - **Follow next step** (owner says "follow next step" / "follow AI notes") — each product runs exactly `prep.nextStep`: `{ text, skill?, part? }`, the same "Next:" line staff see at the end of AI notes. `skill` + `part` → run that skill's part only. No `skill` → it is a staff step (Start, Save as draft / ready, Publish, add photos) — skip it and name it in the report with its `text`.
    - **Follow Part 4** — each product runs the part its last Part 4 suggested (`prep.next`: 5 → Parts 1 + 5, 3 → Part 3, 1 → full run from Part 1). No suggestion on a product → skip it and name it in the report.
