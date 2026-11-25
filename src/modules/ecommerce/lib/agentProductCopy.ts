@@ -366,7 +366,6 @@ export async function saveAgentCopy(id: number, body: z.infer<typeof agentCopySc
 
     const draft: ProductCopy = {
         ...photoCopy(checked.copy),
-        note: `Written by Claude; ${checked.copy.note}`,
         ...(body.photos && {
             photoChecklist: checklistFrom(
                 kinds(body.photos.have), kinds(body.photos.must), kinds(body.photos.nice),
@@ -424,7 +423,9 @@ export async function saveAgentCopy(id: number, body: z.infer<typeof agentCopySc
     const aside = new Set(((await draftRow(id))?.problems ?? []).filter((x) => x.asideAt).map((x) => problemKey(x.text)));
     const open = [...body.notes, ...checked.copy.flags].map((l) => raisedLine(l, 0, "fix", "product-copy")).filter((x) => !aside.has(problemKey(x.text)));
     if (open.length) await parkInAttention([id], { problems: open, replaces: (x) => x.by === "product-copy" }, "product-copy", "any");
-    return { draft: { ...draft, flags: checked.copy.flags, notes }, shopStatus: open.length ? "ATTENTION" : shopStatus };
+    // Claude still gets these back; they are not saved on the product.
+    const { unsure, specSources, flags } = checked.copy;
+    return { draft: { ...draft, note: `Written by Claude; ${checked.copy.note}`, unsure, sources: checked.copy.sources, specSources, flags, notes }, shopStatus: open.length ? "ATTENTION" : shopStatus };
 }
 
 /**

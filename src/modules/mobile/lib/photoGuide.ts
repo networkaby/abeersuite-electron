@@ -24,7 +24,6 @@ export function photoGuide(p: Row): PhotoGuide {
     const info = draftOf(p);
     const notes = [
         ...rowProblems(info).filter((r) => !r.aside).map((r) => r.text),
-        ...(info?.aiCopy?.unsure ?? []),
     ].map((t) => t.trim()).filter(Boolean);
     const all = [...new Set(notes)];
     const attention = p.shopStatus === "ATTENTION" || p.shopAttention

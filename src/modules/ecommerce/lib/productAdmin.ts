@@ -187,7 +187,7 @@ export function draftOf(row: DraftRow): ShopDraft | null {
     };
 }
 /** The AI copy as it is kept: its text and photo advice. Problems live on the list; old-style notes are gone. */
-export const photoCopy = (c: ProductCopy): ProductCopy => ({ ...c, flags: [], notes: [] });
+export const photoCopy = (c: ProductCopy): ProductCopy => ({ ...c, flags: [], notes: [], note: "", unsure: [], sources: [], specSources: undefined });
 
 /** The problems as the products list shows them. */
 export function rowProblems(info: ShopDraft | null): RowProblem[] {

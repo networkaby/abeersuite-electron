@@ -955,7 +955,6 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
 
     const draft: ProductCopy = {
         ...photoCopy(checked.copy),
-        note: `Written by Claude (product prep, from the saved search of ${s.at.slice(0, 10)}); ${checked.copy.note}`,
         photoChecklist: list.checklist,
         ...(ph.arrange && { photoArrange: ph.arrange }),
         photoSuggestions: ph.suggested,
