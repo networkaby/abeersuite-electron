@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { shopSlugClash } from "@/shared/lib/shop/shopSlug";
 import { syncMainCollections } from "@/modules/inventory/lib/productCollections";
 import { NextResponse } from "next/server";
@@ -123,7 +123,7 @@ export async function POST(req: Request) {
 
         // Auto-qualify / auto-slug. A new product has no saved sale price yet, so
         // the qualification price falls back to the effective price (pricePaise).
-        const [bands, rules] = await Promise.all([loadBarcodeBands(), loadShopPublishRules()]);
+        const [bands, rules] = await Promise.all([loadBarcodeBands(prismaWhereSaved()), loadShopPublishRules(prismaWhereSaved())]);
         // Made on the shop's product form = someone is working on it: Draft.
         const shopStatus = nextShopStatus("UNPUBLISHED", { status: b.shopStatus, listed: b.isListedInShop });
         const listing = resolveShopListing(

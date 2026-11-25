@@ -205,9 +205,9 @@ export async function updateShopProduct(
             ? (existing.galleryJson as unknown[]).filter((x): x is string => typeof x === "string")
             : [];
         const [bands, rules, gaps] = await Promise.all([
-            loadBarcodeBands(),
-            loadShopPublishRules(),
-            loadVariantAttrGaps([pid]),
+            loadBarcodeBands(prismaWhereSaved()),
+            loadShopPublishRules(prismaWhereSaved()),
+            loadVariantAttrGaps([pid], prismaWhereSaved()),
         ]);
         const listing = resolveShopListing(
             {

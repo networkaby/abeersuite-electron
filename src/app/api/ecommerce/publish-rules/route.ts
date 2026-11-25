@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
@@ -52,7 +52,7 @@ export async function PUT(req: Request) {
     try {
         // Merge the partial update over the current rules, then store the
         // normalized full object so the column is always well-formed.
-        const current = await loadShopPublishRules();
+        const current = await loadShopPublishRules(prismaWhereSaved());
         const rules = normalizeShopPublishRules({ ...current, ...data });
         await prisma.orgDefaults.update({
             where: { id: 1 },

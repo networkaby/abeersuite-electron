@@ -1,5 +1,5 @@
 import "server-only";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { shopSlugClash } from "@/shared/lib/shop/shopSlug";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
@@ -19,17 +19,18 @@ import { mustPhotoGaps, readPhotoChecklist } from "@/modules/ecommerce/lib/photo
 /**
  * Sibling attributes still empty on each of these products (variant rule). Two
  * reads whatever the count: the products' families, then every member of them.
+ * A save that decides from this passes `prismaWhereSaved()`; a page keeps the default.
  */
-export async function loadVariantAttrGaps(ids: number[]): Promise<Map<number, string[]>> {
+export async function loadVariantAttrGaps(ids: number[], db: typeof prisma = prisma): Promise<Map<number, string[]>> {
     if (ids.length === 0) return new Map();
-    const fams = await prisma.invProduct.findMany({
+    const fams = await db.invProduct.findMany({
         where: { id: { in: ids }, variantFamilyId: { not: null } },
         select: { variantFamilyId: true },
         distinct: ["variantFamilyId"],
     });
     const familyIds = fams.map((f) => f.variantFamilyId!).filter((v) => v != null);
     if (familyIds.length === 0) return new Map();
-    const members = await prisma.invProduct.findMany({
+    const members = await db.invProduct.findMany({
         where: { variantFamilyId: { in: familyIds } },
         select: { id: true, variantFamilyId: true, attrsJson: true },
     });
@@ -43,13 +44,14 @@ export async function loadVariantAttrGaps(ids: number[]): Promise<Map<number, st
  */
 export async function recheckVariantFamilies(productIds: number[]): Promise<void> {
     if (productIds.length === 0) return;
-    const fams = await prisma.invProduct.findMany({
+    const db = prismaWhereSaved();
+    const fams = await db.invProduct.findMany({
         where: { id: { in: productIds }, variantFamilyId: { not: null } },
         select: { variantFamilyId: true },
         distinct: ["variantFamilyId"],
     });
     const familyIds = fams.map((f) => f.variantFamilyId!).filter((v) => v != null);
-    const members = await prisma.invProduct.findMany({
+    const members = await db.invProduct.findMany({
         where: {
             shopStatus: "PUBLISHED",
             OR: [{ id: { in: productIds } }, ...(familyIds.length ? [{ variantFamilyId: { in: familyIds } }] : [])],
@@ -61,8 +63,10 @@ export async function recheckVariantFamilies(productIds: number[]): Promise<void
 
 export async function applyPublished(ids: number[]): Promise<{ published: number; pending: number }> {
     if (ids.length === 0) return { published: 0, pending: 0 };
-    const [bands, rules, gaps] = await Promise.all([loadBarcodeBands(), loadShopPublishRules(), loadVariantAttrGaps(ids)]);
-    const products = await prisma.invProduct.findMany({
+    // Judged from where the save went — the replica may not have it yet.
+    const db = prismaWhereSaved();
+    const [bands, rules, gaps] = await Promise.all([loadBarcodeBands(db), loadShopPublishRules(db), loadVariantAttrGaps(ids, db)]);
+    const products = await db.invProduct.findMany({
         where: { id: { in: ids } },
         select: {
             id: true, name: true, sku: true, imageUrl: true, galleryJson: true,
@@ -132,13 +136,14 @@ export async function applyPublished(ids: number[]): Promise<{ published: number
  * Returns how many changed side, so the caller can say "12 went live · 3 moved to Pending".
  */
 export async function recheckPublished(): Promise<{ wentLive: number; wentPending: number; live: number; pending: number }> {
-    const before = await prisma.invProduct.findMany({
+    const db = prismaWhereSaved();
+    const before = await db.invProduct.findMany({
         where: { shopStatus: "PUBLISHED" },
         select: { id: true, isListedInShop: true },
     });
     const wasLive = new Set(before.filter((p) => p.isListedInShop).map((p) => p.id));
     const { published, pending } = await applyPublished(before.map((p) => p.id));
-    const nowLive = await prisma.invProduct.findMany({
+    const nowLive = await db.invProduct.findMany({
         where: { id: { in: before.map((p) => p.id) }, isListedInShop: true },
         select: { id: true },
     });

@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
 }
 
 async function run(ids: number[], action: z.infer<typeof schema>["action"]) {
-    const held = await prisma.invProduct.findMany({
+    const held = await prismaWhereSaved().invProduct.findMany({
         where: { id: { in: ids }, shopStatus: { in: ["DRAFT", "ATTENTION", "WAITING"] } },
         select: { id: true, name: true, shopStatus: true },
     });

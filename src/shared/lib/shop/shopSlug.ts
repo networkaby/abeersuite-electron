@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { isReservedShopSlug } from "@/shared/lib/shop/storefrontSlugPath";
 import { slugify } from "@/shared/lib/format/slugify";
 
@@ -33,11 +33,13 @@ export async function shopSlugClash(slug: string, self: { kind: ShopSlugKind; id
     if (isReservedShopSlug(s)) return `"${s}" is a page of the website and cannot be used as a link`;
 
     const not = (kind: ShopSlugKind) => (self.kind === kind && self.id != null ? { NOT: { id: self.id } } : {});
+    // Only saves ask this — read where they write, or a link used a moment ago looks free.
+    const db = prismaWhereSaved();
     const [product, group, category, brand] = await Promise.all([
-        prisma.invProduct.findFirst({ where: { slug: s, ...not("product") }, select: { id: true } }),
-        prisma.invProductGroup.findFirst({ where: { slug: s, ...not("group") }, select: { id: true } }),
-        prisma.invCategory.findFirst({ where: { slug: s, ...not("category") }, select: { id: true } }),
-        prisma.invBrand.findFirst({ where: { slug: s, ...not("brand") }, select: { id: true } }),
+        db.invProduct.findFirst({ where: { slug: s, ...not("product") }, select: { id: true } }),
+        db.invProductGroup.findFirst({ where: { slug: s, ...not("group") }, select: { id: true } }),
+        db.invCategory.findFirst({ where: { slug: s, ...not("category") }, select: { id: true } }),
+        db.invBrand.findFirst({ where: { slug: s, ...not("brand") }, select: { id: true } }),
     ]);
     const taken = (Object.entries({ product, group, category, brand }) as [ShopSlugKind, unknown][]).find(([, row]) => row);
     return taken ? `Link "${s}" is already used by ${KIND_LABEL[taken[0]]}` : null;
