@@ -26,6 +26,7 @@
 // Replaces the legacy three-table flow (Invoice negative credit-note +
 // manual JE + parallel InvVoucher) — see Layer 2c of the plan.
 
+import { lockVoucher } from "@/modules/accountancy/lib/voucherLifecycle";
 import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { Prisma } from "@/generated/prisma/client";
 import { notifyBill } from "@/shared/lib/whatsapp/notifyBill";
@@ -273,8 +274,7 @@ export async function POST(req: Request) {
 
             // 0. One return of a bill at a time, then check again: another return (or a
             // cancel) may have landed since the checks above.
-            await tx.$queryRaw`SELECT id FROM "VoucherDetail" WHERE id = ${original.id} FOR UPDATE`;
-            const spineNow = await tx.universalVoucher.findUnique({ where: { id: original.universalVoucherId ?? -1 }, select: { status: true } });
+            const spineNow = await lockVoucher(tx, original.universalVoucherId ?? -1);
             if (spineNow?.status !== "POSTED") throw new ReturnRefusedError("Only POSTED vouchers can be returned");
             const returnedNow = await returnedQtyByProduct(tx, original.id);
             const asked = new Map<number, { line: typeof originalLines[number]; qty: number }>();

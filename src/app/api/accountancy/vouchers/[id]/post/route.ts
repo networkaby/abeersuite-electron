@@ -2,6 +2,7 @@ import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { enginePostSpine } from "@/modules/accountancy/lib/transactionEngine";
+import { ensurePostable, lifecycleErrorResponse, lockAndEnsure } from "@/modules/accountancy/lib/voucherLifecycle";
 import { handleApiError } from "@/shared/lib/api";
 
 // POST /api/accountancy/vouchers/[id]/post
@@ -25,12 +26,15 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         // Per-line account.update over the Supabase pooler can exceed the default
         // 5s interactive-tx ceiling (P2028) — match the 30s headroom.
         await prisma.$transaction(async (tx) => {
+            await lockAndEnsure(tx, voucher.id, ensurePostable);
             await enginePostSpine(tx, voucher.id, { postedAt: new Date() });
         }, { timeout: 30_000, maxWait: 10_000 });
 
         const posted = await prismaWhereSaved().universalVoucher.findUnique({ where: { id: Number(id) } });
         return NextResponse.json(posted);
     } catch (e) {
+        const lifecycle = lifecycleErrorResponse(e);
+        if (lifecycle) return lifecycle;
         return handleApiError(e, "Failed to post voucher");
     }
 }

@@ -8,7 +8,7 @@
 
 import type { Prisma } from "@/generated/prisma/client";
 import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
-import { ensureCancelable, cancelFields, isCancelled } from "@/modules/accountancy/lib/voucherLifecycle";
+import { ensureCancelable, cancelFields, isCancelled, lockVoucher } from "@/modules/accountancy/lib/voucherLifecycle";
 
 export async function cancelVoucherInTx(
     tx: Prisma.TransactionClient,
@@ -20,6 +20,7 @@ export async function cancelVoucherInTx(
     // the whole correction with "already cancelled".
     opts: { skipIfCancelled?: boolean } = {},
 ): Promise<void> {
+    await lockVoucher(tx, voucherId);
     const voucher = await tx.universalVoucher.findUnique({
         where:   { id: voucherId },
         include: { lines: true },

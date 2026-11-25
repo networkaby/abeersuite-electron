@@ -50,6 +50,9 @@ import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 import { startOfDayUtc, businessTodayIso } from "@/shared/lib/format/formatDate";
 import { stampAttendanceOut } from "@/shared/lib/hr/attendanceStamp";
 
+/** Another press closed (or handed over) the shift between the check and the save. */
+class ShiftNotOpenError extends Error {}
+
 const closeSchema = z.object({
     declaredCashPaise:  z.number().int().min(0),
     carryOverNextPaise: z.number().int().min(0).optional(), // defaults to counter.defaultFloatPaise
@@ -195,6 +198,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         }
 
         const result = await prisma.$transaction(async (tx) => {
+            // Two presses at once both pass the check above; only the first gets through here.
+            await tx.$queryRaw`SELECT id FROM "pos_shifts" WHERE id = ${shift.id} FOR NO KEY UPDATE`;
+            const now = await tx.posShift.findUnique({ where: { id: shift.id }, select: { status: true } });
+            if (now?.status !== shift.status) throw new ShiftNotOpenError();
             // 3. Variance adjustment JE (counter till is debited/credited to match physical).
             let varianceJeId: number | null = null;
             if (variance !== 0) {
@@ -356,6 +363,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             varianceUniversalVoucherId: result.varianceJournalEntryId,   // spine id (JE dropped)
         });
     } catch (e) {
+        if (e instanceof ShiftNotOpenError) {
+            return NextResponse.json({ error: "Shift is already closed or being handed over. Refresh to see it." }, { status: 409 });
+        }
         return handleApiError(e, "Failed to close shift");
     }
 }

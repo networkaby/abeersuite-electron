@@ -5,7 +5,7 @@ import { requireAuth, userCanActOnVoucher } from "@/shared/lib/auth/permissions"
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { deleteCancelCounterRows, recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
-import { ensureRestorable, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
+import { ensureRestorable, lifecycleErrorResponse, lockAndEnsure } from "@/modules/accountancy/lib/voucherLifecycle";
 import { writeRestoreAudit } from "@/modules/accountancy/lib/restoreAudit";
 import { findRestoreConflicts } from "@/modules/accountancy/lib/restoreConflicts";
 import { restoreCouponRedemption, undoGiftCardRefundForVoucher } from "@/modules/coupons/lib";
@@ -74,6 +74,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         let touchedProductIds: number[] = [];
 
         await prisma.$transaction(async (tx) => {
+            await lockAndEnsure(tx, spineId, ensureRestorable);
             // ── 1. Take back the rewards the cancel handed out ─────────────────
             if (spineId) {
                 await undoGiftCardRefundForVoucher(tx, { universalVoucherId: spineId });

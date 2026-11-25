@@ -31,6 +31,8 @@
 // every voucher kind now lives on the shared `VoucherStatus` enum
 // (DRAFT / POSTED / CANCELLED).
 
+import type { Prisma } from "@/generated/prisma/client";
+
 export type LifecycleStatus = "DRAFT" | "POSTED" | "CANCELLED" | "DRAFT_INV";
 
 export interface LifecycleVoucher {
@@ -71,6 +73,34 @@ export function ensureCancelable(v: LifecycleVoucher): void {
 
 export function ensureRestorable(v: LifecycleVoucher): void {
   if (!isCancelled(v)) throw new LifecycleError(409, "Only cancelled vouchers can be restored");
+}
+
+export function ensurePostable(v: LifecycleVoucher): void {
+  if (!isDraft(v)) throw new LifecycleError(409, `Voucher is already ${v.status}`);
+}
+
+/**
+ * Take the voucher's row inside the save and return its status NOW. A check made
+ * before the transaction can be passed by two presses at once; call this first and
+ * run the `ensure…` check again on the answer. Null = the voucher is gone.
+ */
+export async function lockVoucher(
+  tx: Prisma.TransactionClient,
+  spineId: number,
+): Promise<{ status: string; cancelledAt: Date | null } | null> {
+  await tx.$queryRaw`SELECT id FROM "UniversalVoucher" WHERE id = ${spineId} FOR NO KEY UPDATE`;
+  return tx.universalVoucher.findUnique({ where: { id: spineId }, select: { status: true, cancelledAt: true } });
+}
+
+/** `lockVoucher` plus the check, for a voucher that must still exist. */
+export async function lockAndEnsure(
+  tx: Prisma.TransactionClient,
+  spineId: number | null | undefined,
+  ensure: (v: LifecycleVoucher) => void,
+): Promise<void> {
+  const now = spineId == null ? null : await lockVoucher(tx, spineId);
+  if (!now) throw new LifecycleError(404, "Voucher not found");
+  ensure(now);
 }
 
 // ── Field-shape helpers for prisma `data` payloads ────────────────────────

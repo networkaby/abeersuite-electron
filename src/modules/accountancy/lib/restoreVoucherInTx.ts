@@ -4,12 +4,13 @@
 
 import type { Prisma } from "@/generated/prisma/client";
 import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
-import { ensureRestorable, restoreFields } from "@/modules/accountancy/lib/voucherLifecycle";
+import { ensureRestorable, restoreFields, lockVoucher } from "@/modules/accountancy/lib/voucherLifecycle";
 
 export async function restoreVoucherInTx(
     tx: Prisma.TransactionClient,
     voucherId: number,
 ): Promise<void> {
+    await lockVoucher(tx, voucherId);
     const voucher = await tx.universalVoucher.findUnique({
         where:   { id: voucherId },
         include: { lines: true },

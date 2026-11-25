@@ -4,6 +4,7 @@ import { after } from "next/server";
 import { notifyBill, autoKindForVoucherType } from "@/shared/lib/whatsapp/notifyBill";
 import { requireAuth, userCanPostVoucher } from "@/shared/lib/auth/permissions";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
+import { ensurePostable, lifecycleErrorResponse, lockAndEnsure } from "@/modules/accountancy/lib/voucherLifecycle";
 import * as Sentry from "@sentry/nextjs";
 import { handleApiError } from "@/shared/lib/api";
 import {
@@ -92,6 +93,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
         const { result, notes } = await prisma.$transaction(
             async (tx) => {
+                await lockAndEnsure(tx, voucher.universalVoucherId, ensurePostable);
                 const { universalVoucherId, notes: postNotes } = await postVoucherInTx(tx, {
                     voucher: voucher as unknown as PostableVoucher,
                     userId,
@@ -144,6 +146,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
         return NextResponse.json({ ...result, createdBy: creator, _postNotes: notes });
     } catch (e) {
+        const lifecycle = lifecycleErrorResponse(e);
+        if (lifecycle) return lifecycle;
         if (e instanceof GlPostFailedError) {
             return NextResponse.json(
                 { error: e.message, notes: e.notes },
