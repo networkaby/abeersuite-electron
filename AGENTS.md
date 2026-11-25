@@ -53,6 +53,8 @@ Read `docs/seeds.md` first — it owns the scripts and the dev loop. The rules t
 
 `PROJECT_BRAIN.md` is the only status doc. After routes/APIs/Prisma/major components/important behavior changes: update docs in the same commit and run `/sync-docs-with-code`. Narrative-only changes: update directly.
 
+**Agent notes live in this repo, never in private memory.** Anything learnt about this project (an owner decision, a trap, pending work, a declined suggestion) goes in `docs/agent-notes/`: one file per note plus its line in `docs/agent-notes/README.md`, committed. This overrides any tool's own memory folder. Read the README index first and open a note only when it matches the work. No passwords, keys, or other people's contact or payment details. Status still goes in `PROJECT_BRAIN.md`.
+
 Commands: `pnpm seed:check-docs` · `pnpm seed:fix-docs` · `pnpm precommit` · `pnpm install:git-hooks`
 
 ## 7. Cost & Performance

@@ -1,0 +1,113 @@
+# Agent notes
+
+One line per note; open a note only when its line matches the work. These are the owner's decisions and traps found while working, true on the date written: check the code before relying on one. AGENTS.md wins over any note.
+
+Adding one: a file here named `<type>_<slug>.md` (`project`, `feedback`, `user`, `reference`) with `name` / `description` / `type` front matter, the fact, **Why:** and **How to apply:**, then one line below. Update an existing note instead of adding a second. Never write passwords, keys, or other people's phone numbers, emails or payment details.
+
+- [Commit freely, user pushes](user-pushes-manually.md) — commit any time without asking; never run git push.
+- [LAN bind is dev-only](project_lan_bind_dev_only.md) — 0.0.0.0 bind is temporary; owner will lock it down for production build.
+- [Stage only own files](feedback_stage_only_own_files.md) — never git add -A; pack script renames files and owner keeps local edits.
+- ["Do a release" = the whole checklist](project_release_means_full_checklist.md) — agent runs AGENTS.md §8 end to end, pushes included.
+- [Permissions are page-level for now](project_permissions_page_level_for_now.md) — except vouchers: every voucher write checks its Role tick at the API since 2026-09-29; other API-gating findings stay deferred; every /office page is locked by its own sidebar tick in proxy.ts since 2026-09-29.
+- [Worktrees: start from main, merge to main](feedback_worktree_branch_from_main.md) — diff HEAD..main before planning; land the work on main, and on dev when the checkout is on dev.
+- [main moves under a long session](feedback_wait_for_parallel_session_fix.md) — re-check git log before follow-up work; pause verification builds when another session is mid-fix.
+- [v1.0.2 fix list is on hold](project_v102_fix_list_pending.md) — five fixes drafted 2026-09-06, waiting on a real-counter test.
+- [No code signing for now](project_no_code_signing_for_now.md) — owner declined 2026-09-06; SmartScreen prompt stays, do not re-propose.
+- [Downloads "AbeerSuite App" button is dead on purpose](project_downloads_websetup_button_dead_on_purpose.md) — .exe is stripped from public/ when packaging; owner chose to leave it unmentioned.
+- [Release tags before it builds the installer](project_release_tags_before_installer_build.md) — an installer.nsh error strands a pushed tag; check where the failure happened.
+- [electron:pack EPERM is transient and resumable](project_electron_pack_eperm_resumable.md) — clear win-unpacked.tmp and rerun electron-builder + verify, never the whole build.
+- [Two release repos, both named abeersuite-electron](project_two_release_repos_same_name.md) — re-read .env before publishing and verify both at step 9.
+- [Counter install paths vary](project_counter_install_paths_vary.md) — Program Files on some counters, LocalAppData on others; discover the psql path, never hardcode it.
+- [No forced DRY across print formats](feedback_no_forced_dry_across_print_formats.md) — A4, thermal HTML, ESC/POS and labels each keep their own layout code; share template data only.
+- [Local mode: the sync engine owns the realtime message](project_local_mode_sync_engine_owns_realtime.md) — screens act only on the replica's `sync:applied`, never on the Supabase nudge.
+- [Fresh worktree needs setup before precommit](project_fresh_worktree_precommit_setup.md) — install, copy .env, prisma generate, deps-check bypass, bigger tsc heap.
+- [A worktree cannot be browser-verified](project_worktree_cannot_be_browser_verified.md) — preview_start starts the server in the main checkout; do the browser pass after merging.
+- [A dry run must exercise the write path](feedback_dry_run_must_exercise_write_path.md) — report-only and --fix are different branches; say which one actually ran.
+- [Permanent fix, not a patch](feedback_permanent_fix_not_patch.md) — go deep on the mechanism, leave working screens alone.
+- [No tsx verify script runs without a server-only shim](project_parity_harness_cannot_run.md) — verify-bill-links included; NODE_PATH to a scratch stub is the clean fix.
+- [Probe the DB through the dev server](project_db_probing_via_dev_server.md) — tsx scripts get ECONNREFUSED; use browser fetch on the app's APIs.
+- [Dev server DB: check .env.local](project_dev_server_writes_to_live.md) — 2026-10-24 it had no DB URL, so dev server = LIVE Supabase; re-check before any write test.
+- [Schema ships via committed migrations](project_schema_ships_via_migrations.md) — since 2026-09-13; every old DB needs `db:migrate:baseline` once, and still regenerate sync registry + local-schema.sql.
+- [Books-begin date is disputed](project_books_begin_2023_04_01.md) — owner said 1 Apr 2023, but live's earliest voucher is 1 Apr 2026; measure before using either.
+- [Opening balances are bill-wise now](project_opening_balances_now_billwise.md) — all 64 parties converted on live 2026-09-16; per-party breakup still manual.
+- [Vyapar migration in progress](project_vyapar_migration.md) — owner's own business; blocked on a local PostgreSQL 17 reinstall.
+- [A .vyb is a ZIP around plain SQLite](project_vyapar_file_format.md) — always verify it; truncated backups look valid.
+- [Six UI patterns: mechanism merged](project_ux_six_patterns_branch.md) — on main at 4a6f0dc6; D/E/F rollout still open, never browser-verified.
+- [production remote tags are lightweight](project_production_tags_lightweight_mismatch.md) — same commits as origin's annotated tags; Cursor's tag-conflict pull dialog is safe to accept once, not "Always".
+- [Shift-delete relaxation is stale in a worktree](project_shift_delete_relaxation_stale_in_worktree.md) — owner's 2026-09-13 call, uncommitted, predates the voucher-carries-shift refactor; redo on main, never commit the worktree files.
+- [v_live: the relay hop dominates, not the DB](project_v_live_relay_dominates_till_latency.md) — measured 68ms/statement to Supabase but ~0.42s per relayed request to Vercel bom1.
+- [DRY pass landed 2026-09-15](project_dry_pass_2026_09_15.md) — batches 0-11 + brands spike on dev; owner declined round2, rupees-in-words, extractApiError sweep, strict schema; do not re-propose.
+- [APP_MODE=counter is unproven and strips live routes](project_counter_variant_unproven.md) — shipped broken as 1.3.7; `parties` does not cover `/api/person`; no build gate yet.
+- [tsc needs a bigger heap, on main too](project_tsc_needs_bigger_heap.md) — OOMs at exit 134; a piped `echo $?` hides it as "exit 0".
+- [Party search reads the whole list from memory](project_party_list_whole_list_in_memory.md) - no per-keystroke party endpoint exists any more; do not reintroduce one.
+- [Phone/Email updatedAt is parked on a branch](project_contact_updatedat_held.md) - cherry-pick hold/contact-updated-at at release time, counters before the deploy.
+- [Office colour rollout: rule settled, batches open](project_office_colour_rollout.md) — hue=module, shade=section; B0/B1 shipped 2026-09-16, accountancy sweep and layouts still open.
+- [Turbopack can serve a stale globals.css](project_stale_turbopack_css_cache.md) — grep the served stylesheet before believing a CSS token is broken.
+- [Service income re-classed out of Sales A/c](project_service_income_reclass.md) — JV-10786-26 on 17 Sep 2026; old service products retired, stock not zeroable.
+- [A hidden Browser pane starves React effects](feedback_hidden_browser_pane_starves_effects.md) — a still-loading screen looks permanently empty; check tabs_context before calling it broken.
+- [Services are PosService lines, not charge rows](project_services_use_posservice_line.md) — keeps subtotal + GST, posts no stock; service items carry no stock record.
+- [d_office/d_shop: ff without asking, owner pushes](project_d_office_triggers_vercel_deploy.md) — fast-forward when Vercel needs it, remind at end; no smoke-test pause; notes/urgent + variant still asked (2026-10-13).
+- [Drive the UI, not just tsc](feedback_drive_the_ui_not_just_tsc.md) — lint and types pass while React state bugs survive; the Next dev overlay hides errors from the console reader.
+- [Version bump favors patch](feedback_version_bump_favors_patch.md) — owner picked 1.5.1 over 1.6.0 for a sign-in rework since the feature had already shipped; new files alone don't mean minor.
+- [Every screen follows changes now](project_ui_realtime_heartbeat.md) — 5-min heartbeat floor; editors subscribe for reference lists only; old exclusions withdrawn.
+- [Local PostgreSQL is on D:, not C:](project_local_postgres_on_d_drive.md) — the C: folder has no bin; read the service PathName to find psql.
+- [abeersuite_dev is the current local copy](project_abeersuite_dev_local_copy.md) — restored from live 2026-09-20; the other local DBs are stale.
+- [Vercel nightly backup is the floor](project_vercel_nightly_backup_floor.md) — GitHub's hourly tick only fires ~6x a day; cron live only after a d_office deploy.
+- [Backup secret masking deferred](project_backup_secret_masking_deferred.md) — secrets stay duplicated in Vercel and git until production DB/hosting settle; do not re-propose.
+- [Seed guard trips on LOCAL_DATABASE_URL](project_seed_guard_local_database_url.md) — blank it inline to seed the local copy; never while .env.local points at live.
+- [migrate dev refuses here; use migrate diff](project_migrate_dev_refuses_here.md) — hand-named migration folder + db:migrate; never run prisma format.
+- [Restart next dev after prisma generate; clear .next/dev](project_next_dev_restart_after_generate.md) — stale client gives 500s, stale cache gives 404s or hangs changed routes on compile.
+- [HR & People phase 1 landed 2026-09-20](project_hr_module_phase1.md) — 2a7e8010 + 259a4e12 on dev+main, browser-verified; attendance/payroll next.
+- [Prefer --no-revoke when syncing permissions](feedback_sync_permissions_no_revoke.md) — the default signs the owner out mid-test.
+- [Compute balances, do not cache them](project_balance_compute_over_cache.md) — every display sums the ledger since 2026-10-12, whole-chart surfaces included; see [project_account_balance_column_to_drop](project_account_balance_column_to_drop.md).
+- [migrate deploy is blocked by the classifier](project_migrate_deploy_blocked_by_classifier.md) — hand the command to the owner; never apply SQL via psql instead.
+- [electron-builder OOMs at 134](project_electron_builder_needs_bigger_heap.md) — rerun builder with an 8 GB heap; EBUSY on win-unpacked = open Explorer/terminal handle.
+- [Constants: one home, curated](feedback_constants_one_home_curated.md) — tunables go in shared/lib/constants/<topic>.ts + the index.ts map; one-file lists stay put.
+- [Pane keys skip POS shortcuts](project_browser_pane_shortcut_keys.md) — dispatch a KeyboardEvent for "/" and F10; click checkout boxes by ref; never Enter.
+- [Exp slip zero-amount: watching](project_exp_slip_zero_amount_watch.md) — printed without amount once, then fixed itself; suspected v_live replica race, fix on hold.
+- [Workflows only when asked](feedback_workflows_only_when_asked.md) — no multi-agent orchestration unless the owner asks, even with ultracode on; offer it in one line with cost.
+- [Party tombstones removed 2026-09-28](project_party_tombstones_removed.md) — convert/merge delete the old row; live data clean-up + migration still on the owner.
+- [Counter number vs id](project_counter_number_vs_id.md) — owner says "Counter 23", docs say 93; search both.
+- [Signed-in browser checks use Chrome](feedback_signed_in_checks_use_chrome.md) — Chrome opens localhost again (2026-10-01); the pane goes hidden and refuses navigation on long sessions.
+- [Auto-fill never overrides staff](feedback_autofill_manual_override.md) — external lookups fill blanks only, after typing, hint + Use; never block save.
+- [auth.d.ts never applies](project_auth_d_ts_never_applies.md) — next-auth re-exports @auth/core types; session casts stay until @auth/core is a direct dep (owner's call).
+- [No pnpm alongside a release build or next dev](feedback_no_pnpm_during_release_build.md) — pnpm 11 pre-run install relinks node_modules; cost v1.9.2 two runs and hung the :3000 dev server (2026-10-05). Use `npx tsx` for scripts.
+- [Patch sweep: B1–B3b done, B4 open](project_patch_sweep_batches.md) — B3b unreleased; every till must update before its d_office deploy; don't redo the sweep.
+- [Phone app sign-in: two ticks](project_mobile_app_outside_counter_rule.md) — outside-counter = full; "Can use Mobile App" = phone-only session boxed by proxy.ts (2026-10-05).
+- [Reuse on-device catalogues; egress first](feedback_reuse_local_catalogs_egress.md) — search Dexie products/parties locally, money via saved answer + ?since=; check localDb/polling.ts before any row endpoint.
+- [Phone app tiny = Desktop site on](project_phone_app_desktop_site_shrink.md) — shrunk 980px look is Chrome per-site Desktop mode, shared with the office origin; ask before touching layout.
+- [Bills: push AND WhatsApp, both, for now](project_bill_notify_push_and_whatsapp_both.md) — owner 2026-10-06: observe push behaviour first; skip-WhatsApp-on-shown stays behind a switch, off.
+- [Customer app is Capacitor now](project_customer_app_twa_push.md) — shop-app-native since 2026-10-08, native FCM; TWA retired, its keystore still signs.
+- [No full seed without permission](feedback_no_full_seed_without_permission.md) — bootstrap/personal seed only on owner's yes; existing DBs restore from backup, changes via targeted seed files (2026-10-07).
+- [App update prompt built](project_app_update_prompt.md) — UA version vs appVersions.ts; APK link on the other host (2026-10-17).
+- [2nd WhatsApp number + R2 attachments](project_wa_second_number_r2.md) — 96996 conversation-only, coexistence blocked by Meta review; files in private R2 bucket; ids in constants — SUPERSEDED: ids go in .env or DB (2026-11-12).
+- [Attendance segment edit deferred](project_attendance_segment_edit_deferred.md) — "count Off duty gap as duty" (meeting) planned 2026-10-13, needs new table; owner said later.
+- [Shop warranty vs manufacturer warranty](project_warranty_shop_vs_manufacturer.md) — POS/office = our support period; e-commerce = maker's term, labelled as the maker's; shorter shop term is not a clash.
+- [Account.balance column to be dropped](project_account_balance_column_to_drop.md) — display-dead since 5e8c9966; never patch its drift; writer list for the removal job.
+- [Meta app policy links move to abeersoft.in later](project_meta_app_policy_urls_move_to_abeersoft.md) — networkservice.in links for now; same legal entity, one app; switch when serving other shops.
+- [Product feed: one rebuild/day, only if dirty](project_product_feed_rebuild_rule.md) — Google/Meta catalog feed planned after WA Channel work; cost/sale changes never mark it dirty (2026-10-23).
+- [GBP API approved](project_gbp_api_application.md) — 2026-10-27, project 975956928914, 300 QPM; enable APIs in Cloud Console, then test a post.
+- [96996: approval first, then app + API](project_wa_96996_coexistence_plan.md) — on Cloud API now; after business_management approval remove from API → Business app → coexistence connect (2026-10-23).
+- [Commit author = devloper email](project_commit_author_devloper_email.md) — repo-local since 2026-10-24 so origin Hobby Vercel builds; production Vercel now blocks; unset to revert.
+- [Play Console waits on D-U-N-S](project_play_console_duns_pending.md) — D&B ref filed 2026-10-26; shop app rejected 10-27 for rewards=financial, wallet/points/ledger/social hidden via SHOP_APP_PLAY_REVIEW until approved.
+- [Office / shop / counter vocabulary](user_deployment_vocabulary.md) — counter app = counter = desktop app (office-mode), never "till"; counter variant retired, docs kept for revival.
+- [Shop app Google sign-in needs SHA-1 in Firebase](project_shop_app_google_signin_fingerprint.md) — "cancelled" = missing fingerprint; Play signing key SHA-1 still to add (2026-10-28).
+- [Review-reply schedule runs in cloud](project_review_reply_runs_in_cloud.md) — /schedule cloud agent, key in cloud env secrets; not Cowork/local (2026-10-30).
+- [App contact merge: recycled-number guard parked](project_portal_contact_merge_recycled_number.md) — OTP add merges/links other profile; 6-month activity check planned, owner said rare, no code (2026-10-28).
+- [Updater test harness](project_updater_harness.md) — fake feed + Electron harness for updateManager; resolve electron-updater via dist-electron (2026-11-03).
+- [Unique-clash sync fix unreleased](project_unique_clash_fix_unreleased.md) — c02cf8440 on main; counters show old groups + "Copy incomplete" until next release (2026-11-06).
+- [No Co-Authored-By trailer](feedback_no_coauthor_trailer.md) — Vercel Hobby blocks d_office deploys with it since 2026-11-09; owner said drop it.
+- [Skill secrets stay](feedback_skill_secrets_stay.md) — real key + URL in product-copy skill on purpose; never placeholder or flag (2026-11-11).
+- [Bulk live changes: report first](feedback_bulk_live_changes_report_first.md) — CSV to verify, apply only on explicit go; a rule is not a go (2026-11-12).
+- [Secrets in Vercel, ids in DB](feedback_secrets_vercel_ids_db.md) — tokens stay env; phone/WABA ids set from app (2026-11-12).
+- [SCRAMBLE_KEY_SECRET rename](project_scramble_key_secret_rename.md) — code reads only the new name since 712ec57b2; rename env (same value) everywhere before next deploy.
+- [Counter 500s after power cut: pgdata empty dirs gone](project_counter_pgdata_empty_dirs_vanished.md) — recreate pg_notify & co; live fallback fails on SSL (2026-11-18).
+- [Pine Labs untested](project_pinelabs_test_pending.md) — built 2026-11-13, no UAT payment yet (OTP issue); paise/live host/paid status unconfirmed, stay TEST.
+- [Say SKU, not product id](feedback_say_sku_not_product_id.md) — name products by SKU/barcode in conversation; id is DB-internal (2026-11-20).
+- [Shipping never blocks prep](feedback_shipping_never_blocks_prep.md) — fill weight/size when possible, never pending/staff; readiness gate catches it (2026-11-23).
+- [Box colour is not proof](feedback_box_colour_not_proof.md) — one box serves all colour variants; never block on box-vs-photo colour (2026-11-23).
+- [Prep Part 4 → Ready, not Published](project_prep_part4_ready_not_publish.md) — verified products go to Ready until the owner trusts the AI to publish (2026-11-19).
+- [Unnumbered vouchers are imports](project_unnumbered_vouchers_imported.md) — 967 on live, created to 18 Sep 2026; only later ones are suspect (2026-11-25).
+- [WRITE_MODE=live on purpose for some builds](project_write_mode_live_on_purpose.md) — testing/emergency since 2026-11-25; check the baked mode first, post-save reads use prismaWhereSaved().
+- [Voucher locks on main for 1.17.17](project_voucher_locks_held.md) — 7e26fc84f, landed 2026-11-26; two real presses untested, rebuild the installer.
+- [Sale vs shift-close race: declined](project_sale_vs_shift_close_race_declined.md) — ordinary sale not locking the shift is accepted; never re-propose (2026-11-26).
