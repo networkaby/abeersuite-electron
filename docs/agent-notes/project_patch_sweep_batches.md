@@ -6,6 +6,8 @@ metadata:
   modified: 2026-09-30T00:05:57.416Z
 ---
 
+> **May be outdated:** B3b shipped in v1.11.0.
+
 On 2026-09-29 the owner asked "find patches and refactor to real code". Three read-only sweeps found about 60 workarounds, and the owner picked **Batch 1 only** (live bugs, no DB change). All nine items are committed on `main` (343d7092 … 868905f5), plus a lint cleanup. Each has a 2026-09-30 PROJECT_BRAIN entry.
 
 **Still open — offer these as the next rounds and don't redo the sweep:**

@@ -66,13 +66,13 @@ Adding one: a file here named `<type>_<slug>.md` (`project`, `feedback`, `user`,
 - [Pane keys skip POS shortcuts](project_browser_pane_shortcut_keys.md) — dispatch a KeyboardEvent for "/" and F10; click checkout boxes by ref; never Enter.
 - [Exp slip zero-amount: watching](project_exp_slip_zero_amount_watch.md) — printed without amount once, then fixed itself; suspected v_live replica race, fix on hold.
 - [Workflows only when asked](feedback_workflows_only_when_asked.md) — no multi-agent orchestration unless the owner asks, even with ultracode on; offer it in one line with cost.
-- [Party tombstones removed 2026-09-28](project_party_tombstones_removed.md) — convert/merge delete the old row; live data clean-up + migration still on the owner.
+- Party tombstones removed 2026-09-28 (no detail file) — convert/merge delete the old row; live data clean-up + migration still on the owner.
 - [Counter number vs id](project_counter_number_vs_id.md) — owner says "Counter 23", docs say 93; search both.
 - [Signed-in browser checks use Chrome](feedback_signed_in_checks_use_chrome.md) — Chrome opens localhost again (2026-10-01); the pane goes hidden and refuses navigation on long sessions.
 - [Auto-fill never overrides staff](feedback_autofill_manual_override.md) — external lookups fill blanks only, after typing, hint + Use; never block save.
 - [auth.d.ts never applies](project_auth_d_ts_never_applies.md) — next-auth re-exports @auth/core types; session casts stay until @auth/core is a direct dep (owner's call).
 - [No pnpm alongside a release build or next dev](feedback_no_pnpm_during_release_build.md) — pnpm 11 pre-run install relinks node_modules; cost v1.9.2 two runs and hung the :3000 dev server (2026-10-05). Use `npx tsx` for scripts.
-- [Patch sweep: B1–B3b done, B4 open](project_patch_sweep_batches.md) — B3b unreleased; every till must update before its d_office deploy; don't redo the sweep.
+- [Patch sweep: B1–B3b done, B4 open](project_patch_sweep_batches.md) — B3b shipped in v1.11.0; don't redo the sweep.
 - [Phone app sign-in: two ticks](project_mobile_app_outside_counter_rule.md) — outside-counter = full; "Can use Mobile App" = phone-only session boxed by proxy.ts (2026-10-05).
 - [Reuse on-device catalogues; egress first](feedback_reuse_local_catalogs_egress.md) — search Dexie products/parties locally, money via saved answer + ?since=; check localDb/polling.ts before any row endpoint.
 - [Phone app tiny = Desktop site on](project_phone_app_desktop_site_shrink.md) — shrunk 980px look is Chrome per-site Desktop mode, shared with the office origin; ask before touching layout.
@@ -95,8 +95,8 @@ Adding one: a file here named `<type>_<slug>.md` (`project`, `feedback`, `user`,
 - [Review-reply schedule runs in cloud](project_review_reply_runs_in_cloud.md) — /schedule cloud agent, key in cloud env secrets; not Cowork/local (2026-10-30).
 - [App contact merge: recycled-number guard parked](project_portal_contact_merge_recycled_number.md) — OTP add merges/links other profile; 6-month activity check planned, owner said rare, no code (2026-10-28).
 - [Updater test harness](project_updater_harness.md) — fake feed + Electron harness for updateManager; resolve electron-updater via dist-electron (2026-11-03).
-- [Unique-clash sync fix unreleased](project_unique_clash_fix_unreleased.md) — c02cf8440 on main; counters show old groups + "Copy incomplete" until next release (2026-11-06).
-- [No Co-Authored-By trailer](feedback_no_coauthor_trailer.md) — Vercel Hobby blocks d_office deploys with it since 2026-11-09; owner said drop it.
+- [Unique-clash sync fix unreleased](project_unique_clash_fix_unreleased.md) — SHIPPED in v1.16.26; older counters still show old groups.
+- No Co-Authored-By trailer (no detail file) — Vercel Hobby blocks d_office deploys with it since 2026-11-09; owner said drop it.
 - [Skill secrets stay](feedback_skill_secrets_stay.md) — real key + URL in product-copy skill on purpose; never placeholder or flag (2026-11-11).
 - [Bulk live changes: report first](feedback_bulk_live_changes_report_first.md) — CSV to verify, apply only on explicit go; a rule is not a go (2026-11-12).
 - [Secrets in Vercel, ids in DB](feedback_secrets_vercel_ids_db.md) — tokens stay env; phone/WABA ids set from app (2026-11-12).
