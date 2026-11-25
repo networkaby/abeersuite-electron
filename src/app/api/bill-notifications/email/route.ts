@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest } from "@/shared/lib/api";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { emailKindForVoucherType } from "@/shared/lib/email/emailTemplates";
 import { emailSendStates, notifyEmail } from "@/shared/lib/email/notifyEmail";
 
@@ -36,7 +36,10 @@ const WHY: Record<string, string> = {
     "not a customer document": "This kind of voucher is not emailed to customers.",
     "no email": "This customer has no verified email address.",
     "send failed": "The email service refused it — try again later.",
-    counter: "Sending works from the office site, not the counter's own server.",
+    counter: "This counter cannot ask the office to send right now — send from the office site.",
+    "office not reachable": "The office did not answer — try again later.",
+    "office app is older than this counter": "The office site must be updated first — send from the office site.",
+    "office refused": "The office did not accept this counter — send from the office site.",
 };
 
 // POST /api/bill-notifications/email — staff's "Send email" from a 3-dot menu.
@@ -49,8 +52,8 @@ export async function POST(req: Request) {
 
     const uvId = data.source === "uv"
         ? data.id
-        : (await prisma.voucherDetail.findUnique({ where: { id: data.id }, select: { universalVoucherId: true } }))?.universalVoucherId ?? null;
-    const uv = uvId == null ? null : await prisma.universalVoucher.findUnique({ where: { id: uvId }, select: { type: true } });
+        : (await prismaWhereSaved().voucherDetail.findUnique({ where: { id: data.id }, select: { universalVoucherId: true } }))?.universalVoucherId ?? null;
+    const uv = uvId == null ? null : await prismaWhereSaved().universalVoucher.findUnique({ where: { id: uvId }, select: { type: true } });
     const kind = uv ? emailKindForVoucherType(uv.type) : null;
     if (uvId == null || !uv) return NextResponse.json({ error: WHY["not posted"] }, { status: 422 });
     if (!kind) return NextResponse.json({ error: WHY["not a customer document"] }, { status: 422 });

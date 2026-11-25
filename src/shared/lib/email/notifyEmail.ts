@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { askOffice } from "@/shared/lib/counter/officeNotify";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { loadRepairMessage, loadTicketCustomer, loadVoucherMessage, ticketClaimKind, type EmailRow, type NotifyResult } from "@/shared/lib/whatsapp/notifyBill";
@@ -80,6 +81,8 @@ export async function sendTemplatedEmail(d: {
 /** A posted customer document (notifyBill on a save, or staff's "Send email"). */
 export async function notifyEmail(kind: string, uvId: number, mode: { manual?: boolean } = {}): Promise<NotifyResult> {
     if (!isDocEmailKind(kind)) return { status: "skipped", reason: "not a customer document" };
+    // Only staff's own send gets here on a counter — the automatic one goes with notifyBill.
+    if (IS_COUNTER_PC) return askOffice({ what: "bill-email", kind, id: uvId }, { staffWaiting: true });
     // The party's emails come with the voucher, so load it first; the template
     // checks inside sendTemplatedEmail still run before anything is claimed.
     try {
@@ -143,7 +146,8 @@ export async function sendFilled(to: string, draft: EmailTemplateDraft, values: 
 
 /** Per kind, whether the 3-dot menu's "Send email" works now. */
 export async function emailSendStates(): Promise<Record<EmailTemplateKind, EmailSendState>> {
-    const configured = await isEmailConfigured();
+    // A counter sends through the office, which holds the email keys.
+    const configured = IS_COUNTER_PC || (await isEmailConfigured());
     const pairs = await Promise.all(
         EMAIL_TEMPLATE_KINDS.map(async (k) => [k, !configured ? "not-configured" : (await getEmailTemplate(k)).enabled ? "ready" : "off"] as const),
     );
@@ -177,6 +181,7 @@ function pickEmail(emails: EmailRow[]): string | null {
  *  Goes when the template is on (its Auto send does not apply — the workflow
  *  chose it). Once per (template, ticket). */
 export async function notifyTicketEmail(kind: EmailAnyKind, ticketId: number): Promise<NotifyResult> {
+    if (IS_COUNTER_PC) return askOffice({ what: "ticket-email", kind, id: ticketId });
     try {
         if (isSecurityKind(kind)) return { status: "skipped", reason: "a sign-in code cannot be sent from a ticket" };
         const c = await loadTicketCustomer(ticketId);

@@ -1,5 +1,5 @@
 import "server-only";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { normalizeMobile10 } from "@/shared/lib/auth/portalIdentifier";
@@ -21,6 +21,7 @@ import {
 } from "./billTemplates";
 import { getApprovedWaTemplate, getWaTemplateDraft, isAutoSend } from "./waTemplateStore";
 import { recordBillMessage } from "@/modules/message/lib/customerMessages";
+import { askOffice } from "@/shared/lib/counter/officeNotify";
 import { notifyEmail, notifyRepairEmail } from "@/shared/lib/email/notifyEmail";
 
 export { autoKindForVoucherType };
@@ -41,8 +42,10 @@ import { billsWaNumber, listWaNumbers } from "./waNumbers";
  * on. Manual (3-dot menu "Send on WhatsApp" → `sendManually`) goes only when
  * the kind's template is switched on and approved.
  *
- * Skipped without a row: a counter PC (no Meta / push keys there — the relayed
- * save runs on the office server and is announced from there), a draft or
+ * A counter PC has no Meta / push keys: it asks the office to send (`askOffice`);
+ * a relayed save runs on the office server and is announced from there.
+ *
+ * Skipped without a row: a draft or
  * cancelled voucher, a walk-in (the pooled walk-in ledger names nobody), any
  * party under Sundry Creditors (a supplier — automatic or manual, every kind;
  * their incoming messages are dropped too, see `ingestInbound`),
@@ -55,12 +58,12 @@ type SendMode = { manual?: boolean };
 
 /** Automatic needs Auto send on; manual needs the template switched on + approved. */
 async function allowed(kind: WaTemplateKind, mode: SendMode): Promise<NotifyResult | null> {
-    if (IS_COUNTER_PC) return { status: "skipped", reason: "counter" };
     if (mode.manual) return (await getApprovedWaTemplate(kind)) ? null : { status: "skipped", reason: "template off" };
     return (await isAutoSend(kind)) ? null : { status: "skipped", reason: "auto off" };
 }
 
 export async function notifyBill(kind: WaTemplateKind, universalVoucherId: number, mode: SendMode = {}): Promise<NotifyResult> {
+    if (IS_COUNTER_PC) return askOffice({ what: "bill", kind, id: universalVoucherId, manual: mode.manual }, { staffWaiting: mode.manual });
     // The automatic send also emails, on its own switches (Settings → Email
     // Templates). Staff's manual "Send on WhatsApp" does not.
     const email = mode.manual ? null : notifyEmail(kind, universalVoucherId);
@@ -77,6 +80,7 @@ export async function notifyBill(kind: WaTemplateKind, universalVoucherId: numbe
 }
 
 export async function notifyRepair(kind: "REPAIR_RECEIVED" | "REPAIR_READY", ticketId: number, mode: SendMode = {}): Promise<NotifyResult> {
+    if (IS_COUNTER_PC) return askOffice({ what: "repair", kind, id: ticketId, manual: mode.manual }, { staffWaiting: mode.manual });
     // The stage completing also emails (Settings → Email Templates); the repair
     // ticket's manual WhatsApp buttons do not.
     const email = mode.manual ? null : notifyRepairEmail(kind, ticketId);
@@ -93,6 +97,7 @@ export async function notifyRepair(kind: "REPAIR_RECEIVED" | "REPAIR_READY", tic
 }
 
 export async function notifyDealCreated(ticketId: number, mode: SendMode = {}): Promise<NotifyResult> {
+    if (IS_COUNTER_PC) return askOffice({ what: "deal", id: ticketId });
     try {
         const stop = await allowed("DEAL_CREATED", mode);
         if (stop) return stop;
@@ -104,6 +109,7 @@ export async function notifyDealCreated(ticketId: number, mode: SendMode = {}): 
 }
 
 export async function notifyHelpCreated(ticketId: number, mode: SendMode = {}): Promise<NotifyResult> {
+    if (IS_COUNTER_PC) return askOffice({ what: "help", id: ticketId });
     try {
         const stop = await allowed("HELP_CREATED", mode);
         if (stop) return stop;
@@ -123,9 +129,9 @@ export async function notifyHelpCreated(ticketId: number, mode: SendMode = {}): 
 export async function sendManually(source: "inv" | "uv", id: number): Promise<NotifyResult> {
     const uvId = source === "uv"
         ? id
-        : (await prisma.voucherDetail.findUnique({ where: { id }, select: { universalVoucherId: true } }))?.universalVoucherId ?? null;
+        : (await prismaWhereSaved().voucherDetail.findUnique({ where: { id }, select: { universalVoucherId: true } }))?.universalVoucherId ?? null;
     if (uvId == null) return { status: "skipped", reason: "not posted" };
-    const uv = await prisma.universalVoucher.findUnique({ where: { id: uvId }, select: { type: true } });
+    const uv = await prismaWhereSaved().universalVoucher.findUnique({ where: { id: uvId }, select: { type: true } });
     const kind = uv ? autoKindForVoucherType(uv.type) : null;
     if (!kind) return { status: "skipped", reason: "not a customer document" };
     return notifyBill(kind, uvId, { manual: true });
@@ -603,9 +609,9 @@ export async function loadTicketCustomer(ticketId: number): Promise<TicketCustom
  *  customer, filled from the ticket. Only an approved, switched-on template
  *  goes; once per (template, ticket). No app notification. Repair received /
  *  ready go through notifyRepair instead (it adds the app notification). */
-export async function notifyTicketTemplate(kind: WaAnyKind, ticketId: number): Promise<NotifyResult> {
+export async function notifyTicketTemplate(kind: WaAnyKind, ticketId: number, mode: SendMode = {}): Promise<NotifyResult> {
+    if (IS_COUNTER_PC) return askOffice({ what: "ticket-wa", kind, id: ticketId }, { staffWaiting: mode.manual });
     try {
-        if (IS_COUNTER_PC) return { status: "skipped", reason: "counter" };
         // The picker lists every template; what cannot work from a ticket is refused here, with the reason.
         if (hasImageHeader(kind)) return { status: "skipped", reason: "a UPI payment request needs its own QR — send it from POS" };
         const approved = await getApprovedWaTemplate(kind);

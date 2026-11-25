@@ -37,7 +37,11 @@ const WHY: Record<string, string> = {
     "not a customer": "Refund messages go only to customers (Sundry Debtors).",
     "not a customer document": "This kind of voucher is not sent to customers.",
     "no customer": "This repair has no customer on its device.",
-    counter: "Sending works from the office site, not the counter's own server.",
+    supplier: "Suppliers are never messaged.",
+    counter: "This counter cannot ask the office to send right now — send from the office site.",
+    "office not reachable": "The office did not answer — try again later.",
+    "office app is older than this counter": "The office site must be updated first — send from the office site.",
+    "office refused": "The office did not accept this counter — send from the office site.",
 };
 
 // POST /api/bill-notifications/send — staff's "Send on WhatsApp": app

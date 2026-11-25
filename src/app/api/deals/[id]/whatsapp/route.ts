@@ -84,7 +84,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             return NextResponse.json({ status: "sent" }, { status: 201 });
         }
         if (!isWaKind(data.template)) return NextResponse.json({ error: "Unknown template" }, { status: 400 });
-        const r = await notifyTicketTemplate(data.template, id);
+        const r = await notifyTicketTemplate(data.template, id, { manual: true });
         const name = data.label || data.template;
         const note = r.status === "sent" ? `📲 WhatsApp template sent: "${name}"`
             : r.status === "already" ? `📲 WhatsApp template "${name}" was already sent on this deal`
