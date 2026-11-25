@@ -1,5 +1,5 @@
 import type { ShopStatus } from "@/generated/prisma/enums";
-import { readShopDraft, rowProblems, splitAttention } from "@/modules/ecommerce/lib/productAdmin";
+import { attentionInfo, draftOf, rowProblems } from "@/modules/ecommerce/lib/productAdmin";
 
 /**
  * What the phone photo screen shows above the photos (owner, 2026-11-25): the
@@ -21,15 +21,14 @@ type Row = { shopStatus: ShopStatus; shopAttention: string | null; shopAttention
 export const photoGuideSelect = { shopStatus: true, shopAttention: true, shopAttentionBy: true, shopAttentionAt: true, shopDraftJson: true } as const;
 
 export function photoGuide(p: Row): PhotoGuide {
-    const info = readShopDraft(p.shopDraftJson);
-    const ai = info?.aiCopy;
+    const info = draftOf(p);
     const notes = [
-        ...rowProblems(info, p.shopAttention).filter((r) => !r.aside).map((r) => r.text),
-        ...(ai?.flags ?? []), ...(ai?.notes ?? []), ...(ai?.unsure ?? []), ...(info?.notes ?? []),
+        ...rowProblems(info).filter((r) => !r.aside).map((r) => r.text),
+        ...(info?.aiCopy?.unsure ?? []),
     ].map((t) => t.trim()).filter(Boolean);
     const all = [...new Set(notes)];
     const attention = p.shopStatus === "ATTENTION" || p.shopAttention
-        ? { lines: splitAttention(p.shopAttention).rest, by: p.shopAttentionBy, at: p.shopAttentionAt?.toISOString() ?? null }
+        ? { lines: attentionInfo(p.shopAttention), by: p.shopAttentionBy, at: p.shopAttentionAt?.toISOString() ?? null }
         : undefined;
     return {
         stage: p.shopStatus,
