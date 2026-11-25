@@ -9,7 +9,7 @@
 // Only the OFFLINE name is rebuilt. Online display name and slug are left alone
 // (the slug drives shop URLs — bulk-rewriting it would break links / SEO).
 
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import * as Sentry from "@sentry/nextjs";
 import {
     buildOfflineName,
@@ -132,8 +132,8 @@ export interface RegenNameResult {
 
 /// Load the singleton naming config as a full NamingConfigShape (DEFAULT filled
 /// in for any missing field), matching what the API GET returns to the client.
-export async function loadNamingConfig(): Promise<NamingConfigShape> {
-    const row = await prisma.invNamingConfig.findFirst({ orderBy: { id: "asc" } });
+export async function loadNamingConfig(db: typeof prisma = prisma): Promise<NamingConfigShape> {
+    const row = await db.invNamingConfig.findFirst({ orderBy: { id: "asc" } });
     return { ...DEFAULT_NAMING_CONFIG, ...(row ?? {}) } as unknown as NamingConfigShape;
 }
 
@@ -162,9 +162,10 @@ export async function regenerateProductNames(
         : null;
     if (where == null) return { scanned: 0, updated: 0 };
 
-    const config = cfg ?? (await loadNamingConfig());
+    const config = cfg ?? (await loadNamingConfig(prismaWhereSaved()));
 
-    const products = await prisma.invProduct.findMany({ where, select: NAMING_SELECT });
+    // The edit that called this was just saved; a replica would rebuild the old name.
+    const products = await prismaWhereSaved().invProduct.findMany({ where, select: NAMING_SELECT });
 
     const updates: Array<{ id: number; name: string }> = [];
     for (const p of products) {

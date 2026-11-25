@@ -68,11 +68,11 @@ type Lot = { date: Date; id: number; qty: number; rate: number };
  * stock from the purchase history that existed THEN, not from purchases that
  * landed afterwards. Omit for the live (up-to-now) valuation.
  */
-async function loadInwardLots(productIds: number[], asOf?: Date): Promise<Map<number, Lot[]>> {
+async function loadInwardLots(productIds: number[], asOf?: Date, db: typeof prisma = prisma): Promise<Map<number, Lot[]>> {
     if (productIds.length === 0) return new Map();
 
     const [rows, masters] = await Promise.all([
-        prisma.invStockLedger.findMany({
+        db.invStockLedger.findMany({
             where:   {
                 productId: { in: productIds },
                 inQty:     { gt: 0 },
@@ -82,7 +82,7 @@ async function loadInwardLots(productIds: number[], asOf?: Date): Promise<Map<nu
             select:  { id: true, productId: true, date: true, inQty: true, rate: true },
             orderBy: [{ date: "asc" }, { id: "asc" }],
         }),
-        prisma.invProduct.findMany({
+        db.invProduct.findMany({
             where:  { id: { in: productIds } },
             select: { id: true, openingStock: true, openingRate: true, openingStockDate: true },
         }),
@@ -130,9 +130,9 @@ async function loadInwardLots(productIds: number[], asOf?: Date): Promise<Map<nu
 }
 
 /** Pull just the opening rate for a product (used as the lowest-level fallback). */
-async function loadOpeningRates(productIds: number[]): Promise<Map<number, number>> {
+async function loadOpeningRates(productIds: number[], db: typeof prisma = prisma): Promise<Map<number, number>> {
     if (productIds.length === 0) return new Map();
-    const masters = await prisma.invProduct.findMany({
+    const masters = await db.invProduct.findMany({
         where:  { id: { in: productIds } },
         select: { id: true, openingRate: true },
     });
@@ -289,11 +289,12 @@ export async function valueStockBatch(
     products: ProductMaster[],
     method: ValuationMethod,
     asOf?: Date,
+    db: typeof prisma = prisma,
 ): Promise<Map<number, ProductValuation>> {
     const out = new Map<number, ProductValuation>();
     if (products.length === 0) return out;
 
-    const lotsByProduct = await loadInwardLots(products.map((p) => p.id), asOf);
+    const lotsByProduct = await loadInwardLots(products.map((p) => p.id), asOf, db);
 
     // Track products that need the opening-rate fallback (no lots at all,
     // or MONTHLY_AVG with no month lots that fell back through LAST_INWARD
@@ -324,7 +325,7 @@ export async function valueStockBatch(
     }
 
     if (needsOpeningFallback.length > 0) {
-        const openingRates = await loadOpeningRates(needsOpeningFallback.map((p) => p.id));
+        const openingRates = await loadOpeningRates(needsOpeningFallback.map((p) => p.id), db);
         for (const p of needsOpeningFallback) {
             const qty = p.stock ?? 0;
             const openingRate = openingRates.get(p.id);

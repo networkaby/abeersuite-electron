@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { barcodeTagPaise } from "@/shared/lib/pricing/barcodePrice";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 
@@ -36,7 +36,8 @@ import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 export async function saveAutoBarcodes(ids: number[], opts: { onlyMissing?: boolean; skipManual?: boolean } = {}): Promise<number> {
     if (ids.length === 0) return 0;
     const [rows, bands] = await Promise.all([
-        prisma.invProduct.findMany({
+        // The price just written, not the replica's old one.
+        prismaWhereSaved().invProduct.findMany({
             where:  {
                 id: { in: ids },
                 ...(opts.onlyMissing ? { barcodeManualPaise: null } : {}),

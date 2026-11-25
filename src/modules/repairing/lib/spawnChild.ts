@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { createChild, hasOpenChild, isSpawnableFlavour, type ChildFlavour } from "./childEntities";
 
@@ -82,7 +82,7 @@ export async function spawnChild(args: {
 // called on every child change. No-op unless the child carries a signal, has a
 // parent link, and the parent is still on the spawning worker.
 export async function reconcileParentFromChild(childId: number, userId: number): Promise<void> {
-    const child = await prisma.ticket.findUnique({
+    const child = await prismaWhereSaved().ticket.findUnique({
         where: { id: childId },
         select: {
             id: true, parentTicketId: true, parentWorkerId: true,
@@ -92,7 +92,7 @@ export async function reconcileParentFromChild(childId: number, userId: number):
     const signal = child?.ticketWorker?.parentSignal;
     if (!child?.parentTicketId || !child.parentWorkerId || (signal !== "success" && signal !== "fail")) return;
 
-    const parent = await prisma.ticket.findUnique({
+    const parent = await prismaWhereSaved().ticket.findUnique({
         where: { id: child.parentTicketId },
         select: { id: true, status: true, workerId: true },
     });

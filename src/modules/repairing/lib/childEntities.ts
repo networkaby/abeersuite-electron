@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 
 // ── Child spawn (5th power) ────────────────────────────────────────────────────
@@ -79,7 +79,7 @@ export async function createChild(flavour: ChildFlavour, a: SpawnArgs): Promise<
 // One OPEN child per (parent, spawning worker) — uniform now that every child is a
 // Ticket (no per-table fan-out).
 export async function hasOpenChild(parentTicketId: number, parentWorkerId: string): Promise<boolean> {
-    return (await prisma.ticket.count({
+    return (await prismaWhereSaved().ticket.count({
         where: { parentTicketId, parentWorkerId, ticketStatus: { isTerminal: false } },
     })) > 0;
 }

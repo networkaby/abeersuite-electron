@@ -210,10 +210,11 @@ export async function getCurrentAdditionalCostByProduct(
     productIds: number[],
     /** Only allocations dated ≤ asOf (BI reports for a past period). Omit = now. */
     asOf?: Date,
+    db: typeof prisma = prisma,
 ): Promise<Map<number, number>> {
     const out = new Map<number, number>();
     if (productIds.length === 0) return out;
-    const rows = await prisma.additionalCostAllocation.findMany({
+    const rows = await db.additionalCostAllocation.findMany({
         where: {
             kind: "ALLOCATION",
             productId: { in: productIds },

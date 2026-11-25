@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
@@ -17,7 +17,7 @@ export async function DELETE(
 
     // Repair permission layer is being rebuilt (blank canvas) — ungated for now.
     try {
-        const participant = await prisma.ticketParticipant.findFirst({
+        const participant = await prismaWhereSaved().ticketParticipant.findFirst({
             where: { ticketId, userId: targetUserId, removedAt: null },
             select: { id: true, user: { select: { name: true } } },
         });
@@ -28,7 +28,7 @@ export async function DELETE(
             data: { removedAt: new Date() },
         });
 
-        const currentStatus = await prisma.ticket.findUnique({ where: { id: ticketId }, select: { status: true } });
+        const currentStatus = await prismaWhereSaved().ticket.findUnique({ where: { id: ticketId }, select: { status: true } });
         await prisma.ticketLog.create({
             data: {
                 ticketId,

@@ -12,7 +12,7 @@
 // PricingStrategy engine was dropped.)
 
 import * as Sentry from "@sentry/nextjs";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { resolveCostBatch } from "@/modules/pricing-strategy/lib/resolveCost";
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
 import { loadStrategyPoints, additiveMarginPct, additivePriceWithSurcharge, marginForPrice } from "@/modules/pricing-strategy/lib/additiveMargin";
@@ -39,11 +39,14 @@ export async function recomputePricesForProducts(
     const result: RecomputeResult = { updated: 0, skipped: 0, failed: 0 };
     if (productIds.length === 0) return result;
 
+    // Read where the voucher was just saved — a replica still has the old cost, and the
+    // price worked out from it is written back.
+    const db = prismaWhereSaved();
     const uniqueIds = [...new Set(productIds)];
     const expiredTemp = await endTempPricesAfterPurchase(uniqueIds);
 
     const [products, points, orgDefaults] = await Promise.all([
-        prisma.invProduct.findMany({
+        db.invProduct.findMany({
             where:  { id: { in: uniqueIds }, isActive: true },
             select: {
                 id:                       true,
@@ -58,8 +61,8 @@ export async function recomputePricesForProducts(
                 savedSalePricePaise:      true,
             },
         }),
-        loadStrategyPoints(),
-        prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { valuationMethod: true } }),
+        loadStrategyPoints(db),
+        db.orgDefaults.findUnique({ where: { id: 1 }, select: { valuationMethod: true } }),
     ]);
 
     if (products.length === 0) return result;
@@ -86,6 +89,7 @@ export async function recomputePricesForProducts(
         const resolved = await resolveCostBatch(
             group.map((g) => ({ id: g.id, stock: g.stock })),
             method,
+            db,
         );
         for (const [id, r] of resolved) costById.set(id, r.costPaise);
     }
@@ -95,8 +99,8 @@ export async function recomputePricesForProducts(
     // screen's Computed / Strategy columns do, so the floor POS reads (Lowest)
     // is the number that screen shows.
     const [taxResult, additionalById] = await Promise.all([
-        resolveProductTaxBatch({ productIds: products.map((p) => p.id) }),
-        getCurrentAdditionalCostByProduct(products.map((p) => p.id)),
+        resolveProductTaxBatch({ productIds: products.map((p) => p.id), client: db }),
+        getCurrentAdditionalCostByProduct(products.map((p) => p.id), undefined, db),
     ]);
     const taxByProduct = taxResult.products;
 
@@ -174,13 +178,14 @@ export async function recomputePricesForProducts(
  * Returns the ended ids.
  */
 async function endTempPricesAfterPurchase(ids: number[]): Promise<number[]> {
-    const temp = await prisma.invProduct.findMany({
+    const db = prismaWhereSaved();
+    const temp = await db.invProduct.findMany({
         where:  { id: { in: ids }, tempPriceAfterLedgerId: { not: null } },
         select: { id: true, tempPriceAfterLedgerId: true, tempRestoreSource: true, tempRestoreSalePaise: true },
     });
     if (temp.length === 0) return [];
     const minMark = Math.min(...temp.map((t) => t.tempPriceAfterLedgerId!));
-    const rows = await prisma.invStockLedger.findMany({
+    const rows = await db.invStockLedger.findMany({
         where: {
             productId:        { in: temp.map((t) => t.id) },
             id:               { gt: minMark },

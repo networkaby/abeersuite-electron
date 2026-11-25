@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { Priority } from "@/generated/prisma/enums";
@@ -151,7 +151,7 @@ export async function PUT(
         const userId = resolvedUser.id;
 
         const { id } = await params;
-        const scopedTicket = await prisma.ticket.findUnique({
+        const scopedTicket = await prismaWhereSaved().ticket.findUnique({
             where: { id: Number(id) },
             select: { id: true, status: true, context: true },
         });
@@ -339,7 +339,7 @@ export async function DELETE(
     }
 
     try {
-        const existing = await prisma.ticket.findUnique({
+        const existing = await prismaWhereSaved().ticket.findUnique({
             where: { id: ticketId },
             select: { id: true, _count: { select: { children: true } } },
         });

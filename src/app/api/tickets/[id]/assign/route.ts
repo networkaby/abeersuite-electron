@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
@@ -34,7 +34,7 @@ export async function POST(
     const { action, toUserId } = data;
 
     try {
-        const ticket = await prisma.ticket.findUnique({
+        const ticket = await prismaWhereSaved().ticket.findUnique({
             where: { id: ticketId },
             select: {
                 id: true,

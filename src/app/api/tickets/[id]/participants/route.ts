@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
@@ -56,7 +56,7 @@ export async function POST(
     const body = data;
 
     try {
-        const ticket = await prisma.ticket.findUnique({
+        const ticket = await prismaWhereSaved().ticket.findUnique({
             where: { id: ticketId },
             select: { ticketStatus: { select: { isTerminal: true } } },
         });
@@ -83,7 +83,7 @@ export async function POST(
             include: { user: { select: { id: true, name: true, role: true } } },
         });
 
-        const currentStatus = await prisma.ticket.findUnique({ where: { id: ticketId }, select: { status: true } });
+        const currentStatus = await prismaWhereSaved().ticket.findUnique({ where: { id: ticketId }, select: { status: true } });
         await prisma.ticketLog.create({
             data: {
                 ticketId,

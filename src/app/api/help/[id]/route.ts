@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -82,7 +82,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const { data, error } = await validateRequest(req, updateHelpSchema);
         if (error) return error;
 
-        const existing = await prisma.ticket.findUnique({
+        const existing = await prismaWhereSaved().ticket.findUnique({
             where: { id },
             select: {
                 id: true, pipelineId: true, status: true, assignedPositionId: true,

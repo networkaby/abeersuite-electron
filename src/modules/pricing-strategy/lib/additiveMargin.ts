@@ -30,10 +30,10 @@ export interface StrategyPointsResolved {
 }
 
 /** Load the single org-wide additive-margin point set, grouped by dimension. */
-export async function loadStrategyPoints(): Promise<StrategyPointsResolved> {
+export async function loadStrategyPoints(db: typeof prisma = prisma): Promise<StrategyPointsResolved> {
     const [rows, groups] = await Promise.all([
-        prisma.strategyPoint.findMany(),
-        prisma.invProductGroup.findMany({ select: { id: true, parentId: true } }),
+        db.strategyPoint.findMany(),
+        db.invProductGroup.findMany({ select: { id: true, parentId: true } }),
     ]);
     const out: StrategyPointsResolved = {
         base: 0, brand: {}, category: {}, group: {}, product: {},

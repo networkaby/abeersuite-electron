@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { passesWorkGate } from "@/modules/repairing/lib/workGate";
@@ -75,7 +75,7 @@ export async function PATCH(
         if (error) return error;
         const { workerId, statusId, note, visibility, outcome, args } = data;
 
-        const ticket = await prisma.ticket.findUnique({
+        const ticket = await prismaWhereSaved().ticket.findUnique({
             where: { id: ticketId },
             include: { repair: { select: { deviceId: true } } },
         });
@@ -471,7 +471,7 @@ export async function DELETE(
         const { id } = await params;
         const ticketId = Number(id);
 
-        const ticket = await prisma.ticket.findUnique({
+        const ticket = await prismaWhereSaved().ticket.findUnique({
             where: { id: ticketId },
             include: { ticketWorker: { select: { label: true } } },
         });

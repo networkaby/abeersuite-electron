@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, hasPermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -41,7 +41,7 @@ export async function PATCH(
             return NextResponse.json({ error: "Nothing to override — provide a status and/or worker" }, { status: 400 });
         }
 
-        const ticket = await prisma.ticket.findUnique({
+        const ticket = await prismaWhereSaved().ticket.findUnique({
             where: { id: ticketId },
             select: { id: true, status: true, workerId: true },
         });

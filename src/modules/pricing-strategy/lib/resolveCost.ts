@@ -47,13 +47,14 @@ const COST_TO_VAL: Record<CostMethod, ValuationMethod> = {
 export async function resolveCostBatch(
     products: PricingProduct[],
     method: CostMethod,
+    db: typeof prisma = prisma,
 ): Promise<Map<number, ResolvedCost>> {
     const out = new Map<number, ResolvedCost>();
     if (products.length === 0) return out;
 
     if (method === "MONTHLY_AVG") {
         const since = startOfCurrentMonth();
-        const rows = await prisma.invStockLedger.groupBy({
+        const rows = await db.invStockLedger.groupBy({
             by:    ["productId"],
             where: {
                 productId: { in: products.map((p) => p.id) },
@@ -71,7 +72,7 @@ export async function resolveCostBatch(
             return r == null || r._sum.inQty == null || toNumber(r._sum.inQty) <= 0;
         });
         const fallbackVals = noMonthIds.length > 0
-            ? await valueStockBatch(noMonthIds, "LAST_INWARD")
+            ? await valueStockBatch(noMonthIds, "LAST_INWARD", undefined, db)
             : new Map();
 
         for (const p of products) {
@@ -105,6 +106,8 @@ export async function resolveCostBatch(
     const vals = await valueStockBatch(
         products.map((p) => ({ id: p.id, stock: p.stock })),
         valMethod,
+        undefined,
+        db,
     );
     for (const p of products) {
         const v = vals.get(p.id);

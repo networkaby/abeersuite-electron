@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { Prisma } from "@/generated/prisma/client";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
@@ -60,7 +60,7 @@ export async function autoAdvance(ticketId: number, userId: number): Promise<Aut
     const author = await buildActorSnapshot(userId);
 
     for (let hop = 0; hop < MAX_AUTO_HOPS; hop++) {
-        const ticket = await prisma.ticket.findUnique({ where: { id: ticketId }, select: ticketSelect });
+        const ticket = await prismaWhereSaved().ticket.findUnique({ where: { id: ticketId }, select: ticketSelect });
         if (!ticket?.workerId) return result_();
 
         const worker = await prisma.ticketWorker.findUnique({
@@ -163,7 +163,7 @@ export async function autoAdvance(ticketId: number, userId: number): Promise<Aut
     }
 
     // Bound exceeded — stop and log (prevents runaway chains).
-    const t = await prisma.ticket.findUnique({ where: { id: ticketId }, select: { status: true, workerId: true } });
+    const t = await prismaWhereSaved().ticket.findUnique({ where: { id: ticketId }, select: { status: true, workerId: true } });
     await log(ticketId, t?.status ?? "", t?.workerId ?? null, `⚠️ Auto-run chain exceeded ${MAX_AUTO_HOPS} hops — stopped`, author);
     return result_();
 }
