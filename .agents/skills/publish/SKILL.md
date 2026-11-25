@@ -42,10 +42,10 @@ node -p "require('./package.json').version" && git tag -l && git log --oneline -
 
 **A `dist` build first — look for the marker.** `git tag -l "dist-v<version>"`. If it exists, the build came from the `dist` skill and the marker is the authority:
 
-1. **Commit:** `HEAD` must be the marker's commit (`git rev-parse dist-v<version>^{commit}`). If `main` has moved on, check out that commit (detached is fine — this skill publishes any commit) and say so. Never publish a later commit under a dist build's installer.
-2. **Package:** the `sha512:` in the marker's message (`git tag -l --format='%(contents)' dist-v<version>`) must equal the top-level `sha512:` in `dist-app/latest.yml`, and the installer file it names must be present. Mismatch → the pack was rebuilt or overwritten since the owner tested it; stop and say so (rung B territory — it needs a fresh `dist` and a fresh test).
+1. **Commit:** `HEAD` must be or contain the marker's commit (`git rev-parse dist-v<version>^{commit}`). If `main` has moved on, stay on it and say so: step 5 tags the marker's commit, not `HEAD`. Never tag a later commit for a dist build's installer, and skip steps 2–3 — the notes were committed by `dist`.
+2. **Package:** the `sha512:` in the marker's message (`git tag -l --format='%(contents)' dist-v<version>`) must equal the top-level `sha512:` in `dist-app/latest.yml`, and the installer file it names must be present. A `latest.yml` from another version → `pnpm dist:pin` writes the right one, keeping a marker that names this installer. Any other mismatch → the pack was rebuilt or overwritten since the owner tested it; stop and say so (rung B territory — it needs a fresh `dist` and a fresh test).
 3. Both match → checks 1–6 below still run, and pass as a reused pack.
-4. **Delete the marker before step 5**: `git tag -d dist-v<version>`. It is spent once this build goes out; delete it once checks pass, before the push gate.
+4. **Delete the marker after step 5 has succeeded for every repo**: `git tag -d dist-v<version>`. Step 5 reads it, and so does a retry.
 
 No marker → carry on as below.
 
@@ -144,8 +144,10 @@ On a detached HEAD or a tag: **no branch push.** Say that plainly — only the t
 ## Step 5 — Tag and upload
 
 ```bash
-npx tsx scripts/release-electron.ts
+npx tsx scripts/release-electron.ts --reuse-installer
 ```
+
+`--reuse-installer` checks the tested `.exe` against the marker and uploads it byte for byte, as a draft that is published once all three files are up. It needs the marker and the `gh` CLI. A build with no marker, or a rung A re-stamp, runs without it and electron-builder packs a new installer. Retry one repo with the same flag plus `RELEASE_ONLY_REPO`.
 
 Running the script directly is correct **here and only here**: `release` forbids it because it bypasses the `verify:package` gate, and in this flow that gate has already passed — in the owner's `pnpm electron:dist`, and again at step 0 check 6. Confirm it passed before running this. If you cannot confirm it, you are on rung B, not this step.
 
