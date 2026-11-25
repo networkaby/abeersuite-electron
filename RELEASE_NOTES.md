@@ -1,22 +1,26 @@
-# v1.17.16
+# v1.17.17
 
-Every counter should install this. After you save something, the screen no longer goes back to the old data, and the other counters see your save sooner. It also brings a bigger Sale Return window and better price boxes in the product form.
-
-## Saving and refreshing
-
-- After a save, the counter brings the change into its own copy before the screen reloads. Make primary and Delete on product photos should no longer bounce back.
-- A save made on one counter is announced to the other counters and the office at once, so they need not wait for the next timed refresh.
+Every counter should install this. On counters that save straight to the live database, sale returns and gift cards are checked again while saving, and customer messages go out after a save. Other screens also show the new data after a save.
 
 ## Billing
 
-- The Sale Return window is bigger, and the return slip prints like a POS sale.
-- The customer panel shows **Warranties ending soon**, worked out from the bill date and the warranty term.
-- Barcodes on thermal slips now fit the paper even when the voucher number is long.
-- Known errors (offline, voucher year, branch, phone) show the same clear message in more places.
+- A sale return, gift card issue, gift card expiry and quality note are checked again inside the save, so a quick second press cannot pass twice.
+- Bill, receipt and ticket messages (WhatsApp, app, email) are now sent by the office when the counter saves. The office must be updated too, and the counter must be online.
 
-## Products and prices
+## Customers
 
-- The product form has a **Print price** box. Actual sale and Safety % work out the print price, and typing the print price works back to Actual sale.
-- The **Sale price** box is now called **Lowest price**, also in the quick New product box.
-- Saving a product sends only what you changed, waits for the product to finish loading, and keeps what you are typing when the page refreshes.
-- Small product photos load a smaller copy, so lists open faster.
+- Adding a new person or company no longer says "Could not create" when it was saved. If it really fails, the box shows the reason.
+
+## Saving
+
+- Vouchers, shifts, tickets, prices, staff, products, campaigns and contact details now read back what was just saved.
+
+## Products (online shop)
+
+- AI notes show hidden data warnings as open problems, and each open problem has a temporary pass tick.
+- A photo the AI removed can be put back.
+- The in-app product AI and its leftover AI Use rows are hidden for now.
+
+## Phone app
+
+- When the status check is refused, the app stops asking every 10 seconds.
