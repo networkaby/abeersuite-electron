@@ -1,3 +1,4 @@
+import type { PhotoGuide } from "./photoGuide";
 /** Shapes the phone screens read from /api/mobile/*. */
 
 export type PartyBill = {
@@ -74,6 +75,8 @@ export type ProductPhotos = {
     galleryUrls: string[];
     isListedInShop: boolean;
     wasListedInShop?: boolean;
+    /** GET only — stage and notes telling staff what to shoot (photoGuide.ts). */
+    guide?: PhotoGuide;
 };
 
 /** /api/mobile/photos/master/[kind]/[id] — a brand, group or category after its image changed. */

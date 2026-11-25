@@ -13,6 +13,7 @@ import { forgetUnsaved, isNoAnswer, readUnsaved, rememberUnsaved, saveFailureTex
 import type { ProductPhotos } from "../lib/types";
 import MobileHeader from "./MobileHeader";
 import PhotoPickButtons from "./PhotoPickButtons";
+import MobilePhotoGuide, { StageBadge } from "./MobilePhotoGuide";
 import { photosHref } from "./MobilePhotos";
 import { useValueChange } from "@/shared/hooks/useValueChange";
 
@@ -102,7 +103,8 @@ export default function MobileProductPhotos({ id }: { id: number }) {
 
     /** The server's answer after any change — plus a line when the shop listing moved. */
     const applySaved = (saved: ProductPhotos) => {
-        setData(saved);
+        // A save answers without the guide — keep the one from the last load.
+        setData((prev) => ({ ...saved, guide: saved.guide ?? prev?.guide }));
         if (saved.wasListedInShop === false && saved.isListedInShop) setNote({ text: "Shop-ready — now live on the shop.", tone: "good" });
         else if (saved.wasListedInShop && !saved.isListedInShop) setNote({ text: "Taken off the shop — a product needs a photo there.", tone: "warn" });
         void invalidateProductCatalog();
@@ -177,10 +179,11 @@ export default function MobileProductPhotos({ id }: { id: number }) {
             <div className="space-y-4 p-3">
                 {loadError && <p className="text-sm text-destructive">{loadError}</p>}
                 {data && (
-                    <p className="text-sm text-muted-foreground">
-                        {data.sku} · {data.isListedInShop ? "Live on the shop" : "Not on the shop yet"}
+                    <p className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
+                        {data.sku} ·{data.guide && <StageBadge stage={data.guide.stage} />}· {data.isListedInShop ? "Live on the shop" : "Not on the shop yet"}
                     </p>
                 )}
+                {data?.guide && <MobilePhotoGuide guide={data.guide} />}
 
                 <ul className="grid grid-cols-3 gap-2">
                     {photos.map((url, i) => (

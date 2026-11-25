@@ -10,8 +10,10 @@ import { updateShopProduct } from "@/modules/ecommerce/lib/updateShopProduct";
 import { isOwnPhotoUrl } from "@/modules/mobile/lib/shopPhotos";
 import { setAiSkipped } from "@/shared/lib/shop/photoMark";
 import type { ProductPhotos } from "@/modules/mobile/lib/types";
+import { photoGuide, photoGuideSelect } from "@/modules/mobile/lib/photoGuide";
 
-// GET   /api/mobile/photos/product/[id] — one product's shop photos, main first.
+// GET   /api/mobile/photos/product/[id] — one product's shop photos, main first,
+//       plus `guide` (stage, Attention reason, AI / staff notes — photoGuide.ts).
 // PATCH /api/mobile/photos/product/[id] — one change to them:
 //   { add: [url, …] }   append newly uploaded photos (the first photo becomes main)
 //   { remove: url }     take one off
@@ -39,7 +41,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const { id, error } = await parseIdParam(params);
     if (error) return error;
     try {
-        const p = await prisma.invProduct.findUnique({ where: { id }, select });
+        const p = await prisma.invProduct.findUnique({ where: { id }, select: { ...select, ...photoGuideSelect } });
         if (!p) return NextResponse.json({ error: "Product not found" }, { status: 404 });
         const body: ProductPhotos = {
             id: p.id,
@@ -47,6 +49,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             sku: p.sku,
             galleryUrls: productGalleryUrls(p.galleryJson, p.imageUrl),
             isListedInShop: p.isListedInShop,
+            guide: photoGuide(p),
         };
         return NextResponse.json(body);
     } catch (e) {
