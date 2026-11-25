@@ -73,7 +73,7 @@ export function withClosed(info: ShopDraft | null, gone: PrepProblem[], by: stri
 /** parts = every part that raised it (owner, 2026-11-20: "one problem once, credit both parts"). */
 export type PrepProblem = { text: string; level: "stop" | "fix"; part: number; parts?: number[]; at: string; source?: "staff"; by?: string; asideBy?: string; asideAt?: string };
 
-export type RowProblem = { text: string; level: "stop" | "fix" | "note"; aside?: boolean };
+export type RowProblem = { text: string; level: "stop" | "fix" | "note"; aside?: boolean; /** The line as written, and the part that wrote it. */ raw?: string; part?: number };
 
 export type StaffNote = { text: string; by: string; at: string };
 
@@ -100,8 +100,8 @@ export function splitAttention(text: string | null | undefined): { problems: Row
     const problems: RowProblem[] = [];
     const rest: string[] = [];
     for (const line of (text ?? "").split("\n").map((l) => l.trim()).filter(Boolean)) {
-        const m = /^(PENDING|STOPPED|NOTE) \(Part \d\) — (.*)$/.exec(line);
-        if (m) problems.push({ text: problemText(m[2]), level: m[1] === "NOTE" ? "fix" : "stop" });
+        const m = /^(PENDING|STOPPED|NOTE) \(Part (\d)\) — (.*)$/.exec(line);
+        if (m) problems.push({ text: problemText(m[3]), level: m[1] === "NOTE" ? "fix" : "stop", raw: m[3], part: Number(m[2]) });
         else rest.push(line);
     }
     return { problems: [...problems.filter((p) => p.level === "stop"), ...problems.filter((p) => p.level === "fix")], rest };
@@ -110,6 +110,7 @@ export function splitAttention(text: string | null | undefined): { problems: Row
 /**
  * The open list as the AI notes box shows it (owner, 2026-11-25): the saved list, plus
  * what is parked in the Attention reason or flagged on the AI copy and is not on it yet.
+ * A line not saved yet has no `at`; the first temporary pass saves them all.
  * A reason with no tagged line at all (staff's, a review's) is problems line by line.
  */
 export function openList(saved: PrepProblem[], attention: string | null, flags: string[], closed: ClosedProblem[] = []): PrepProblem[] {
@@ -120,12 +121,12 @@ export function openList(saved: PrepProblem[], attention: string | null, flags: 
     // A flag already closed is not raised again by the old copy; a reason line is what is open now.
     const done = new Set(closed.map((c) => key(c.text)));
     const more: PrepProblem[] = [];
-    const add = (text: string, level: PrepProblem["level"]) => {
+    const add = (text: string, level: PrepProblem["level"], part = 0) => {
         if (seen.has(key(text))) return;
         seen.add(key(text));
-        more.push({ text, level, part: 0, at: "" });
+        more.push({ text, level, part, at: "" });
     };
-    for (const p of [...problems, ...plain]) add(p.text, p.level === "stop" ? "stop" : "fix");
+    for (const p of [...problems, ...plain]) add(p.raw ?? p.text, p.level === "stop" ? "stop" : "fix", p.part);
     for (const f of flags) if (!done.has(key(f))) add(f, "fix");
     const ai = [...saved.filter((p) => !p.source && !p.asideAt), ...more];
     return [...ai.filter((p) => p.level === "stop"), ...ai.filter((p) => p.level === "fix"), ...saved.filter((p) => p.source || p.asideAt)];

@@ -7,7 +7,7 @@ import { AI_PHOTO_LIMITS } from "@/shared/lib/constants/ai";
 import { COMPATIBLE_SPEC } from "@/shared/lib/shop/compatibility";
 import { getR2Text, isR2Configured, messagesBucket, putR2 } from "@/shared/lib/storage/r2";
 import type { ProductCopy } from "@/modules/ecommerce/lib/aiProductCopy";
-import { aiRuns, nextStep, noteItems, readShopDraft, trimRuns, withClosed, type PrepProblem, type PrepRun, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
+import { aiRuns, nextStep, noteItems, openList, readShopDraft, trimRuns, withClosed, type PrepProblem, type PrepRun, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
 import type { ShopStatus } from "@/generated/prisma/enums";
 import { updateShopProduct, type ShopProductPatch } from "@/modules/ecommerce/lib/updateShopProduct";
 import { startAi } from "@/modules/ecommerce/lib/shopWaiting";
@@ -1273,19 +1273,22 @@ export async function savePart4(id: number, input: z.infer<typeof part4Schema>) 
  * (so it no longer reads as open) and no part raises it again, but it stays on
  * the product with who and when — the products list's "Set aside" tab finds it.
  * Back: it is open again; the next run raises it if it is still true.
+ * A problem shown only from the Attention reason or the AI copy's flags is saved
+ * first, with the others like it, so every line in the AI notes box can be ticked.
  */
 export async function setProblemAside(id: number, text: string, aside: boolean, by: string) {
     const r = await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { shopAttention: true, shopDraftJson: true, photoChecklistJson: true, shopStatus: true } });
     if (!r) throw new AgentCopyError("Product not found");
     const info = readShopDraft(r.shopDraftJson);
     const key = problemKey(text);
-    const list = info?.problems ?? [];
-    if (!list.some((p) => problemKey(p.text) === key)) throw new AgentCopyError("That problem is not on the product any more — reload.");
     const now = new Date().toISOString();
+    const list = openList(info?.problems ?? [], r.shopStatus === "ATTENTION" ? r.shopAttention : null, info?.aiCopy?.flags ?? [], info?.closed)
+        .map((p) => (p.at ? p : { ...p, at: now }));
+    if (!list.some((p) => problemKey(p.text) === key)) throw new AgentCopyError("That problem is not on the product any more — reload.");
     const problems = list.map((p) => problemKey(p.text) !== key ? p : aside ? { ...p, asideBy: by, asideAt: now } : { ...p, asideBy: undefined, asideAt: undefined });
     const asideCount = problems.filter((p) => p.asideAt).length;
     const attention = aside && r.shopAttention
-        ? r.shopAttention.split("\n").filter((l) => !(OPEN_LINE.test(l.trim()) && problemKey(l) === key)).join("\n")
+        ? r.shopAttention.split("\n").filter((l) => problemKey(l) !== key).join("\n")
         : r.shopAttention;
     // A pass on "Must photo missing: …" also lets those photos stop holding the product
     // off the shop (owner, 2026-11-22: "publish with hope we add the photo soon").

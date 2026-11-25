@@ -27,6 +27,7 @@ test("open list: reason, flags, closed and temporary pass", () => {
     const closed = [{ text: "Done flag", level: "fix" as const, raisedBy: "AI", at: "x", by: "AI", how: "fixed" as const }];
     const out = openList(saved, "STOPPED (Part 1) — No label\nLast run: Part 1", ["New flag", "Done flag", "Old brand."], closed);
     assert.deepEqual(out.map((p) => p.text), ["No label", "New flag", "Old brand"]);
+    assert.deepEqual(openList([], "PENDING (Part 5) — No photo — take it", []), [{ text: "No photo — take it", level: "stop", part: 5, at: "" }]);
     assert.deepEqual(openList([], "Check the unit\nWas Unpublished before this check.", []).map((p) => p.text), ["Check the unit"]);
 });
 
