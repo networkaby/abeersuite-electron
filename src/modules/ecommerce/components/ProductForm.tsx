@@ -837,7 +837,7 @@ export default function ProductForm({
                         productId: initial.id, runs: row?.shopDraft?.runs ?? [], problems: row?.shopDraft?.problems ?? [], staffNote: row?.shopDraft?.staffNote ?? null, closed: row?.shopDraft?.closed ?? [], onChanged: () => void reloadRow(),
                         next: nextStep({
                             stage: shopStatus, listed: !!initial?.isListedInShop, photos: galleryUrls.length, weight: !!weightGrams.trim(),
-                            description: !!description.trim(), runs: row?.shopDraft?.runs ?? [],
+                            description: !!description.trim(), runs: row?.shopDraft?.runs ?? [], attention: row?.shopAttention,
                             openProblems: (row?.shopDraft?.problems ?? []).filter((x) => !x.asideAt).length, pendingMissing: qualification.missing,
                         }),
                         acting: busy || queueing,

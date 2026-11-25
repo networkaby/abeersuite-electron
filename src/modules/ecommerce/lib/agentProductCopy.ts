@@ -2,7 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import type { ShopStatus } from "@/generated/prisma/enums";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
 import { photosForAi } from "@/shared/lib/shop/photoMark";
 import { AI_PHOTO_LIMITS } from "@/shared/lib/constants/ai";
@@ -277,7 +277,7 @@ export const agentCopySchema = z.object({
 export class AgentCopyError extends Error {}
 
 export async function saveAgentCopy(id: number, body: z.infer<typeof agentCopySchema>): Promise<{ draft: ProductCopy; shopStatus: ShopStatus }> {
-    const p = await prisma.invProduct.findUnique({
+    const p = await prismaWhereSaved().invProduct.findUnique({
         where: { id },
         select: {
             name: true, modelNo: true, shopStatus: true, imageUrl: true, galleryJson: true,
@@ -436,7 +436,7 @@ export async function writeAsDraft(id: number, fields: ShopProductPatch, extra: 
         const err = (await saved.response.json().catch(() => null)) as { error?: string } | null;
         throw new AgentCopyError(err?.error ?? "Could not save the product");
     }
-    const row = await prisma.invProduct.findUniqueOrThrow({ where: { id }, select: { shopDraftJson: true } });
+    const row = await prismaWhereSaved().invProduct.findUniqueOrThrow({ where: { id }, select: { shopDraftJson: true } });
     const info = readShopDraft(row.shopDraftJson);
     const next: ShopDraft = { ...info, ...extra(info) };
     await prisma.invProduct.update({ where: { id }, data: { shopDraftJson: next as unknown as Prisma.InputJsonValue } });
@@ -462,7 +462,7 @@ export const readPageSchema = z.object({
  * never a private address: not an open scraper. Same answer as Step 4 sees.
  */
 export async function readPageForAgent(b: z.infer<typeof readPageSchema>) {
-    const p = await prisma.invProduct.findUnique({
+    const p = await prismaWhereSaved().invProduct.findUnique({
         where: { id: b.productId },
         select: { name: true, modelNo: true, brand: { select: { name: true } }, codes: { where: { kind: { in: ["EAN", "UPC"] } }, select: { value: true } } },
     });
@@ -514,13 +514,13 @@ export const notesSchema = z.object({
  * draft or Save as ready. One note per line.
  */
 export async function addReviewNotes(id: number, b: z.infer<typeof notesSchema>) {
-    const p = await prisma.invProduct.findUnique({ where: { id }, select: { shopAttention: true } });
+    const p = await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { shopAttention: true } });
     if (!p) throw new AgentCopyError("Product not found");
     const before = b.replace ? [] : (p.shopAttention ?? "").split("\n").map((x) => x.trim()).filter(Boolean);
     const notes = [...new Set([...before, ...b.notes])].slice(-30);
     await parkInAttention([id], notes.join("\n").slice(0, 10000), "Claude", "any");
     // A new review replaces the notes kept from the last one.
-    const row = await prisma.invProduct.findUnique({ where: { id }, select: { shopDraftJson: true } });
+    const row = await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { shopDraftJson: true } });
     const info = readShopDraft(row?.shopDraftJson);
     if (info?.kept) {
         const { stageBefore, aiCopy } = info;
@@ -547,7 +547,7 @@ export const compatSchema = z.object({
  * goes on the product as the "Compatible Models" spec, and it moves to Draft.
  */
 export async function saveCompatibility(id: number, b: z.infer<typeof compatSchema>) {
-    const p = await prisma.invProduct.findUnique({
+    const p = await prismaWhereSaved().invProduct.findUnique({
         where: { id },
         select: { name: true, modelNo: true, specsJson: true, brand: { select: { name: true } }, codes: { where: { kind: { in: ["EAN", "UPC"] } }, select: { value: true } } },
     });

@@ -1,7 +1,7 @@
 import "server-only";
 import { Prisma } from "@/generated/prisma/client";
 import type { ShopStatus } from "@/generated/prisma/enums";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { readShopDraft, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
 
 // Waiting stage (owner, 2026-11-17): staff shortlist products for the AI run
@@ -14,7 +14,7 @@ const IN_WORK: ShopStatus[] = ["DRAFT", "ATTENTION", "WAITING"];
 
 /** Start AI: move to Waiting, remember the stage it came from, clear the Attention flag. */
 export async function startAi(ids: number[]): Promise<{ queued: number; published: string[] }> {
-    const rows = await prisma.invProduct.findMany({
+    const rows = await prismaWhereSaved().invProduct.findMany({
         where: { id: { in: ids }, shopStatus: { not: "WAITING" } },
         select: { id: true, name: true, shopStatus: true, shopDraftJson: true },
     });
@@ -43,7 +43,7 @@ export async function startAi(ids: number[]): Promise<{ queued: number; publishe
 
 /** Remove from Waiting: back to the stage it came from (Unpublished when unknown). */
 export async function cancelWaiting(ids: number[]): Promise<{ removed: number; moved: { id: number; shopStatus: ShopStatus }[] }> {
-    const rows = await prisma.invProduct.findMany({
+    const rows = await prismaWhereSaved().invProduct.findMany({
         where: { id: { in: ids }, shopStatus: "WAITING" },
         select: { id: true, shopDraftJson: true },
     });

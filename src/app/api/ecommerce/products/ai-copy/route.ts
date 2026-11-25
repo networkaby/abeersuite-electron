@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
@@ -166,7 +166,7 @@ async function applyInAppExtras(productId: number, copy: ProductCopy) {
  * temporary pass is not raised again, and a reason already there is kept.
  */
 async function parkInApp(productId: number, lines: string[]): Promise<boolean> {
-    const r = await prisma.invProduct.findUnique({ where: { id: productId }, select: { shopStatus: true, shopAttention: true, shopDraftJson: true } });
+    const r = await prismaWhereSaved().invProduct.findUnique({ where: { id: productId }, select: { shopStatus: true, shopAttention: true, shopDraftJson: true } });
     const aside = new Set((readShopDraft(r?.shopDraftJson)?.problems ?? []).filter((p) => p.asideAt).map((p) => problemKey(p.text)));
     const fresh = lines.map((l) => l.replace(/\s+/g, " ").trim()).filter((l) => !aside.has(problemKey(l)));
     if (!fresh.length) return false;

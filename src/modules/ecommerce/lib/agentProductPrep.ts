@@ -1,6 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
 import { photosForAi } from "@/shared/lib/shop/photoMark";
 import { AI_PHOTO_LIMITS } from "@/shared/lib/constants/ai";
@@ -90,7 +90,7 @@ export const problemKey = (l: string) => {
 
 /** The problems staff set aside ("can't fix now"): a part never raises them again, so they never block. */
 async function asideKeys(id: number): Promise<Set<string>> {
-    const r = await prisma.invProduct.findUnique({ where: { id }, select: { shopDraftJson: true } });
+    const r = await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { shopDraftJson: true } });
     return new Set((readShopDraft(r?.shopDraftJson)?.problems ?? []).filter((p) => p.asideAt).map((p) => problemKey(p.text)));
 }
 /** The same point once, whichever part or level wrote it — the first (stronger) one stays. */
@@ -116,7 +116,7 @@ const notPhotoRestatement = (serverLines: string[]) => {
  * reports them fixed (POST /fixed); an AI problem no longer in the reason was fixed and goes.
  */
 export async function recordRun(id: number, skill: PrepRun["skill"], part: string, from: ShopStatus, photos?: { before: string[]; why: Map<string, string> }) {
-    const r = await prisma.invProduct.findUnique({ where: { id }, select: { shopStatus: true, shopAttention: true, shopDraftJson: true, imageUrl: true, galleryJson: true } });
+    const r = await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { shopStatus: true, shopAttention: true, shopDraftJson: true, imageUrl: true, galleryJson: true } });
     if (!r) return;
     const info = readShopDraft(r.shopDraftJson);
     const now = new Date().toISOString();
@@ -173,7 +173,7 @@ async function leaveAt(id: number, to: Then, patch: ShopProductPatch, extra?: (i
         }
     }
     if (extra) {
-        const row = await prisma.invProduct.findUniqueOrThrow({ where: { id }, select: { shopDraftJson: true } });
+        const row = await prismaWhereSaved().invProduct.findUniqueOrThrow({ where: { id }, select: { shopDraftJson: true } });
         const info = readShopDraft(row.shopDraftJson);
         await prisma.invProduct.update({ where: { id }, data: { shopDraftJson: { ...info, ...extra(info) } as never } });
     }
@@ -181,7 +181,7 @@ async function leaveAt(id: number, to: Then, patch: ShopProductPatch, extra?: (i
     // Draft with nothing left for staff: the old Attention reason is done with.
     else if (to === "draft") await prisma.invProduct.update({ where: { id }, data: { shopAttention: null, shopAttentionAt: null, shopAttentionBy: null } });
     else if (to === "waiting") await startAi([id]);
-    return (await prisma.invProduct.findUniqueOrThrow({ where: { id }, select: { shopStatus: true } })).shopStatus;
+    return (await prismaWhereSaved().invProduct.findUniqueOrThrow({ where: { id }, select: { shopStatus: true } })).shopStatus;
 }
 
 /** An Attention reason: the open problems, what to do after, the Last run line and where it came from. */
@@ -256,7 +256,7 @@ async function writeState(id: number, s: PrepState, run?: RunCtx) {
 }
 
 async function currentIdentity(id: number): Promise<Identity> {
-    const p = await prisma.invProduct.findUniqueOrThrow({
+    const p = await prismaWhereSaved().invProduct.findUniqueOrThrow({
         where: { id },
         select: { modelNo: true, brand: { select: { name: true } }, codes: { where: { kind: { in: ["EAN", "UPC"] } }, select: { value: true } } },
     });
@@ -284,7 +284,7 @@ const STAGE_WORDS: Record<string, string> = {
     UNPUBLISHED: "Unpublished before this check",
 };
 async function originLine(id: number): Promise<string> {
-    const r = await prisma.invProduct.findUnique({ where: { id }, select: { shopStatus: true, shopDraftJson: true } });
+    const r = await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { shopStatus: true, shopDraftJson: true } });
     if (!r) return "";
     const work = r.shopStatus === "DRAFT" || r.shopStatus === "ATTENTION" || r.shopStatus === "WAITING";
     const from = work ? readShopDraft(r.shopDraftJson)?.stageBefore ?? "UNPUBLISHED" : r.shopStatus;
@@ -325,7 +325,7 @@ const aiCopyWithoutRun = (info: ShopDraft | null) => info?.aiCopy && { aiCopy: {
 
 /** Write a part's notes onto the Draft notes ("Notes for you"), replacing its earlier ones. */
 async function addDraftNotes(id: number, part: number, lines: string[], result: string) {
-    const row = await prisma.invProduct.findUniqueOrThrow({ where: { id }, select: { shopDraftJson: true } });
+    const row = await prismaWhereSaved().invProduct.findUniqueOrThrow({ where: { id }, select: { shopDraftJson: true } });
     const info = readShopDraft(row.shopDraftJson);
     const notes = partNotes(info?.notes ?? [], part, lines, result);
     await prisma.invProduct.update({ where: { id }, data: { shopDraftJson: { ...info, ...aiCopyWithoutRun(info), notes, notesAt: new Date().toISOString(), kept: undefined } as never } });
@@ -373,7 +373,7 @@ export async function replacePhotoWithEdit(id: number, n: number, file: Blob | n
         // Undo a bad edit: only a photo already in our own Cloudinary shop folder (the original the edit answered with).
         if (!restoreUrl || !isCloudinaryUrl(restoreUrl) || !restoreUrl.includes("/shop/products/")) throw new AgentCopyError("restore needs the original's link from our photo storage");
     } else if (!file || !file.type.startsWith("image/") || file.size === 0 || file.size > EDIT_MAX_BYTES) throw new AgentCopyError("Send one JPG / PNG / WebP image up to 10 MB");
-    const p = await prisma.invProduct.findUnique({ where: { id }, select: { imageUrl: true, galleryJson: true } });
+    const p = await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { imageUrl: true, galleryJson: true } });
     if (!p) throw new AgentCopyError("Product not found");
     const gallery = galleryOf(p);
     const original = photosForAi(gallery)[n - 1];
@@ -445,7 +445,7 @@ export async function productForPrep(id: number) {
              */
             nextStep: nextStep({
                 stage: base.shopStatus, listed: base.shopStatus === "PUBLISHED", photos: base.photos.length, weight: !!p.weightGrams,
-                description: !!base.currentDescription?.trim(), runs: draft?.runs ?? [],
+                description: !!base.currentDescription?.trim(), runs: draft?.runs ?? [], attention: p.shopAttention,
                 openProblems: (draft?.problems ?? []).filter((x) => !x.asideAt).length,
             }),
             /**
@@ -549,7 +549,7 @@ const PRODUCT_KINDS = new Set<string>(Object.entries(PHOTO_KINDS).filter(([, v])
  * saved after this part). `alias` maps a page photo url to its copy in our storage.
  */
 async function photoListOf(part: 1 | 3 | 4 | 5, id: number, c: PhotoCheck, gallery: string[], remove: PhotoRemoval[] = [], alias = new Map<string, string>()) {
-    const row = await prisma.invProduct.findUnique({ where: { id }, select: { photoChecklistJson: true } });
+    const row = await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { photoChecklistJson: true } });
     const prev = readPhotoChecklist(row?.photoChecklistJson);
     const kinds = (xs: string[]) => xs.filter(isPhotoKind) as PhotoKind[];
     const tagOf = new Map(c.tags.map((t) => [alias.get(t.url) ?? t.url, t.kind]));
@@ -665,7 +665,7 @@ export const part1Schema = z.object({
 export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?: RunCtx, next?: "part3" | "part5") {
     const photosNext = next === "part5";
     requireR2();
-    const p = await prisma.invProduct.findUnique({ where: { id }, select: { imageUrl: true, galleryJson: true, specsJson: true } });
+    const p = await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { imageUrl: true, galleryJson: true, specsJson: true } });
     if (!p) throw new AgentCopyError("Product not found");
     const gallery = galleryOf(p);
     const { gone: sure, held } = splitRemovals(gallery, b.remove, tagMap(b.photos.tags));
@@ -761,7 +761,7 @@ export async function savePart2(id: number, b: z.infer<typeof part2Schema>, run?
     if (!state || state.part < 1) throw new AgentCopyError(identityChanged ? "Brand / model / barcode changed since Part 1 — run Part 1 again first." : "Part 1 is not done for this product — run it first.");
     if (state.search && !b.again) throw new AgentCopyError(`Already searched on ${state.search.at.slice(0, 10)} — one search per product. Use the saved pages (Part 3); send "again": true only when the owner asks.`);
     if (b.failed) return searchFailed(id, b.failed);
-    const p = await prisma.invProduct.findUniqueOrThrow({ where: { id }, select: { name: true } });
+    const p = await prismaWhereSaved().invProduct.findUniqueOrThrow({ where: { id }, select: { name: true } });
     const identity = await currentIdentity(id);
     let found: PageSearch;
     try {
@@ -800,7 +800,7 @@ export async function savePart2(id: number, b: z.infer<typeof part2Schema>, run?
         read: found.pages.map((pg) => ({ url: pg.url, site: pg.site, maker: pg.maker, codeMatch: pg.codeMatch, accepted: accepted.includes(pg) })),
         dropped: found.dropped,
         /** Must photos still missing — Part 3 adds them from the kept pages when sure. */
-        findOnline: photosToFind(readPhotoChecklist((await prisma.invProduct.findUnique({ where: { id }, select: { photoChecklistJson: true } }))?.photoChecklistJson)),
+        findOnline: photosToFind(readPhotoChecklist((await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { photoChecklistJson: true } }))?.photoChecklistJson)),
     };
 }
 
@@ -957,7 +957,7 @@ export async function savePart3(id: number, b: z.infer<typeof part3Schema>, run?
     const { state, identityChanged } = await liveState(id, run);
     if (!state?.search || state.part < 2) throw new AgentCopyError(identityChanged ? "Brand / model / barcode changed since the search — start again at Part 1." : "No saved search — Part 2 is not done.");
     const s = state.search;
-    const p: ProductRow = await prisma.invProduct.findUniqueOrThrow({ where: { id }, select: productSelect });
+    const p: ProductRow = await prismaWhereSaved().invProduct.findUniqueOrThrow({ where: { id }, select: productSelect });
 
     // The fact check, exactly as product-copy's — but on the SAVED pages, no download.
     const letterOf = new Map(s.found.pages.map((pg, i) => [pg.url, String.fromCharCode(65 + i)]));
@@ -1082,7 +1082,7 @@ const SERVER_PHOTO_LINE = /^(Main photo |No photo at all|Must photo missing)/;
  * is left only staff can do; Part 4 checks it after.
  */
 export async function savePart5(id: number, b: z.infer<typeof part5Schema>, run?: RunCtx) {
-    const p: ProductRow & { shopAttention: string | null } = await prisma.invProduct.findUniqueOrThrow({
+    const p: ProductRow & { shopAttention: string | null } = await prismaWhereSaved().invProduct.findUniqueOrThrow({
         where: { id }, select: { ...productSelect, shopAttention: true },
     }).catch(() => { throw new AgentCopyError("Product not found"); });
     const { state, identityChanged } = await liveState(id, run);
@@ -1216,7 +1216,7 @@ const NEXT_WORDS = { part5: "Part 5 (photos — with Part 1, no search)", part3:
  * shop is fine). Only a product with nothing found is verified.
  */
 export async function savePart4(id: number, input: z.infer<typeof part4Schema>) {
-    const row = await prisma.invProduct.findUnique({ where: { id }, select: { imageUrl: true, galleryJson: true } });
+    const row = await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { imageUrl: true, galleryJson: true } });
     if (!row) throw new AgentCopyError("Product not found");
     // Photos are checked here, not taken on the AI's word (owner, 2026-11-18: a
     // one-photo product with our logo on the main photo passed).
@@ -1275,7 +1275,7 @@ export async function savePart4(id: number, input: z.infer<typeof part4Schema>) 
  * Back: it is open again; the next run raises it if it is still true.
  */
 export async function setProblemAside(id: number, text: string, aside: boolean, by: string) {
-    const r = await prisma.invProduct.findUnique({ where: { id }, select: { shopAttention: true, shopDraftJson: true, photoChecklistJson: true, shopStatus: true } });
+    const r = await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { shopAttention: true, shopDraftJson: true, photoChecklistJson: true, shopStatus: true } });
     if (!r) throw new AgentCopyError("Product not found");
     const info = readShopDraft(r.shopDraftJson);
     const key = problemKey(text);
@@ -1312,7 +1312,7 @@ export async function setProblemAside(id: number, text: string, aside: boolean, 
  * goes, an unchanged one keeps its date and any "can't fix now" tick.
  */
 export async function saveStaffNote(id: number, text: string, by: string) {
-    const r = await prisma.invProduct.findUnique({ where: { id }, select: { shopDraftJson: true } });
+    const r = await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { shopDraftJson: true } });
     if (!r) throw new AgentCopyError("Product not found");
     const info = readShopDraft(r.shopDraftJson);
     const now = new Date().toISOString();
@@ -1338,7 +1338,7 @@ export async function saveStaffNote(id: number, text: string, by: string) {
  * note so it is not picked up again. Text not on the list comes back in `unknown`.
  */
 export async function markFixed(id: number, texts: string[]) {
-    const r = await prisma.invProduct.findUnique({ where: { id }, select: { shopAttention: true, shopDraftJson: true } });
+    const r = await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { shopAttention: true, shopDraftJson: true } });
     if (!r) throw new AgentCopyError("Product not found");
     const info = readShopDraft(r.shopDraftJson);
     const keys = new Set(texts.map(problemKey));

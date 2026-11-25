@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { splitRemovals } from "./photoChecklist";
-import { openList } from "./productAdmin";
+import { nextStep, openList } from "./productAdmin";
 
 const r = (url: string, why: string, kind?: string) => ({ url, why, kind });
 const urls = (xs: { url: string }[]) => xs.map((x) => x.url);
@@ -28,4 +28,11 @@ test("open list: reason, flags, closed and temporary pass", () => {
     const out = openList(saved, "STOPPED (Part 1) — No label\nLast run: Part 1", ["New flag", "Done flag", "Old brand."], closed);
     assert.deepEqual(out.map((p) => p.text), ["No label", "New flag", "Old brand"]);
     assert.deepEqual(openList([], "Check the unit\nWas Unpublished before this check.", []).map((p) => p.text), ["Check the unit"]);
+});
+
+test("next step in Attention follows the reason, not only the run list", () => {
+    const at = (attention: string) => nextStep({ stage: "ATTENTION", listed: false, photos: 3, weight: true, description: true, runs: [], openProblems: 1, attention });
+    assert.equal(at("NOTE (Part 4) — x\nLast run: Part 4 · 25 Nov 2026, 5:30 pm · 1 problem(s) → Attention · next: Part 5 (photos — with Part 1, no search)").part, "5");
+    assert.equal(at("NOTE (Part 4) — x\nLast run: Part 4 · 25 Nov 2026 · 1 problem(s) → Attention").act, "save");
+    assert.equal(at("STOPPED (Part 1) — x\nLast run: Part 1 · stopped").part, "1");
 });

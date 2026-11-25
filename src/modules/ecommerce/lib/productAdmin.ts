@@ -362,6 +362,8 @@ export type NextInput = {
     description: boolean;
     runs: PrepRun[];
     openProblems: number;
+    /** The Attention reason — its Last run line says which part parked it, and what Part 4 wants next. */
+    attention?: string | null;
     /** What the publish rules still need (Pending only). */
     pendingMissing?: string[];
 };
@@ -385,12 +387,20 @@ export function nextStep(i: NextInput): NextStep {
             return { text: `${fix}product-recheck part 4 → Ready`, skill: "product-recheck", part: "4" };
         case "ATTENTION": {
             const parked = [...i.runs].reverse().find((r) => r.to === "ATTENTION");
-            if (parked?.skill === "staff") {
+            if (parked?.skill === "staff" && !/^Last run: /m.test(i.attention ?? "")) {
                 return parked.from === "PUBLISHED" || parked.from === "READY"
                     ? { text: `${fix}Save as ready → Publish`, act: "ready", actLabel: "Save as ready" }
                     : { text: `${fix}Save as draft → product-recheck part 4`, act: "save", actLabel: "Save as draft" };
             }
-            const p = parked ? partNo(parked) : 1;
+            // The reason is the stop itself; the run list may miss it (an old stop, a trimmed list).
+            const said = /^Last run: Part (\d)\b(?:.*· next: Part (\d))?/m.exec(i.attention ?? "");
+            const then = said?.[2];
+            // Part 4 says which part repairs it (owner, 2026-11-25): photos → 5, text → 3, start again → 1.
+            if (then) {
+                const what = then === "5" ? "part 5 (photos, with part 1)" : then === "3" ? "part 3 (rewrite)" : `part ${then}`;
+                return { text: `${fix ? "fix by hand, or " : ""}Start → product-prep ${what}`, act: "start", actLabel: "Start", skill: "product-prep", part: then };
+            }
+            const p = said ? Number(said[1]) : parked ? partNo(parked) : Number(/\(Part ([1-5])\) —/.exec(i.attention ?? "")?.[1] ?? 1);
             return p <= 2
                 ? { text: `${fix}Start → product-prep part ${p || 1} runs again`, act: "start", actLabel: "Start", skill: "product-prep", part: String(p || 1) }
                 : { text: `${fix}Save as draft → product-recheck part 4`, act: "save", actLabel: "Save as draft" };

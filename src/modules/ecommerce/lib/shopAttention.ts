@@ -1,7 +1,7 @@
 import "server-only";
 import { Prisma } from "@/generated/prisma/client";
 import type { ShopStatus } from "@/generated/prisma/enums";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { readShopDraft, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
 
 // Attention stage (owner, 2026-11-11): a Draft blocked on a manual check — name
@@ -21,7 +21,7 @@ export async function parkInAttention(
     by: string,
     from: ShopStatus[] | "any",
 ): Promise<{ parked: number; skipped: string[] }> {
-    const rows = await prisma.invProduct.findMany({
+    const rows = await prismaWhereSaved().invProduct.findMany({
         where: { id: { in: ids } },
         select: { id: true, name: true, shopStatus: true, shopDraftJson: true },
     });
