@@ -613,6 +613,11 @@ type Removal = z.infer<typeof removal>;
 const asAdvice = (rs: Removal[], gallery: string[]): PhotoRemoval[] =>
     rs.filter((r) => gallery.includes(r.url)).map((r) => ({ url: r.url, why: r.why in PHOTO_REMOVE_REASONS ? (r.why as PhotoRemoveReason) : "quality", note: r.note }));
 const tagMap = (tags: PhotoCheck["tags"], alias = new Map<string, string>()) => new Map(tags.map((t) => [alias.get(t.url) ?? t.url, t.kind]));
+/** The gallery after a split: a held photo goes last, so photo 1 is the one the AI judged (its mainClean took the held one as gone). */
+const afterRemovals = (gallery: string[], gone: Set<string>, held: Removal[]) => {
+    const last = new Set(held.map((r) => r.url));
+    return [...gallery.filter((u) => !gone.has(u) && !last.has(u)), ...gallery.filter((u) => last.has(u))];
+};
 const noteLine = (part: number) => (x: string) => `NOTE (Part ${part}) — ${x.replace(/\s+/g, " ").trim()}`;
 const lines = z.array(z.string().trim().min(1).max(300)).max(40).default([]);
 
@@ -667,9 +672,11 @@ export async function savePart1(id: number, b: z.infer<typeof part1Schema>, run?
     const gone = new Set(sure.map((r) => r.url));
     const patch: ShopProductPatch = {};
     const done: string[] = [];
-    if (gone.size) {
-        patch.galleryUrls = gallery.filter((u) => !gone.has(u));
+    if (gone.size || held.length) {
+        patch.galleryUrls = afterRemovals(gallery, gone, held);
         patch.imageUrl = patch.galleryUrls[0] ?? null;
+    }
+    if (gone.size) {
         done.push(`Removed ${gone.size} wrong photo(s): ${sure.map((r) => r.note || r.why).join("; ")}.`);
     }
     if (b.clear.brand) { patch.brandId = null; done.push("Brand cleared (wrong)."); }
@@ -880,10 +887,10 @@ async function applyPhotos(ph: PhotoPlan, p: ProductRow, trusted: PageRead[], pa
     const added = wanted.filter((x) => copyOf.has(x.url));
     const { gone: sure, held } = splitRemovals(gallery, ph.remove, tagMap(tags, copyOf), [...copyOf.values()]);
     const gone = new Set(sure.map((r) => r.url));
-    let next = [...gallery.filter((u) => !gone.has(u)), ...added.map((x) => copyOf.get(x.url)!)];
+    let next = afterRemovals([...gallery, ...added.map((x) => copyOf.get(x.url)!)], gone, held);
     const ordered = [...new Set(ph.order.map((u) => copyOf.get(u) ?? u).filter((u) => next.includes(u)))];
     if (ordered.length) next = [...ordered, ...next.filter((u) => !ordered.includes(u))];
-    if (gone.size || added.length || ordered.length) {
+    if (gone.size || held.length || added.length || ordered.length) {
         patch.galleryUrls = next;
         patch.imageUrl = next[0] ?? null;
         if (gone.size) notes.push(`Removed ${gone.size} wrong photo(s): ${sure.map((r) => r.note || r.why).join("; ")}.`);
