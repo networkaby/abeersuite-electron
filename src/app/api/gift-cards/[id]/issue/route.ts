@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError, parseIdParam } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -8,6 +8,8 @@ import { enginePost } from "@/modules/accountancy/lib/transactionEngine";
 import { auth } from "@/auth";
 import { requireWritableBranchId } from "@/shared/lib/auth/activeBranch";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
+
+class NotDraftError extends Error {}
 
 // POST /api/gift-cards/[id]/issue — SELL a DRAFT card. Posts a balanced JE
 // Dr <payment ledger> / Cr "Gift Card Liability" for the card's value, writes an
@@ -29,7 +31,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             return NextResponse.json({ error: "Gift Card Liability ledger not configured. Re-run the bootstrap seed.", code: "GC_LEDGER_MISSING" }, { status: 422 });
         }
 
-        const card = await prisma.giftCard.findUnique({ where: { id }, select: { id: true, code: true, status: true, initialValue: true } });
+        const card = await prismaWhereSaved().giftCard.findUnique({ where: { id }, select: { id: true, code: true, status: true, initialValue: true } });
         if (!card) return NextResponse.json({ error: "Gift card not found" }, { status: 404 });
         if (card.status !== "DRAFT") {
             return NextResponse.json({ error: "Only draft gift cards can be issued", code: "GC_NOT_DRAFT" }, { status: 409 });
@@ -49,6 +51,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const branchId = requireWritableBranchId(req, await auth());
 
         const issued = await prisma.$transaction(async (tx) => {
+            // Claim the card first — a second press finds it no longer a draft.
+            const { count } = await tx.giftCard.updateMany({
+                where: { id: card.id, status: "DRAFT", initialValue: card.initialValue },
+                data: { status: "ACTIVE", issuedAt: new Date() },
+            });
+            if (count === 0) throw new NotDraftError();
+
             // Dr payment ledger / Cr Gift Card Liability — through the engine
             // (writes the JE + balance deltas + universal-voucher spine in one
             // place). Posts as a JOURNAL voucher (no dedicated gift-card voucher
@@ -67,15 +76,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             await tx.giftCardTxn.create({
                 data: { giftCardId: card.id, type: "ISSUE", amount: value, balanceAfter: value, createdById: user!.id },
             });
-            return tx.giftCard.update({
+            return tx.giftCard.findUniqueOrThrow({
                 where: { id: card.id },
-                data: { status: "ACTIVE", issuedAt: new Date() },
                 include: { ownerAccount: { select: { name: true } } },
             });
         });
 
         return NextResponse.json(issued);
     } catch (e) {
+        if (e instanceof NotDraftError) {
+            return NextResponse.json({ error: "Only draft gift cards can be issued", code: "GC_NOT_DRAFT" }, { status: 409 });
+        }
         return handleApiError(e, "Failed to issue gift card");
     }
 }

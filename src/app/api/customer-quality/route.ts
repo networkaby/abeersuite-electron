@@ -50,17 +50,26 @@ export async function POST(req: Request) {
             ...(data.source === "pos" && data.counterNo ? { counterNo: data.counterNo } : {}),
         };
 
-        if (data.personId != null) {
-            const row = await prisma.person.findUnique({ where: { id: data.personId }, select: { qualityLog: true } });
-            if (!row) return NextResponse.json({ error: "Person not found" }, { status: 404 });
-            const log = [...parseQualityLog(row.qualityLog), entry];
-            await prisma.person.update({ where: { id: data.personId }, data: { qualityLog: log } });
-            return NextResponse.json({ qualityLog: log }, { status: 201 });
-        }
-        const row = await prisma.company.findUnique({ where: { id: data.companyId! }, select: { qualityLog: true } });
-        if (!row) return NextResponse.json({ error: "Company not found" }, { status: 404 });
-        const log = [...parseQualityLog(row.qualityLog), entry];
-        await prisma.company.update({ where: { id: data.companyId! }, data: { qualityLog: log } });
+        // The whole list is written back, so lock the row and read it in the same
+        // transaction — else a note added meanwhile is lost.
+        const { personId, companyId } = data;
+        const log = await prisma.$transaction(async (tx) => {
+            if (personId != null) {
+                await tx.$queryRaw`SELECT id FROM "Person" WHERE id = ${personId} FOR UPDATE`;
+                const row = await tx.person.findUnique({ where: { id: personId }, select: { qualityLog: true } });
+                if (!row) return null;
+                const next = [...parseQualityLog(row.qualityLog), entry];
+                await tx.person.update({ where: { id: personId }, data: { qualityLog: next } });
+                return next;
+            }
+            await tx.$queryRaw`SELECT id FROM "Company" WHERE id = ${companyId!} FOR UPDATE`;
+            const row = await tx.company.findUnique({ where: { id: companyId! }, select: { qualityLog: true } });
+            if (!row) return null;
+            const next = [...parseQualityLog(row.qualityLog), entry];
+            await tx.company.update({ where: { id: companyId! }, data: { qualityLog: next } });
+            return next;
+        });
+        if (!log) return NextResponse.json({ error: personId != null ? "Person not found" : "Company not found" }, { status: 404 });
         return NextResponse.json({ qualityLog: log }, { status: 201 });
     } catch (e) {
         return handleApiError(e, "Failed to add the entry");

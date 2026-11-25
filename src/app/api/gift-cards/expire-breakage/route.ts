@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -24,7 +24,7 @@ export async function POST() {
         }
 
         const now = new Date();
-        const due = await prisma.giftCard.findMany({
+        const due = await prismaWhereSaved().giftCard.findMany({
             where: { status: "ACTIVE", expiresAt: { not: null, lt: now }, balance: { gt: 0 } },
             select: { id: true, code: true, balance: true },
         });
@@ -36,12 +36,19 @@ export async function POST() {
         ]);
 
         let total = 0;
+        let expired = 0;
         await prisma.$transaction(async (tx) => {
             // Nobody picked a branch here — this is a sweep, not a screen — so the
             // breakage lands on Head Office rather than being left branch-less.
             const branchId = await systemBranchId(tx);
             for (const gc of due) {
                 const amt = moneyNumber(gc.balance);
+                // Claim first: a card spent or expired since the list was read is skipped.
+                const { count } = await tx.giftCard.updateMany({
+                    where: { id: gc.id, status: "ACTIVE", balance: gc.balance },
+                    data: { balance: 0, status: "EXPIRED" },
+                });
+                if (count === 0) continue;
                 // Dr Gift Card Liability / Cr Breakage Income — through the engine
                 // (JE + balances + spine in one place). Posts as a JOURNAL voucher.
                 await enginePost(tx, {
@@ -57,12 +64,12 @@ export async function POST() {
                 await tx.giftCardTxn.create({
                     data: { giftCardId: gc.id, type: "EXPIRE", amount: -amt, balanceAfter: 0, createdById: user!.id },
                 });
-                await tx.giftCard.update({ where: { id: gc.id }, data: { balance: 0, status: "EXPIRED" } });
                 total += amt;
+                expired++;
             }
         });
 
-        return NextResponse.json({ ok: true, expired: due.length, total: round2(total) });
+        return NextResponse.json({ ok: true, expired, total: round2(total) });
     } catch (e) {
         return handleApiError(e, "Failed to recognise gift-card breakage");
     }

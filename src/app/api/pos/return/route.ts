@@ -26,7 +26,7 @@
 // Replaces the legacy three-table flow (Invoice negative credit-note +
 // manual JE + parallel InvVoucher) — see Layer 2c of the plan.
 
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { Prisma } from "@/generated/prisma/client";
 import { notifyBill } from "@/shared/lib/whatsapp/notifyBill";
 import { NextResponse } from "next/server";
@@ -66,6 +66,25 @@ class GlPostFailedError extends Error {
     constructor(message: string, public notes: string[]) { super(message); }
 }
 
+/** The re-check inside the save found the return no longer allowed. */
+class ReturnRefusedError extends Error {}
+
+/** Quantity already returned against a sale, per product. */
+async function returnedQtyByProduct(db: Prisma.TransactionClient, originalId: number): Promise<Map<number, number>> {
+    const returns = await db.voucherDetail.findMany({
+        where:  { refVoucherId: originalId, universalVoucher: { status: "POSTED" } },
+        select: { universalVoucherId: true },
+    });
+    const uvIds = returns.map((r) => r.universalVoucherId).filter((id): id is number => id != null);
+    const lines = uvIds.length === 0 ? [] : await db.voucherInventoryLine.findMany({
+        where:  { universalVoucherId: { in: uvIds } },
+        select: { productId: true, quantity: true },
+    });
+    const byProduct = new Map<number, number>();
+    for (const l of lines) byProduct.set(l.productId, (byProduct.get(l.productId) ?? 0) + Number(l.quantity));
+    return byProduct;
+}
+
 export async function POST(req: Request) {
     // The POS table's Sale Return Create tick (office Sale Return key also counts) —
     // same gate as the lost-bill return. A cash refund still needs an open shift.
@@ -76,8 +95,10 @@ export async function POST(req: Request) {
     if (error) return error;
 
     try {
+        // Checks read where the return lands: a replica may not have the last return yet.
+        const db = prismaWhereSaved();
         // ── Original InvVoucher ───────────────────────────────────────────────
-        const original = await prisma.voucherDetail.findUnique({
+        const original = await db.voucherDetail.findUnique({
             where: { id: data.originalInvoiceId },
             include: {
                 universalVoucher: { select: { partyAccountId: true, voucherNo: true, status: true, type: true, branchId: true, branch: { select: { id: true, gstStateCode: true } } } },   // 5D-4 party + 5D-6 ref + 5D-8 status + 5D-11 type + 5D-12 branch
@@ -87,10 +108,10 @@ export async function POST(req: Request) {
         // 5D-4: resolve the party ledger from the spine's partyAccountId.
         const partyAccountId = original.universalVoucher?.partyAccountId ?? null;
         const account = partyAccountId != null
-            ? await prisma.account.findUnique({ where: { id: partyAccountId }, select: { id: true, name: true, personId: true, companyId: true } })
+            ? await db.account.findUnique({ where: { id: partyAccountId }, select: { id: true, name: true, personId: true, companyId: true } })
             : null;
         // Phase 5 5C: goods lines hang off the spine.
-        const originalLines = await prisma.voucherInventoryLine.findMany({
+        const originalLines = await db.voucherInventoryLine.findMany({
             where: { universalVoucherId: original.universalVoucherId ?? -1 },
         });
         if (original.universalVoucher?.status !== "POSTED") {
@@ -107,19 +128,7 @@ export async function POST(req: Request) {
         // POS merges same-product cart lines into one line per sale, so a
         // product appears on at most one line per original voucher — matching
         // prior SALE_RETURNs back to this original by productId is unambiguous.
-        const priorReturns = await prisma.voucherDetail.findMany({
-            where:  { refVoucherId: original.id, universalVoucher: { status: "POSTED" } },
-            select: { universalVoucherId: true },
-        });
-        const priorReturnUvIds = priorReturns.map((r) => r.universalVoucherId).filter((id): id is number => id != null);
-        const priorReturnLines = priorReturnUvIds.length === 0 ? [] : await prisma.voucherInventoryLine.findMany({
-            where:  { universalVoucherId: { in: priorReturnUvIds } },
-            select: { productId: true, quantity: true },
-        });
-        const alreadyReturnedByProduct = new Map<number, number>();
-        for (const l of priorReturnLines) {
-            alreadyReturnedByProduct.set(l.productId, (alreadyReturnedByProduct.get(l.productId) ?? 0) + Number(l.quantity));
-        }
+        const alreadyReturnedByProduct = await returnedQtyByProduct(db, original.id);
 
         // ── Validate return lines ─────────────────────────────────────────────
         const lineMap = new Map(originalLines.map((l) => [l.id, l]));
@@ -136,7 +145,7 @@ export async function POST(req: Request) {
         }
 
         // ── Active shift (required for CASH refund, supplies branch context) ─
-        const shift = await prisma.posShift.findFirst({
+        const shift = await db.posShift.findFirst({
             where:  { userId: user!.id, status: "OPEN" },
             select: { id: true, branchId: true, counter: { select: { tillAccountId: true } } },
         });
@@ -261,6 +270,25 @@ export async function POST(req: Request) {
         // ── Transaction ───────────────────────────────────────────────────────
         const result = await prisma.$transaction(async (tx) => {
             const today = requestBusinessDate(req);
+
+            // 0. One return of a bill at a time, then check again: another return (or a
+            // cancel) may have landed since the checks above.
+            await tx.$queryRaw`SELECT id FROM "VoucherDetail" WHERE id = ${original.id} FOR UPDATE`;
+            const spineNow = await tx.universalVoucher.findUnique({ where: { id: original.universalVoucherId ?? -1 }, select: { status: true } });
+            if (spineNow?.status !== "POSTED") throw new ReturnRefusedError("Only POSTED vouchers can be returned");
+            const returnedNow = await returnedQtyByProduct(tx, original.id);
+            const asked = new Map<number, { line: typeof originalLines[number]; qty: number }>();
+            for (const rl of returnLines) {
+                const { productId } = rl.voucherLine;
+                asked.set(productId, { line: rl.voucherLine, qty: (asked.get(productId)?.qty ?? 0) + rl.qty });
+            }
+            for (const [productId, r] of asked) {
+                const sold = originalLines.filter((l) => l.productId === productId).reduce((s, l) => s + Number(l.quantity), 0);
+                const remaining = sold - (returnedNow.get(productId) ?? 0);
+                if (r.qty > remaining) {
+                    throw new ReturnRefusedError(`Return qty ${r.qty} exceeds remaining returnable qty ${remaining} on line "${r.line.description ?? productId}" — it may have just been returned`);
+                }
+            }
 
             // 1. SALE_RETURN InvVoucher + refund tender row.
             const vRef = await invNextRef(tx, "SALE_RETURN");
@@ -458,6 +486,7 @@ export async function POST(req: Request) {
 
         return NextResponse.json({ ...result, returnPrint }, { status: 201 });
     } catch (e) {
+        if (e instanceof ReturnRefusedError) return NextResponse.json({ error: e.message }, { status: 409 });
         if (e instanceof GlPostFailedError) {
             return NextResponse.json({ error: e.message, notes: e.notes }, { status: 500 });
         }
