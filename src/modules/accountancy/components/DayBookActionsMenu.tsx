@@ -3,12 +3,12 @@
 // Cross-source 3-dot row menu — used by the Day Book, the All Vouchers
 // register, and (after the DRY migration) every per-kind voucher register.
 //
-//   Edit · Cancel · Delete · Duplicate · Convert · Send on WhatsApp · Send email
+//   Edit · Cancel / Restore (a cancelled voucher) · Delete · Duplicate · Convert · Send on WhatsApp · Send email
 //
 // "Delete" is the ONE delete: it posts to `${apiBase}/hard-delete`, which removes
 // the row and snapshots the whole graph to AuditLog = the Recycle Bin (restore via
 // POST /api/audit/[id]/restore). There is no soft-delete tier — it was removed on
-// 2026-08-01 along with this menu's Restore branch.
+// 2026-08-01. Restore here un-cancels (VoucherRestoreDialog).
 //
 // Lifecycle actions hit `${apiBase}/<verb>` on the source's API (see
 // voucherUrls.ts).  Duplicate is purely client-side: it stashes a payload in
@@ -21,8 +21,10 @@ import { SendEmailMenuItem } from "@/shared/components/SendEmailMenuItem";
 import { useSession } from "next-auth/react";
 import axios from "axios";
 import { toast } from "sonner";
+import { VoucherRestoreDialog } from "@/modules/accountancy/components/VoucherRestoreDialog";
+import { isVoucherStale } from "@/modules/accountancy/lib/voucherStale";
 import { extractApiError } from "@/shared/lib/api";
-import { MoreVertical, Pencil, Ban, Trash2, Copy, Printer, FileText, ArrowRightLeft, MessageCircle } from "lucide-react";
+import { MoreVertical, Pencil, Ban, Trash2, Copy, RotateCcw, Printer, FileText, ArrowRightLeft, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -49,6 +51,8 @@ interface Props {
     source:     CombinedSource;
     kind:       string;
     reference:  string;
+    /** Voucher status. Absent on lists that only hold posted vouchers. */
+    status?:    string;
     /** Already converted (a live voucher references it)? Hides the Convert action
      *  — delete that target to convert again. */
     converted?: boolean;
@@ -61,12 +65,13 @@ type ConfirmAction = "cancel" | "hard-delete" | null;
 // ── Component ─────────────────────────────────────────────────────────────
 
 export function DayBookActionsMenu({
-    rawId, source, kind, reference, converted, onChanged,
+    rawId, source, kind, reference, status, converted, onChanged,
 }: Props) {
     const router = useRouter();
     const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
     const [reason, setReason] = useState("");
     const [busy, setBusy] = useState(false);
+    const [restoring, setRestoring] = useState(false);
 
     const base = apiBase(source, rawId);
 
@@ -127,6 +132,7 @@ export function DayBookActionsMenu({
             onChanged?.();
         } catch (e: unknown) {
             toast.error(extractApiError(e, `Failed to ${confirmAction}`));
+            if (isVoucherStale(e)) { setConfirmAction(null); onChanged?.(); }
         } finally {
             setBusy(false);
         }
@@ -271,7 +277,12 @@ export function DayBookActionsMenu({
                             <Pencil className="size-4" /> Edit
                         </DropdownMenuItem>
                     )}
-                    {canEdit && (
+                    {canEdit && status === "CANCELLED" && (
+                        <DropdownMenuItem onSelect={() => setRestoring(true)} disabled={busy}>
+                            <RotateCcw className="size-4" /> Restore (un-cancel)
+                        </DropdownMenuItem>
+                    )}
+                    {canEdit && status !== "CANCELLED" && status !== "DRAFT" && (
                         <DropdownMenuItem onSelect={startCancel} disabled={busy}>
                             <Ban className="size-4" /> Cancel
                         </DropdownMenuItem>
@@ -340,6 +351,14 @@ export function DayBookActionsMenu({
                     </div>
                 </DialogContent>
             </Dialog>
+
+            <VoucherRestoreDialog
+                open={restoring}
+                onClose={() => setRestoring(false)}
+                apiBasePath={base}
+                label={reference}
+                onRestored={onChanged}
+            />
         </>
     );
 }

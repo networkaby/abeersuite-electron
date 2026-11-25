@@ -26,6 +26,7 @@
 // Replaces the legacy three-table flow (Invoice negative credit-note +
 // manual JE + parallel InvVoucher) — see Layer 2c of the plan.
 
+import { returnedQtyByProduct } from "@/modules/accountancy/lib/saleReturnGuard";
 import { lockVoucher } from "@/modules/accountancy/lib/voucherLifecycle";
 import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { Prisma } from "@/generated/prisma/client";
@@ -69,22 +70,6 @@ class GlPostFailedError extends Error {
 
 /** The re-check inside the save found the return no longer allowed. */
 class ReturnRefusedError extends Error {}
-
-/** Quantity already returned against a sale, per product. */
-async function returnedQtyByProduct(db: Prisma.TransactionClient, originalId: number): Promise<Map<number, number>> {
-    const returns = await db.voucherDetail.findMany({
-        where:  { refVoucherId: originalId, universalVoucher: { status: "POSTED" } },
-        select: { universalVoucherId: true },
-    });
-    const uvIds = returns.map((r) => r.universalVoucherId).filter((id): id is number => id != null);
-    const lines = uvIds.length === 0 ? [] : await db.voucherInventoryLine.findMany({
-        where:  { universalVoucherId: { in: uvIds } },
-        select: { productId: true, quantity: true },
-    });
-    const byProduct = new Map<number, number>();
-    for (const l of lines) byProduct.set(l.productId, (byProduct.get(l.productId) ?? 0) + Number(l.quantity));
-    return byProduct;
-}
 
 export async function POST(req: Request) {
     // The POS table's Sale Return Create tick (office Sale Return key also counts) —

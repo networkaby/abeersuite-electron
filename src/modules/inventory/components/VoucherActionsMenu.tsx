@@ -21,6 +21,7 @@ import { useSession } from "next-auth/react";
 import axios from "axios";
 import { toast } from "sonner";
 import { MoreVertical, Pencil, Ban, Trash2, Copy, Printer, MessageCircle } from "lucide-react";
+import { isVoucherStale } from "@/modules/accountancy/lib/voucherStale";
 import { extractApiError } from "@/shared/lib/api";
 import { canActOnVoucher } from "@/shared/lib/auth/posVoucherMatrix";
 import { autoKindForVoucherType, waSendHint } from "@/shared/lib/whatsapp/billTemplates";
@@ -125,6 +126,7 @@ export function VoucherActionsMenu({ voucherId, voucherType, voucherRef, onChang
             onChanged?.();
         } catch (e: unknown) {
             toast.error(extractApiError(e, `Failed to ${confirmAction} voucher`));
+            if (isVoucherStale(e)) { setConfirmAction(null); onChanged?.(); }
         } finally {
             setBusy(false);
         }

@@ -1,11 +1,13 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanActOnVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
+import { ensureNoPostedReturn } from "@/modules/accountancy/lib/saleReturnGuard";
 import { removeLinksForVoucher } from "@/modules/accountancy/lib/billLink";
-import { auditSnapshot, isPosted, isCancelled, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
+import { auditSnapshot, isPosted, isCancelled, LifecycleError, lifecycleErrorResponse, lockVoucher } from "@/modules/accountancy/lib/voucherLifecycle";
+import { VOUCHER_STALE } from "@/modules/accountancy/lib/voucherStale";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 
@@ -28,7 +30,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     // Load the full graph up-front so the snapshot captures everything a faithful
     // restore needs (charges/tenders/stock-ledger included — they were missing before).
-    const voucherRow = await prisma.voucherDetail.findUnique({
+    const voucherRow = await prismaWhereSaved().voucherDetail.findUnique({
         where: { id: Number(id) },
         // settlementJson (tender/charge input) is a scalar — captured in the snapshot
         // automatically. 5D-2: creator lives on the spine (not needed for the snapshot).
@@ -40,11 +42,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         ...voucherRow,
         type:      voucherRow.universalVoucher?.type ?? "",
         status:    voucherRow.universalVoucher?.status ?? "DRAFT",
-        lines: await prisma.voucherInventoryLine.findMany({
+        lines: await prismaWhereSaved().voucherInventoryLine.findMany({
             where:   { universalVoucherId: voucherRow.universalVoucherId ?? -1 },
             include: { product: { select: { id: true, sku: true, name: true } } },
         }),
-        stockEntries: await prisma.invStockLedger.findMany({
+        stockEntries: await prismaWhereSaved().invStockLedger.findMany({
             where: { universalVoucherId: voucherRow.universalVoucherId ?? -1 },
         }),
     } : null;
@@ -70,6 +72,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             // a DRAFT voucher has only universalVoucherId (Phase 5 5.0d) — fall back
             // to it so the draft spine is physically removed too (no orphan).
             const spineId = voucher.universalVoucherId;
+            // The snapshot above must still be the truth: a cancel / restore that landed
+            // since would be remembered wrongly in the Recycle Bin.
+            if (spineId != null && (await lockVoucher(tx, spineId))?.status !== voucher.status) {
+                throw new LifecycleError(409, "This voucher has just changed. Refresh and try again.", VOUCHER_STALE);
+            }
+            await ensureNoPostedReturn(tx, voucher.id, "delete");
             const origJe = spineId
                 ? await tx.universalVoucher.findUnique({
                     where: { id: spineId },

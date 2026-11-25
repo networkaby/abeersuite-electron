@@ -22,6 +22,7 @@ import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
+import { VoucherRestoreDialog } from "@/modules/accountancy/components/VoucherRestoreDialog";
 import { useRouter } from "next/navigation";
 import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 import { NO_ACCESS_HOME } from "@/shared/lib/auth/pageAccess";
@@ -38,9 +39,6 @@ export interface LifecycleVoucher {
     status:      string;
     cancelledAt?: string | null;
 }
-
-/** One thing that will go short if the cancelled rewards are taken back. */
-type RestoreConflict = { kind: string; label: string; message: string };
 
 export function LifecycleActions({
     voucher, apiBasePath, listPath, label,
@@ -69,8 +67,6 @@ export function LifecycleActions({
     const [hardDeleteReason, setHardDeleteReason] = useState("");
 
     const [showRestore, setShowRestore] = useState(false);
-    const [restoreReason, setRestoreReason] = useState("");
-    const [restoreConflicts, setRestoreConflicts] = useState<RestoreConflict[]>([]);
 
     const post = async (path: string, body?: object, successMsg = "Done") => {
         setBusy(path);
@@ -80,26 +76,6 @@ export function LifecycleActions({
             onChanged();
         } catch (err: unknown) {
             toast.error(extractApiError(err, "Failed"));
-        } finally {
-            setBusy(null);
-        }
-    };
-
-    // `force` is sent only after the user has read the conflict list and chosen to
-    // go ahead — a first attempt never forces, so the warning can never be skipped.
-    const submitRestore = async (force: boolean) => {
-        setBusy("restore");
-        try {
-            await axios.post(`${apiBasePath}/restore`, { reason: restoreReason, force });
-            toast.success(`${label} restored`);
-            setShowRestore(false); setRestoreReason(""); setRestoreConflicts([]);
-            onChanged();
-        } catch (err: unknown) {
-            const conflicts = axios.isAxiosError(err) && err.response?.status === 409
-                ? (err.response.data?.conflicts as RestoreConflict[] | undefined)
-                : undefined;
-            if (conflicts?.length) setRestoreConflicts(conflicts);
-            else toast.error(extractApiError(err, "Failed to restore"));
         } finally {
             setBusy(null);
         }
@@ -123,7 +99,7 @@ export function LifecycleActions({
                     </Button>
                 )}
                 {isCancelled && canCancel && (
-                    <Button variant="outline" onClick={() => { setRestoreConflicts([]); setShowRestore(true); }}>
+                    <Button variant="outline" onClick={() => setShowRestore(true)}>
                         <RotateCcw size={14} /> Restore
                     </Button>
                 )}
@@ -158,50 +134,13 @@ export function LifecycleActions({
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={showRestore} onOpenChange={(o) => { if (!o) { setShowRestore(false); setRestoreConflicts([]); } }}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle className={restoreConflicts.length > 0 ? "flex items-center gap-2 text-destructive" : undefined}>
-                            {restoreConflicts.length > 0 && <AlertTriangle size={18} />}
-                            {restoreConflicts.length > 0 ? `Restoring ${label} will go short` : `Restore ${label}`}
-                        </DialogTitle>
-                        <DialogDescription>
-                            {restoreConflicts.length > 0
-                                ? "Some of what the cancel gave back has already been used on another bill. Restoring takes it back anyway — you can adjust it afterwards."
-                                : "Puts the voucher back to POSTED and re-applies the stock / GL impact the cancel reversed, along with any gift card, coupon or loyalty points it gave back."}
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    {restoreConflicts.length > 0 ? (
-                        <ul className="space-y-2 text-sm">
-                            {restoreConflicts.map((c, i) => (
-                                <li key={i} className="rounded-md border border-destructive/30 bg-destructive/5 p-2.5">
-                                    {c.message}
-                                </li>
-                            ))}
-                        </ul>
-                    ) : (
-                        <div className="space-y-1.5">
-                            <Label>Reason</Label>
-                            <Textarea value={restoreReason} onChange={(e) => setRestoreReason(e.target.value)} rows={3} placeholder="Reason for restoring..." />
-                        </div>
-                    )}
-
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => { setShowRestore(false); setRestoreConflicts([]); }}>
-                            {restoreConflicts.length > 0 ? "Cancel restore" : "Back"}
-                        </Button>
-                        <Button
-                            variant={restoreConflicts.length > 0 ? "destructive" : "default"}
-                            disabled={!restoreReason.trim() || busy === "restore"}
-                            onClick={() => submitRestore(restoreConflicts.length > 0)}
-                        >
-                            {busy === "restore" && <Loader2 size={14} className="animate-spin" />}
-                            {restoreConflicts.length > 0 ? "Restore anyway" : "Confirm Restore"}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            <VoucherRestoreDialog
+                open={showRestore}
+                onClose={() => setShowRestore(false)}
+                apiBasePath={apiBasePath}
+                label={label}
+                onRestored={onChanged}
+            />
 
             <Dialog open={showHardDelete} onOpenChange={(o) => { if (!o) setShowHardDelete(false); }}>
                 <DialogContent className="sm:max-w-md">

@@ -10,11 +10,14 @@
 // (POSTED, not cancelled / soft-deleted) — a cancelled/deleted entity's caches were
 // already reversed upstream and must stay that way.
 //
-// Volatile soft-links the voucher carried (shopOrder / ticket / deal / refVoucher) are
+// A sale return keeps the link to its sale (saleReturnGuard.ts). Every other volatile
+// soft-link the voucher carried (shopOrder / ticket / deal / refVoucher) are
 // NULLed on restore: their targets may be gone, and re-linking them risks a FK
 // violation. The truth path self-corrects from the recreated JE's own status.
 
 import type { Prisma } from "@/generated/prisma/client";
+import type { QtyLine } from "@/modules/accountancy/lib/returnQty";
+import { ensureReturnFits, saleForRestoredReturn } from "@/modules/accountancy/lib/saleReturnGuard";
 import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 
 type Tx = Prisma.TransactionClient;
@@ -146,6 +149,10 @@ export async function restoreFromAudit(
     const stockEntries = (snap.stockEntries as Row[]) ?? [];
     const journalEntry = (snap.journalEntry as JeSnapshot | null) ?? null;
 
+    const isReturn = snap.type === "SALE_RETURN" || journalEntry?.type === "SALE_RETURN";
+    const saleId = isReturn ? await saleForRestoredReturn(tx, snap.refVoucherId) : null;
+    if (isLive(snap.status, snap.cancelledAt)) await ensureReturnFits(tx, saleId, lines as unknown as QtyLine[]);
+
     const newJeId = journalEntry ? await recreateJournalEntry(tx, cols, journalEntry) : null;
     // G4b: tender/charge input is `settlementJson` (a scalar) — restored via ...scalars.
     // `universalVoucherId` is dropped: the snapshot's value points at the spine that
@@ -156,8 +163,9 @@ export async function restoreFromAudit(
             ...scalars,
             // Link the restored detail to the recreated spine (the JE id IS the spine id since G5).
             universalVoucherId: newJeId,
-            // Sever volatile soft-links — targets may be gone; truth path self-corrects.
-            refVoucherId: null,
+            // Sever volatile soft-links — targets may be gone; truth path self-corrects. A
+            // return keeps its sale, or the same goods could be returned again.
+            refVoucherId: saleId,
         } as unknown as Prisma.VoucherDetailUncheckedCreateInput,
     });
 

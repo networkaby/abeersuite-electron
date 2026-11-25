@@ -416,6 +416,7 @@ export function VoucherRegisterTable({
                                                 source={r.source}
                                                 kind={r.kind}
                                                 reference={r.reference}
+                                                status={r.status}
                                                 converted={r.converted}
                                                 onChanged={onChanged}
                                             />

@@ -32,6 +32,7 @@
 // (DRAFT / POSTED / CANCELLED).
 
 import type { Prisma } from "@/generated/prisma/client";
+import { VOUCHER_STALE } from "@/modules/accountancy/lib/voucherStale";
 
 export type LifecycleStatus = "DRAFT" | "POSTED" | "CANCELLED" | "DRAFT_INV";
 
@@ -41,7 +42,7 @@ export interface LifecycleVoucher {
 }
 
 export class LifecycleError extends Error {
-  constructor(public httpStatus: number, message: string) {
+  constructor(public httpStatus: number, message: string, public code?: string) {
     super(message);
     this.name = "LifecycleError";
   }
@@ -67,12 +68,12 @@ export function isDraft(v: LifecycleVoucher): boolean {
 // ── Pre-flight checks (throw LifecycleError on failure) ───────────────────
 
 export function ensureCancelable(v: LifecycleVoucher): void {
-  if (isCancelled(v)) throw new LifecycleError(409, "Voucher is already cancelled");
+  if (isCancelled(v)) throw new LifecycleError(409, "Voucher is already cancelled", VOUCHER_STALE);
   if (!isPosted(v)) throw new LifecycleError(409, "Only POSTED vouchers can be cancelled");
 }
 
 export function ensureRestorable(v: LifecycleVoucher): void {
-  if (!isCancelled(v)) throw new LifecycleError(409, "Only cancelled vouchers can be restored");
+  if (!isCancelled(v)) throw new LifecycleError(409, "Only cancelled vouchers can be restored", VOUCHER_STALE);
 }
 
 export function ensurePostable(v: LifecycleVoucher): void {
@@ -164,7 +165,7 @@ import { NextResponse } from "next/server";
 /** Convert a thrown LifecycleError to a NextResponse; rethrow other errors. */
 export function lifecycleErrorResponse(err: unknown): NextResponse | null {
   if (err instanceof LifecycleError) {
-    return NextResponse.json({ error: err.message }, { status: err.httpStatus });
+    return NextResponse.json({ error: err.message, ...(err.code ? { code: err.code } : {}) }, { status: err.httpStatus });
   }
   return null;
 }

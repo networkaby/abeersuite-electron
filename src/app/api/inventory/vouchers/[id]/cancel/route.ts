@@ -6,6 +6,7 @@ import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { reverseStockMovement, recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { ensureCancelable, lifecycleErrorResponse, lockAndEnsure } from "@/modules/accountancy/lib/voucherLifecycle";
+import { ensureNoPostedReturn } from "@/modules/accountancy/lib/saleReturnGuard";
 import { reverseCouponRedemption, refundGiftCard, netDrawsByCard } from "@/modules/coupons/lib";
 import { reverseLoyaltyForReturn, ratesFromConfig } from "@/modules/loyalty/lib";
 import { releaseRedemptions, reholdRedemptions } from "@/modules/order/lib/redemptionHold";
@@ -46,6 +47,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
         await prisma.$transaction(async (tx) => {
             await lockAndEnsure(tx, voucher.universalVoucherId, ensureCancelable);
+            await ensureNoPostedReturn(tx, voucher.id, "cancel");
             // ── 1. Reverse stock ledger + cached InvProduct.stock ─────────────
             // MIRROR whatever this voucher actually wrote — one counter-entry per
             // original row — instead of re-deriving the direction from the type.

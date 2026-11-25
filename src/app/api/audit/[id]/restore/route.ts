@@ -1,8 +1,9 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanRestoreAudit } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { restoreFromAudit } from "@/modules/accountancy/lib/auditRestore";
+import { LifecycleError, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { liveAuditCopyTarget } from "@/modules/accountancy/lib/auditCopyLive";
 import { glPatchBodyFromSnapshot, invPatchBodyFromSnapshot } from "@/modules/accountancy/lib/auditRevert";
 import { PATCH as patchInvVoucher } from "@/app/api/inventory/vouchers/[id]/route";
@@ -19,7 +20,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         return NextResponse.json({ error: "Invalid id" }, { status: 400 });
     }
 
-    const audit = await prisma.auditLog.findUnique({ where: { id: auditId } });
+    const audit = await prismaWhereSaved().auditLog.findUnique({ where: { id: auditId } });
     if (!audit) return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (audit.restoredAt) return NextResponse.json({ error: "Already restored" }, { status: 409 });
 
@@ -34,7 +35,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // The voucher is still on the books: change it back to this copy through its own
     // edit save — same id, same number — instead of re-inserting it as a second
     // voucher (how POS-910861/862 became one bill saved twice). See auditRevert.ts.
-    const target = await liveAuditCopyTarget(prisma, audit);
+    const target = await liveAuditCopyTarget(prismaWhereSaved(), audit);
     if (target != null) {
         if (audit.entityType === "JOURNAL_ENTRY") {
             return NextResponse.json({ error: `${audit.originalRef || "This voucher"} is still on the books. Edit it there instead.` }, { status: 409 });
@@ -61,18 +62,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     try {
         const reference = await prisma.$transaction(async (tx) => {
-            const ref = await restoreFromAudit(tx, audit);
-            await tx.auditLog.update({
-                where: { id: auditId },
+            // Claimed first: of two presses at once, the second finds it taken.
+            const claimed = await tx.auditLog.updateMany({
+                where: { id: auditId, restoredAt: null },
                 data: { restoredAt: new Date(), restoredById: user!.id },
             });
-            return ref;
+            if (claimed.count === 0) throw new LifecycleError(409, "Already restored");
+            return restoreFromAudit(tx, audit);
         // Re-inserting the full graph + re-applying caches over the Supabase pooler can
         // exceed the default 5s interactive-tx ceiling (P2028) — match the 30s headroom.
         }, { timeout: 30_000, maxWait: 10_000 });
 
         return NextResponse.json({ ok: true, entityType: audit.entityType, reference });
     } catch (e) {
+        const lifecycle = lifecycleErrorResponse(e);
+        if (lifecycle) return lifecycle;
         return handleApiError(e, "Failed to restore from audit");
     }
 }
