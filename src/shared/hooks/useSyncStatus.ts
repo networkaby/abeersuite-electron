@@ -106,7 +106,7 @@ let inFlight: Promise<void> | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
 let intervalMs: number = COUNTER_STATUS_POLL_MS;
 /** See the note on the same flag in `useCounterMode`. */
-let settledUnauthenticated = false;
+let settledRefused = false;
 let expiry: ReturnType<typeof setTimeout> | null = null;
 let unsubscribeChangeSignal: (() => void) | null = null;
 
@@ -135,7 +135,7 @@ function refresh(): Promise<void> {
     inFlight = axios
         .get<ApiSyncStatus>("/api/sync/status")
         .then(({ data }) => {
-            settledUnauthenticated = false;
+            settledRefused = false;
             api = data;
             // Off a counter this endpoint short-circuits on IS_COUNTER_PC before it
             // touches a database, and that const cannot change while the server runs.
@@ -143,11 +143,13 @@ function refresh(): Promise<void> {
             compose();
         })
         .catch((e) => {
-            // Nobody signed in — nothing to report and nothing to wait for. Any other
-            // failure leaves the last known status in place rather than flashing
+            // Nobody signed in (401), or a phone-only sign-in, which proxy.ts refuses here
+            // (403) — nothing to report and nothing to wait for. A PC already known to be
+            // a counter keeps its tick on a 403. Any other failure leaves the last known status in place rather than flashing
             // "unknown".
-            if (axios.isAxiosError(e) && e.response?.status === 401) {
-                settledUnauthenticated = true;
+            const status = axios.isAxiosError(e) ? e.response?.status : undefined;
+            if (status === 401 || (status === 403 && !api?.isCounter)) {
+                settledRefused = true;
                 retune(COUNTER_STATUS_IDLE_POLL_MS);
             }
         })
@@ -223,6 +225,6 @@ export function useSyncStatus(): SyncStatus | null {
 
 /** Ask now — see `refreshCounterStatus`, which this mirrors. */
 export function refreshSyncStatus() {
-    if (settledUnauthenticated) retune(COUNTER_STATUS_POLL_MS);
+    if (settledRefused) retune(COUNTER_STATUS_POLL_MS);
     void refresh();
 }

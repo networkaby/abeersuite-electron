@@ -66,14 +66,14 @@ let timer: ReturnType<typeof setInterval> | null = null;
 /** Current tick length. Starts eager and settles down once the answer is final. */
 let intervalMs: number = COUNTER_STATUS_POLL_MS;
 /**
- * Settled because nobody is signed in, rather than because this is not a counter.
+ * Settled because the server refused us (nobody signed in, or not allowed), rather than because this is not a counter.
  *
  * The two look the same from here — both mean "stop asking" — but only this one can
  * be undone from inside the app, and it MUST be: login navigates with `router.push`,
  * so the React tree survives and a poller left idle would never wake up. See
  * `refreshCounterStatus`, called from the login screen's success path.
  */
-let settledUnauthenticated = false;
+let settledRefused = false;
 
 function emit() {
     for (const l of listeners) l();
@@ -115,7 +115,7 @@ function refresh(): Promise<void> {
     inFlight = axios
         .get<CounterStatus>("/api/counter/status")
         .then(({ data }) => {
-            settledUnauthenticated = false;
+            settledRefused = false;
             // Where writes land decides who announces them, and — with where reads
             // come from — whether a save is pulled into the replica before the screen
             // re-reads. See setWritePreference.
@@ -141,12 +141,14 @@ function refresh(): Promise<void> {
             emit();
         })
         .catch((e) => {
-            // Not signed in: there is no badge to feed and no counter to describe, so
+            // Not signed in (401), or refused (403) on a machine not known to be a
+            // counter: there is no badge to feed and no counter to describe, so
             // stop asking until someone logs in. Every OTHER failure leaves both the
             // last known status and the current tick alone rather than flashing
             // "unknown" or backing off a counter that is merely mid-restart.
-            if (axios.isAxiosError(e) && e.response?.status === 401) {
-                settledUnauthenticated = true;
+            const status = axios.isAxiosError(e) ? e.response?.status : undefined;
+            if (status === 401 || (status === 403 && !state?.isCounter)) {
+                settledRefused = true;
                 retune(COUNTER_STATUS_IDLE_POLL_MS);
             }
         })
@@ -198,6 +200,6 @@ export function useCounterMode(): CounterStatus | null {
  * this the badge would stay dark on a counter until the next tab focus.
  */
 export function refreshCounterStatus() {
-    if (settledUnauthenticated) retune(COUNTER_STATUS_POLL_MS);
+    if (settledRefused) retune(COUNTER_STATUS_POLL_MS);
     void refresh();
 }
