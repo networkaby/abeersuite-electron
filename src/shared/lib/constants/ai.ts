@@ -172,3 +172,11 @@ export const AI_USES: readonly {
         hidden: true,
     },
 ];
+
+/**
+ * The in-app AI's screens on products (Generate, Photos only, bulk write). Off: product
+ * copy is done with the Claude skills until this one matches them (owner, 2026-11-25).
+ * AI Setup stays — the Claude skills read pages with its keys. This only hides
+ * the screens; the code and API stay for the return.
+ */
+export const IN_APP_PRODUCT_AI: boolean = false;

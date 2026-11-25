@@ -6,6 +6,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { ExternalLink, Images, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { IN_APP_PRODUCT_AI } from "@/shared/lib/constants/ai";
 import { extractApiError } from "@/shared/lib/api";
 import { fetchAiCopy, fetchAiPhotos, type PhotoAdvice, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
 import { FlowButtons, PhotoAiSwitch, PremiumSwitch, useCopyFlow, usePhotoAi, usePremiumAi } from "@/modules/ecommerce/components/AiCopyControls";
@@ -249,6 +250,8 @@ export default function AiCopyPanel({
         }
     };
     const photoView = photoRun ?? draft;
+    // Nothing to show before the first save while the in-app AI is hidden.
+    if (!IN_APP_PRODUCT_AI && !prep) return null;
 
     const descDiffers = draft && description.trim() && description.trim() !== draft.shopDescription.trim();
     const titleDiffers = draft && subheading.trim() && subheading.trim() !== draft.title.trim();
@@ -271,22 +274,24 @@ export default function AiCopyPanel({
                 prep={prep}
                 copy={draft ? { notes: draft.notes ?? [], flags: draft.flags } : null}
             />
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void run(false)}>
-                    <Sparkles className="size-4" />
-                    {busy ? "Writing…" : draft ? "Generate again" : "Generate with AI"}
-                </Button>
-                <PremiumSwitch value={premium} onChange={setPremium} disabled={busy} />
-                {flow === "verified" && <PhotoAiSwitch value={photoAi} onChange={setPhotoAi} disabled={busy} />}
-                {flow === "verified" && (
-                    <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => void runPhotos()}
-                        title="One AI call on the last run's search; with none saved it searches first">
-                        <Images className="size-4" />
-                        Photos only
+            {IN_APP_PRODUCT_AI && (
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void run(false)}>
+                        <Sparkles className="size-4" />
+                        {busy ? "Writing…" : draft ? "Generate again" : "Generate with AI"}
                     </Button>
-                )}
-                <FlowButtons value={flow} onChange={setFlow} disabled={busy} />
-            </div>
+                    <PremiumSwitch value={premium} onChange={setPremium} disabled={busy} />
+                    {flow === "verified" && <PhotoAiSwitch value={photoAi} onChange={setPhotoAi} disabled={busy} />}
+                    {flow === "verified" && (
+                        <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => void runPhotos()}
+                            title="One AI call on the last run's search; with none saved it searches first">
+                            <Images className="size-4" />
+                            Photos only
+                        </Button>
+                    )}
+                    <FlowButtons value={flow} onChange={setFlow} disabled={busy} />
+                </div>
+            )}
             {checkFlags && <DataFlags flags={checkFlags} title={parked ? "Not written — parked in Attention. Check the real unit:" : "Not written — fix this product's data first:"} />}
             {!draft && !photoRun && !!photoOffers?.length && <AiPhotoPicker suggestions={photoOffers} checklist={photoChecklist} onAdd={onAddPhotos} />}
             {photoRun && !draft && (

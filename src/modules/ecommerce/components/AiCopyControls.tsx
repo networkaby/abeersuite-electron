@@ -3,7 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { AI_COPY_FLOWS, AI_DEFAULT_COPY_FLOW, type AiCopyFlow } from "@/shared/lib/constants/ai";
+import { AI_COPY_FLOWS, AI_DEFAULT_COPY_FLOW, type AiCopyFlow, IN_APP_PRODUCT_AI } from "@/shared/lib/constants/ai";
 
 // AI controls shared by the product form and the bulk screen: the "Use
 // Premium API" switch (owner, 2026-10-19 — off by default so a paid key is
@@ -40,6 +40,7 @@ let adminPhotoCheck = false;
 let adminFlowAsked = false;
 /** One read per page load; a failure keeps the built-in fallback. */
 function askAdminFlow() {
+    if (!IN_APP_PRODUCT_AI) return; // hidden — nothing to ask
     if (adminFlowAsked) return;
     adminFlowAsked = true;
     void fetch("/api/ecommerce/products/ai-copy")

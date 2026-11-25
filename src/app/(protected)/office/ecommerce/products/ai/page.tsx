@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowLeft, Camera, Search, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { extractApiError } from "@/shared/lib/api";
 import { cloudinaryThumb } from "@/shared/lib/cloudinaryImage";
-import { AI_BULK_BATCH_SIZE } from "@/shared/lib/constants/ai";
+import { AI_BULK_BATCH_SIZE, IN_APP_PRODUCT_AI } from "@/shared/lib/constants/ai";
 import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 import { runPool } from "@/shared/lib/runPool";
 import { isAiSkipped, photosForAi } from "@/shared/lib/shop/photoMark";
@@ -67,7 +68,13 @@ function priority(a: ShopProductAdmin, b: ShopProductAdmin) {
     return stocked(b) - stocked(a) || b.galleryUrls.length - a.galleryUrls.length || a.name.localeCompare(b.name);
 }
 
+/** Hidden with the rest of the in-app AI — an old link goes to the products list. */
 export default function AiBulkCopyPage() {
+    if (!IN_APP_PRODUCT_AI) redirect("/office/ecommerce/products");
+    return <AiBulkCopy />;
+}
+
+function AiBulkCopy() {
     const [products, setProducts] = useState<ShopProductAdmin[]>(() => cachedAdminProducts() ?? []);
     const [loading, setLoading] = useState(products.length === 0);
     const [work, setWork] = useState<Record<number, Work>>({});
