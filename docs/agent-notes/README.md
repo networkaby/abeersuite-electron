@@ -111,3 +111,4 @@ Adding one: a file here named `<type>_<slug>.md` (`project`, `feedback`, `user`,
 - [WRITE_MODE=live on purpose for some builds](project_write_mode_live_on_purpose.md) — testing/emergency since 2026-11-25; check the baked mode first, post-save reads use prismaWhereSaved().
 - [Voucher locks on main for 1.17.17](project_voucher_locks_held.md) — 7e26fc84f, landed 2026-11-26; two real presses untested, rebuild the installer.
 - [Sale vs shift-close race: declined](project_sale_vs_shift_close_race_declined.md) — ordinary sale not locking the shift is accepted; never re-propose (2026-11-26).
+- [GitHub repos are always private](project_github_repos_always_private.md) — owner confirmed 2026-11-26; do not ask about visibility.
