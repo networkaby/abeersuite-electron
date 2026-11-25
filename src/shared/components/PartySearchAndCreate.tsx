@@ -25,6 +25,7 @@ import {
     type KeyboardEvent as ReactKeyboardEvent,
     type ReactNode,
 } from "react";
+import { extractApiError } from "@/shared/lib/api/extractApiError";
 import axios from "axios";
 import { toast } from "sonner";
 import { Building2, ChevronDown, Search, User, UserPlus } from "lucide-react";
@@ -595,14 +596,10 @@ export const PartySearchAndCreate = forwardRef<
             // field: "phone" when the value is already used. Surface inline
             // so the user can fix the offending input, and still toast so a
             // closed dialog is noticed.
-            let message: string | undefined;
-            let field: string | undefined;
-            if (axios.isAxiosError(e)) {
-                const payload = e.response?.data as { error?: string; field?: string } | undefined;
-                message = payload?.error;
-                field = payload?.field;
-            }
-            const finalMessage = message ?? "Could not create";
+            const field = axios.isAxiosError(e)
+                ? (e.response?.data as { field?: string } | undefined)?.field
+                : undefined;
+            const finalMessage = extractApiError(e, "Could not create");
             setServerError({ message: finalMessage, field });
             toast.error(finalMessage);
             // Move focus to the offending input when we know which one

@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
@@ -208,7 +208,8 @@ export async function POST(req: Request) {
             return c;
         });
 
-        const full = await prisma.company.findUnique({
+        // From where it was saved: a replica-reading counter does not have the row yet.
+        const full = await prismaWhereSaved().company.findUniqueOrThrow({
             where: { id: company.id },
             include: {
                 account: { select: { id: true } },
