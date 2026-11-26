@@ -86,6 +86,8 @@ const GUARD_PATTERNS = [
     // WhatsApp verify token, and the Cowork agent's /api/agent/* doors.
     /\brequireIncomingKey\b/,
     /\bincomingSecret\b/,
+    // Counter relay / notify auth: authenticated via counter key + acting staff user header.
+    /\bauthenticateCounterRequest\b/,
 ];
 
 const HANDLER_START = /^export\s+(?:async\s+)?(?:function|const)\s+(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b/gm;

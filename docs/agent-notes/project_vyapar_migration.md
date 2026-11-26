@@ -40,7 +40,7 @@ check. Any future check must compare against an independently published figure.
 ## Build the clean room
 
 `.env.local` → `abeersuite_migrate-v1`, then: `prisma db push` → `prisma/seeds/bootstrap-seed.ts`
-→ `prisma/seeds/personal-bootstrap.ts` → `pnpm vyapar:opening -- --apply`. Both seeds need
+→ legacy `prisma/seeds/personal-bootstrap.ts` (retired) → `pnpm vyapar:opening -- --apply`. Both seeds need
 `COUNTER_PC= LOCAL_DATABASE_URL=` prefixed — `.env` marks this machine a counter PC and they
 refuse otherwise. See [project_fresh_worktree_precommit_setup](project_fresh_worktree_precommit_setup.md).
 

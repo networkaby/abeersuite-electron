@@ -95,6 +95,8 @@ Never stop a product because a photo URL is blocked — use this.
 
 ## 2. Check the photos (open every one)
 
+**Cyan tips** ("Photo needed: …" from photo-suggest, owner 2026-11-27) may be on the product: read them as advice for step 7 and the photo notes, judge them yourself (this product may not need that view), never copy them into `notes`. Clearing them is product-prep's job — do not call its endpoints.
+
 Never use your own memory of the product.
 
 1. **Clash** = our typed data (name, modelNo, barcodes, typedSpecs) disagrees with what is **printed**: another brand or model, another printed number (capacity, wattage, size, count). Not a clash: missing data, the same thing spelled differently, a count only *seen*, our support period shorter than the printed warranty.
@@ -202,7 +204,7 @@ Run this when the product has **fewer than 4 good photos** (after leaving out th
 "photoPicks": [ { "url": "https://www.portronics.com/cdn/shop/files/M8_-_1.png", "kind": "front" } ]
 ```
 
-Only this exact model and colour; no watermark, no other brand's logo, sharp. Prefer the maker's. Fill the `must` kinds first. The server keeps a pick only if an accepted page shows it; staff add them — nothing goes into the gallery by itself.
+Only this exact model and colour; no watermark, no other brand's logo, sharp. **Size first:** download it (`curl -o`) and run `photo-edit.mjs size` (setup: product-prep `photos.md`) — under 500 px on the short side never goes in (page thumbnails often are); prefer the largest copy the page offers (owner, 2026-11-27). Prefer the maker's. Fill the `must` kinds first. The server keeps a pick only if an accepted page shows it; staff add them — nothing goes into the gallery by itself.
 
 ## 8. Mistake check → `notes`
 
@@ -214,7 +216,7 @@ Go through this list for every product and write each problem as one short line 
 - **Collections**: none set, a customer segment or Setup Kit missed (e.g. CCTV parts not in "CCTV & Security Setup"), or one picked only because it repeats the product type.
 - **Group** looks wrong for the product (GST!) — say which fits; never change it yourself.
 - **Primary photo** with any logo, watermark, date stamp or text overlay (our own shop logo too) → "Pick a clean primary photo — Google and Meta reject logos on the main image". Our logo or a camera stamp on the other photos is fine.
-- **Photos**: another model or old box version, someone else's watermark, blurry / dark, duplicates, no plain product front, no size photo, the main photo is not the best.
+- **Photos**: another model or old box version, someone else's watermark, blurry / dark, **too small — measure each with `photo-edit.mjs size`: short side under 500 px → "Photo n is 250×164 — too small, remove and reshoot"**, duplicates, no plain product front, no size photo, the main photo is not the best.
 - **Description already there**: a wrong spec, missing compatibility, our support period written as the maker's warranty.
 - **Shipping**: only a weight / size plainly wrong for the item (a 5 kg mouse). Empty is never a note.
 - **Price / stock**: only if something is plainly off (MRP below price) — say it, never guess a price.
@@ -256,7 +258,8 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
 - `photos` = gallery advice with `photoKinds` keys: what we **have**, what we **must** add (most important first), **nice** to add, and our photos to **remove** (`{ url, why: one of photoRemoveReasons, note }`; duplicates: list only the weaker). Each one shows staff a **Remove** button under *Shop readiness → AI suggests removing* — so never tell staff to delete photos by hand; say "press Remove". Give each wrong photo its own entry with a short `note` ("personal family photo", "Citizen calculator").
 - `notes` holds up to 40 lines — one problem per line; never squash several into one.
 - Full example of `photos`: `{ "have": ["box_front"], "must": ["front", "ports"], "nice": ["in_use"], "remove": [{ "url": "…/9.jpg", "why": "irrelevant", "note": "personal family photo" }], "order": ["…/2.jpg", "…/1.jpg", "…/3.jpg"], "look": [{ "url": "…/1.jpg", "crop": "pad", "fixes": ["trim", "auto_color"], "rotate": 0, "background": "white", "why": "yellow tint, wide border" }] }`
-- Answer: `{ result: "draft", shopStatus, kept, unsure, flags, note, sources }`. `422` → fix as the message says and resend.
+- Every line in `notes` and `dataFlags` becomes an **open problem** in the product's AI notes and the product goes to **Attention**; nothing to fix → **Draft**. So send only what staff must do, never information.
+- Answer: `{ result: "draft" | "attention", shopStatus, kept, unsure, flags, note, sources }`. `422` → fix as the message says and resend.
 - It goes straight onto the product: description, online name, specs (your rows replace ours with the same label; other rows stay), brand, collections (added), shipping. The product moves to Draft.
 
 ---
@@ -312,4 +315,4 @@ In Review mode, add **Minor, not sent** — the small points held back for Publi
 Then: **stopped products** with the exact clash (staff must fix the data or the photos), and the next step for the owner:
 
 > **Attention** tab: the stopped products, parked with the clash as the reason — check the real unit, fix the data or photos, then **Save as draft** (and run product copy again) or **Save as ready**.
-> **Draft** tab: the finished ones — read "Notes for you", add the suggested photos, fix what the notes say, then **Save as ready**. Publish when the time is right.
+> **Draft** tab: the finished ones — read the AI notes, add the suggested photos, fix what the notes say, then **Save as ready**. Publish when the time is right.

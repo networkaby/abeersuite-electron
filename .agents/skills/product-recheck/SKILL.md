@@ -52,7 +52,7 @@ Usually the Draft tab: `GET /api/agent/products?stage=draft&limit=20` (or `sku=`
 curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$PRODUCT_COPY_READ_URL/api/agent/prep/<id>"
 ```
 
-Use: the product fields, every photo (open each — `GET /api/agent/products/<id>/photos/<n>` if blocked), `draftNotes`, `processNotes`, `attention`, and `prep.pages` / `prep.labelFacts` (the saved search — the only outside source allowed).
+Use: the product fields, every photo (open each — `GET /api/agent/products/<id>/photos/<n>` if blocked), `prep.problems` (the one open list), `photoList.keep` (staff's Keep — correct photos, never doubt them), and `prep.pages` / `prep.labelFacts` (the saved search — the only outside source allowed).
 `prep.identityChanged: true` → staff changed brand / model / barcode after the search: **pending** "Identity changed after the search — run product prep from Part 1".
 `prep.runs` (last 10 runs, `{ skill, part, at, from, to, found?, fixed? }`) and `prep.changedSinceRun` (owner, 2026-11-20): the last run was a product-recheck and `changedSinceRun: false` → **skip** ("verified / checked on <date>, nothing changed since") unless the owner said **"redo"** or named the SKU.
 
@@ -107,6 +107,7 @@ The server keeps the list on the product (staff see it under Product image), **n
 ```
 
 - A dropped photo becomes **optional**: staff need not upload it. The reason goes to staff as a note.
+- **A photo of a similar but different model is another product's**: Part 4 cannot change photos, so send the pending line naming the photo, and `next: "part5"` — Part 5 removes it or offers staff Remove / Keep.
 - **Dropping is never a reason to remove the photo.** Other sellers not showing a view does not mean we cannot. If staff already added it, look at it: keep it unless it is ugly, low quality or adds nothing (then `remove` / `suggestRemove` with the usual reason).
 - The fixed floor (clean product photo; box front + back when boxed) can never be dropped. Part 1's drops are ignored.
 - Staff's "Not applicable" tick is cleared by the server once that photo is dropped or is in the gallery — it only means something on a must photo still missing.
@@ -125,17 +126,21 @@ The server tags each line with its part ("Part 3 · …") and **a part that runs
 
 | Area | Pending when |
 |---|---|
-| **Earlier notes** | Each line in `processNotes` / `draftNotes` (Remove this photo, copy model no. X, create brand Y, fix group…) — not carried out |
+| **Earlier notes** | Each line in `prep.problems` (Remove this photo, copy model no. X, create brand Y, fix group…) — not carried out |
 | **Text** | Title / description / specs say something not on the label or an accepted saved page; a spec contradicts a photo; our support period shown as the maker's warranty (warranty: see its own row). A maker's SKU code and a different model number / name for the same product (Foxin FOXCOM0033 = FGK-9991) is **not** a mismatch, and needs no saved search to pass |
 | **Warranty** | Title, description and specs give **different** warranties (period or who gives it), or the box / label prints a warranty that differs from ours, or our support period is shown as the maker's warranty. A warranty **not printed on the box is never pending and never a note** (owner, 2026-11-27) — most boxes don't print it. A warranty in the title / description but missing from the specs → pending "add Warranty row to specs" |
 | **Brand** | Empty or wrong while the label shows a brand that is now in `masters.brands` |
 | **Collections** | None, or plainly wrong for who buys it |
 | **Group** | Plainly wrong (GST) — always pending until staff fix it |
 | **Shipping** | **Never pending, never a note** (owner, 2026-11-23) — empty, a spec weight that differs from the box, or an old shipping line: none of them blocks. The shop readiness gate puts a product with no weight in Pending by itself. Mention a doubtful weight in the report to the owner only; an old shipping line in `prep.problems` → send it in `/fixed` |
-| **Photos** | Main photo not a clean product photo without the box, or has a logo / watermark / text (our own too); another product's photo; someone else's watermark on any photo; blurry / dark; duplicates; a `must` photo kind still missing (`photoList.missing`). Our own logo / address on a **non-main** photo is fine — never flag it. Send **`photoCheck`** (below) — the server checks the must photos and the main photo itself |
+| **Photos** | Main photo not a clean product photo without the box, or has a logo / watermark / text (our own too); another product's photo; someone else's watermark on any photo; blurry / dark; **any photo under 500 px on its short side** ("Photo n is 250×164 — too small, remove or reshoot" — measured, see below); duplicates; a `must` photo kind still missing (`photoList.missing`). Our own logo / address on a **non-main** photo is fine — never flag it. Send **`photoCheck`** (below) — the server checks the must photos and the main photo itself |
 | **Photo edits** | A photo cut out, blanked, cropped or straightened by Part 3 / 5 (`prep.edits`, and the Part 5 notes: "Photo n: cut out onto white (original: …)") with a ragged edge, a part of the product missing (a crop that cut off a cable end or stand counts), a label or text damaged, a visible grey block, a straighten that left it more tilted → pending "Photo n edit is bad — restore the original" (Part 5 restores it, see product-prep `photos.md`). A no-meaning background still left on a photo with lots of empty space → a `note` for Part 5. Never flag a meaningful or designed background (in hand, in our shop, RGB on black), and never a blanked MRP that looks clean |
 
+**Tips** (`level: "tip"`, cyan) in `prep.problems` never block Ready. Judge each one the same way as product-prep ("One shared open-problem list" → `tip`): done or not needed for this product → send it in `/fixed` (not needed: say why in `notes`); now a real problem → `/fixed` it and put your own line in `pending`; still worth doing → leave it. Never copy a tip into `pending` / `notes` unchanged.
+
 **Pending** = would be wrong or embarrassing on the shop. Smaller things (wording could be nicer, a nice-to-have photo) go in `notes`. **Any line in either sends the product to Attention** (owner, 2026-11-17) — a Published product too; going off the shop is accepted. So write a line only for a real problem; nothing found → send both empty.
+
+**Measure the photos** (owner, 2026-11-27) — looks lie: download each photo (`/photos/<n>`) and run `node photo-edit.mjs size p1.jpg p2.jpg …` (setup in product-prep `photos.md`). TOO SMALL (short side < 500) → **pending**, never verified, whatever it looks like. WEAK (500–799) → **no line** (a note here would send it to Attention too); mention it in the report to the owner only.
 
 ## 4. Send
 

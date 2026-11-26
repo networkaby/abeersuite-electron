@@ -102,12 +102,18 @@ curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$PRODUCT_COPY_READ_URL/api/agent
 ```
 
 Answer = product-copy's read (`name, brand, modelNo, barcodes, typedSpecs, photos, writing, masters …`) **plus**
-`title` (online name), `group`, `shipping`, `attention` (Attention reason now), `draftNotes`, `processNotes`, and
+`title` (online name), `group`, `shipping`, `attention` (a summary of the open problems and the last run — work from `prep.problems`), and
 `prep: { runs, changedSinceRun, problems, staffNote, partDone, path, photosDoneAt, photoStatus, next, nextStep, identityChanged, searchAllowed, searchedAt, pages, dropped, labelFacts, seen, labelWebsite }`.
 
 **Run records first — never run the same thing twice for nothing** (owner, 2026-11-20). `prep.runs` = the last 10 runs (`{ skill, part, at, from, to, found?, fixed? }`, oldest first); the server writes one after every call — you never send it. `prep.changedSinceRun: false` and the last run is the same path you are about to run (`"1+5"`, `"1+2+3"`, `"1+3"`) → **skip the product** ("already ran on <date>, nothing changed since"), unless the owner said **"redo"** or named this SKU. `changedSinceRun: true` (staff saved it after the run) → go on.
 
-**One shared open-problem list** (owner, 2026-11-20). `prep.problems` = every open problem on the product, whoever raised it: `{ text, level: stop | fix, part, source?, by?, asideAt? }`.
+**One shared open-problem list** (owner, 2026-11-20). `prep.problems` = every open problem on the product, whoever raised it: `{ text, level: stop | fix | tip, part, source?, by?, asideAt? }`.
+- **`tip`** (cyan, owner 2026-11-27) = "better to do" — e.g. photo-suggest's "Photo needed: …". A tip is **advice, not an order**: never blocks, never moves the stage, a part's re-run never closes it. Each run, judge every tip with what you now know (photos, saved search, maker's pages):
+  - **Done** (the photo / thing is there now) → send its text in `/fixed`.
+  - **Not needed** for this product (your own must / optional list or the maker's pages say that view adds nothing — e.g. "Bottom" for a sealed cable) → send it in `/fixed` and say why in your part's `notes`.
+  - **Wrong or now serious** (it names another model, or the view is a real must still missing) → `/fixed` the tip and raise your own line in `staff` / the photo list instead.
+  - **Still worth doing** → leave it. Never copy a tip into `staff` / `pending` just because it is there.
+  - Use tips as **input** to your must / optional list, never as the list itself.
 - Raised by a part (`part` 1–5) or by **staff** (`source: "staff"`, `by` = who) — staff write theirs as `{…}` in the product's manual note (`prep.staffNote`, Markdown; text outside `{ }` is for people, ignore it). Treat a staff problem **exactly like any other**: do it first, within what this skill may do. An open staff problem always makes `changedSinceRun: true` — never skip that product.
 - **`asideAt`** = staff ticked **"temporary pass"**: it does not block and you never write it again in `staff` / `pending`, but it **stays until fixed** — if you see it is fixed now, report it fixed.
 - **You fixed one** (any source, set aside or not) → report it, one call for all, before the part call:
@@ -116,6 +122,7 @@ Answer = product-copy's read (`name, brand, modelNo, barcodes, typedSpecs, photo
 curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json"   "$PRODUCT_COPY_WRITE_URL/api/agent/prep/<id>/fixed" -d '{ "fixed": ["Must photo missing: Box back", "Add one more photo of the side ports"] }'
 ```
   Send each `text` exactly as in `prep.problems`. The server removes them from the list and the Attention reason, and a staff one turns into `✓ …` in the note. Could not do a staff one (needs a person) → leave it open and say why in your part's `notes`.
+- **`photoList.keep`** = staff pressed **Keep**: those photos are correct. Never send them in `remove` / `suggestRemove` and never call them wrong (the server ignores it).
 - A new problem you find goes in the part's `staff` / `pending` as before — the server adds it to the same list. Every run, refused ones included, leaves its one-line history record (`prep.runs`, last 10, `{ skill, part, at, from, to, found?, fixed? }`) by itself; you never send one.
 
 **"Check the open problems that say xyz"** (the owner's words, any product): `GET $PRODUCT_COPY_READ_URL/api/agent/prep/problems?q=<words>` → `{ count, products: [{ sku, id, name, stage, problems: [{ text, level, source, aside }] }] }` — all words must match, any order; no `q` = every product with an open problem. Report by SKU; work on them only if the owner says so.
@@ -223,12 +230,13 @@ The server tags each line with its part ("Part 3 · …") and **a part that runs
 1. **Read everything**: name (the custom part is usually the most reliable), brand, group, collections, SKU, barcodes, model no., specs, title, description, shipping, warranty — and **open every photo**. Never use your own memory of the product.
 2. **Find what is wrong**:
    - **Self-contradiction**: fields disagree with each other or with what is *printed* on the item / box (brand, model, capacity, wattage, size, count). Unbranded / Premium Unbranded with a small printed name is **not** a conflict. A maker's own SKU / part code (Foxin FOXCOM0033), its model number (FGK-9991) and a model name (Thunder) can all name **one** product — makers differ — so two codes are **not** a conflict unless the label, box or an accepted page ties them to different products (owner, 2026-11-27).
-   - **Wrong photos**: another product, old box version, someone else's watermark (our own stamp is not one).
-   - **Poor photos**: blurry, dark, low resolution, bad angle, duplicates.
+   - **Wrong photos**: another product — **a similar model is another product** (DG-GS1008D is not DG-GS1008DGE, unless the unit or the maker says they are the same) —, old box version, someone else's watermark (our own stamp is not one).
+   - **Poor photos**: blurry, dark, bad angle, duplicates — and **too small: measure every photo with `photo-edit.mjs size`** (short side < 500 px = too small, never on the shop; < 800 = weak, a note). Rules: `photos.md` "Photo size".
    - **Wrong text**: a wrong spec row, our support period written as the maker's warranty, a wrong weight / size, a description of another product. Warranty: wrong only when title / description / specs disagree with each other or with a warranty printed on the box — **no warranty on the box is never a problem** (owner, 2026-11-27).
 3. **Decide what is sure**:
-   - Sure wrong → `remove` (photos) / `clear` (fields). The server does it now. Give every removed photo its **`kind`** (the view it shows). The server holds back the last photo, the only photo of a view and one with no `kind` — staff get a Remove button (another product's photo, `irrelevant`, needs no `kind`). Box colour alone is never a reason.
-   - Not so confident → `suggestRemove` (staff get a Remove button; never blocks).
+   - Sure wrong → `remove` (photos) / `clear` (fields). The server does it now. Give every removed photo its **`kind`** (the view it shows). The server holds back the last photo, the only photo of a view and one with no `kind` — staff get a Remove button (another product's photo, `irrelevant`, is removed even when it is the only one of its view — still send its `kind`: the server unticks that view unless another photo shows it). Box colour alone is never a reason.
+   - Not so confident → `suggestRemove` (staff get Remove / Keep buttons; never blocks).
+   - **A wrong-model photo is never only a text line**: it always goes in `remove` (sure) or `suggestRemove` (not sure). Do not write "Removed photo N" as a `staff` / `fix` line.
    - Cannot decide → leave it to staff: a `fix` line ("Photo 3: check if this is our model"); Part 3 / 5: a `staff` line.
    - **Never clear the group** — `fix` line "Group looks wrong — should be X (GST!)".
 4. **Major or minor?**
