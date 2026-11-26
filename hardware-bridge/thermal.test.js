@@ -407,4 +407,13 @@ test("barcode: never wider than the head, long voucher numbers get thinner bars"
     const slip = await buildPosBuffer(payload);
     assert.ok(slip.includes(Buffer.from([0x1d, 0x77, 0x02])), "GS w 2 reaches the slip");
     assert.ok(slip.includes(Buffer.from([0x1d, 0x6b, 0x49, 18, 0x7b, 0x42])), "CODE128 command");
+    assert.ok(slip.includes(Buffer.from([0x1b, 0x4a, 12])), "small gap between bars and number");
+});
+
+test("cut: feeds only to the cutter, no fixed blank lines before it", async () => {
+    for (const slip of [await buildPosBuffer(posPayload({ showBarcode: true })), await buildPosBuffer(posPayload())]) {
+        assert.ok(slip.includes(Buffer.from([0x1d, 0x56, 0x42, 0x00])), "GS V 66 0");
+        assert.ok(!slip.includes(Buffer.from([0x1d, 0x56, 0x00])), "no plain GS V 0");
+        assert.ok(!slip.includes(Buffer.from([0x1b, 0x64, 0x04])), "no ESC d 4 feed");
+    }
 });

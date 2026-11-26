@@ -293,6 +293,16 @@ function barcodeModuleWidth(reference, cols) {
     return modules * 2 <= dots ? 2 : 1;
 }
 
+// GS V 66 0: feed the paper just to the cutter, then full cut. The library's
+// cut() feeds a fixed 8 lines (2 × ESC d 4) first and the head-to-cutter gap
+// comes on top, leaving ~5 cm of blank roll under every slip. ESC @ afterwards
+// matches the library (it also clears the ₹ slot, reloaded per slip).
+const CUT_AT_CUTTER = Buffer.from([0x1d, 0x56, 0x42, 0x00]);
+function cutSlip(printer) {
+    printer.add(CUT_AT_CUTTER);
+    printer.initHardware();
+}
+
 // Footer chrome — mirrors ThermalFooter: [divider + terms] → [bank block] →
 // [signature] → divider → footer line → disclaimer → barcode → cut.
 async function printFooter(printer, t, reference, tag) {
@@ -326,10 +336,15 @@ async function printFooter(printer, t, reference, tag) {
         // The printer's own HRI text is ignored by some heads (RETSOL TP806), so
         // the number is printed as a plain centred line under the bars, like the
         // preview's BarcodeSvg caption.
-        try { printer.code128(String(reference), { height: 60, width: barcodeModuleWidth(reference, t._cols) }); printer.println(String(reference)); }
+        // ESC J 12 (12 dots, ~1.5 mm) keeps the number clear of the bars' bottom edge.
+        try {
+            printer.code128(String(reference), { height: 60, width: barcodeModuleWidth(reference, t._cols) });
+            printer.add(Buffer.from([0x1b, 0x4a, 12]));
+            printer.println(String(reference));
+        }
         catch (err) { console.warn(`[thermal:${tag}] barcode skipped:`, err.message); }
     }
-    printer.cut();
+    cutSlip(printer);
 }
 
 // Tenders received against the bill (one row per tender ledger) + balance due,
@@ -1543,7 +1558,7 @@ function start({ getConfig, setConfig }) {
             printer.println("Total ₹499.00");
             printer.println("If the sign above is not a rupee,");
             printer.println("turn off 'Print ₹' in Printer Settings.");
-            printer.cut();
+            cutSlip(printer);
             await sendBuffer(getConfig(), printer.getBuffer());
             return { ok: true };
         },
