@@ -8,7 +8,6 @@ import { Plus, Pencil, Trash2, ShieldCheck, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { NumericInput } from "@/shared/components/NumericInput";
@@ -171,17 +170,34 @@ export default function InventoryWarrantyTermsPage() {
             </div>
 
             {adding || editId != null ? (
-                <div className="flex-none space-y-3 border-2 border-border bg-muted/30 p-4">
-                    <p className="text-sm font-semibold">{adding ? "New warranty term" : "Edit warranty term"}</p>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="space-y-2 sm:col-span-2">
-                            <Label>Name</Label>
+                // Compact: two rows on a wide screen, so the list stays in view.
+                <div className="flex-none space-y-2 border-2 border-border bg-muted/30 px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <p className="text-sm font-semibold">{adding ? "New warranty term" : "Edit warranty term"}</p>
+                        {locked ? (
+                            <span className="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400">
+                                <Lock className="size-3.5 shrink-0" aria-hidden />
+                                On {editing?.usedOnBills} bill line{editing?.usedOnBills === 1 ? "" : "s"}: type, days and extra condition are locked. Create a new term for a new policy.
+                            </span>
+                        ) : null}
+                        <div className="ml-auto flex gap-2">
+                            <Button type="button" size="sm" variant="outline" onClick={cancel}>
+                                Cancel
+                            </Button>
+                            <Button type="button" size="sm" onClick={save} disabled={saving}>
+                                Save
+                            </Button>
+                        </div>
+                    </div>
+
+                    <div className="grid gap-x-3 gap-y-2 lg:grid-cols-12">
+                        <div className="space-y-1 lg:col-span-3">
+                            <Label className="text-xs">Name</Label>
                             <Input value={form.name} onChange={(e) => set("name", e.target.value)} />
                         </div>
-
-                        <div className="space-y-2 sm:col-span-2">
-                            <Label>Warranty type</Label>
-                            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Warranty type">
+                        <div className="space-y-1 lg:col-span-7">
+                            <Label className="text-xs">Warranty type</Label>
+                            <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="Warranty type">
                                 {WARRANTY_TYPES.map((wt) => (
                                     <Button
                                         key={wt}
@@ -196,13 +212,17 @@ export default function InventoryWarrantyTermsPage() {
                                         {WARRANTY_TYPE_LABEL[wt]}
                                     </Button>
                                 ))}
+                                <span className="text-xs text-muted-foreground">{TYPE_HINT[t]}</span>
                             </div>
-                            <p className="text-xs text-muted-foreground">{TYPE_HINT[t]}</p>
                         </div>
+                        <label className="flex items-center gap-2 self-end pb-2 text-sm lg:col-span-2 lg:justify-end">
+                            <Checkbox checked={form.isActive} onCheckedChange={(v) => set("isActive", v === true)} />
+                            Active
+                        </label>
 
                         {t === "COMBINED" ? (
-                            <div className="space-y-2">
-                                <Label>Seller period (days)</Label>
+                            <div className="space-y-1 lg:col-span-2">
+                                <Label className="text-xs">Seller period (days)</Label>
                                 <NumericInput
                                     mode="digits"
                                     min={1}
@@ -212,14 +232,14 @@ export default function InventoryWarrantyTermsPage() {
                                     onValueChange={(v) => set("sellerDays", v)}
                                     disabled={locked}
                                 />
-                                <p className="text-xs text-muted-foreground">
-                                    Our own warranty on top{form.sellerDays ? ` · ${formatWarrantyDaysLong(toDays(form.sellerDays))}` : ""}.
+                                <p className="text-[11px] text-muted-foreground">
+                                    {form.sellerDays ? `Our own · ${formatWarrantyDaysLong(toDays(form.sellerDays))}` : "Our own, on top"}
                                 </p>
                             </div>
                         ) : null}
                         {t !== "NONE" ? (
-                            <div className="space-y-2">
-                                <Label>{t === "COMBINED" ? "Manufacturer period (days)" : "Duration (days)"}</Label>
+                            <div className={`space-y-1 ${t === "COMBINED" ? "lg:col-span-2" : "lg:col-span-3"}`}>
+                                <Label className="text-xs">{t === "COMBINED" ? "Manufacturer period (days)" : "Duration (days)"}</Label>
                                 <NumericInput
                                     mode="digits"
                                     min={0}
@@ -229,58 +249,31 @@ export default function InventoryWarrantyTermsPage() {
                                     onValueChange={(v) => set("durationDays", v)}
                                     disabled={locked}
                                 />
-                                <p className="text-xs text-muted-foreground">
+                                <p className="text-[11px] text-muted-foreground">
                                     {form.durationDays && toDays(form.durationDays)
-                                        ? `${formatWarrantyDaysLong(toDays(form.durationDays))} from sale.`
-                                        : "Days from sale. Blank = lifetime / no fixed period."}
+                                        ? `${formatWarrantyDaysLong(toDays(form.durationDays))} from sale`
+                                        : "Blank = lifetime"}
                                 </p>
                             </div>
                         ) : null}
-
-                        <div className="space-y-2 sm:col-span-2">
-                            <Label>Extra condition (optional)</Label>
-                            <Textarea
+                        <div className={`space-y-1 ${t === "NONE" ? "lg:col-span-6" : t === "COMBINED" ? "lg:col-span-4" : "lg:col-span-5"}`}>
+                            <Label className="text-xs">Extra condition (optional)</Label>
+                            <Input
                                 value={form.extraCondition}
                                 onChange={(e) => set("extraCondition", e.target.value)}
-                                rows={2}
                                 disabled={locked}
-                                placeholder="Printed after the type's standard condition, for this term only."
+                                placeholder="Printed after the type's condition (Settings → Print templates)"
                             />
-                            <p className="text-xs text-muted-foreground">
-                                The standard condition for each type is set in Settings → Print templates.
-                            </p>
                         </div>
-
-                        <div className="space-y-2 sm:col-span-2">
-                            <Label>Description (internal)</Label>
-                            <Textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={2} />
+                        <div className={`space-y-1 ${t === "NONE" ? "lg:col-span-6" : "lg:col-span-4"}`}>
+                            <Label className="text-xs">Description (internal)</Label>
+                            <Input value={form.description} onChange={(e) => set("description", e.target.value)} />
                         </div>
-
-                        {locked ? (
-                            <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400 sm:col-span-2">
-                                <Lock className="size-4 shrink-0" aria-hidden />
-                                On {editing?.usedOnBills} bill line{editing?.usedOnBills === 1 ? "" : "s"}: type, days and extra condition are locked.
-                                Create a new term for a new policy.
-                            </div>
-                        ) : null}
-
-                        <label className="flex items-center gap-2 text-sm">
-                            <Checkbox checked={form.isActive} onCheckedChange={(v) => set("isActive", v === true)} />
-                            Active
-                        </label>
-                    </div>
-                    <div className="flex gap-2">
-                        <Button type="button" onClick={save} disabled={saving}>
-                            Save
-                        </Button>
-                        <Button type="button" variant="outline" onClick={cancel}>
-                            Cancel
-                        </Button>
                     </div>
                 </div>
             ) : null}
 
-            <div className="min-h-0 flex-1 overflow-auto border border-border [&_[data-slot=table-container]]:overflow-x-visible">
+            <div className="min-h-48 flex-1 overflow-auto border border-border [&_[data-slot=table-container]]:overflow-x-visible">
                 <Table>
                     <TableHeader className="sticky top-0 z-20 bg-background [&_th]:bg-background [&_tr]:border-b [&_th]:shadow-[inset_0_-1px_0_var(--border)]">
                         <TableRow>
