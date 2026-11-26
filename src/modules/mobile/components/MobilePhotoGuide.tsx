@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { AlertTriangle, Camera, ChevronDown, ChevronRight } from "lucide-react";
-import type { PhotoGuide } from "../lib/photoGuide";
+import { AlertTriangle, Camera, Pencil } from "lucide-react";
+import type { GuideNote, PhotoGuide } from "../lib/photoGuide";
 
 const STAGE: Record<PhotoGuide["stage"], { label: string; cls: string }> = {
     UNPUBLISHED: { label: "Not started", cls: "bg-muted text-muted-foreground" },
@@ -20,15 +19,31 @@ export function StageBadge({ stage }: { stage: PhotoGuide["stage"] }) {
     return <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${s.cls}`}>{s.label}</span>;
 }
 
-/** Stage-aware notes above the photos: why it is parked, what to shoot, the rest folded. */
+/** Same dot colours as the computer's Open problems list (AiNotesBox). */
+const DOT: Record<GuideNote["level"], string> = { stop: "bg-red-600", fix: "bg-amber-500", staff: "bg-blue-600" };
+
+function Notes({ notes }: { notes: GuideNote[] }) {
+    return (
+        <ol className="mt-1 space-y-1">
+            {notes.map((n) => (
+                <li key={n.no} className="flex items-start gap-1.5">
+                    <span className={`mt-1.5 inline-block size-2 shrink-0 rounded-full ${DOT[n.level]}`} />
+                    <span className="w-4 shrink-0 text-muted-foreground">{n.no}</span>
+                    <span>{n.text}</span>
+                </li>
+            ))}
+        </ol>
+    );
+}
+
+/** Stage-aware notes above the photos: a one-line Attention, what to shoot, what to fix on the computer. */
 export default function MobilePhotoGuide({ guide }: { guide: PhotoGuide }) {
-    const [open, setOpen] = useState(false);
     const { attention, shoot, other } = guide;
     const when = attention?.at ? new Date(attention.at).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : null;
     return (
         <div className="space-y-2">
             {attention && (
-                <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm">
+                <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-1.5 text-sm">
                     <p className="flex items-center gap-1 font-semibold text-amber-700 dark:text-amber-400">
                         <AlertTriangle className="size-4" aria-hidden /> Attention
                         {(attention.by || when) && <span className="font-normal text-muted-foreground">— {[attention.by, when].filter(Boolean).join(" · ")}</span>}
@@ -38,21 +53,16 @@ export default function MobilePhotoGuide({ guide }: { guide: PhotoGuide }) {
             )}
             <div className="rounded-lg border border-blue-500/40 px-3 py-2 text-sm">
                 <p className="flex items-center gap-1 font-semibold text-blue-700 dark:text-blue-400">
-                    <Camera className="size-4" aria-hidden /> Shoot these
+                    <Camera className="size-4" aria-hidden /> Shoot these{shoot.length > 0 && ` (${shoot.length})`}
                 </p>
-                {shoot.length ? (
-                    <ul className="mt-1 list-disc space-y-0.5 pl-5">{shoot.map((t) => <li key={t}>{t}</li>)}</ul>
-                ) : (
-                    <p className="mt-1 text-muted-foreground">{TIP}</p>
-                )}
+                {shoot.length ? <Notes notes={shoot} /> : <p className="mt-1 text-muted-foreground">{TIP}</p>}
             </div>
             {other.length > 0 && (
                 <div className="rounded-lg border px-3 py-2 text-sm">
-                    <button type="button" onClick={() => setOpen(!open)} className="flex w-full items-center gap-1 text-left text-muted-foreground" aria-expanded={open}>
-                        {open ? <ChevronDown className="size-4" aria-hidden /> : <ChevronRight className="size-4" aria-hidden />}
-                        Other notes ({other.length}) — AI & staff
-                    </button>
-                    {open && <ul className="mt-1 list-disc space-y-0.5 pl-5">{other.map((t) => <li key={t}>{t}</li>)}</ul>}
+                    <p className="flex items-center gap-1 font-semibold">
+                        <Pencil className="size-4" aria-hidden /> Fix these on the computer ({other.length})
+                    </p>
+                    <Notes notes={other} />
                 </div>
             )}
         </div>
