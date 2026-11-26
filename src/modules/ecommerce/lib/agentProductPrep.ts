@@ -94,11 +94,17 @@ const notAside = (aside: Set<string>) => (l: string) => !aside.has(problemKey(l)
  * One problem once (owner, 2026-11-20): the server's own photo lines ("Must photo
  * missing: Box back") already say which photos are missing, so the AI's own
  * wording of the same gap ("box front and back photos are missing") is dropped.
+ * Same for the main photo (owner, 2026-11-26): the server's "Main photo is not a clean
+ * product photo (…)" already carries the AI's reason, so its own "Photo 1 is a tiny
+ * blurry thumbnail — reshoot" is the same problem twice.
  */
 const PHOTO_GAP = /\bphotos?\b[^.]*\bmissing\b|\bmissing\b[^.]*\bphotos?\b/i;
+const MAIN_PHOTO = /\b(main|primary|first|1st) (product )?photo\b|\bphoto (#|no\.? ?)?1\b/i;
+const SERVER_LINE = /^(Must photo missing|Main photo|No photo at all)/;
 const notPhotoRestatement = (serverLines: string[]) => {
-    const covered = serverLines.some((l) => /^Must photo missing/.test(openText(l)));
-    return (l: string) => !covered || /^(Must photo missing|Main photo)/.test(openText(l)) || !PHOTO_GAP.test(l);
+    const gaps = serverLines.some((l) => /^Must photo missing/.test(openText(l)));
+    const main = serverLines.some((l) => /^(Main photo|No photo at all)/.test(openText(l)));
+    return (l: string) => SERVER_LINE.test(openText(l)) || !((gaps && PHOTO_GAP.test(l)) || (main && MAIN_PHOTO.test(l)));
 };
 
 /**
