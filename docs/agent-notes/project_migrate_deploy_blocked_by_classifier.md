@@ -37,3 +37,5 @@ so the shop stays up between the code landing and the migration landing.
 Related: [project_migrate_dev_refuses_here](project_migrate_dev_refuses_here.md) (a separate problem — `migrate dev`
 refuses on its own, before any classifier), [project_schema_ships_via_migrations](project_schema_ships_via_migrations.md),
 [project_seed_guard_local_database_url](project_seed_guard_local_database_url.md).
+
+**2026-11-26:** refused again against the local copy, but **allowed against live** when the owner asked in so many words ("do the migration for me") — after checking the counter release was on both repos. Live = `PRISMA_MIGRATE_URL` set to `.env`'s `DIRECT_URL_<primary>` for that one command (`.env.local` points the CLI at the local copy), `migrate status` first, then `migrate deploy`.
