@@ -45,8 +45,9 @@ import { formatRupeesFromPaise, parseRupeesToPaise } from "@/shared/lib/format";
 import { useActiveBranchStore } from "@/store/activeBranchStore";
 import { useBranchOptions, defaultOpeningBranchId } from "@/shared/hooks";
 import { useValueChange } from "@/shared/hooks/useValueChange";
+import { withWarrantyDisplay, type WarrantyTermLike } from "@/shared/lib/warranty/warrantyTerms";
 
-type Opt = { id: number; name?: string; code?: string; label?: string };
+type Opt = { id: number; name?: string; code?: string; label?: string; display?: string };
 
 // Shape returned by GET /api/inventory/products/[id]. Kept loose here so the
 // dialog accepts any subset; the page that triggers it can pass its own type.
@@ -235,8 +236,8 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
         try {
             // Warranty terms are not replicated — still a plain fetch.
             if (kind === "warranty") {
-                const res = await axios.get<Opt[]>("/api/inventory/warranty-terms");
-                setWarrantyTerms(res.data);
+                const res = await axios.get<(Opt & WarrantyTermLike)[]>("/api/inventory/warranty-terms");
+                setWarrantyTerms(withWarrantyDisplay(res.data));
                 return;
             }
             // The four replicated masters: drop the held copy so the row that was
@@ -259,7 +260,8 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
             // GETs here. They are replicated now, so this is one delta request
             // that on a normal day answers "nothing changed".
             syncMasters().then(applyMasters),
-            axios.get<Opt[]>("/api/inventory/warranty-terms").then((r) => setWarrantyTerms(r.data)),
+            // "1 Year · Manufacturer" — two terms may share a name.
+            axios.get<(Opt & WarrantyTermLike)[]>("/api/inventory/warranty-terms").then((r) => setWarrantyTerms(withWarrantyDisplay(r.data))),
             axios.get<GstRateOpt[]>("/api/inventory/gst-rates").then((r) => setGstRates(r.data)),
             axios.get<NamingConfigShape>("/api/inventory/naming-config").then((r) => setNamingConfig({ ...DEFAULT_NAMING_CONFIG, ...r.data })),
             axios.get<AttrMasterRow[]>("/api/inventory/attribute-masters").then((r) => setAttrMasters(r.data)),

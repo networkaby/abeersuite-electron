@@ -169,11 +169,13 @@ model InvWarrantyTerm {
   /// Total coverage in days from sale. 0 / null = no fixed duration (e.g.
   /// "lifetime"). Days, so short DOA windows and 5-year terms share one unit.
   durationDays Int?
-  /// Who honours the claim. COMBINED = the shop for the first `sellerDays`,
-  /// then the manufacturer up to `durationDays`. The printed condition text per
-  /// type lives on the print template (warranty*Text), not here.
-  warrantyType WarrantyType @default(SELLER)
-  /// COMBINED only: the shop's own part, in days from sale.
+  /// Who honours the claim. COMBINED = the manufacturer for `durationDays`
+  /// plus the shop's own warranty on top for the first `sellerDays` (either
+  /// may be claimed then). The printed condition text per type lives on the
+  /// print template (warranty*Text), not here. Default MANUFACTURER: the usual
+  /// kind, and what every pre-type term became (owner, 2026-11-26).
+  warrantyType WarrantyType @default(MANUFACTURER)
+  /// COMBINED only: the shop's own extra part, in days from sale.
   sellerDays   Int?
   /// Printed after the type's standard condition, for this term only.
   extraCondition String?

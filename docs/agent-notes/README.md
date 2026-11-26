@@ -82,7 +82,7 @@ Adding one: a file here named `<type>_<slug>.md` (`project`, `feedback`, `user`,
 - [App update prompt built](project_app_update_prompt.md) — UA version vs appVersions.ts; APK link on the other host (2026-10-17).
 - [2nd WhatsApp number + R2 attachments](project_wa_second_number_r2.md) — 96996 conversation-only, coexistence blocked by Meta review; files in private R2 bucket; ids in constants — SUPERSEDED: ids go in .env or DB (2026-11-12).
 - [Attendance segment edit deferred](project_attendance_segment_edit_deferred.md) — "count Off duty gap as duty" (meeting) planned 2026-10-13, needs new table; owner said later.
-- [Shop warranty vs manufacturer warranty](project_warranty_shop_vs_manufacturer.md) — POS/office = our support period; e-commerce = maker's term, labelled as the maker's; shorter shop term is not a clash. Since 2026-11-26 terms carry a type, sale lines freeze the term, used terms are locked.
+- [Warranty types: manufacturer, seller, combined](project_warranty_shop_vs_manufacturer.md) — existing terms are Manufacturer (seller not involved); seller = shop repairs undamaged items, 15 days; combined = brand + shop's extra part, either; sale lines freeze the term (2026-11-26).
 - [Account.balance column to be dropped](project_account_balance_column_to_drop.md) — display-dead since 5e8c9966; never patch its drift; writer list for the removal job.
 - [Meta app policy links move to abeersoft.in later](project_meta_app_policy_urls_move_to_abeersoft.md) — networkservice.in links for now; same legal entity, one app; switch when serving other shops.
 - [Product feed: one rebuild/day, only if dirty](project_product_feed_rebuild_rule.md) — Google/Meta catalog feed planned after WA Channel work; cost/sale changes never mark it dirty (2026-10-23).

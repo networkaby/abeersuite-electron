@@ -24,7 +24,7 @@ const FIELD_LABELS: Record<ProductImportField, string> = {
     category: "Category — by name",
     group: "Group — by name (HSN / tax bucket)",
     brand: "Brand — by name",
-    warrantyTerm: "Warranty term — by name",
+    warrantyTerm: "Warranty term — name, or name · type (1 Year · Manufacturer)",
     modelNo: "Model number",
     barcode1: "Barcode",
     hsnCode: "HSN code",

@@ -2979,7 +2979,7 @@ CREATE TABLE IF NOT EXISTS "InvWarrantyTerm" (
     "name" TEXT NOT NULL,
     "description" TEXT,
     "durationDays" INTEGER,
-    "warrantyType" "WarrantyType" NOT NULL DEFAULT 'SELLER',
+    "warrantyType" "WarrantyType" NOT NULL DEFAULT 'MANUFACTURER',
     "sellerDays" INTEGER,
     "extraCondition" TEXT,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
@@ -2994,7 +2994,7 @@ ALTER TABLE "InvWarrantyTerm" ADD COLUMN IF NOT EXISTS "description" TEXT;
 ALTER TABLE "InvWarrantyTerm" ALTER COLUMN "description" DROP NOT NULL;
 ALTER TABLE "InvWarrantyTerm" ADD COLUMN IF NOT EXISTS "durationDays" INTEGER;
 ALTER TABLE "InvWarrantyTerm" ALTER COLUMN "durationDays" DROP NOT NULL;
-ALTER TABLE "InvWarrantyTerm" ADD COLUMN IF NOT EXISTS "warrantyType" "WarrantyType" NOT NULL DEFAULT 'SELLER';
+ALTER TABLE "InvWarrantyTerm" ADD COLUMN IF NOT EXISTS "warrantyType" "WarrantyType" NOT NULL DEFAULT 'MANUFACTURER';
 ALTER TABLE "InvWarrantyTerm" ADD COLUMN IF NOT EXISTS "sellerDays" INTEGER;
 ALTER TABLE "InvWarrantyTerm" ALTER COLUMN "sellerDays" DROP NOT NULL;
 ALTER TABLE "InvWarrantyTerm" ADD COLUMN IF NOT EXISTS "extraCondition" TEXT;

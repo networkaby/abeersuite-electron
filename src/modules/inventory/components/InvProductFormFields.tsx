@@ -137,7 +137,7 @@ export const emptyInvProductForm: InvProductFormState = {
     taxability: "",
 };
 
-type Opt = { id: number; name?: string; code?: string; label?: string; parentId?: number | null };
+type Opt = { id: number; name?: string; code?: string; label?: string; display?: string; parentId?: number | null };
 
 export type GstRateOpt = { id: number; rate: string | number; label: string; isActive: boolean };
 
@@ -257,7 +257,7 @@ export function InvProductFormFields({
      *  if cancelled) — the form auto-selects it. */
     onCreateMaster?: (kind: MasterKind) => Promise<number | null>;
 }) {
-    const label = (o: Opt) => o.name ?? `${o.code ?? ""} ${o.label ?? ""}`.trim();
+    const label = (o: Opt) => o.display ?? o.name ?? `${o.code ?? ""} ${o.label ?? ""}`.trim();
 
     // Per-field dirty flags: once the user hand-edits Online name / Slug,
     // master changes stop auto-filling that field. Edit mode opens with the

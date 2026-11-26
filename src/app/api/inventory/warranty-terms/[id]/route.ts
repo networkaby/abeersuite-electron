@@ -27,7 +27,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         // The printed part, as it would be after this edit.
         const shape = checkWarrantyShape({
-            warrantyType: b.warrantyType ?? (isWarrantyType(existing.warrantyType) ? existing.warrantyType : "SELLER"),
+            warrantyType: b.warrantyType ?? (isWarrantyType(existing.warrantyType) ? existing.warrantyType : "MANUFACTURER"),
             durationDays: b.durationDays !== undefined ? b.durationDays ?? null : existing.durationDays,
             sellerDays:   b.sellerDays   !== undefined ? b.sellerDays ?? null   : existing.sellerDays,
         });
@@ -40,7 +40,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         // never reads as an edit.
         const used = existing._count.saleLines;
         const was = checkWarrantyShape({
-            warrantyType: isWarrantyType(existing.warrantyType) ? existing.warrantyType : "SELLER",
+            warrantyType: isWarrantyType(existing.warrantyType) ? existing.warrantyType : "MANUFACTURER",
             durationDays: existing.durationDays,
             sellerDays:   existing.sellerDays,
         });

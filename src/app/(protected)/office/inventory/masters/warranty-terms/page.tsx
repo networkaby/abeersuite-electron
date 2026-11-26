@@ -57,13 +57,13 @@ type Form = {
 };
 
 const empty: Form = {
-    name: "", description: "", warrantyType: "SELLER", durationDays: "", sellerDays: "", extraCondition: "", isActive: true,
+    name: "", description: "", warrantyType: "MANUFACTURER", durationDays: "", sellerDays: "", extraCondition: "", isActive: true,
 };
 
 const TYPE_HINT: Record<WarrantyTypeValue, string> = {
     SELLER:       "The shop handles the claim.",
     MANUFACTURER: "The brand's service centre handles the claim.",
-    COMBINED:     "The shop for the seller period, then the brand up to the total.",
+    COMBINED:     "The brand for the whole period, plus our own warranty for the seller period (customer may go to either).",
     NONE:         "Printed as \"No warranty\" on the bill.",
 };
 
@@ -81,7 +81,7 @@ export default function InventoryWarrantyTermsPage() {
     const load = () => {
         axios
             .get<Row[]>("/api/inventory/warranty-terms")
-            .then((r) => setRows(r.data.map((t) => ({ ...t, warrantyType: isWarrantyType(t.warrantyType) ? t.warrantyType : "SELLER" }))))
+            .then((r) => setRows(r.data.map((t) => ({ ...t, warrantyType: isWarrantyType(t.warrantyType) ? t.warrantyType : "MANUFACTURER" }))))
             .catch(() => toast.error("Failed to load warranty terms"))
             .finally(() => setLoading(false));
     };
@@ -213,13 +213,13 @@ export default function InventoryWarrantyTermsPage() {
                                     disabled={locked}
                                 />
                                 <p className="text-xs text-muted-foreground">
-                                    Shop handles claims{form.sellerDays ? ` · ${formatWarrantyDaysLong(toDays(form.sellerDays))}` : ""}.
+                                    Our own warranty on top{form.sellerDays ? ` · ${formatWarrantyDaysLong(toDays(form.sellerDays))}` : ""}.
                                 </p>
                             </div>
                         ) : null}
                         {t !== "NONE" ? (
                             <div className="space-y-2">
-                                <Label>{t === "COMBINED" ? "Total period (days)" : "Duration (days)"}</Label>
+                                <Label>{t === "COMBINED" ? "Manufacturer period (days)" : "Duration (days)"}</Label>
                                 <NumericInput
                                     mode="digits"
                                     min={0}

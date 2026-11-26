@@ -7,6 +7,7 @@ import { rebaseBarcodeGap, saveAutoBarcodes } from "@/modules/pricing-strategy/l
 import { systemBranchId } from "@/shared/lib/org/systemBranch";
 import * as Sentry from "@sentry/nextjs";
 import { PRODUCT_IMPORT_FIELDS, type ProductImportField } from "./productImportFields";
+import { parseWarrantyValue, WARRANTY_TYPE_LABEL } from "@/shared/lib/warranty/warrantyTerms";
 
 export { PRODUCT_IMPORT_FIELDS };
 export type { ProductImportField };
@@ -116,7 +117,9 @@ interface MasterMaps {
     categories: Map<string, { id: number; name: string }>;
     groups: Map<string, { id: number; name: string }>;
     brands: Map<string, { id: number; name: string }>;
-    warrantyTerms: Map<string, { id: number; name: string }>;
+    /** Keyed by name AND by "name · type". A name two terms share maps to
+     *  `ambiguous` — the row must then say the type. */
+    warrantyTerms: Map<string, { id: number; name: string } | "ambiguous">;
     // `rate` is dropped from the map value — only used inline to build the
     // numeric lookup key. Downstream code reads only `id` / `label`.
     gstRates: Map<string, { id: number; label: string }>;
@@ -126,13 +129,19 @@ function norm(s: string | null | undefined): string {
     return (s ?? "").trim().toLowerCase();
 }
 
+/** The lookup key of a typed warranty value: "1 Year - seller" → "1 year · seller". */
+function warrantyKey(raw: string): string {
+    const { name, warrantyType } = parseWarrantyValue(raw);
+    return norm(warrantyType ? `${name} · ${WARRANTY_TYPE_LABEL[warrantyType]}` : name);
+}
+
 async function loadMasters(): Promise<MasterMaps> {
     const [units, categories, groups, brands, warrantyTerms, gstRates] = await Promise.all([
         prisma.invUnit.findMany({ select: { id: true, code: true, label: true } }),
         prisma.invCategory.findMany({ select: { id: true, name: true } }),
         prisma.invProductGroup.findMany({ select: { id: true, name: true } }),
         prisma.invBrand.findMany({ select: { id: true, name: true } }),
-        prisma.invWarrantyTerm.findMany({ select: { id: true, name: true } }),
+        prisma.invWarrantyTerm.findMany({ select: { id: true, name: true, warrantyType: true, sellerDays: true, durationDays: true } }),
         prisma.gstRate.findMany({ select: { id: true, rate: true, label: true } }),
     ]);
 
@@ -147,8 +156,13 @@ async function loadMasters(): Promise<MasterMaps> {
     for (const g of groups) grpMap.set(norm(g.name), { id: g.id, name: g.name });
     const brMap = new Map<string, { id: number; name: string }>();
     for (const b of brands) brMap.set(norm(b.name), { id: b.id, name: b.name });
-    const wtMap = new Map<string, { id: number; name: string }>();
-    for (const w of warrantyTerms) wtMap.set(norm(w.name), { id: w.id, name: w.name });
+    const wtMap: MasterMaps["warrantyTerms"] = new Map();
+    // A key two terms share (same name, or even same name and type) is ambiguous.
+    const putTerm = (k: string, v: { id: number; name: string }) => wtMap.set(k, wtMap.has(k) ? "ambiguous" : v);
+    for (const w of warrantyTerms) {
+        putTerm(norm(w.name), { id: w.id, name: w.name });
+        putTerm(norm(`${w.name} · ${WARRANTY_TYPE_LABEL[w.warrantyType]}`), { id: w.id, name: w.name });
+    }
 
     const gstMap = new Map<string, { id: number; label: string }>();
     for (const g of gstRates) {
@@ -212,8 +226,8 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
                 missingGroups.set(norm(v.group), v.group.trim());
             if (v.brand?.trim() && !masters.brands.has(norm(v.brand)))
                 missingBrands.set(norm(v.brand), v.brand.trim());
-            if (v.warrantyTerm?.trim() && !masters.warrantyTerms.has(norm(v.warrantyTerm)))
-                missingWarrantyTerms.set(norm(v.warrantyTerm), v.warrantyTerm.trim());
+            if (v.warrantyTerm?.trim() && !masters.warrantyTerms.has(warrantyKey(v.warrantyTerm)))
+                missingWarrantyTerms.set(warrantyKey(v.warrantyTerm), v.warrantyTerm.trim());
         }
     }
 
@@ -250,7 +264,12 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
                 }
                 if (missingWarrantyTerms.size > 0) {
                     await tx.invWarrantyTerm.createMany({
-                        data: [...missingWarrantyTerms.values()].map((name) => ({ name })),
+                        // "1 Year · Seller" → a term named "1 Year" of type Seller;
+                        // no type given → the default (Manufacturer).
+                        data: [...missingWarrantyTerms.values()].map((raw) => {
+                            const { name, warrantyType } = parseWarrantyValue(raw);
+                            return warrantyType ? { name, warrantyType } : { name };
+                        }),
                         skipDuplicates: true,
                     });
                 }
@@ -424,9 +443,10 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
         }
         let warrantyTermId: number | null = null;
         if (v.warrantyTerm?.trim()) {
-            const w = masters.warrantyTerms.get(norm(v.warrantyTerm));
-            if (w) warrantyTermId = w.id;
-            else if (!pendingWarrantyNames.has(norm(v.warrantyTerm))) errors.push(`warranty term "${v.warrantyTerm}" not found`);
+            const w = masters.warrantyTerms.get(warrantyKey(v.warrantyTerm));
+            if (w === "ambiguous") errors.push(`warranty term "${v.warrantyTerm}" matches more than one term — add the type, e.g. "${v.warrantyTerm.trim()} · Manufacturer" or "${v.warrantyTerm.trim()} · Seller"`);
+            else if (w) warrantyTermId = w.id;
+            else if (!pendingWarrantyNames.has(warrantyKey(v.warrantyTerm))) errors.push(`warranty term "${v.warrantyTerm}" not found`);
         }
 
         let gstRateId: number | null = null;

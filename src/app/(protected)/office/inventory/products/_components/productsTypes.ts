@@ -4,7 +4,9 @@
 import { type ProductCode } from "@/shared/lib/inventory";
 import type { Topic } from "@/shared/lib/realtime/topics";
 
-export type Opt = { id: number; name?: string; code?: string; label?: string };
+/** `display` wins over `name` in dropdowns — warranty terms set it to "1 Year · Manufacturer"
+ *  (withWarrantyDisplay) while `name` stays what the product name is built from. */
+export type Opt = { id: number; name?: string; code?: string; label?: string; display?: string };
 export type GstRateOpt = { id: number; rate: string | number; label: string; isActive?: boolean };
 
 /// The fields the edit grid reads and writes. A row on another page (reached
@@ -131,6 +133,7 @@ export const STOCK_FILTER_ITEMS: { key: string; label: string }[] = [
 
 export function optLabel(o: Opt | undefined | null): string {
     if (!o) return "—";
+    if (o.display) return o.display;
     if (o.name) return o.name;
     const composed = `${o.code ?? ""} ${o.label ?? ""}`.trim();
     return composed || "—";

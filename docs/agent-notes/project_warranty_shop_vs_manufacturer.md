@@ -1,17 +1,19 @@
 ---
 name: project-warranty-shop-vs-manufacturer
-description: "Product warranty term in office/POS = the shop's own support period; e-commerce copy shows the manufacturer's full warranty, labelled as the manufacturer's."
+description: "Warranty terms carry a type (Manufacturer default / Seller / Combined / None); what each means, frozen on sale lines, existing terms are Manufacturer."
 metadata:
   type: project
-  modified: 2026-11-26T14:00:00.000Z
+  modified: 2026-11-26T18:00:00.000Z
 ---
 
-Owner's rule (2026-10-21). Two warranties per product:
-- **Shop support period** (product name "(Warranty-1 Year)", warranty term, POS bill): we collect the item, send it to the maker at our cost, return it. Local walk-in customers know only this.
-- **Manufacturer warranty** (e.g. Logitech 3 years): customer ↔ maker. E-commerce description shows this fact, clearly worded as the manufacturer's, not ours.
+Owner's rules, 2026-11-26 (supersede the 2026-10-21 "office term = shop support period" rule):
+- **Manufacturer warranty** — the brand's only. The customer claims it directly at the brand's authorised service centre; **the seller is not involved in any way.** Every term that existed before types is Manufacturer (migration `20261126160000_warranty_existing_manufacturer`), and it is the default for new terms.
+- **Seller warranty** — the shop repairs the item, **only if it has no physical, liquid or burn damage and its seal / sticker is intact**; repair may take **up to 15 days**.
+- **Combined** — the brand's warranty for the whole period **plus** the shop's own warranty on top for the first `sellerDays`; in that part the customer may go to either. Never "shop first, then brand".
+- **No warranty** — printed as such.
 
-**Why:** a shorter shop period limits what customers can claim from the shop; online buyers still see the true maker term.
+Modelled as `InvWarrantyTerm.warrantyType` + `sellerDays` + `extraCondition`. Each SALE / POS / ONLINE_INVOICE line freezes its term id; a term on any bill is locked (new policy = new term; names may repeat, so every picker shows "1 Year · Manufacturer"). The bill's Warranty section groups items by type + condition and points at the Terms text ("See terms 4."); the Terms text (points 3–5) spells each kind out. Both live on the print template — renumber the terms and the "See terms N" boxes must follow.
 
-**2026-11-26 — now modelled:** `InvWarrantyTerm.warrantyType` (SELLER / MANUFACTURER / COMBINED with `sellerDays` / NONE). Existing office terms were set to SELLER by the migration — the shop period above. Each sale line freezes its term id; a term on any bill is locked, so a policy change = a new term (names may repeat). Bill prints items grouped by type + condition, never repeating durations (the name has them); condition text per type is on the print template, owner's choice over per-term text.
+**Why:** the owner sells most items on the brand's warranty and does not want to be the claim point for them; the shop's own warranty is narrow (no damage, 15 days).
 
-**How to apply:** a shop term shorter than the maker's is NOT a data clash; flag only when the shop term is longer. AI copy never writes the shop period as "Manufacturer Warranty" (aiProductCopy.ts fallback did this as of 2026-10-21) and never edits the office name/term. Related: [project_services_use_posservice_line](project_services_use_posservice_line.md).
+**How to apply:** never describe a Manufacturer term as the shop's support; never word Combined as shop-then-brand. E-commerce copy shows the maker's term labelled as the maker's. AI copy never edits the office name/term. Related: [project_services_use_posservice_line](project_services_use_posservice_line.md).

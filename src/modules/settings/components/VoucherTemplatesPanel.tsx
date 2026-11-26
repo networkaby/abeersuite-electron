@@ -122,9 +122,9 @@ const SAMPLE_WARRANTY_TERMS: WarrantyTermLike[] = [
     { durationDays: null, warrantyType: "NONE" },
 ];
 const WARRANTY_TEXT_FIELDS = [
-    { key: "warrantySellerText",       label: "Seller warranty",       hint: "Shop handles the claim." },
-    { key: "warrantyManufacturerText", label: "Manufacturer warranty", hint: "Brand's service centre handles the claim." },
-    { key: "warrantyCombinedText",     label: "Combined (seller, then manufacturer)", hint: "The bill already says how long the seller part is." },
+    { key: "warrantySellerText",       label: "Seller warranty",       hint: "Our shop handles the claim, e.g. \"See terms 3.\"" },
+    { key: "warrantyManufacturerText", label: "Manufacturer warranty", hint: "The brand's service centre only, e.g. \"See terms 4.\"" },
+    { key: "warrantyCombinedText",     label: "Combined (manufacturer + seller)", hint: "The bill already says how long the seller part is." },
     { key: "warrantyNoneText",         label: "No warranty",           hint: "Optional, e.g. \"No return or replacement.\"" },
 ] as const;
 

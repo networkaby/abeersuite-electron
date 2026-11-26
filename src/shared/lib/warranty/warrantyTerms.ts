@@ -1,8 +1,9 @@
 // Warranty terms — labels, and the "Warranty" section a sale bill prints.
 //
 // A term says WHO honours the claim (warrantyType): the shop (SELLER), the brand
-// (MANUFACTURER), the shop first then the brand (COMBINED, the shop's part in
-// sellerDays) or NONE. The product name already carries the period
+// (MANUFACTURER), the brand for the whole period PLUS the shop's own warranty
+// on top for the first sellerDays (COMBINED — in that part the customer may go
+// to either) or NONE. The product name already carries the period
 // ("(Warranty-2 Year)"), so the bill never repeats durations: it groups the
 // items by type + condition and lists their line numbers. Only COMBINED prints
 // its seller part, which the name does not show. The condition text per type
@@ -10,7 +11,8 @@
 //
 // Pure — imported by the print routes, the POS screen and the master page.
 
-export const WARRANTY_TYPES = ["SELLER", "MANUFACTURER", "COMBINED", "NONE"] as const;
+// Manufacturer first: the usual kind, and the default.
+export const WARRANTY_TYPES = ["MANUFACTURER", "SELLER", "COMBINED", "NONE"] as const;
 export type WarrantyTypeValue = (typeof WARRANTY_TYPES)[number];
 
 export const WARRANTY_TYPE_LABEL: Record<WarrantyTypeValue, string> = {
@@ -55,8 +57,10 @@ export type WarrantyTermLike = {
     extraCondition?: string | null;
 };
 
+// A term read without its type (an older cached list) is the usual kind: the
+// brand's warranty (owner, 2026-11-26 — every pre-type term was MANUFACTURER).
 const typeOf = (t: WarrantyTermLike): WarrantyTypeValue =>
-    isWarrantyType(t.warrantyType) ? t.warrantyType : "SELLER";
+    isWarrantyType(t.warrantyType) ? t.warrantyType : "MANUFACTURER";
 
 /**
  * Short label for screens: "1y seller", "2y mfr", "1y seller + 2y mfr",
@@ -68,10 +72,31 @@ export function warrantyTermLabel(t: WarrantyTermLike): string {
     const total = t.durationDays && t.durationDays > 0 ? formatWarrantyDays(t.durationDays) : null;
     if (type === "COMBINED") {
         const seller = t.sellerDays && t.sellerDays > 0 ? formatWarrantyDays(t.sellerDays) : null;
-        if (seller && total) return `${seller} seller + ${total} mfr`;
+        if (seller && total) return `${total} mfr + ${seller} seller`;
     }
     if (!total) return t.name?.trim() || WARRANTY_TYPE_LABEL[type];
-    return `${total} ${type === "MANUFACTURER" ? "mfr" : type === "COMBINED" ? "seller + mfr" : "seller"}`;
+    return `${total} ${type === "MANUFACTURER" ? "mfr" : type === "COMBINED" ? "mfr + seller" : "seller"}`;
+}
+
+/**
+ * A term as a dropdown / grid shows it: its own name, then who honours it —
+ * "1 Year · Seller", "1 Year · Manufacturer", "2 Years · Mfr + seller 1y",
+ * "No · No warranty". Two terms may share a name, so the name alone is not
+ * enough to pick one. A term read without its type shows just its name.
+ */
+export function warrantyTermOptionLabel(t: WarrantyTermLike): string {
+    const name = t.name?.trim() || "—";
+    if (!isWarrantyType(t.warrantyType)) return name;
+    if (t.warrantyType === "COMBINED") {
+        const seller = t.sellerDays && t.sellerDays > 0 ? ` ${formatWarrantyDays(t.sellerDays)}` : "";
+        return `${name} · Mfr + seller${seller}`;
+    }
+    return `${name} · ${WARRANTY_TYPE_LABEL[t.warrantyType]}`;
+}
+
+/** The term list with `display` set, for the generic master dropdowns (they show `display` first). */
+export function withWarrantyDisplay<T extends WarrantyTermLike>(terms: readonly T[]): (T & { display: string })[] {
+    return terms.map((t) => ({ ...t, display: warrantyTermOptionLabel(t) }));
 }
 
 /** The template's standard condition per type (VoucherPrintTemplate.warranty*Text). */
@@ -86,7 +111,7 @@ export type WarrantyTexts = {
 export type WarrantyGroup = {
     /** 1-based line numbers as printed on the bill. */
     items: number[];
-    /** "Manufacturer warranty", "Seller warranty for the first 1 year, then manufacturer", "No warranty". */
+    /** "Manufacturer warranty", "Manufacturer warranty + seller warranty for the first 1 year", "No warranty". */
     label: string;
     /** Template text for the type, then the term's own extra condition. May be "". */
     condition: string;
@@ -98,7 +123,7 @@ function groupLabel(t: WarrantyTermLike): string {
         case "NONE":         return "No warranty";
         case "COMBINED": {
             const seller = formatWarrantyDaysLong(t.sellerDays);
-            return seller ? `Seller warranty for the first ${seller}, then manufacturer` : "Seller warranty, then manufacturer";
+            return seller ? `Manufacturer warranty + seller warranty for the first ${seller}` : "Manufacturer warranty + seller warranty";
         }
         default:             return "Seller warranty";
     }
@@ -155,8 +180,8 @@ export function checkWarrantyShape(t: {
     const total = t.durationDays && t.durationDays > 0 ? t.durationDays : null;
     if (warrantyType !== "COMBINED") return { value: { warrantyType, durationDays: total, sellerDays: null } };
     const seller = t.sellerDays && t.sellerDays > 0 ? t.sellerDays : null;
-    if (!seller || !total) return { error: "A combined warranty needs both the seller period and the total period." };
-    if (seller >= total) return { error: "The seller period must be shorter than the total period." };
+    if (!seller || !total) return { error: "A combined warranty needs both the seller period and the manufacturer period." };
+    if (seller >= total) return { error: "The seller period must be shorter than the manufacturer period." };
     return { value: { warrantyType, durationDays: total, sellerDays: seller } };
 }
 
@@ -169,4 +194,20 @@ export function warrantyPrintChanged(
         || (a.durationDays ?? null) !== (b.durationDays ?? null)
         || (a.sellerDays ?? null) !== (b.sellerDays ?? null)
         || (a.extraCondition?.trim() || null) !== (b.extraCondition?.trim() || null);
+}
+
+/**
+ * A typed warranty value (CSV import): "1 Year · Manufacturer" → name + type;
+ * "1 Year" → name only. The type part is any WARRANTY_TYPE_LABEL (any case);
+ * "-" or "|" also separate it. An unknown type part keeps the whole text as the name.
+ */
+export function parseWarrantyValue(raw: string): { name: string; warrantyType: WarrantyTypeValue | null } {
+    const text = raw.trim();
+    const m = /^(.*\S)\s*[·|-]\s*([^·|-]+)$/.exec(text);
+    if (m) {
+        const want = m[2].trim().toLowerCase();
+        const type = WARRANTY_TYPES.find((t) => WARRANTY_TYPE_LABEL[t].toLowerCase() === want);
+        if (type) return { name: m[1].trim(), warrantyType: type };
+    }
+    return { name: text, warrantyType: null };
 }

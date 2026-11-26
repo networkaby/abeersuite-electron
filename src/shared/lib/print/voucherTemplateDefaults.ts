@@ -244,21 +244,33 @@ const SIGNATURE_LABEL_BY_KIND: Partial<Record<VoucherTemplateKind, string>> = {
     SHIFT_CLOSE: "Cashier Signature",
 };
 
-// Starting warranty condition per type on the customer sale bills — the same
-// wording the 20261126140000_warranty_type migration wrote onto existing rows.
-// Other kinds start blank (they never print a Warranty section).
+// Starting warranty wording on the customer sale bills (owner, 2026-11-26):
+// the Terms text spells out each kind of warranty, and the Warranty section's
+// per-type condition points at it ("See terms 4."). Renumber the terms →
+// update these pointers too. Other kinds start blank (no Warranty section).
+// Existing databases keep what they hold — these are for a new setup / reset.
 const WARRANTY_TEXT_KINDS: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTemplateKind>(["SALE", "POS", "ONLINE_INVOICE"]);
+const SALE_TERMS_TEXT = [
+    "1. We declare that this invoice shows the actual price of the goods described herein and that all particulars are true and correct.",
+    "2. Sold items cannot be returned. A bill is mandatory for any type of after-sales support.",
+    "3. Seller warranty: bring the item to our shop with this bill. Repair may take up to 15 days. We repair it only if it has no physical, liquid or burn damage and its seal or sticker is not broken.",
+    "4. Manufacturer warranty: given by the brand only. Claim it directly at the brand's authorised service centre with this bill. The seller is not involved in any way.",
+    "5. Manufacturer + seller warranty: during the seller period you may go to our shop (point 3) or to the brand's service centre (point 4); after it, to the brand's service centre only.",
+].join("\n");
 function warrantyTextDefaults(kind: VoucherTemplateKind) {
     const on = WARRANTY_TEXT_KINDS.has(kind);
     return {
-        warrantySellerText:       on ? "Bring the item with this bill to our shop. Physical, liquid and burn damage not covered." : "",
-        warrantyManufacturerText: on ? "Claim at the brand's authorised service centre with this bill." : "",
-        warrantyCombinedText:     on ? "During the seller period bring the item with this bill to our shop; after that, claim at the brand's authorised service centre." : "",
+        warrantySellerText:       on ? "See terms 3." : "",
+        warrantyManufacturerText: on ? "See terms 4." : "",
+        warrantyCombinedText:     on ? "See terms 5." : "",
         warrantyNoneText:         "",
     };
 }
 
 const TERMS_TEXT_BY_KIND: Partial<Record<VoucherTemplateKind, string>> = {
+    SALE:           SALE_TERMS_TEXT,
+    POS:            SALE_TERMS_TEXT,
+    ONLINE_INVOICE: SALE_TERMS_TEXT,
     REPAIR_TICKET: [
         "1. Please keep this receipt. It is required for device collection.",
         "2. Estimated cost may vary after diagnosis.",

@@ -40,7 +40,11 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { useValueChange } from "@/shared/hooks/useValueChange";
+import { WARRANTY_TYPE_LABEL } from "@/shared/lib/warranty/warrantyTerms";
 import { treeSelectOptions, type TreeNodeRow } from "@/shared/lib/tree";
+
+const QUICK_WARRANTY_TYPES = ["MANUFACTURER", "SELLER", "NONE"] as const;
+type QuickWarrantyType = (typeof QUICK_WARRANTY_TYPES)[number];
 
 export type MasterKind = "category" | "brand" | "group" | "warranty" | "unit";
 
@@ -82,6 +86,8 @@ export function InventoryMasterDropdownQuickDialog({
     const [decimals, setDecimals] = useState("0");
     const [description, setDescription] = useState("");
     const [durationDays, setDurationDays] = useState("");
+    // Combined needs its seller period — made on the Warranty terms page.
+    const [warrantyType, setWarrantyType] = useState<QuickWarrantyType>("MANUFACTURER");
     const [parentId, setParentId] = useState("");
     const [gstRateId, setGstRateId] = useState("");
     const [hsnCode, setHsnCode] = useState("");
@@ -96,6 +102,7 @@ export function InventoryMasterDropdownQuickDialog({
         setDecimals("0");
         setDescription("");
         setDurationDays("");
+        setWarrantyType("MANUFACTURER");
         setParentId("");
         setGstRateId("");
         setHsnCode("");
@@ -148,7 +155,8 @@ export function InventoryMasterDropdownQuickDialog({
                     name: trimmedName,
                     isActive,
                     description: description.trim() === "" ? null : description.trim(),
-                    durationDays: days,
+                    warrantyType,
+                    durationDays: warrantyType === "NONE" ? null : days,
                 };
                 break;
             }
@@ -296,6 +304,26 @@ export function InventoryMasterDropdownQuickDialog({
                     {kind === "warranty" ? (
                         <>
                             <div className="grid gap-1.5">
+                                <Label>Warranty type</Label>
+                                <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Warranty type">
+                                    {QUICK_WARRANTY_TYPES.map((wt) => (
+                                        <Button
+                                            key={wt}
+                                            type="button"
+                                            size="sm"
+                                            role="radio"
+                                            aria-checked={warrantyType === wt}
+                                            variant={warrantyType === wt ? "default" : "outline"}
+                                            onClick={() => setWarrantyType(wt)}
+                                        >
+                                            {WARRANTY_TYPE_LABEL[wt]}
+                                        </Button>
+                                    ))}
+                                </div>
+                                <p className="text-xs text-muted-foreground">Manufacturer + seller (combined): make it on the Warranty terms page.</p>
+                            </div>
+                            {warrantyType !== "NONE" ? (
+                            <div className="grid gap-1.5">
                                 <Label htmlFor="mq-days">Duration (days)</Label>
                                 <Input
                                     id="mq-days"
@@ -306,6 +334,7 @@ export function InventoryMasterDropdownQuickDialog({
                                 />
                                 <p className="text-xs text-muted-foreground">Leave blank for lifetime / no fixed duration.</p>
                             </div>
+                            ) : null}
                             <div className="grid gap-1.5">
                                 <Label htmlFor="mq-desc">Description</Label>
                                 <Input

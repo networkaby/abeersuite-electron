@@ -79,6 +79,7 @@ import {
     FROZEN_W,
 } from "./_components/productsTypes";
 import { SortHead, ColumnChooser, ColFilter, CellSelect, BulkApply } from "./_components/ProductsGridParts";
+import { withWarrantyDisplay, type WarrantyTermLike } from "@/shared/lib/warranty/warrantyTerms";
 
 export default function InventoryProductsPage() {
     const router = useRouter();
@@ -212,7 +213,7 @@ export default function InventoryProductsPage() {
                 axios.get<Opt[]>("/api/inventory/categories"),
                 axios.get<Opt[]>("/api/inventory/brands"),
                 axios.get<Opt[]>("/api/inventory/product-groups"),
-                axios.get<Opt[]>("/api/inventory/warranty-terms"),
+                axios.get<(Opt & WarrantyTermLike)[]>("/api/inventory/warranty-terms"),
                 axios.get<GstRateOpt[]>("/api/inventory/gst-rates").catch(() => ({ data: [] as GstRateOpt[] })),
                 axios.get<Partial<NamingConfigShape>>("/api/inventory/naming-config").catch(() => ({ data: {} as Partial<NamingConfigShape> })),
             ]);
@@ -220,7 +221,8 @@ export default function InventoryProductsPage() {
             setCategories(c.data);
             setBrands(b.data);
             setGroups(g.data);
-            setWarrantyTerms(w.data);
+            // "1 Year · Manufacturer" in every warranty picker — names may repeat.
+            setWarrantyTerms(withWarrantyDisplay(w.data));
             setGstRates(gst.data);
             setNamingConfig({ ...DEFAULT_NAMING_CONFIG, ...(n.data ?? {}) });
         } catch {
@@ -910,7 +912,7 @@ export default function InventoryProductsPage() {
                                                                 onCreate={() => createMaster("warranty")}
                                                             />
                                                         ) : (
-                                                            r.warrantyTerm?.name ?? "—"
+                                                            (warrantyTerms.find((w) => w.id === r.warrantyTermId)?.display ?? r.warrantyTerm?.name ?? "—")
                                                         )}
                                                     </TableCell>
                                                 ) : null}

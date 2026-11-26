@@ -31,7 +31,7 @@ export async function POST(req: Request) {
         if (error) return error;
         const b = data;
         const shape = checkWarrantyShape({
-            warrantyType: b.warrantyType ?? "SELLER",
+            warrantyType: b.warrantyType ?? "MANUFACTURER",
             durationDays: b.durationDays ?? null,
             sellerDays:   b.sellerDays ?? null,
         });
