@@ -93,6 +93,22 @@ export async function lockVoucher(
   return tx.universalVoucher.findUnique({ where: { id: spineId }, select: { status: true, cancelledAt: true } });
 }
 
+/**
+ * The accountancy voucher routes (post / cancel / restore / hard-delete) change the
+ * spine and its GL lines only. A bill or stock document (anything with a
+ * VoucherDetail: sale, POS, return, purchase, stock journal…) also moves stock,
+ * coupons, gift cards and loyalty — its own `/api/inventory/vouchers/[id]/…` route
+ * does that, and checks returns. Refuse it here so a direct call cannot leave the
+ * books and the stock disagreeing.
+ */
+export async function refuseInventoryDocument(
+  db: Pick<Prisma.TransactionClient, "voucherDetail">,
+  spineId: number,
+): Promise<void> {
+  const doc = await db.voucherDetail.findUnique({ where: { universalVoucherId: spineId }, select: { id: true } });
+  if (doc) throw new LifecycleError(409, "This is a bill or stock document. Change it from its own screen.", "INVENTORY_DOCUMENT");
+}
+
 /** `lockVoucher` plus the check, for a voucher that must still exist. */
 export async function lockAndEnsure(
   tx: Prisma.TransactionClient,

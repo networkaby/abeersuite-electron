@@ -3,7 +3,7 @@ import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { auditSnapshot, isPosted, isCancelled, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
+import { auditSnapshot, isPosted, isCancelled, lifecycleErrorResponse, refuseInventoryDocument } from "@/modules/accountancy/lib/voucherLifecycle";
 import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
 import { removeLinksForVoucher } from "@/modules/accountancy/lib/billLink";
 import { validateRequest } from "@/shared/lib/api";
@@ -36,6 +36,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     try {
         const audit = await prisma.$transaction(async (tx) => {
+            await refuseInventoryDocument(tx, voucher.id);
             if (needsReversal) {
                 // Removing a posted voucher dirties a reconciled window exactly as
                 // much as adding one — same retreat as the posting path.

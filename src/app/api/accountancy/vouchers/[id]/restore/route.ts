@@ -2,7 +2,7 @@ import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
+import { lifecycleErrorResponse, refuseInventoryDocument } from "@/modules/accountancy/lib/voucherLifecycle";
 import { restoreVoucherInTx } from "@/modules/accountancy/lib/restoreVoucherInTx";
 import { writeRestoreAudit } from "@/modules/accountancy/lib/restoreAudit";
 import { validateRequest } from "@/shared/lib/api";
@@ -32,6 +32,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     try {
         await prisma.$transaction(async (tx) => {
+            await refuseInventoryDocument(tx, Number(id));
             await restoreVoucherInTx(tx, Number(id));
         }, { timeout: 30_000, maxWait: 10_000 });
 

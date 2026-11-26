@@ -9,7 +9,7 @@ import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { isoDateSchema } from "@/shared/lib/schemas";
 import { isBalanced } from "@/modules/accountancy/lib/balance";
-import { auditSnapshot } from "@/modules/accountancy/lib/voucherLifecycle";
+import { auditSnapshot, lifecycleErrorResponse, refuseInventoryDocument } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { assertLinksSurviveEdit, BillLinkError } from "@/modules/accountancy/lib/billLink";
@@ -118,6 +118,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     try {
         await prisma.$transaction(async (tx) => {
+            await refuseInventoryDocument(tx, voucherId);
             const wasPosted = existing.status === "POSTED";
             if (wasPosted) {
                 // Snapshot the pre-edit spine to AuditLog (matches the inventory edit).
@@ -196,6 +197,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     } catch (e) {
         // A refusal the user can act on ("unlink it first"), not a server fault.
         if (e instanceof BillLinkError) return NextResponse.json({ error: e.message }, { status: 422 });
+        const lifecycle = lifecycleErrorResponse(e);
+        if (lifecycle) return lifecycle;
         return handleApiError(e, "Failed to update voucher");
     }
 }
