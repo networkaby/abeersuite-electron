@@ -133,10 +133,15 @@ function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]>) {
                                             {aside && ` · temporary pass${p.asideBy ? ` (${p.asideBy}, ${formatDate(p.asideAt!)})` : ""} — not blocking, stays until fixed`}
                                         </span>
                                     </span>
-                                    <label className="flex shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap text-muted-foreground">
-                                        <input type="checkbox" checked={aside} disabled={busy === p.text} onChange={(e) => void tick(p, e.target.checked)} />
-                                        temporary pass
-                                    </label>
+                                    {/* A tip never blocks, so there is nothing to pass. */}
+                                    {p.level === "tip" ? (
+                                        <span className="shrink-0 whitespace-nowrap text-muted-foreground">tip · not blocking</span>
+                                    ) : (
+                                        <label className="flex shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap text-muted-foreground">
+                                            <input type="checkbox" checked={aside} disabled={busy === p.text} onChange={(e) => void tick(p, e.target.checked)} />
+                                            temporary pass
+                                        </label>
+                                    )}
                                 </li>
                             );
                         })}
