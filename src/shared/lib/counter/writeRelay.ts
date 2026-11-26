@@ -3,7 +3,7 @@
  *
  * ── Why ──────────────────────────────────────────────────────────────────────
  * A counter runs the whole app locally. Saving a bill against Supabase from here is
- * ~35 sequential Prisma round trips (plus two per cart line) across the WAN; the same
+ * some 20-30 database round trips, one after another, across the WAN; the same
  * handler on Vercel sits beside the database and pays a millisecond a hop. So under
  * `v_live` the counter's own Next server relays every non-GET `/api/*` call to the
  * office deployment (`WRITE_API_URL`) as ONE round trip, and keeps serving reads from

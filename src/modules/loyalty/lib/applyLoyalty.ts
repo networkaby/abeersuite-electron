@@ -22,9 +22,11 @@ import {
 
 type Tx = Prisma.TransactionClient | PrismaClient;
 
-/// Upsert the wallet header so subsequent updates have a row to hit.
+/// Make sure the wallet header exists so subsequent updates have a row to hit.
 async function ensureAccount(tx: Tx, accountId: number): Promise<void> {
-    await tx.loyaltyAccount.upsert({ where: { accountId }, create: { accountId }, update: {} });
+    // Read first: Prisma runs an upsert with nothing to update as three reads.
+    const existing = await tx.loyaltyAccount.findUnique({ where: { accountId }, select: { id: true } });
+    if (!existing) await tx.loyaltyAccount.upsert({ where: { accountId }, create: { accountId }, update: {} });
 }
 
 /// Live spendable balance = Σ pointsRemaining of in-window lots, less any owed

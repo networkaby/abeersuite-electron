@@ -171,6 +171,9 @@ export async function engineGlArm(
         // spine and flip it to POSTED (instead of minting a fresh spine). Lets a
         // draft carry a spine id from create time; POST fills its lines + balances.
         existingSpineId?: number | null;
+        // That spine was made POSTED, complete, in this same transaction
+        // (engineCreateSpine status "POSTED") — write its GL lines and nothing else.
+        spineBornPosted?: boolean;
         // The POS shift this voucher is raised on. Omit and the engine resolves it
         // from the source counter; pass it when the caller already knows (the POS
         // routes are handed the shift in the URL). See sourceShift.ts.
@@ -194,6 +197,10 @@ export async function engineGlArm(
     // voucher-save by engineCreateSpine). Fill its GL lines + flip DRAFT→POSTED.
     if (args.existingSpineId != null) {
         const id = args.existingSpineId;
+        if (args.spineBornPosted) {
+            await tx.voucherGlLine.createMany({ data: glLineBase.map((d) => ({ universalVoucherId: id, ...d })) });
+            return { journalEntryId: id, universalVoucherId: id };
+        }
         const voucherNoArg = args.voucherNo?.trim() || null;
         // Read the spine BEFORE writing it: a draft created since numbering moved
         // to post time has no number, and this is where it takes one. A spine that
@@ -272,6 +279,12 @@ export async function engineGlArm(
     // by the spine `id` directly. The engine's `journalEntryId` RETURN value (= the
     // spine id) is kept for caller compatibility.
     return { journalEntryId: uv.id, universalVoucherId: uv.id };
+}
+
+/** The description a posted spine carries — one rule for `enginePost` and for a
+ *  caller that creates the spine POSTED before its spec exists. */
+export function postedDescription(type: string, reference: string | null | undefined, narration: string | null | undefined): string {
+    return `${type} ${reference ?? ""}: ${narration ?? ""}`.trim();
 }
 
 // ── Draft spine (Phase 5 5.0) ─────────────────────────────────────────────────
@@ -400,6 +413,9 @@ export async function enginePost(
         branchId: string;
         postedAt?: Date;
         existingSpineId?: number | null;
+        /** `existingSpineId` was created POSTED, with its final number, description
+         *  and narration, in this transaction — see engineGlArm. */
+        spineBornPosted?: boolean;
         /**
          * The party's ledger, stamped on the spine.
          *
@@ -428,7 +444,7 @@ export async function enginePost(
     let universalVoucherId: number | null = opts.existingSpineId ?? null;
     if (spec.glLines.length > 0) {
         const description = spec.description
-            ?? `${spec.type} ${spec.reference ?? ""}: ${spec.narration ?? ""}`.trim();
+            ?? postedDescription(spec.type, spec.reference, spec.narration);
         const gl = await engineGlArm(tx, {
             date:        spec.date,
             description,
@@ -441,6 +457,7 @@ export async function enginePost(
             narration:   spec.narration ?? null,
             partyAccountId: opts.partyAccountId ?? null,
             existingSpineId: opts.existingSpineId ?? null,   // Phase 5 5.0: attach to draft spine
+            spineBornPosted: opts.spineBornPosted,
         });
         journalEntryId = gl.journalEntryId;
         universalVoucherId = gl.universalVoucherId;   // G4d direct spine link

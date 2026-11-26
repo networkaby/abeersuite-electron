@@ -1,7 +1,7 @@
 import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, after } from "next/server";
 import { createSchema, alreadySavedReply } from "@/modules/pos/lib/saleSchema";
-import { priceFloorAndTier, lineDiscountIncl, mdrStep, freeGrantLines, giftCardStep, refused, logTicketBill, type ComputedLine } from "@/modules/pos/lib/saleSteps";
+import { loadLoyaltyConfig, loadCouponConfig, priceFloorAndTier, lineDiscountIncl, mdrStep, freeGrantLines, giftCardStep, refused, logTicketBill, type ComputedLine } from "@/modules/pos/lib/saleSteps";
 import { notifyBill } from "@/shared/lib/whatsapp/notifyBill";
 import { requirePosVoucher } from "@/shared/lib/auth/permissions";
 import { cleanLineNote } from "@/shared/lib/print/lineDescription";
@@ -11,12 +11,12 @@ import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recom
 import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
 import { buildSettlementJson, type ChargeInput } from "@/shared/lib/accountancy/settlement";
 import { resolveServiceCharges, chargesNetTotal } from "@/shared/lib/accountancy/serviceCharges";
-import { enginePost, engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
+import { enginePost, engineCreateSpine, postedDescription } from "@/modules/accountancy/lib/transactionEngine";
 import { syncVoucherLink } from "@/modules/accountancy/lib/voucherLinks";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
 import { resolveCounterPayments, giftCardTenderRef } from "@/modules/pos/lib/counterTenders";
 import { Prisma, type PaymentMethod } from "@/generated/prisma/client";
-import { buildPartyJson } from "@/shared/lib/accountancy/partySnapshot";
+import { buildPartyJson, readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 import { getOpenSaleBillsForFifo } from "@/modules/accountancy/lib/outstandings";
 import { getThermalTemplate } from "@/shared/lib/print/voucherTemplate";
 import { buildVoucherBridgePayload } from "@/modules/accountancy/lib/voucherReceiptSample";
@@ -133,7 +133,7 @@ export async function POST(req: Request) {
                 company: { select: { name: true } },
             },
         }),
-        prisma.loyaltyConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} }),
+        loadLoyaltyConfig(),
         // Which benefits this party may get + its customer group's price rules
         // (Pricing Strategy → Group pricing) — see groupPricingServer.ts.
         loadPartyPricing(prisma, body.accountId),
@@ -392,7 +392,7 @@ export async function POST(req: Request) {
     // Coupons switched off for this party: coupons (typed code AND auto-offers,
     // money and free-grant alike) are skipped silently.
     if (benefits.coupons && (body.couponCode || body.autoApply || body.couponId != null)) {
-        couponConfig = await prisma.couponConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
+        couponConfig = await loadCouponConfig();
         couponExpenseAccountId = couponConfig.couponExpenseAccountId;
         selected = body.couponId != null
             // AUTO offer force-applied by id (no code to type).
@@ -794,12 +794,17 @@ export async function POST(req: Request) {
                         : []),
                 ];
             // Phase 5 5.0/5C: spine FIRST (the document anchor) so goods lines hang
-            // off it; enginePost attaches the GL lines + flips it via existingSpineId.
+            // off it. Born POSTED with its final text: enginePost only adds the GL
+            // lines, and a posting that fails rolls the whole sale back.
             const voucherDescription = body.notes?.trim() || `POS sale — ${partyName}`;
+            const partyJson = buildPartyJson({ name: partyName });
+            const narration = readPartyName(partyJson) ?? voucherDescription;   // as saleToSpec
             const spineId = await engineCreateSpine(tx, {
                 type: "POS",
+                status: "POSTED",
                 date: new Date(body.issueDate),
-                description: voucherDescription,
+                description: postedDescription("POS", voucherRef, narration),
+                narration,
                 voucherNo: voucherRef,
                 partyAccountId: customerAccount.id,
                 branchId: activeBranchId,   // 5D-12: branch primary on the spine
@@ -821,7 +826,7 @@ export async function POST(req: Request) {
                     // Convert-to-sale link → marks the source estimate/order "Converted".
                     refVoucherId: body.sourceVoucherId ?? null,
                     // 5D-5/5D-8/5D-10: description + postedAt + status + date + 5D-4 party live on the spine.
-                    partyJson: buildPartyJson({ name: partyName }) ?? Prisma.DbNull,
+                    partyJson: partyJson ?? Prisma.DbNull,
                     partyType,
                     partyId,
                     deliveryMode: "COUNTER",
@@ -901,17 +906,13 @@ export async function POST(req: Request) {
                 sellerStateCode,
                 buyerStateCode: sellerStateCode, // counter pickup → intra-state
             });
-            const gl = await enginePost(tx, spec, user!.id, { branchId: activeBranchId, existingSpineId: spineId });
+            const gl = await enginePost(tx, spec, user!.id, { branchId: activeBranchId, existingSpineId: spineId, spineBornPosted: true });
             if (gl.journalEntryId === null) {
                 throw new GlPostFailedError(
                     `Cannot post POS sale ${voucherRef}: engine produced no journal entry.`,
                     [],
                 );
             }
-            await tx.voucherDetail.update({
-                where: { id: voucher.id },
-                data: { universalVoucherId: gl.universalVoucherId },
-            });
 
             // ── 3a. Coupon: log the redemption(s) (enforces usage limits +
             // powers return reversal). Non-GL — the discount already posted as

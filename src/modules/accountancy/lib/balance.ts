@@ -129,11 +129,9 @@ export async function nextRefFromSeries(
 
     // Load the org-level books config (singleton). Auto-create on first call
     // so a fresh install never throws.
-    const config = await tx.booksConfig.upsert({
-        where: { id: 1 },
-        create: { id: 1 },
-        update: {},
-    });
+    // Read first: Prisma runs an upsert with nothing to update as three reads.
+    const config = await tx.booksConfig.findUnique({ where: { id: 1 } })
+        ?? await tx.booksConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
 
     // The format lives on the kind's row; the NUMBER lives on this counter's row.
     const current = await tx.voucherSeries.findUnique({ where: { kind } });
@@ -146,7 +144,7 @@ export async function nextRefFromSeries(
 
     // One row per (kind, counter); a counter's first voucher starts its run at
     // `startFrom`. (Counter 1's running number moved here from the series row in B3b.)
-    const row = await tx.voucherSeriesCounter.upsert({
+    const row = await tx.voucherSeriesCounter.findUnique({ where: key }) ?? await tx.voucherSeriesCounter.upsert({
         where: key,
         create: {
             kind,

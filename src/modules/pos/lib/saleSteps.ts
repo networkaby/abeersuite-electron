@@ -9,7 +9,7 @@
 
 import { NextResponse } from "next/server";
 import type { z } from "zod";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
 import { calcLineTotals } from "@/modules/inventory/lib/stock";
 import { resolveEffectiveCostMap } from "@/modules/pricing-strategy/lib/resolveCost";
 import { loadProtectedProductIds } from "@/modules/retention/lib/protection";
@@ -43,6 +43,21 @@ export function lineDiscountIncl(
         const net = calcLineTotals({ quantity: l.quantity, rate: l.unitPrice, discountPct: 0, discountAmt: discExcl[i], taxRate: l.taxRate }).amount;
         return s + (gross - net);
     }, 0);
+}
+
+// The two settings rows a sale reads. Read where the sale saves, and created only
+// when missing: Prisma runs an upsert with nothing to update as its own
+// transaction of three reads — five waits on a counter saving over the internet.
+export async function loadLoyaltyConfig() {
+    const db = prismaWhereSaved();
+    return await db.loyaltyConfig.findUnique({ where: { id: 1 } })
+        ?? await db.loyaltyConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
+}
+
+export async function loadCouponConfig() {
+    const db = prismaWhereSaved();
+    return await db.couponConfig.findUnique({ where: { id: 1 } })
+        ?? await db.couponConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
 }
 
 // ── Spend-tier discount: % of COST (incl. tax), applied per line BEFORE tax ──
@@ -204,7 +219,7 @@ export async function giftCardStep(args: {
     let giftCardId: number | null = null;
     let giftCardLiabilityAccountId: number | null = null;
     if (giftCardCode) {
-        const couponConfig = await prisma.couponConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
+        const couponConfig = await loadCouponConfig();
         giftCardLiabilityAccountId = couponConfig.giftCardLiabilityAccountId;
         const gc = await lookupActiveGiftCard(prisma, giftCardCode, new Date());
         if (!gc || gc.status !== "ACTIVE" || gc.balance <= 0 || !gc.enabled) {
