@@ -7,6 +7,8 @@
 //   node photo-edit.mjs crop   <in> <out> [x,y,w,h]   cut away empty space, KEEP the background:
 //                                                      no box → finds the product (same model) and crops
 //                                                      to it + a 6% margin; a box → crops to that box
+//   node photo-edit.mjs size <file>...              true pixel size of each photo + verdict:
+//                                                      TOO SMALL (short side < 500) / WEAK (< 800) / ok
 //   node photo-edit.mjs straighten <in> <out> <deg>   turn a tilted photo by deg (−15…15, + = clockwise)
 //                                                      and crop the empty corners the turn leaves
 //
@@ -20,13 +22,30 @@
 import sharp from "sharp";
 
 const SIZE = 1500;
+// Short side in pixels (owner, 2026-11-27). Below MIN_SIDE the photo cannot go on the shop;
+// below GOOD_SIDE it may stay but staff are asked for a bigger one.
+const MIN_SIDE = 500;
+const GOOD_SIDE = 800;
 const FILL = 0.85;
 
 const args = process.argv.slice(2);
 const solid = args.includes("--solid");
 const [mode, input, output, box] = args.filter((a) => a !== "--solid");
+if (mode === "size") {
+    // Before any edit: cutout stretches to 1500 px, so a 250 px thumbnail would come out
+    // looking "big" but blurry. Measure the file as downloaded (= as stored).
+    let bad = 0;
+    for (const file of args.slice(1)) {
+        const { width, height } = await sharp(file).metadata();
+        const side = Math.min(width, height);
+        const verdict = side < MIN_SIDE ? "TOO SMALL" : side < GOOD_SIDE ? "WEAK" : "ok";
+        if (side < MIN_SIDE) bad++;
+        console.log(`${file}  ${width}x${height}  ${verdict}`);
+    }
+    process.exit(bad ? 1 : 0);
+}
 if (!mode || !input || !output) {
-    console.error("usage: photo-edit.mjs cutout|blank|crop|straighten <in> <out> [x,y,w,h | deg]");
+    console.error("usage: photo-edit.mjs size <file>... | cutout|blank|crop|straighten <in> <out> [x,y,w,h | deg]");
     process.exit(2);
 }
 
@@ -177,6 +196,14 @@ async function straighten() {
     await sharp(turned).extract({ left: Math.floor((TW - w) / 2), top: Math.floor((TH - h) / 2), width: w, height: h }).jpeg({ quality: 92 }).toFile(output);
 }
 
+// Never edit a too-small photo: the edit would hide the problem, not fix it.
+{
+    const { width, height } = await sharp(input).metadata();
+    if (Math.min(width, height) < MIN_SIDE) {
+        console.error(`${input} is ${width}x${height} — too small (short side < ${MIN_SIDE}); do not edit, remove it or ask for a reshoot`);
+        process.exit(3);
+    }
+}
 const t = Date.now();
 if (mode === "cutout") await cutout();
 else if (mode === "blank") await blank();

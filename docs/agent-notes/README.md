@@ -116,3 +116,4 @@ Adding one: a file here named `<type>_<slug>.md` (`project`, `feedback`, `user`,
 - [GitHub repos are always private](project_github_repos_always_private.md) — owner confirmed 2026-11-26; do not ask about visibility.
 - [WA send leftovers deferred](project_wa_send_leftovers_deferred.md) — claim DB error = "already", reminder log after send, UPI double press; owner said ok for now (2026-11-26).
 - [Counter push/email wait for the cron: deferred](project_counter_queue_delay_deferred.md) — up to 30 min, evening bills next morning; owner said no problem for now (2026-11-26).
+- [Photo size is measured](feedback_photo_size_rule.md) — short side < 500 px = too small (removed, blocks Part 4), < 800 = weak note; tool refuses edits below 500 (2026-11-27).

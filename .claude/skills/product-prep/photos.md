@@ -2,13 +2,25 @@
 
 Read this on the **Parts 1 + 5** path (the product already has a description), and for the photo step of Part 3. Part 1, the photo list, notes and the run call are in SKILL.md.
 
+## Photo size — measure every photo first (owner, 2026-11-27)
+
+Looking is not enough: a 250 px thumbnail looks fine shown small, and `cutout` stretches it to 1500 px, which hides the blur. Before judging or editing, download every photo (`/photos/<n>`) and run `node photo-edit.mjs size p1.jpg p2.jpg …` (true pixels of the stored file). The **short side** decides:
+
+| Short side | Verdict | Do |
+|---|---|---|
+| **< 500 px** | TOO SMALL | Never on the shop. Another photo shows the same view → `remove` (`why: "quality"`, note "250×164, too small"). It is the **only** photo of a view (a must view too) → `suggestRemove` + a `staff` line "Photo n is 250×164 — too small, reshoot <view>". Never the main photo, never edited (the tool refuses, exit 3) |
+| **500–799 px** | WEAK | Keep; a `note` "Photo n is 640×480 — a bigger photo would be better". Main photo only if nothing better |
+| **≥ 800 px** | ok | — |
+
+Size beats looks: a TOO SMALL photo is never kept because it "looks sharp", and a big photo that is blurry is still poor.
+
 ## Photo edits — cut-out and covered MRP (Parts 3 and 5; owner, 2026-11-19)
 
 We improve **our own photos**; we never regenerate them. Free tool: `photo-edit.mjs` next to this file (ISNet model, ~6 s a photo). Never invent or redraw text, MRP, barcode or any product detail.
 
 **Do the edits first, then send the part** — an edit changes the photo's link, so read the product again before you write `order` / `photoCheck`.
 
-**Main photo (photo 1):** pick the **best** photo of the product — straight-on, sharp, whole product, readable — then improve it: cut it to white if its background is not already clean white. No good candidate → a `staff` line "Reshoot the main photo: <why>".
+**Main photo (photo 1):** pick the **best** photo **of 500 px or more on its short side** of the product — straight-on, sharp, whole product, readable — then improve it: cut it to white if its background is not already clean white. No good candidate → a `staff` line "Reshoot the main photo: <why>".
 
 **Every other photo — decide by its background:**
 
