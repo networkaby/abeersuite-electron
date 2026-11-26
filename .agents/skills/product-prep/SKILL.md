@@ -225,7 +225,7 @@ The server tags each line with its part ("Part 3 · …") and **a part that runs
    - **Self-contradiction**: fields disagree with each other or with what is *printed* on the item / box (brand, model, capacity, wattage, size, count). Unbranded / Premium Unbranded with a small printed name is **not** a conflict.
    - **Wrong photos**: another product, old box version, someone else's watermark (our own stamp is not one).
    - **Poor photos**: blurry, dark, low resolution, bad angle, duplicates.
-   - **Wrong text**: a wrong spec row, our support period written as the maker's warranty, a wrong weight / size, a description of another product.
+   - **Wrong text**: a wrong spec row, our support period written as the maker's warranty, a wrong weight / size, a description of another product. Warranty: wrong only when title / description / specs disagree with each other or with a warranty printed on the box — **no warranty on the box is never a problem** (owner, 2026-11-27).
 3. **Decide what is sure**:
    - Sure wrong → `remove` (photos) / `clear` (fields). The server does it now. Give every removed photo its **`kind`** (the view it shows). The server holds back the last photo, the only photo of a view and one with no `kind` — staff get a Remove button (another product's photo, `irrelevant`, needs no `kind`). Box colour alone is never a reason.
    - Not so confident → `suggestRemove` (staff get a Remove button; never blocks).
