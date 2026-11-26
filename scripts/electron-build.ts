@@ -44,7 +44,13 @@ if (!fs.existsSync(path.join(ROOT, "resources", "pgsql", "bin"))) {
     );
 }
 
-const childEnv = { ...process.env, COUNTER_BUILD: "1" };
+// The build is never a running till. COUNTER_PC / OFFICE_HANDED_DB make the app use
+// only the plain DATABASE_URL the office hands a counter at start (dbTargets.ts) — a
+// build machine has none, so pre-rendering ran with no database and passed only while
+// .next held page data from an older build (v1.17.18, 2026-11-27). Forced "false", not
+// deleted: `next build` loads .env itself and would bring COUNTER_PC=true back. The
+// installed counter sets both at runtime (electron/main.ts); neither is baked in.
+const childEnv = { ...process.env, COUNTER_BUILD: "1", COUNTER_PC: "false", OFFICE_HANDED_DB: "false" };
 
 function step(label: string, command: string, args: string[]): void {
     console.log(`[electron-build] → ${label}`);
