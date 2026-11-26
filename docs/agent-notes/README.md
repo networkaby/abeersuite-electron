@@ -112,3 +112,4 @@ Adding one: a file here named `<type>_<slug>.md` (`project`, `feedback`, `user`,
 - [Voucher locks on main for 1.17.17](project_voucher_locks_held.md) — 7e26fc84f, landed 2026-11-26; two real presses untested, rebuild the installer.
 - [Sale vs shift-close race: declined](project_sale_vs_shift_close_race_declined.md) — ordinary sale not locking the shift is accepted; never re-propose (2026-11-26).
 - [GitHub repos are always private](project_github_repos_always_private.md) — owner confirmed 2026-11-26; do not ask about visibility.
+- [WA send leftovers deferred](project_wa_send_leftovers_deferred.md) — claim DB error = "already", reminder log after send, UPI double press; owner said ok for now (2026-11-26).
