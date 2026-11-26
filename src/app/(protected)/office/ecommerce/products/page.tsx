@@ -155,7 +155,7 @@ function ProblemLines({ problems, full }: { problems: RowProblem[]; full?: boole
     const open = problems.filter((p) => !p.aside);
     const aside = problems.filter((p) => p.aside);
     const shown = full ? open : open.slice(0, 1);
-    const tone = (p: RowProblem) => (p.level === "stop" ? "text-red-700 dark:text-red-400" : p.level === "note" ? "text-blue-700 dark:text-blue-400" : "text-amber-700 dark:text-amber-400");
+    const tone = (p: RowProblem) => (p.level === "stop" ? "text-red-700 dark:text-red-400" : p.level === "note" ? "text-blue-700 dark:text-blue-400" : p.level === "tip" ? "text-cyan-700 dark:text-cyan-400" : "text-amber-700 dark:text-amber-400");
     return (
         <span className={`flex flex-col gap-0.5 whitespace-normal ${full ? "" : "w-[230px]"} text-[11px] leading-snug`}>
             {shown.map((p, i) => (

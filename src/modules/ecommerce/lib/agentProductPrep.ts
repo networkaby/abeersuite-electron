@@ -7,7 +7,7 @@ import { AI_PHOTO_LIMITS } from "@/shared/lib/constants/ai";
 import { COMPATIBLE_SPEC } from "@/shared/lib/shop/compatibility";
 import { getR2Text, isR2Configured, messagesBucket, putR2 } from "@/shared/lib/storage/r2";
 import type { ProductCopy } from "@/modules/ecommerce/lib/aiProductCopy";
-import { aiRuns, attentionAgain, draftOf, nextStep, noteItems, openText, photoCopy, problemKey, raisedLine, raiseProblems, trimRuns, withClosed, withProblems, type PrepProblem, type PrepRun, type RaisedProblem, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
+import { aiRuns, attentionAgain, blocks, draftOf, nextStep, noteItems, openText, photoCopy, problemKey, raisedLine, raiseProblems, trimRuns, withClosed, withProblems, type PrepProblem, type PrepRun, type RaisedProblem, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
 import type { ShopStatus } from "@/generated/prisma/enums";
 import { updateShopProduct, type ShopProductPatch } from "@/modules/ecommerce/lib/updateShopProduct";
 import { startAi } from "@/modules/ecommerce/lib/shopWaiting";
@@ -380,7 +380,7 @@ export async function productForPrep(id: number) {
             nextStep: nextStep({
                 stage: base.shopStatus, listed: base.shopStatus === "PUBLISHED", photos: base.photos.length, weight: !!p.weightGrams,
                 description: !!base.currentDescription?.trim(), runs: draft?.runs ?? [], attention: p.shopAttention,
-                openProblems: (draft?.problems ?? []).filter((x) => !x.asideAt).length,
+                openProblems: (draft?.problems ?? []).filter(blocks).length,
             }),
             /**
              * Staff (or anyone) changed the product after the last run (owner, 2026-11-20).
@@ -390,7 +390,7 @@ export async function productForPrep(id: number) {
             // An open staff {…} problem always means "run again" — it is an instruction for this run.
             changedSinceRun: !lastRunAt || (draft?.noteCount ?? 0) > 0 || p.updatedAt.getTime() > Date.parse(lastRunAt) + 30_000,
             /**
-             * The one shared open list: { text, level: stop | fix, part, source?: "staff", by?, asideAt? }.
+             * The one shared open list: { text, level: stop | fix | tip (tip never blocks), part, source?: "staff", by?, asideAt? }.
              * source "staff" = a {…} instruction from the manual note — do it like any problem.
              * Set-aside ones never block, but stay until fixed. Anything you fixed (yours, staff's,
              * set aside) → POST /fixed { fixed: [its text] }.
@@ -1048,7 +1048,7 @@ export async function savePart5(id: number, b: z.infer<typeof part5Schema>, run?
     // guessing), minus the server's photo lines (worked out fresh above), plus new ones.
     const fixed = new Set(b.fixed.map(problemKey));
     const carried = ((await draftNow(id))?.problems ?? [])
-        .filter((x) => !x.source && !x.asideAt && !SERVER_PHOTO_LINE.test(x.text) && !fixed.has(problemKey(x.text)))
+        .filter((x) => !x.source && blocks(x) && !SERVER_PHOTO_LINE.test(x.text) && !fixed.has(problemKey(x.text)))
         .map((x) => `${x.level === "stop" ? "PENDING" : "NOTE"} (Part ${x.part}) — ${x.text}`);
     const open = oneEach([...list.lines, ...carried.filter(notPhotoRestatement(list.lines)), ...b.staff.filter(notPhotoRestatement(list.lines)), ...(state.fix ?? []).map(noteLine(1))]).filter(notAside(await asideKeys(id)));
 

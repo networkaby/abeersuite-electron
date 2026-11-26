@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { nextStep, type ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
+import { blocks, nextStep, type ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { productShopUrl, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import ProductGalleryUploader from "@/modules/ecommerce/components/ProductGalleryUploader";
 import ProductVariantsSection from "@/modules/inventory/components/ProductVariantsSection";
@@ -832,7 +832,7 @@ export default function ProductForm({
                         next: nextStep({
                             stage: shopStatus, listed: !!initial?.isListedInShop, photos: galleryUrls.length, weight: !!weightGrams.trim(),
                             description: !!description.trim(), runs: row?.shopDraft?.runs ?? [], attention: row?.shopAttention,
-                            openProblems: (row?.shopDraft?.problems ?? []).filter((x) => !x.asideAt).length, pendingMissing: qualification.missing,
+                            openProblems: (row?.shopDraft?.problems ?? []).filter(blocks).length, pendingMissing: qualification.missing,
                         }),
                         acting: busy || queueing,
                         gallery: galleryUrls,

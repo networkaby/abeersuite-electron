@@ -121,8 +121,8 @@ function PrepNotes(props: NonNullable<AiNotesBoxProps["prep"]>) {
                         {problems.map((p, i) => {
                             const aside = !!p.asideAt;
                             const staff = p.source === "staff";
-                            const tone = aside ? "text-muted-foreground" : staff ? "text-blue-700 dark:text-blue-400" : p.level === "stop" ? "text-red-700 dark:text-red-400" : "text-amber-700 dark:text-amber-400";
-                            const dot = aside ? "bg-muted-foreground/50" : staff ? "bg-blue-600" : p.level === "stop" ? "bg-red-600" : "bg-amber-500";
+                            const tone = aside ? "text-muted-foreground" : staff ? "text-blue-700 dark:text-blue-400" : p.level === "stop" ? "text-red-700 dark:text-red-400" : p.level === "tip" ? "text-cyan-700 dark:text-cyan-400" : "text-amber-700 dark:text-amber-400";
+                            const dot = aside ? "bg-muted-foreground/50" : staff ? "bg-blue-600" : p.level === "stop" ? "bg-red-600" : p.level === "tip" ? "bg-cyan-500" : "bg-amber-500";
                             return (
                                 <li key={p.text} className="flex items-start justify-between gap-3">
                                     <span className={tone}>

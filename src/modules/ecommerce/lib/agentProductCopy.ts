@@ -7,7 +7,7 @@ import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
 import { photosForAi } from "@/shared/lib/shop/photoMark";
 import { AI_PHOTO_LIMITS } from "@/shared/lib/constants/ai";
 import { OUTPUT_KEYS, type ProductCopy } from "@/modules/ecommerce/lib/aiProductCopy";
-import { draftOf, photoCopy, problemKey, raisedLine, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
+import { draftOf, photoCopy, problemKey, raisedLine, raiseProblems, type PrepProblem, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
 import { updateShopProduct, type ShopProductPatch } from "@/modules/ecommerce/lib/updateShopProduct";
 import { parkInAttention } from "@/modules/ecommerce/lib/shopAttention";
 import { PHOTO_LOOK_OPTIONS, arrangeFrom, checkWrittenCopy, writtenCopySchema } from "@/modules/ecommerce/lib/aiVerifiedCopy";
@@ -511,6 +511,8 @@ export const notesSchema = z.object({
     notes: z.array(z.string().trim().min(1).max(300)).min(1).max(30),
     /** true = replace the review notes already there (a fresh review); default adds to them. */
     replace: z.boolean().default(false),
+    /** true = cyan tips ("better to do"): added to the open list, never blocking, the stage untouched (owner, 2026-11-27). */
+    tip: z.boolean().default(false),
 });
 
 /**
@@ -522,12 +524,22 @@ export const notesSchema = z.object({
 export async function addReviewNotes(id: number, b: z.infer<typeof notesSchema>) {
     const p = await prismaWhereSaved().invProduct.findUnique({ where: { id }, select: { id: true } });
     if (!p) throw new AgentCopyError("Product not found");
+    if (b.tip) return addTips(id, b);
     const problems = b.notes.map((n) => {
         const stop = /^STOPPED\s+—\s+/i.exec(n);
         return raisedLine(stop ? n.slice(stop[0].length) : n, 0, stop ? "stop" : "fix", "Claude review");
     });
     await parkInAttention([id], { problems, ...(b.replace && { replaces: (x) => x.by === "Claude review" }) }, "Claude review", "any");
     return { notes: problems.length };
+}
+
+/** Tips go straight onto the list — no Attention, no stage change. "replace" swaps this writer's own tips. */
+async function addTips(id: number, b: z.infer<typeof notesSchema>) {
+    const row = await prismaWhereSaved().invProduct.findUniqueOrThrow({ where: { id }, select: { shopDraftJson: true, shopStatus: true, shopAttention: true, shopAttentionAt: true } });
+    const items = b.notes.map((n) => ({ ...raisedLine(n, 0, "tip", "Claude tip"), level: "tip" as const }));
+    const next = raiseProblems(draftOf(row), items, { by: "Claude tip", tips: true, ...(b.replace && { replaces: (x: PrepProblem) => x.level === "tip" && x.by === "Claude tip" }) });
+    await prisma.invProduct.update({ where: { id }, data: { shopDraftJson: next as never } });
+    return { notes: items.length, tips: true };
 }
 
 // ── Compatibility only ────────────────────────────────────────────────────────

@@ -20,7 +20,7 @@ export function StageBadge({ stage }: { stage: PhotoGuide["stage"] }) {
 }
 
 /** Same dot colours as the computer's Open problems list (AiNotesBox). */
-const DOT: Record<GuideNote["level"], string> = { stop: "bg-red-600", fix: "bg-amber-500", staff: "bg-blue-600" };
+const DOT: Record<GuideNote["level"], string> = { stop: "bg-red-600", fix: "bg-amber-500", tip: "bg-cyan-500", staff: "bg-blue-600" };
 
 function Notes({ notes }: { notes: GuideNote[] }) {
     return (

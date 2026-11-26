@@ -58,7 +58,7 @@ export function trimRuns(runs: PrepRun[], max = 10): PrepRun[] {
 }
 /** source "staff" = a {…} item from the manual note (part 0, `by` = who wrote it). */
 /** by = "AI part 5" / "AI" / a staff name; how = fixed (AI checked) · removed from the note. */
-export type ClosedProblem = { text: string; level: "stop" | "fix"; source?: "staff"; raisedBy: string; at: string; by: string; how: "fixed" | "removed" };
+export type ClosedProblem = { text: string; level: PrepProblem["level"]; source?: "staff"; raisedBy: string; at: string; by: string; how: "fixed" | "removed" };
 
 /** Append what left the open list, newest last, last 20 kept. */
 export function withClosed(info: ShopDraft | null, gone: PrepProblem[], by: string, how: ClosedProblem["how"]): ClosedProblem[] | undefined {
@@ -69,9 +69,14 @@ export function withClosed(info: ShopDraft | null, gone: PrepProblem[], by: stri
 }
 
 /** parts = every part that raised it (owner, 2026-11-20: "one problem once, credit both parts"). */
-export type PrepProblem = { text: string; level: "stop" | "fix"; part: number; parts?: number[]; at: string; source?: "staff"; by?: string; asideBy?: string; asideAt?: string };
+/**
+ * Problem levels, most serious first (owner, 2026-11-27): stop (red) and fix (yellow)
+ * block and park in Attention; tip (cyan) is "better to do" — never blocks, never
+ * moves the stage, never closed by a part's own re-run, only by /fixed or its writer.
+ */
+export type PrepProblem = { text: string; level: "stop" | "fix" | "tip"; part: number; parts?: number[]; at: string; source?: "staff"; by?: string; asideBy?: string; asideAt?: string };
 
-export type RowProblem = { text: string; level: "stop" | "fix" | "note"; aside?: boolean };
+export type RowProblem = { text: string; level: "stop" | "fix" | "tip" | "note"; aside?: boolean };
 
 export type StaffNote = { text: string; by: string; at: string };
 
@@ -111,12 +116,16 @@ export function raisedLine(line: string, part: number, level: PrepProblem["level
     return { text: openText(line).replace(/\s+/g, " "), level: m ? (m[1] === "NOTE" ? "fix" : "stop") : level, part: m ? Number(m[2]) : part, ...(by && { by }) };
 }
 
-/** Put a problem list on a draft: red first, then yellow, staff's, passed ones — and the counts the list reads. */
+/** Does this problem hold the product back? A temporary pass or a tip never does. */
+export const blocks = (p: PrepProblem) => !p.asideAt && p.level !== "tip";
+
+/** Put a problem list on a draft: red first, then yellow, staff's, tips, passed ones — and the counts the list reads. */
 export function withProblems(info: ShopDraft | null, list: PrepProblem[]): ShopDraft {
-    const ai = list.filter((p) => !p.source && !p.asideAt);
+    const ai = list.filter((p) => !p.source && blocks(p));
+    const tips = list.filter((p) => !p.source && !p.asideAt && p.level === "tip");
     const staff = list.filter((p) => p.source === "staff" && !p.asideAt);
     const aside = list.filter((p) => p.asideAt);
-    const problems = [...ai.filter((p) => p.level === "stop"), ...ai.filter((p) => p.level === "fix"), ...staff, ...aside];
+    const problems = [...ai.filter((p) => p.level === "stop"), ...ai.filter((p) => p.level === "fix"), ...staff, ...tips, ...aside];
     return { ...info, v: 2, problems: problems.length ? problems : undefined, asideCount: aside.length || undefined, noteCount: staff.length || undefined };
 }
 
@@ -126,11 +135,12 @@ export function withProblems(info: ShopDraft | null, list: PrepProblem[]): ShopD
  * raising it is credited. "replaces" picks the open AI problems this run speaks
  * for: one it no longer raises goes to the history.
  */
-export function raiseProblems(info: ShopDraft | null, items: RaisedProblem[], opts: { replaces?: (p: PrepProblem) => boolean; by: string }): ShopDraft {
+export function raiseProblems(info: ShopDraft | null, items: RaisedProblem[], opts: { replaces?: (p: PrepProblem) => boolean; by: string; tips?: boolean }): ShopDraft {
     const now = new Date().toISOString();
     const raised = new Set(items.map((i) => problemKey(i.text)));
     const before = info?.problems ?? [];
-    const gone = before.filter((p) => !p.asideAt && !p.source && opts.replaces?.(p) && !raised.has(problemKey(p.text)));
+    // A tip is closed only by /fixed or by a writer that names tips in "replaces".
+    const gone = before.filter((p) => !p.asideAt && !p.source && (p.level !== "tip" || opts.tips) && opts.replaces?.(p) && !raised.has(problemKey(p.text)));
     const list = before.filter((p) => !gone.includes(p)).map((p) => ({ ...p }));
     for (const i of items) {
         if (!i.text.trim()) continue;
@@ -139,7 +149,8 @@ export function raiseProblems(info: ShopDraft | null, items: RaisedProblem[], op
         if (was.asideAt || was.source) continue;
         const parts = [...new Set([...(was.parts ?? [was.part]), i.part])].filter(Boolean).sort();
         if (parts.length > 1) was.parts = parts;
-        if (i.level === "stop") was.level = "stop";
+        // A part finding a tip serious makes it serious; a tip never weakens a real problem.
+        if (i.level === "stop" || (i.level === "fix" && was.level === "tip")) was.level = i.level;
         was.text = i.text;
     }
     return { ...withProblems(info, list), closed: gone.length ? withClosed(info, gone, opts.by, "fixed") : info?.closed };
@@ -147,7 +158,7 @@ export function raiseProblems(info: ShopDraft | null, items: RaisedProblem[], op
 
 /** The Attention reason: a summary made from the list — never read back as problems. "more" = the small print. */
 export function attentionText(info: ShopDraft | null, more: string[]): string {
-    const open = (info?.problems ?? []).filter((p) => !p.asideAt && !p.source);
+    const open = (info?.problems ?? []).filter((p) => blocks(p) && !p.source);
     return [...open.map((p) => `${p.level === "stop" ? "PENDING" : "NOTE"} (Part ${p.part}) — ${p.text}`), ...more].filter(Boolean).join("\n").slice(0, 10000);
 }
 /** The small print of a saved Attention reason (what to do after, the Last run line, where it came from). */
@@ -210,11 +221,12 @@ const isProblem = (x: unknown): x is PrepProblem => !!x && typeof x === "object"
 
 /**
  * What outlives Ready / Discard: the runs, the manual note, staff's problems, passed
- * ones and the history. An AI problem still open goes to the history, closed by `by`.
+ * ones, tips and the history. An AI problem still open goes to the history, closed by `by`.
  */
 export function prepHistory(info: ShopDraft | null, by: string): ShopDraft | null {
-    const gone = (info?.problems ?? []).filter((p) => !p.asideAt && p.source !== "staff");
-    const kept = (info?.problems ?? []).filter((p) => p.asideAt || p.source === "staff");
+    // Tips stay too: still worth doing after Ready.
+    const gone = (info?.problems ?? []).filter((p) => blocks(p) && p.source !== "staff");
+    const kept = (info?.problems ?? []).filter((p) => !blocks(p) || p.source === "staff");
     const closed = gone.length ? withClosed(info, gone, by, "fixed") : info?.closed;
     if (!info?.runs?.length && !kept.length && !info?.staffNote && !closed?.length) return null;
     return withProblems({

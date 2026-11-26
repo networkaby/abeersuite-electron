@@ -7,7 +7,7 @@ import { attentionInfo, draftOf, problemText } from "@/modules/ecommerce/lib/pro
  * and the rest (owner, 2026-11-26) — numbered and coloured like the computer's
  * "Open problems" list, so "problem 3" is the same problem on both screens.
  */
-export type GuideNote = { no: number; text: string; level: "stop" | "fix" | "staff" };
+export type GuideNote = { no: number; text: string; level: "stop" | "fix" | "tip" | "staff" };
 export type PhotoGuide = {
     stage: ShopStatus;
     /** Who parked it and when, plus any reason a person wrote. The run's small print stays on the computer. */
