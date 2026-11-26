@@ -9,6 +9,7 @@ import { runGooglePosts } from "@/modules/campaigns/lib/googlePosts";
 import { syncGoogleReviews } from "@/modules/reviews/lib/googleReviews";
 import { runStatusAutoMoves } from "@/modules/repairing/lib/autoMoveTickets";
 import { requireIncomingKey } from "@/modules/incoming/lib/incomingApi";
+import { runCounterQueue } from "@/shared/lib/counter/counterQueue";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +28,7 @@ export const maxDuration = 300;
  * hand share.
  * New and changed Google reviews are copied in for CRM → Reviews alongside.
  * Tickets left long enough in a status with an auto-move rule move on (autoMoveTickets.ts).
+ * App notifications and emails a counter queued after its own WhatsApp go out (counterQueue.ts).
  * Backup is not part of this: Vercel's nightly cron owns it.
  *
  * CRON_SECRET is optional, as for /api/cron/due-reminders — blank counts as absent.
@@ -57,7 +59,7 @@ export async function GET(req: Request) {
         out.instagramPosts = { error: (e as Error)?.message ?? String(e) };
     }
 
-    const jobs = { googleReviews: syncGoogleReviews, dueReminders: runDueReminders, emailReminders: runEmailReminders, postReminders: runPostReminders, campaigns: runScheduledCampaigns, statusAutoMoves: () => runStatusAutoMoves() };
+    const jobs = { googleReviews: syncGoogleReviews, dueReminders: runDueReminders, emailReminders: runEmailReminders, postReminders: runPostReminders, campaigns: runScheduledCampaigns, statusAutoMoves: () => runStatusAutoMoves(), counterQueue: runCounterQueue };
     const settled = await Promise.allSettled(Object.values(jobs).map((run) => run()));
     Object.keys(jobs).forEach((name, i) => {
         const r = settled[i];

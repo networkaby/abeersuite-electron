@@ -26,6 +26,7 @@ function appChip(n: Notification): [string, string, string] {
     if (n.shownAt) return ["App: shown", GOOD, "The customer's phone showed the notification"];
     if (n.pushStatus === "sent") return ["App: not shown yet", WAIT, "Sent; the phone has not reported showing it"];
     if (n.pushStatus === "pending") return ["App: sending", WAIT, ""];
+    if (n.pushStatus === "queued") return ["App: waiting for office", WAIT, "The office sends it within half an hour (08:00–20:00)"];
     if (n.pushStatus === "failed") return ["App: failed", BAD, "Google/Apple refused every device"];
     return ["App: none", OFF, "Customer has no app with notifications on"];
 }

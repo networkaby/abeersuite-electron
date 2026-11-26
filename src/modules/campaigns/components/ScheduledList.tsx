@@ -60,7 +60,7 @@ const sendTimeLabel = (hhmm: string) => {
     return new Date(2000, 0, 1, h, m).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
 };
 const channelName = (c: string) => channelOf(c)?.label ?? c;
-const EMAIL_STATUS: Record<string, string> = { sent: "Sent", failed: "Failed", pending: "Sending", "not-configured": "Email not set up", "no-email": "No email on file" };
+const EMAIL_STATUS: Record<string, string> = { sent: "Sent", failed: "Failed", pending: "Sending", queued: "Waiting for office", "not-configured": "Email not set up", "no-email": "No email on file" };
 
 function reminderStatus(r: DuePreview): string {
     if (!r.enabled) return "Automatic reminders are off.";

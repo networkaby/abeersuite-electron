@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import type { PrismaClient } from "@/generated/prisma/client";
 import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
 import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
@@ -33,13 +34,15 @@ export interface PartyLedgerBalance {
 export async function partyBalanceAroundVoucher(
     partyAccountId: number | null | undefined,
     universalVoucherId: number | readonly number[] | null | undefined,
+    /** A counter's WhatsApp reads Supabase (notifyBill.ts); everyone else the default. */
+    db: PrismaClient = prisma,
 ): Promise<PartyLedgerBalance | null> {
     if (partyAccountId == null) return null;
     const ownIds = universalVoucherId == null ? []
         : typeof universalVoucherId === "number" ? [universalVoucherId]
         : [...new Set(universalVoucherId)];
 
-    const acct = await prisma.account.findUnique({
+    const acct = await db.account.findUnique({
         where:  { id: partyAccountId },
         select: {
             normalBalance: true, openingBalance: true, openingBalanceType: true,
@@ -52,7 +55,7 @@ export async function partyBalanceAroundVoucher(
         ?? (acct.group?.type ? defaultNormalBalanceForGroupType(acct.group.type) : "DEBIT");
 
     const [otherLines, ownLines] = await Promise.all([
-        prisma.voucherGlLine.findMany({
+        db.voucherGlLine.findMany({
             where:  {
                 accountId: partyAccountId,
                 universalVoucher: ledgerStatusFilterUv(),
@@ -61,7 +64,7 @@ export async function partyBalanceAroundVoucher(
             select: { type: true, amount: true },
         }),
         ownIds.length > 0
-            ? prisma.voucherGlLine.findMany({
+            ? db.voucherGlLine.findMany({
                 where:  { accountId: partyAccountId, universalVoucherId: { in: ownIds } },
                 select: { type: true, amount: true },
             })

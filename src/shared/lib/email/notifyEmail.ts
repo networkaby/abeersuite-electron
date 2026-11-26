@@ -1,5 +1,6 @@
 import "server-only";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaLive } from "@/shared/lib/prisma/prismaClient";
+import { AUTO_WAITS_MS, retryBeforeClaim } from "@/shared/lib/whatsapp/counterSend";
 import { askOffice } from "@/shared/lib/counter/officeNotify";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
@@ -21,6 +22,7 @@ import {
     type EmailTemplateKind,
 } from "./emailTemplates";
 import { getEmailTemplate, type EmailSendState } from "./emailTemplateStore";
+import type { WaTemplateKind } from "@/shared/lib/whatsapp/billTemplates";
 import { isEmailConfigured, sendEmail } from "./sendEmail";
 import { isOptedOut, unsubscribeUrl } from "./unsubscribe";
 
@@ -124,6 +126,81 @@ export async function notifyWelcomeEmail(personId: number): Promise<NotifyResult
         emails: p.emails,
         values: { customer: p.name, shop: getOrganisation().brandName, link: PORTAL_URL, app: SHOP_APP_URL },
     });
+}
+
+// ── A counter's automatic emails: queued in Supabase, sent by the office ─────
+//
+// A counter holds no email keys. Its automatic email is written as an
+// EmailNotification row with status "queued" (the same once-only key), and the
+// office's communications cron sends it (counter/counterQueue.ts) — so a counter
+// restart or the office being busy never loses it. Older than a day: left alone.
+
+/** A posted document saved on a counter (notifyBill's automatic send). */
+export function queueDocEmail(kind: string, uvId: number): Promise<NotifyResult> {
+    if (!isDocEmailKind(kind)) return Promise.resolve({ status: "skipped", reason: "not a customer document" });
+    return queueEmail(kind, uvId, () => loadVoucherMessage(kind, uvId));
+}
+
+/** A repair stage completed on a counter. */
+export function queueRepairEmail(kind: "REPAIR_RECEIVED" | "REPAIR_READY", ticketId: number): Promise<NotifyResult> {
+    return queueEmail(kind, ticketId, () => loadRepairMessage(kind, ticketId));
+}
+
+async function queueEmail(kind: EmailAnyKind, refId: number, load: () => Promise<{ emails: EmailRow[] } | NotifyResult>): Promise<NotifyResult> {
+    try {
+        const tpl = await getEmailTemplate(kind);
+        if (!tpl.enabled) return { status: "skipped", reason: "template off" };
+        if (!tpl.autoSend && (hasAutoSendSwitch(kind) || kind === "REPAIR_RECEIVED" || kind === "REPAIR_READY")) return { status: "skipped", reason: "auto off" };
+        const out = await retryBeforeClaim(async (): Promise<NotifyResult> => {
+            const m = await load();
+            if ("status" in m) return m;
+            const to = pickEmail(m.emails);
+            if (!to) return { status: "skipped", reason: "no email" };
+            try {
+                await prismaLive.emailNotification.create({ data: { kind, refId, email: to, status: "queued" } });
+            } catch (e) {
+                if ((e as { code?: unknown })?.code === "P2002") return { status: "already" };
+                throw e;
+            }
+            return { status: "sent", reason: "queued" };
+        }, AUTO_WAITS_MS);
+        return out ?? { status: "skipped", reason: "no internet" };
+    } catch (e) {
+        console.error(`[notify-email] ${kind} ${refId}: not queued`, e);
+        return { status: "skipped", reason: "error" };
+    }
+}
+
+/** Office: send the emails counters queued in the last day. Each row is taken
+ *  with one atomic update, so two cron runs at once still send it once. */
+export async function sendQueuedEmails(since: Date, limit = 100): Promise<number> {
+    if (IS_COUNTER_PC || !(await isEmailConfigured())) return 0;
+    const rows = await prisma.emailNotification.findMany({
+        where: { status: "queued", createdAt: { gte: since } },
+        select: { id: true, kind: true, refId: true, email: true },
+        orderBy: { id: "asc" },
+        take: limit,
+    });
+    let sent = 0;
+    for (const r of rows) {
+        const { count } = await prisma.emailNotification.updateMany({ where: { id: r.id, status: "queued" }, data: { status: "pending" } });
+        if (!count) continue;
+        let error: string | undefined;
+        try {
+            const repair = r.kind === "REPAIR_RECEIVED" || r.kind === "REPAIR_READY";
+            const m = repair ? await loadRepairMessage(r.kind as "REPAIR_RECEIVED", r.refId) : await loadVoucherMessage(r.kind as WaTemplateKind, r.refId);
+            const tpl = await getEmailTemplate(r.kind as EmailAnyKind);
+            if ("status" in m) error = `not sent: ${m.reason ?? m.status}`;
+            else if (!tpl.enabled) error = "not sent: template switched off";
+            else if (!r.email) error = "not sent: no email";
+            else error = (await sendFilled(r.email, tpl.draft, m.values as EmailFieldValues)).error;
+        } catch (e) {
+            error = (e instanceof Error ? e.message : String(e)).slice(0, 500);
+        }
+        await prisma.emailNotification.update({ where: { id: r.id }, data: { status: error ? "failed" : "sent", error: error ?? null } });
+        if (!error) sent++;
+    }
+    return sent;
 }
 
 /** Fill a template and send it. Used by the real send and the settings test. */

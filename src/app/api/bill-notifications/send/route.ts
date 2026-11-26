@@ -40,6 +40,7 @@ const WHY: Record<string, string> = {
     supplier: "Suppliers are never messaged.",
     counter: "This counter cannot ask the office to send right now — send from the office site.",
     "office not reachable": "The office did not answer — try again later.",
+    "no internet": "Not sent — no internet. Nothing went to the customer; press Send again when the internet is back.",
     "office app is older than this counter": "The office site must be updated first — send from the office site.",
     "office refused": "The office did not accept this counter — send from the office site.",
 };
