@@ -38,7 +38,7 @@ What it does **not** do: no internet search, no text, no brand / collection / gr
 curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json" \
   "$PRODUCT_COPY_WRITE_URL/api/agent/prep/<id>/part1" -d '{
   "enough": true,
-  "fix": ["Photo needed: Box back — the side with model no., specs and MRP", "Photo needed: Bottom — underside with the sensor, on white"],
+  "fix": ["Photo needed: Box back - the side with model no., specs and MRP", "Photo needed: Bottom - underside with the sensor, on white"],
   "notes": [],
   "photos": { "box": "carton", "shape": "palm-size wired mouse",
     "tags": [ { "url": "…/1.jpg", "kind": "box_front" } ],
@@ -47,7 +47,7 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
 ```
 
    - `tags`: every existing photo with the view it shows (a < 500 px photo still gets its tag, but its view also gets a "Photo needed: … (current one is 250×164, too small)" line).
-   - `fix` lines start with **"Photo needed:"** so they land in the phone app's **Shoot these** list. One view per line, about 15 words.
+   - `fix` lines start with **"Photo needed:"** so they land in the phone app's **Shoot these** list. One view per line, about 15 words. Plain ASCII only (a hyphen, not "—": the Windows shell garbles it).
    - Nothing missing → send no `fix`; the product stays where it is.
 
 **What staff see:** a missing must view makes Part 1 stop as usual → the product goes to **Attention** (that is how every prep skill asks staff for photos); the "Must photo missing" line and your "Photo needed" lines appear under Product image and in the phone app's Shoot these. Any later prep part / product-recheck reads and clears them the usual way; staff can tick **Not applicable** on a view that cannot be shot.
