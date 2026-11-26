@@ -108,7 +108,12 @@ Answer = product-copy's read (`name, brand, modelNo, barcodes, typedSpecs, photo
 **Run records first — never run the same thing twice for nothing** (owner, 2026-11-20). `prep.runs` = the last 10 runs (`{ skill, part, at, from, to, found?, fixed? }`, oldest first); the server writes one after every call — you never send it. `prep.changedSinceRun: false` and the last run is the same path you are about to run (`"1+5"`, `"1+2+3"`, `"1+3"`) → **skip the product** ("already ran on <date>, nothing changed since"), unless the owner said **"redo"** or named this SKU. `changedSinceRun: true` (staff saved it after the run) → go on.
 
 **One shared open-problem list** (owner, 2026-11-20). `prep.problems` = every open problem on the product, whoever raised it: `{ text, level: stop | fix | tip, part, source?, by?, asideAt? }`.
-- **`tip`** (cyan, owner 2026-11-27) = "better to do" — e.g. photo-suggest's "Photo needed: …". Never blocks, never moves the stage, and a part's re-run never closes it by itself: when the photo / thing is now there, send that tip's text in `/fixed`; still wanted → leave it.
+- **`tip`** (cyan, owner 2026-11-27) = "better to do" — e.g. photo-suggest's "Photo needed: …". A tip is **advice, not an order**: never blocks, never moves the stage, a part's re-run never closes it. Each run, judge every tip with what you now know (photos, saved search, maker's pages):
+  - **Done** (the photo / thing is there now) → send its text in `/fixed`.
+  - **Not needed** for this product (your own must / optional list or the maker's pages say that view adds nothing — e.g. "Bottom" for a sealed cable) → send it in `/fixed` and say why in your part's `notes`.
+  - **Wrong or now serious** (it names another model, or the view is a real must still missing) → `/fixed` the tip and raise your own line in `staff` / the photo list instead.
+  - **Still worth doing** → leave it. Never copy a tip into `staff` / `pending` just because it is there.
+  - Use tips as **input** to your must / optional list, never as the list itself.
 - Raised by a part (`part` 1–5) or by **staff** (`source: "staff"`, `by` = who) — staff write theirs as `{…}` in the product's manual note (`prep.staffNote`, Markdown; text outside `{ }` is for people, ignore it). Treat a staff problem **exactly like any other**: do it first, within what this skill may do. An open staff problem always makes `changedSinceRun: true` — never skip that product.
 - **`asideAt`** = staff ticked **"temporary pass"**: it does not block and you never write it again in `staff` / `pending`, but it **stays until fixed** — if you see it is fixed now, report it fixed.
 - **You fixed one** (any source, set aside or not) → report it, one call for all, before the part call:

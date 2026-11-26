@@ -95,6 +95,8 @@ Never stop a product because a photo URL is blocked — use this.
 
 ## 2. Check the photos (open every one)
 
+**Cyan tips** ("Photo needed: …" from photo-suggest, owner 2026-11-27) may be on the product: read them as advice for step 7 and the photo notes, judge them yourself (this product may not need that view), never copy them into `notes`. Clearing them is product-prep's job — do not call its endpoints.
+
 Never use your own memory of the product.
 
 1. **Clash** = our typed data (name, modelNo, barcodes, typedSpecs) disagrees with what is **printed**: another brand or model, another printed number (capacity, wattage, size, count). Not a clash: missing data, the same thing spelled differently, a count only *seen*, our support period shorter than the printed warranty.

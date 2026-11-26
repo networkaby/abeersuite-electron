@@ -44,7 +44,7 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
    - Start every line with **"Photo needed:"** (it puts the line in the phone's Shoot these). One view per line, about 15 words, plain ASCII (a hyphen, not "—": the Windows shell garbles it).
    - A photo under 500 px: "Photo needed: Box front - current one is 250x164, too small".
    - Nothing missing → send nothing.
-6. Product-prep later finds the photos there → it sends those tips in `/fixed` (or staff clear them).
+6. Running again: judge the tips already there — a view now shot or not needed → leave it out of the new list (`replace: true` drops it). Product-prep later finds the photos there → it sends those tips in `/fixed` (or staff clear them).
 
 ## Report
 
