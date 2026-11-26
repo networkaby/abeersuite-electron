@@ -103,7 +103,7 @@ export function hasAutoSendSwitch(kind: EmailAnyKind): boolean {
     return isShared(kind) && kind !== "DUE_SOFT" && kind !== "DUE_FIRM";
 }
 
-const DOC_KINDS = ["SALE", "RECEIPT", "SALE_RETURN", "REFUND", "ORDER", "ESTIMATE"] as const;
+export const DOC_KINDS = ["SALE", "RECEIPT", "SALE_RETURN", "REFUND", "ORDER", "ESTIMATE"] as const;
 export type DocEmailKind = (typeof DOC_KINDS)[number];
 
 /** A kind that announces a posted voucher (refId = UniversalVoucher id). */

@@ -569,6 +569,9 @@ async function queuePush(personId: number): Promise<{ status: string; messageId:
     return { status: subs ? "queued" : "no-subscription", messageId: null };
 }
 
+/** The kinds `queuedPushPayload` can rebuild — only these are retried when stuck (counterQueue.ts). */
+export const REBUILDABLE_PUSH_KINDS: readonly string[] = [...VOUCHER_KINDS, "REPAIR_RECEIVED", "REPAIR_READY", "DEAL_CREATED", "HELP_CREATED"];
+
 /** For the office draining a counter's queue: the same notification, rebuilt
  *  from the document. Null when the document no longer has anyone to tell. */
 export async function queuedPushPayload(kind: string, refId: number): Promise<{ personId: number; payload: PushPayload } | null> {

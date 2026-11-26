@@ -20,7 +20,9 @@ import {
     type EmailTemplateDraft,
     type EmailAnyKind,
     type EmailTemplateKind,
+    DOC_KINDS,
 } from "./emailTemplates";
+import { takeRowWhere, takeableWhere } from "@/shared/lib/counter/queueTake";
 import { getEmailTemplate, type EmailSendState } from "./emailTemplateStore";
 import type { WaTemplateKind } from "@/shared/lib/whatsapp/billTemplates";
 import { isEmailConfigured, sendEmail } from "./sendEmail";
@@ -171,19 +173,25 @@ async function queueEmail(kind: EmailAnyKind, refId: number, load: () => Promise
     }
 }
 
-/** Office: send the emails counters queued in the last day. Each row is taken
- *  with one atomic update, so two cron runs at once still send it once. */
-export async function sendQueuedEmails(since: Date, limit = 100): Promise<number> {
+/** The kinds `sendQueuedEmails` can rebuild — only these are retried when stuck. */
+const REBUILDABLE_EMAIL_KINDS: readonly string[] = [...DOC_KINDS, "REPAIR_RECEIVED", "REPAIR_READY"];
+
+/** Office: send the emails counters queued in the last day, and any document /
+ *  repair email left "pending" since `stuckBefore` (a send that stopped before
+ *  writing its outcome — counter/queueTake.ts). Each row is taken with one
+ *  atomic update, so two cron runs at once still send it once. */
+export async function sendQueuedEmails(since: Date, stuckBefore: Date, limit = 100): Promise<number> {
     if (IS_COUNTER_PC || !(await isEmailConfigured())) return 0;
     const rows = await prisma.emailNotification.findMany({
-        where: { status: "queued", createdAt: { gte: since } },
-        select: { id: true, kind: true, refId: true, email: true },
+        where: { createdAt: { gte: since }, ...takeableWhere("status", stuckBefore, REBUILDABLE_EMAIL_KINDS) },
+        select: { id: true, kind: true, refId: true, email: true, status: true },
         orderBy: { id: "asc" },
         take: limit,
     });
     let sent = 0;
     for (const r of rows) {
-        const { count } = await prisma.emailNotification.updateMany({ where: { id: r.id, status: "queued" }, data: { status: "pending" } });
+        // updatedAt is set by hand so a second run sees the row as just taken.
+        const { count } = await prisma.emailNotification.updateMany({ where: takeRowWhere("status", r.id, r.status, stuckBefore), data: { status: "pending", updatedAt: new Date() } });
         if (!count) continue;
         let error: string | undefined;
         try {
