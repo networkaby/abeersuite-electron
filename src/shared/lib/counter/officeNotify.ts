@@ -4,14 +4,16 @@ import { WRITE_API_URL, shouldWriteLocal } from "@/shared/lib/prisma/counterMode
 import { ACTING_USER_HEADER, COUNTER_KEY_REFUSED } from "@/shared/lib/auth/counterRelayAuth";
 import { counterAuthorization, forgetCounterKey } from "./relayKey";
 import type { NotifyResult } from "@/shared/lib/whatsapp/notifyBill";
+import { AUTO_WAITS_MS, MANUAL_WAITS_MS } from "@/shared/lib/whatsapp/counterSend";
 
 /**
  * A counter asks the office to send a customer message.
  *
- * A counter holds no Meta / push / email keys, so it never sends itself. Under
- * `WRITE_MODE=v_live` the save runs at the office, which sends. Under `live` the save
- * runs here, straight into Supabase — so after it, the counter asks the office to send
- * for that document (`POST /api/counter/notify`). The office decides everything:
+ * A counter holds no push / email keys. Under `WRITE_MODE=live` it sends WhatsApp
+ * itself (notifyBill.ts) and leaves push + email queued in Supabase for the office's
+ * communications cron (counterQueue.ts) — it calls here only for staff's own
+ * "Send email". Under `v_live` the save runs at the office, so every message is
+ * asked for here (`POST /api/counter/notify`). The office decides everything:
  * posted or not, Auto send, template, customer, and once per document.
  */
 
@@ -32,9 +34,6 @@ export const officeNotifySchema = z.discriminatedUnion("what", [
 export type OfficeNotifyJob = z.infer<typeof officeNotifySchema>;
 
 const TIMEOUT_MS = 30_000;
-/** Waits before each try. Staff waiting on a button get the short list. */
-const AUTO_WAITS_MS = [0, 3_000, 15_000, 40_000];
-const MANUAL_WAITS_MS = [0, 2_000];
 
 const skipped = (reason: string): NotifyResult => ({ status: "skipped", reason });
 

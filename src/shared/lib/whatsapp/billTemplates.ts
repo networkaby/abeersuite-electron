@@ -122,6 +122,8 @@ const KIND_FOR_TYPE: Record<string, WaTemplateKind> = {
     RECEIPT: "RECEIPT",
     PAYMENT: "REFUND",
 };
+/** Kinds announced for a voucher (refId = UniversalVoucher id). */
+export const VOUCHER_KINDS: ReadonlySet<string> = new Set(Object.values(KIND_FOR_TYPE));
 export function autoKindForVoucherType(type: string): WaTemplateKind | null {
     return KIND_FOR_TYPE[type] ?? null;
 }

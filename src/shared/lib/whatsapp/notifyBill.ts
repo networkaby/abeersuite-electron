@@ -1,15 +1,17 @@
 import "server-only";
-import { prisma, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
-import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
+import { prisma, prismaLive, prismaWhereSaved } from "@/shared/lib/prisma/prismaClient";
+import type { PrismaClient } from "@/generated/prisma/client";
+import { IS_COUNTER_PC, WRITE_PREFERENCE, shouldWriteLocal } from "@/shared/lib/prisma/counterMode";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { normalizeMobile10 } from "@/shared/lib/auth/portalIdentifier";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { partyBalanceAroundVoucher } from "@/shared/lib/accountancy/partyLedgerBalance";
 import { formatAmount, withCurrency } from "@/shared/lib/format/moneyInr";
-import { sendPushToPerson } from "@/shared/lib/push/sendPush";
+import { sendPushToPerson, type PushPayload } from "@/shared/lib/push/sendPush";
 import {
     WA_APP_LINK,
     WA_BILL_LINK_BASE,
+    VOUCHER_KINDS,
     WA_TEMPLATE_LABEL,
     autoKindForVoucherType,
     fillBody,
@@ -22,7 +24,8 @@ import {
 import { getApprovedWaTemplate, getWaTemplateDraft, isAutoSend } from "./waTemplateStore";
 import { recordBillMessage } from "@/modules/message/lib/customerMessages";
 import { askOffice } from "@/shared/lib/counter/officeNotify";
-import { notifyEmail, notifyRepairEmail } from "@/shared/lib/email/notifyEmail";
+import { notifyEmail, notifyRepairEmail, queueDocEmail, queueRepairEmail } from "@/shared/lib/email/notifyEmail";
+import { AUTO_WAITS_MS, MANUAL_WAITS_MS, claimOnce, claimToken, retryBeforeClaim, sendsFromCounter } from "./counterSend";
 
 export { autoKindForVoucherType };
 import { isBillSendConfigured, sendBillTemplate, sendTextMessage } from "./metaTemplates";
@@ -43,8 +46,13 @@ import { billsWaNumber, listWaNumbers } from "./waNumbers";
  * on. Manual (3-dot menu "Send on WhatsApp" → `sendManually`) goes only when
  * the kind's template is switched on and approved.
  *
- * A counter PC has no Meta / push keys: it asks the office to send (`askOffice`);
- * a relayed save runs on the office server and is announced from there.
+ * A counter under `WRITE_MODE=live` sends the WhatsApp itself (it holds the Meta
+ * token) and reads + claims in Supabase only (`db()` = prismaLive), never the
+ * replica. It has no push / email keys, so those wait in Supabase as "queued" for
+ * the office's communications cron (counter/counterQueue.ts). No internet before
+ * the claim -> retried in the background, then "no internet" (nothing went out).
+ * `v_live` and an outage still ask the office (`askOffice`): the save is there,
+ * or not in Supabase yet.
  *
  * Skipped without a row: a draft or
  * cancelled voucher, a walk-in (the pooled walk-in ledger names nobody), any
@@ -60,6 +68,21 @@ export type NotifyResult = { status: "sent" | "already" | "skipped"; reason?: st
 
 type SendMode = { manual?: boolean };
 
+/** Where message data is read and claimed: Supabase only on a counter (the replica
+ *  may not have the save yet, and a claim must never land in the outbox). */
+const db = (): PrismaClient => (IS_COUNTER_PC ? prismaLive : prisma);
+
+/** False on a counter that must ask the office (v_live, outage). */
+function sendsHere(): boolean {
+    return !IS_COUNTER_PC || sendsFromCounter({ isCounter: true, write: WRITE_PREFERENCE, writeLocal: shouldWriteLocal() });
+}
+
+/** On a counter, retry while nothing is claimed yet (no internet). */
+async function untilClaimed(attempt: () => Promise<NotifyResult>, mode: SendMode): Promise<NotifyResult> {
+    if (!IS_COUNTER_PC) return attempt();
+    return (await retryBeforeClaim(attempt, mode.manual ? MANUAL_WAITS_MS : AUTO_WAITS_MS)) ?? { status: "skipped", reason: "no internet" };
+}
+
 /** Automatic needs Auto send on; manual needs the template switched on + approved. */
 async function allowed(kind: WaTemplateKind, mode: SendMode): Promise<NotifyResult | null> {
     if (mode.manual) return (await getApprovedWaTemplate(kind)) ? null : { status: "skipped", reason: "template off" };
@@ -67,14 +90,14 @@ async function allowed(kind: WaTemplateKind, mode: SendMode): Promise<NotifyResu
 }
 
 export async function notifyBill(kind: WaTemplateKind, universalVoucherId: number, mode: SendMode = {}): Promise<NotifyResult> {
-    if (IS_COUNTER_PC) return askOffice({ what: "bill", kind, id: universalVoucherId, manual: mode.manual }, { staffWaiting: mode.manual });
+    if (!sendsHere()) return askOffice({ what: "bill", kind, id: universalVoucherId, manual: mode.manual }, { staffWaiting: mode.manual });
     // The automatic send also emails, on its own switches (Settings → Email
-    // Templates). Staff's manual "Send on WhatsApp" does not.
-    const email = mode.manual ? null : notifyEmail(kind, universalVoucherId);
+    // Templates). Staff's manual "Send on WhatsApp" does not. A counter queues it.
+    const email = mode.manual ? null : IS_COUNTER_PC ? queueDocEmail(kind, universalVoucherId) : notifyEmail(kind, universalVoucherId);
     try {
         const stop = await allowed(kind, mode);
         if (stop) return stop;
-        return await notifyVoucher(kind, universalVoucherId);
+        return await untilClaimed(() => notifyVoucher(kind, universalVoucherId), mode);
     } catch (e) {
         console.error(`[notify-bill] ${kind} ${universalVoucherId} failed`, e);
         return { status: "skipped", reason: "error" };
@@ -84,14 +107,14 @@ export async function notifyBill(kind: WaTemplateKind, universalVoucherId: numbe
 }
 
 export async function notifyRepair(kind: "REPAIR_RECEIVED" | "REPAIR_READY", ticketId: number, mode: SendMode = {}): Promise<NotifyResult> {
-    if (IS_COUNTER_PC) return askOffice({ what: "repair", kind, id: ticketId, manual: mode.manual }, { staffWaiting: mode.manual });
+    if (!sendsHere()) return askOffice({ what: "repair", kind, id: ticketId, manual: mode.manual }, { staffWaiting: mode.manual });
     // The stage completing also emails (Settings → Email Templates); the repair
-    // ticket's manual WhatsApp buttons do not.
-    const email = mode.manual ? null : notifyRepairEmail(kind, ticketId);
+    // ticket's manual WhatsApp buttons do not. A counter queues it.
+    const email = mode.manual ? null : IS_COUNTER_PC ? queueRepairEmail(kind, ticketId) : notifyRepairEmail(kind, ticketId);
     try {
         const stop = await allowed(kind, mode);
         if (stop) return stop;
-        return await notifyTicket(kind, ticketId);
+        return await untilClaimed(() => notifyTicket(kind, ticketId), mode);
     } catch (e) {
         console.error(`[notify-bill] ${kind} ticket ${ticketId} failed`, e);
         return { status: "skipped", reason: "error" };
@@ -101,11 +124,11 @@ export async function notifyRepair(kind: "REPAIR_RECEIVED" | "REPAIR_READY", tic
 }
 
 export async function notifyDealCreated(ticketId: number, mode: SendMode = {}): Promise<NotifyResult> {
-    if (IS_COUNTER_PC) return askOffice({ what: "deal", id: ticketId });
+    if (!sendsHere()) return askOffice({ what: "deal", id: ticketId });
     try {
         const stop = await allowed("DEAL_CREATED", mode);
         if (stop) return stop;
-        return await notifyTicketDeal(ticketId);
+        return await untilClaimed(() => notifyTicketDeal(ticketId), mode);
     } catch (e) {
         console.error(`[notify-deal] ticket ${ticketId} failed`, e);
         return { status: "skipped", reason: "error" };
@@ -113,11 +136,11 @@ export async function notifyDealCreated(ticketId: number, mode: SendMode = {}): 
 }
 
 export async function notifyHelpCreated(ticketId: number, mode: SendMode = {}): Promise<NotifyResult> {
-    if (IS_COUNTER_PC) return askOffice({ what: "help", id: ticketId });
+    if (!sendsHere()) return askOffice({ what: "help", id: ticketId });
     try {
         const stop = await allowed("HELP_CREATED", mode);
         if (stop) return stop;
-        return await notifyTicketHelp(ticketId);
+        return await untilClaimed(() => notifyTicketHelp(ticketId), mode);
     } catch (e) {
         console.error(`[notify-help] ticket ${ticketId} failed`, e);
         return { status: "skipped", reason: "error" };
@@ -167,7 +190,7 @@ export type VoucherMessage = {
 };
 
 export async function loadVoucherMessage(kind: WaTemplateKind, uvId: number): Promise<VoucherMessage | NotifyResult> {
-    const uv = await prisma.universalVoucher.findUnique({
+    const uv = await db().universalVoucher.findUnique({
         where: { id: uvId },
         select: {
             voucherNo: true,
@@ -180,7 +203,7 @@ export async function loadVoucherMessage(kind: WaTemplateKind, uvId: number): Pr
     if (!uv || uv.status !== "POSTED") return { status: "skipped", reason: "not posted" };
     if (uv.partyAccountId == null) return { status: "skipped", reason: "no party" };
 
-    const account = await prisma.account.findUnique({ where: { id: uv.partyAccountId }, select: partySelect });
+    const account = await db().account.findUnique({ where: { id: uv.partyAccountId }, select: partySelect });
     const party = account?.person ?? account?.company;
     if (!account || !party) return { status: "skipped", reason: "walk-in" };
     // A supplier never hears from us — automatic or manual, any kind.
@@ -191,7 +214,7 @@ export async function loadVoucherMessage(kind: WaTemplateKind, uvId: number): Pr
     // its lines on the party (credit for money in, debit for money paid out).
     let amount = uv.voucherDetail ? Number(uv.voucherDetail.totalAmount) : 0;
     if (!uv.voucherDetail) {
-        const lines = await prisma.voucherGlLine.findMany({
+        const lines = await db().voucherGlLine.findMany({
             where: { universalVoucherId: uvId, accountId: uv.partyAccountId, type: kind === "REFUND" ? "DEBIT" : "CREDIT" },
             select: { amount: true },
         });
@@ -199,7 +222,7 @@ export async function loadVoucherMessage(kind: WaTemplateKind, uvId: number): Pr
     }
 
     // Previous / closing balance — the same figures the print template shows.
-    const bal = await partyBalanceAroundVoucher(uv.partyAccountId, uvId);
+    const bal = await partyBalanceAroundVoucher(uv.partyAccountId, uvId, db());
     const balanceText = (n: number) => {
         const rounded = Math.round(n * 100) / 100;
         if (rounded === 0) return "Nil";
@@ -232,10 +255,17 @@ export async function loadVoucherMessage(kind: WaTemplateKind, uvId: number): Pr
     };
 }
 
-async function notifyVoucher(kind: WaTemplateKind, uvId: number): Promise<NotifyResult> {
+type DeliverInput = Parameters<typeof deliver>[0];
+const built = async (input: Promise<DeliverInput | NotifyResult>): Promise<NotifyResult> => {
+    const d = await input;
+    return "status" in d ? d : deliver(d);
+};
+
+const notifyVoucher = (kind: WaTemplateKind, uvId: number) => built(buildVoucher(kind, uvId));
+async function buildVoucher(kind: WaTemplateKind, uvId: number): Promise<DeliverInput | NotifyResult> {
     const m = await loadVoucherMessage(kind, uvId);
     if ("status" in m) return m;
-    return deliver({
+    return {
         kind,
         refId: uvId,
         linkCode: String(uvId),
@@ -244,13 +274,13 @@ async function notifyVoucher(kind: WaTemplateKind, uvId: number): Promise<Notify
         values: m.values,
         push: { title: `${WA_TEMPLATE_LABEL[kind]} ${m.docNo}`, body: `${withCurrency(m.amountText)} · ${m.dateText} · tap to view` },
         summary: `${WA_TEMPLATE_LABEL[kind]} ${m.docNo} · ${withCurrency(m.amountText)}`,
-    });
+    };
 }
 
 /** A repair ticket's customer and fields, for WhatsApp here and email in
  *  email/notifyEmail.ts — or why it has nobody to tell. */
 export async function loadRepairMessage(kind: "REPAIR_RECEIVED" | "REPAIR_READY", ticketId: number) {
-    const t = await prisma.ticket.findUnique({
+    const t = await db().ticket.findUnique({
         where: { id: ticketId },
         select: {
             createdAt: true,
@@ -288,12 +318,13 @@ export async function loadRepairMessage(kind: "REPAIR_RECEIVED" | "REPAIR_READY"
     };
 }
 
-async function notifyTicket(kind: "REPAIR_RECEIVED" | "REPAIR_READY", ticketId: number): Promise<NotifyResult> {
+const notifyTicket = (kind: "REPAIR_RECEIVED" | "REPAIR_READY", ticketId: number) => built(buildRepair(kind, ticketId));
+async function buildRepair(kind: "REPAIR_RECEIVED" | "REPAIR_READY", ticketId: number): Promise<DeliverInput | NotifyResult> {
     const m = await loadRepairMessage(kind, ticketId);
     if ("status" in m) return m;
     const { deviceName, jobNo } = m;
     const ready = kind === "REPAIR_READY";
-    return deliver({
+    return {
         kind,
         refId: ticketId,
         linkCode: m.code,
@@ -305,11 +336,12 @@ async function notifyTicket(kind: "REPAIR_RECEIVED" | "REPAIR_READY", ticketId: 
             body: ready ? `Job ${jobNo} · ready for pickup · tap for details` : `${deviceName} · tap to track`,
         },
         summary: ready ? `Repair ${jobNo} ready · ${deviceName}` : `Repair ${jobNo} received · ${deviceName}`,
-    });
+    };
 }
 
-async function notifyTicketDeal(ticketId: number): Promise<NotifyResult> {
-    const t = await prisma.ticket.findUnique({
+const notifyTicketDeal = (ticketId: number) => built(buildDeal(ticketId));
+async function buildDeal(ticketId: number): Promise<DeliverInput | NotifyResult> {
+    const t = await db().ticket.findUnique({
         where: { id: ticketId },
         select: {
             id: true,
@@ -344,7 +376,7 @@ async function notifyTicketDeal(ticketId: number): Promise<NotifyResult> {
     }
     if (!phones.length) return { status: "skipped", reason: "no customer phone" };
 
-    return deliver({
+    return {
         kind: "DEAL_CREATED",
         refId: ticketId,
         linkCode: code,
@@ -368,11 +400,12 @@ async function notifyTicketDeal(ticketId: number): Promise<NotifyResult> {
             body: `${subject} · tap to view`,
         },
         summary: `Enquiry noted: ${subject}`,
-    });
+    };
 }
 
-async function notifyTicketHelp(ticketId: number): Promise<NotifyResult> {
-    const t = await prisma.ticket.findUnique({
+const notifyTicketHelp = (ticketId: number) => built(buildHelp(ticketId));
+async function buildHelp(ticketId: number): Promise<DeliverInput | NotifyResult> {
+    const t = await db().ticket.findUnique({
         where: { id: ticketId },
         select: {
             id: true,
@@ -409,7 +442,7 @@ async function notifyTicketHelp(ticketId: number): Promise<NotifyResult> {
     }
     if (!phones.length) return { status: "skipped", reason: "no customer phone" };
 
-    return deliver({
+    return {
         kind: "HELP_CREATED",
         refId: ticketId,
         linkCode: code,
@@ -433,7 +466,7 @@ async function notifyTicketHelp(ticketId: number): Promise<NotifyResult> {
             body: `${subject} · tap to track`,
         },
         summary: `Support ticket ${jobNo} received · ${subject}`,
-    });
+    };
 }
 
 /** Claim the (kind, refId) row, then send push + WhatsApp side by side. */
@@ -452,23 +485,30 @@ async function deliver(d: {
     summary: string;
 }): Promise<NotifyResult> {
     // Claim first — a retried request or a second save path for the same
-    // document stops here instead of messaging the customer twice.
+    // document stops here instead of messaging the customer twice. A claim left
+    // "pending" by a crash counts as taken: never resent by itself. Throws
+    // (NotClaimed) only when nothing was claimed — the caller may retry.
+    const key = d.claimKind ?? d.kind;
+    const where = { kind_refId: { kind: key, refId: d.refId } };
+    const claim = await claimOnce({
+        create: (token) => db().billNotification.create({
+            data: { kind: key, refId: d.refId, personId: d.personId, pushStatus: "pending", waStatus: "pending", waError: token },
+        }),
+        find: () => db().billNotification.findUnique({ where, select: { waStatus: true, waError: true } }),
+    }, claimToken());
+    if (!claim.mine) return { status: "already", wa: claim.wa };
+
+    // Claimed: from here nothing throws, so nothing is retried.
+    let out: Awaited<ReturnType<typeof sendPushAndWhatsApp>>;
     try {
-        await prisma.billNotification.create({
-            data: { kind: d.claimKind ?? d.kind, refId: d.refId, personId: d.personId, pushStatus: "pending", waStatus: "pending" },
-        });
-    } catch {
-        // A claim left "pending" by a crash included: never resent by itself.
-        const prev = await prisma.billNotification
-            .findUnique({ where: { kind_refId: { kind: d.claimKind ?? d.kind, refId: d.refId } }, select: { waStatus: true } })
-            .catch(() => null);
-        return { status: "already", wa: prev?.waStatus };
+        out = await sendPushAndWhatsApp({ ...d, queuePush: IS_COUNTER_PC });
+    } catch (e) {
+        console.error(`[notify-bill] ${key} ${d.refId}: stopped after the claim`, e);
+        return { status: "sent", wa: "pending" };
     }
-
-    const { mobile, push, wa } = await sendPushAndWhatsApp(d);
-
-    await prisma.billNotification.update({
-        where: { kind_refId: { kind: d.claimKind ?? d.kind, refId: d.refId } },
+    const { mobile, push, wa } = out;
+    await db().billNotification.update({
+        where,
         data: {
             mobile,
             pushStatus: push.status,
@@ -477,7 +517,7 @@ async function deliver(d: {
             waMessageId: wa.messageId ?? null,
             waError: wa.error ?? null,
         },
-    });
+    }).catch((e) => console.error(`[notify-bill] ${key} ${d.refId}: outcome not saved (${wa.status})`, e));
     return { status: "sent", wa: wa.status };
 }
 
@@ -497,25 +537,49 @@ export async function sendPushAndWhatsApp(d: {
     summary: string;
     /** Photo header link, for a kind with one (hasImageHeader). */
     headerImage?: string;
+    /** A counter has no push keys: leave it "queued" for the office (counterQueue.ts). */
+    queuePush?: boolean;
 }): Promise<{ mobile: string | null; push: { status: string; messageId: string | null }; wa: WaOutcome }> {
     const mobile = pickMobile(d.phones);
+    const personId = d.personId;
     const [push, wa] = await Promise.all([
-        d.personId != null
-            ? sendPushToPerson(d.personId, {
-                title: d.push.title,
-                body: d.push.body,
-                url: `/portal/b/${d.linkCode}`,
-                tag: `${d.kind}-${d.refId}`,
-                refType: d.kind,
-                refId: String(d.refId),
-            })
-            : Promise.resolve({ status: "no-person" as const, messageId: null }),
+        personId == null
+            ? Promise.resolve({ status: "no-person", messageId: null })
+            : d.queuePush
+              ? queuePush(personId)
+              : sendPushToPerson(personId, pushPayload(d)),
         sendWhatsApp(d.kind, d.linkCode, mobile, d.values, d.headerImage),
     ]);
     if (mobile && wa.messageId) {
-        await recordBillMessage({ mobile10: mobile, externalId: wa.messageId, billKind: d.claimKind ?? d.kind, billRefId: d.refId, body: d.summary });
+        // The WhatsApp went: a failed copy into Messages must not read as a failed send.
+        await recordBillMessage({ mobile10: mobile, externalId: wa.messageId, billKind: d.claimKind ?? d.kind, billRefId: d.refId, body: d.summary })
+            .catch((e) => console.error(`[notify-bill] ${d.kind} ${d.refId}: not copied into Messages`, e));
     }
     return { mobile, push, wa };
+}
+
+/** The app notification for a document — sent now, or later by the office for a counter. */
+function pushPayload(d: { kind: string; refId: number; linkCode: string; push: { title: string; body: string } }): PushPayload {
+    return { title: d.push.title, body: d.push.body, url: `/portal/b/${d.linkCode}`, tag: `${d.kind}-${d.refId}`, refType: d.kind, refId: String(d.refId) };
+}
+
+/** Queued only when the customer has a phone that can show it; unsure → queued. */
+async function queuePush(personId: number): Promise<{ status: string; messageId: null }> {
+    const subs = await db().pushSubscription.count({ where: { personId } }).catch(() => 1);
+    return { status: subs ? "queued" : "no-subscription", messageId: null };
+}
+
+/** For the office draining a counter's queue: the same notification, rebuilt
+ *  from the document. Null when the document no longer has anyone to tell. */
+export async function queuedPushPayload(kind: string, refId: number): Promise<{ personId: number; payload: PushPayload } | null> {
+    const input =
+        kind === "REPAIR_RECEIVED" || kind === "REPAIR_READY" ? await buildRepair(kind, refId)
+        : kind === "DEAL_CREATED" ? await buildDeal(refId)
+        : kind === "HELP_CREATED" ? await buildHelp(refId)
+        : VOUCHER_KINDS.has(kind) ? await buildVoucher(kind as WaTemplateKind, refId)
+        : null;
+    if (!input || "status" in input || input.personId == null) return null;
+    return { personId: input.personId, payload: pushPayload(input) };
 }
 
 async function sendWhatsApp(kind: WaAnyKind, linkCode: string, mobile: string | null, values: WaFieldValues, headerImage?: string): Promise<WaOutcome> {
@@ -560,7 +624,7 @@ export type TicketCustomer = {
  *  else the deal's or help ticket's person / company / typed phone. */
 export async function loadTicketCustomer(ticketId: number): Promise<TicketCustomer | null> {
     const party = { select: { id: true, name: true, phones: phonesSelect, emails: emailsSelect } } as const;
-    const t = await prisma.ticket.findUnique({
+    const t = await db().ticket.findUnique({
         where: { id: ticketId },
         select: {
             title: true,
@@ -601,7 +665,7 @@ export async function loadTicketCustomer(ticketId: number): Promise<TicketCustom
  *  goes; once per (template, ticket). No app notification. Repair received /
  *  ready go through notifyRepair instead (it adds the app notification). */
 export async function notifyTicketTemplate(kind: WaAnyKind, ticketId: number, mode: SendMode = {}): Promise<NotifyResult> {
-    if (IS_COUNTER_PC) return askOffice({ what: "ticket-wa", kind, id: ticketId }, { staffWaiting: mode.manual });
+    if (!sendsHere()) return askOffice({ what: "ticket-wa", kind, id: ticketId }, { staffWaiting: mode.manual });
     try {
         // The picker lists every template; what cannot work from a ticket is refused here, with the reason.
         if (hasImageHeader(kind)) return { status: "skipped", reason: "a UPI payment request needs its own QR — send it from POS" };
@@ -611,7 +675,7 @@ export async function notifyTicketTemplate(kind: WaAnyKind, ticketId: number, mo
         if (!c) return { status: "skipped", reason: "no customer" };
         if (!pickMobile(c.phones)) return { status: "skipped", reason: "no customer mobile" };
         const values = c.values;
-        return await deliver({
+        return await untilClaimed(() => deliver({
             kind,
             claimKind: ticketClaimKind(kind),
             refId: ticketId,
@@ -621,7 +685,7 @@ export async function notifyTicketTemplate(kind: WaAnyKind, ticketId: number, mo
             values,
             push: { title: "", body: "" },
             summary: fillBody(approved.draft.body, values).slice(0, 200),
-        });
+        }), mode);
     } catch (e) {
         console.error(`[notify-template] ${kind} ticket ${ticketId} failed`, e);
         return { status: "skipped", reason: "error" };
@@ -654,14 +718,14 @@ let groupCache: { at: number; byId: Map<number, { parentId: number | null; name:
 /** Is this ledger a supplier (under Sundry Creditors)? The inbound webhook drops their messages. */
 export async function isSupplierAccount(accountId: number | null | undefined): Promise<boolean> {
     if (accountId == null) return false;
-    const acc = await prisma.account.findUnique({ where: { id: accountId }, select: { groupId: true } });
+    const acc = await db().account.findUnique({ where: { id: accountId }, select: { groupId: true } });
     return isUnderGroup(acc?.groupId ?? null, ACCOUNT_GROUPS.SUNDRY_CREDITORS);
 }
 
 async function isUnderGroup(groupId: number | null, groupName: string): Promise<boolean> {
     if (groupId == null) return false;
     if (!groupCache || Date.now() - groupCache.at > 300_000) {
-        const rows = await prisma.accountGroup.findMany({ select: { id: true, parentId: true, name: true } });
+        const rows = await db().accountGroup.findMany({ select: { id: true, parentId: true, name: true } });
         groupCache = { at: Date.now(), byId: new Map(rows.map((r) => [r.id, { parentId: r.parentId, name: r.name }])) };
     }
     const seen = new Set<number>();
