@@ -163,19 +163,28 @@ model InvBrand {
 
 model InvWarrantyTerm {
   id           Int      @id @default(autoincrement())
+  /// Not unique: two "2 Years" terms may differ by type or extra condition.
   name         String
   description  String?
-  /// Coverage duration in days. 0 / null = no fixed duration (e.g. "lifetime" or
-  /// "testing only"). Days chosen over months so terms can express short DOA /
-  /// RMA windows (e.g. 7-day replacement) and long manufacturer warranties
-  /// (e.g. 1825 = 5 years) in the same unit. See memory todo_warranty_redesign
-  /// for the planned full redesign (provider / coverage / service-mode enums).
+  /// Total coverage in days from sale. 0 / null = no fixed duration (e.g.
+  /// "lifetime"). Days, so short DOA windows and 5-year terms share one unit.
   durationDays Int?
+  /// Who honours the claim. COMBINED = the shop for the first `sellerDays`,
+  /// then the manufacturer up to `durationDays`. The printed condition text per
+  /// type lives on the print template (warranty*Text), not here.
+  warrantyType WarrantyType @default(SELLER)
+  /// COMBINED only: the shop's own part, in days from sale.
+  sellerDays   Int?
+  /// Printed after the type's standard condition, for this term only.
+  extraCondition String?
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   products InvProduct[]
+  /// Sale lines sold under this term (frozen at sale time). Once any exists the
+  /// term's type / days / extra condition are locked, and it cannot be deleted.
+  saleLines VoucherInventoryLine[]
 }
 
 /// Category-specific attribute definitions — drives the "attr" token in naming
@@ -805,6 +814,11 @@ model VoucherInventoryLine {
   /// bill shows the barcode line + the "Counter discount" (barcode − effective)
   /// without re-reading the product or re-deriving the tag (prices/bands drift).
   savedSalePricePaise Int?
+  /// The product's warranty term at sale time (SALE / POS / ONLINE_INVOICE), so
+  /// a reprint shows the warranty it was sold with even after the product moves
+  /// to another term. Null on older bills and on every other voucher type.
+  warrantyTermId      Int?
+  warrantyTerm        InvWarrantyTerm? @relation(fields: [warrantyTermId], references: [id], onDelete: Restrict)
   discountPct         Decimal          @default(0) @db.Decimal(5, 2)
   discountAmt         Decimal          @default(0) @db.Decimal(14, 2)
   taxRate             Decimal          @default(0) @db.Decimal(5, 2)
@@ -816,6 +830,7 @@ model VoucherInventoryLine {
 
   @@index([universalVoucherId])
   @@index([productId])
+  @@index([warrantyTermId])
 }
 
 /// Immutable audit trail — one row per product per voucher line posted.

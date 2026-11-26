@@ -29,6 +29,7 @@ import {
     type MilestoneTier,
 } from "@/modules/loyalty/lib";
 import { loadProtectedProductIds } from "@/modules/retention/lib/protection";
+import { stampWarrantyTerms } from "@/modules/inventory/lib/warrantyStamp";
 
 // POST /api/ecommerce/orders/[id]/invoice
 //
@@ -407,7 +408,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                 },
             });
             await tx.voucherInventoryLine.createMany({
-                data: computedLines.map((l) => ({
+                data: await stampWarrantyTerms(tx, "ONLINE_INVOICE", computedLines.map((l) => ({
                     universalVoucherId: spineId,
                     productId:   l.productId,
                     description: l.description,
@@ -421,7 +422,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                     freeQty:     l.freeQty,
                     mrpPaise:            l.mrpPaise,
                     savedSalePricePaise: l.savedSalePricePaise,
-                })),
+                }))),
             });
 
             // ── GL + stock OUT in one enginePost (ONLINE_INVOICE is a fixed-

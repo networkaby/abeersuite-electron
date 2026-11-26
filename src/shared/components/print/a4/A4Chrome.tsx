@@ -8,6 +8,7 @@ import { QrSvg } from "@/shared/components/print/QrSvg";
 import { gstinDerivedStateCode } from "@/shared/lib/gst/computeGstSplit";
 import { stateNameForCode } from "@/shared/lib/gst/indianStates";
 import { DEPOSIT_SLIP_KINDS, type A4ChromeProps } from "@/shared/components/print/a4/a4Shared";
+import { warrantyItemsLabel } from "@/shared/lib/warranty/warrantyTerms";
 
 /** Template-driven letterhead (logo · brand · address · GSTIN · phone) + banner. */
 export function A4Header({ template, sample }: A4ChromeProps) {
@@ -99,9 +100,22 @@ export function A4Header({ template, sample }: A4ChromeProps) {
 }
 
 /** Template-driven footer chrome (notes · terms · signature · footer line · barcode). */
-export function A4Footer({ template }: A4ChromeProps) {
+export function A4Footer({ template, sample }: A4ChromeProps) {
     return (
         <div className="footer-block">
+            {/* Warranty — the bill's items grouped by the warranty they were sold
+                 with, by their row number in the goods table. Sale bills only;
+                 nothing prints when no line carries a term. */}
+            {template.showWarranty && sample.warranty && sample.warranty.length > 0 && (
+                <div className="terms">
+                    <span className="bold">Warranty:</span>
+                    {sample.warranty.map((g) => (
+                        <div key={g.items.join(",")}>
+                            <span className="bold">{warrantyItemsLabel(g.items)}</span> — {g.label}.{g.condition ? ` ${g.condition}` : ""}
+                        </div>
+                    ))}
+                </div>
+            )}
             {/* 7 — Terms + signature + footer.
                  No narration here by design: the voucher narration is internal
                  bookkeeping text and never goes on a customer document (Tally

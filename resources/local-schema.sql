@@ -150,6 +150,17 @@ ALTER TYPE "UserScope" ADD VALUE IF NOT EXISTS 'ORG' AFTER 'REGION';
 
 -- CreateEnum
 DO $$ BEGIN
+    CREATE TYPE "WarrantyType" AS ENUM ('SELLER', 'MANUFACTURER', 'COMBINED', 'NONE');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+ALTER TYPE "WarrantyType" ADD VALUE IF NOT EXISTS 'SELLER';
+ALTER TYPE "WarrantyType" ADD VALUE IF NOT EXISTS 'MANUFACTURER' AFTER 'SELLER';
+ALTER TYPE "WarrantyType" ADD VALUE IF NOT EXISTS 'COMBINED' AFTER 'MANUFACTURER';
+ALTER TYPE "WarrantyType" ADD VALUE IF NOT EXISTS 'NONE' AFTER 'COMBINED';
+
+-- CreateEnum
+DO $$ BEGIN
     CREATE TYPE "WarrantyStatus" AS ENUM ('NONE', 'ACTIVE', 'VOID', 'CLAIMED');
 EXCEPTION
     WHEN duplicate_object THEN NULL;
@@ -2017,6 +2028,12 @@ CREATE TABLE IF NOT EXISTS "VoucherPrintTemplate" (
     "showBankThermal" BOOLEAN NOT NULL DEFAULT false,
     "showPartyBalance" BOOLEAN NOT NULL DEFAULT false,
     "showPartyBalanceThermal" BOOLEAN NOT NULL DEFAULT false,
+    "showWarranty" BOOLEAN NOT NULL DEFAULT true,
+    "showWarrantyThermal" BOOLEAN NOT NULL DEFAULT true,
+    "warrantySellerText" TEXT NOT NULL DEFAULT '',
+    "warrantyManufacturerText" TEXT NOT NULL DEFAULT '',
+    "warrantyCombinedText" TEXT NOT NULL DEFAULT '',
+    "warrantyNoneText" TEXT NOT NULL DEFAULT '',
     "showTicket" BOOLEAN NOT NULL DEFAULT true,
     "showTicketThermal" BOOLEAN NOT NULL DEFAULT true,
     "showTicketTl" BOOLEAN NOT NULL DEFAULT true,
@@ -2091,6 +2108,12 @@ ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showBank" BOOLEAN N
 ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showBankThermal" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showPartyBalance" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showPartyBalanceThermal" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showWarranty" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showWarrantyThermal" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "warrantySellerText" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "warrantyManufacturerText" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "warrantyCombinedText" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "warrantyNoneText" TEXT NOT NULL DEFAULT '';
 ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showTicket" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showTicketThermal" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showTicketTl" BOOLEAN NOT NULL DEFAULT true;
@@ -2956,6 +2979,9 @@ CREATE TABLE IF NOT EXISTS "InvWarrantyTerm" (
     "name" TEXT NOT NULL,
     "description" TEXT,
     "durationDays" INTEGER,
+    "warrantyType" "WarrantyType" NOT NULL DEFAULT 'SELLER',
+    "sellerDays" INTEGER,
+    "extraCondition" TEXT,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -2968,6 +2994,11 @@ ALTER TABLE "InvWarrantyTerm" ADD COLUMN IF NOT EXISTS "description" TEXT;
 ALTER TABLE "InvWarrantyTerm" ALTER COLUMN "description" DROP NOT NULL;
 ALTER TABLE "InvWarrantyTerm" ADD COLUMN IF NOT EXISTS "durationDays" INTEGER;
 ALTER TABLE "InvWarrantyTerm" ALTER COLUMN "durationDays" DROP NOT NULL;
+ALTER TABLE "InvWarrantyTerm" ADD COLUMN IF NOT EXISTS "warrantyType" "WarrantyType" NOT NULL DEFAULT 'SELLER';
+ALTER TABLE "InvWarrantyTerm" ADD COLUMN IF NOT EXISTS "sellerDays" INTEGER;
+ALTER TABLE "InvWarrantyTerm" ALTER COLUMN "sellerDays" DROP NOT NULL;
+ALTER TABLE "InvWarrantyTerm" ADD COLUMN IF NOT EXISTS "extraCondition" TEXT;
+ALTER TABLE "InvWarrantyTerm" ALTER COLUMN "extraCondition" DROP NOT NULL;
 ALTER TABLE "InvWarrantyTerm" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "InvWarrantyTerm" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE "InvWarrantyTerm" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
@@ -3428,6 +3459,7 @@ CREATE TABLE IF NOT EXISTS "VoucherInventoryLine" (
     "rate" DECIMAL(14,2) NOT NULL,
     "mrpPaise" INTEGER,
     "savedSalePricePaise" INTEGER,
+    "warrantyTermId" INTEGER,
     "discountPct" DECIMAL(5,2) NOT NULL DEFAULT 0,
     "discountAmt" DECIMAL(14,2) NOT NULL DEFAULT 0,
     "taxRate" DECIMAL(5,2) NOT NULL DEFAULT 0,
@@ -3453,6 +3485,8 @@ ALTER TABLE "VoucherInventoryLine" ADD COLUMN IF NOT EXISTS "mrpPaise" INTEGER;
 ALTER TABLE "VoucherInventoryLine" ALTER COLUMN "mrpPaise" DROP NOT NULL;
 ALTER TABLE "VoucherInventoryLine" ADD COLUMN IF NOT EXISTS "savedSalePricePaise" INTEGER;
 ALTER TABLE "VoucherInventoryLine" ALTER COLUMN "savedSalePricePaise" DROP NOT NULL;
+ALTER TABLE "VoucherInventoryLine" ADD COLUMN IF NOT EXISTS "warrantyTermId" INTEGER;
+ALTER TABLE "VoucherInventoryLine" ALTER COLUMN "warrantyTermId" DROP NOT NULL;
 ALTER TABLE "VoucherInventoryLine" ADD COLUMN IF NOT EXISTS "discountPct" DECIMAL(5,2) NOT NULL DEFAULT 0;
 ALTER TABLE "VoucherInventoryLine" ADD COLUMN IF NOT EXISTS "discountAmt" DECIMAL(14,2) NOT NULL DEFAULT 0;
 ALTER TABLE "VoucherInventoryLine" ADD COLUMN IF NOT EXISTS "taxRate" DECIMAL(5,2) NOT NULL DEFAULT 0;
@@ -6499,6 +6533,9 @@ CREATE INDEX IF NOT EXISTS "VoucherInventoryLine_universalVoucherId_idx" ON "Vou
 CREATE INDEX IF NOT EXISTS "VoucherInventoryLine_productId_idx" ON "VoucherInventoryLine"("productId");
 
 -- CreateIndex
+CREATE INDEX IF NOT EXISTS "VoucherInventoryLine_warrantyTermId_idx" ON "VoucherInventoryLine"("warrantyTermId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "InvStockLedger_reversalOfId_key" ON "InvStockLedger"("reversalOfId");
 
 -- CreateIndex
@@ -7610,6 +7647,13 @@ END $$;
 -- AddForeignKey
 DO $$ BEGIN
     ALTER TABLE "VoucherInventoryLine" ADD CONSTRAINT "VoucherInventoryLine_productId_fkey" FOREIGN KEY ("productId") REFERENCES "InvProduct"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "VoucherInventoryLine" ADD CONSTRAINT "VoucherInventoryLine_warrantyTermId_fkey" FOREIGN KEY ("warrantyTermId") REFERENCES "InvWarrantyTerm"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;

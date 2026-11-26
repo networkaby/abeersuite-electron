@@ -128,7 +128,10 @@ export function paginateGoods(sample: ThermalReceiptSample, template: VoucherTem
     // Measured on the compressed layout: terms + bank text + QR = 51.1mm, of
     // which the QR contributes only ~6mm — it sits BESIDE the account lines, so
     // it costs just the amount it sticks out past them, not its full height.
-    const footerMm = (template.termsText ? 20 : 0);
+    // Warranty section: heading + one ~4.5mm row per group (a long condition
+    // wraps to a second row, hence the generous per-group figure).
+    const warrantyMm = template.showWarranty && sample.warranty?.length ? 5 + sample.warranty.length * 6 : 0;
+    const footerMm = (template.termsText ? 20 : 0) + warrantyMm;
     // Every sheet spends the same height on chrome AND on its own sign-off,
     // since the signature / footer / barcode now repeat per sheet. Measured off
     // the template's own flags rather than a flat guess: a template with no

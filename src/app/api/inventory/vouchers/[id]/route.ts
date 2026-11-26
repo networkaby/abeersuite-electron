@@ -26,6 +26,7 @@ import { GiftCardBalanceChangedError } from "@/modules/coupons/lib";
 import { correctClosedShiftForEdit, tillPaiseOf } from "@/modules/pos/lib/shiftCloseCorrection";
 import { shouldWriteLocal } from "@/shared/lib/prisma/counterMode";
 import { findHeldRedemptions } from "@/modules/order/lib/redemptionHold";
+import { keptWarrantyTerms, stampWarrantyTerms } from "@/modules/inventory/lib/warrantyStamp";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -589,6 +590,14 @@ export async function PATCH(req: Request, { params }: Params) {
             // ────────────────────────────────────────────────────────────
             // PHASE 2 — Apply the user's edits (header + lines)
             // ────────────────────────────────────────────────────────────
+            // The warranty each product was sold with survives the rewrite below.
+            const keptTerms = computedLines
+                ? keptWarrantyTerms(await tx.voucherInventoryLine.findMany({
+                    where: { universalVoucherId: existing.universalVoucherId ?? -1 },
+                    select: { productId: true, warrantyTermId: true },
+                    orderBy: { id: "asc" },
+                }))
+                : undefined;
             if (computedLines) {
                 await tx.voucherInventoryLine.deleteMany({ where: { universalVoucherId: existing.universalVoucherId ?? -1 } });
             }
@@ -666,7 +675,7 @@ export async function PATCH(req: Request, { params }: Params) {
             // nothing to write back.
             if (computedLines?.length) {
                 await tx.voucherInventoryLine.createMany({
-                    data: computedLines.map((l) => ({
+                    data: await stampWarrantyTerms(tx, existing.universalVoucher?.type, computedLines.map((l) => ({
                         universalVoucherId: existing.universalVoucherId!,
                         productId:   l.productId,
                         description: l.description || null,
@@ -682,7 +691,7 @@ export async function PATCH(req: Request, { params }: Params) {
                         taxRate:     l.taxRate    ?? 0,
                         taxAmount:   l.taxAmount,
                         amount:      l.amount,
-                    })),
+                    })), keptTerms),
                 });
             }
 

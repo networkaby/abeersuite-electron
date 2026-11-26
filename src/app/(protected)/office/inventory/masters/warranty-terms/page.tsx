@@ -4,15 +4,26 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, ShieldCheck } from "lucide-react";
+import { Plus, Pencil, Trash2, ShieldCheck, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { NumericInput } from "@/shared/components/NumericInput";
 import { useDeleteWithConfirm, useListSearch } from "@/shared/hooks";
 import { TableEmptyRow } from "@/shared/components/DataTableStates";
 import { ListSearchInput } from "@/shared/components/ListSearchInput";
+import {
+    checkWarrantyShape,
+    formatWarrantyDaysLong,
+    isWarrantyType,
+    WARRANTY_TYPE_LABEL,
+    WARRANTY_TYPES,
+    warrantyTermLabel,
+    type WarrantyTypeValue,
+} from "@/shared/lib/warranty/warrantyTerms";
 import {
     Table,
     TableBody,
@@ -27,33 +38,50 @@ type Row = {
     name: string;
     description: string | null;
     durationDays: number | null;
+    warrantyType: WarrantyTypeValue;
+    sellerDays: number | null;
+    extraCondition: string | null;
+    isActive: boolean;
+    /** Sale lines that froze this term — its printed part is locked when > 0. */
+    usedOnBills: number;
+};
+
+type Form = {
+    name: string;
+    description: string;
+    warrantyType: WarrantyTypeValue;
+    durationDays: string;
+    sellerDays: string;
+    extraCondition: string;
     isActive: boolean;
 };
 
-const empty = { name: "", description: "", durationDays: "", isActive: true };
+const empty: Form = {
+    name: "", description: "", warrantyType: "SELLER", durationDays: "", sellerDays: "", extraCondition: "", isActive: true,
+};
 
-/// Display a day count as "Nd" / "Nm" / "Ny" depending on what divides cleanly.
-/// Examples: 7 → "7d", 30 → "1m", 90 → "3m", 365 → "1y", 1825 → "5y".
-function formatDays(days: number | null): string {
-    if (days == null || days === 0) return "—";
-    if (days % 365 === 0) return `${days / 365}y`;
-    if (days % 30 === 0) return `${days / 30}m`;
-    return `${days}d`;
-}
+const TYPE_HINT: Record<WarrantyTypeValue, string> = {
+    SELLER:       "The shop handles the claim.",
+    MANUFACTURER: "The brand's service centre handles the claim.",
+    COMBINED:     "The shop for the seller period, then the brand up to the total.",
+    NONE:         "Printed as \"No warranty\" on the bill.",
+};
+
+const toDays = (s: string): number | null => (s.trim() === "" ? null : parseInt(s, 10));
 
 export default function InventoryWarrantyTermsPage() {
     const [rows, setRows] = useState<Row[]>([]);
-    const { query, setQuery, filtered } = useListSearch(rows, (r) => `${r.name} ${r.description ?? ""}`);
+    const { query, setQuery, filtered } = useListSearch(rows, (r) => `${r.name} ${r.description ?? ""} ${WARRANTY_TYPE_LABEL[r.warrantyType] ?? ""}`);
     const [loading, setLoading] = useState(true);
     const [adding, setAdding] = useState(false);
     const [editId, setEditId] = useState<number | null>(null);
-    const [form, setForm] = useState(empty);
+    const [form, setForm] = useState<Form>(empty);
     const [saving, setSaving] = useState(false);
 
     const load = () => {
         axios
             .get<Row[]>("/api/inventory/warranty-terms")
-            .then((r) => setRows(r.data))
+            .then((r) => setRows(r.data.map((t) => ({ ...t, warrantyType: isWarrantyType(t.warrantyType) ? t.warrantyType : "SELLER" }))))
             .catch(() => toast.error("Failed to load warranty terms"))
             .finally(() => setLoading(false));
     };
@@ -63,6 +91,10 @@ export default function InventoryWarrantyTermsPage() {
     }, []);
 
     useRealtimeTopics(["catalogue"], load);
+
+    const editing = editId != null ? rows.find((r) => r.id === editId) ?? null : null;
+    // A term on any bill keeps its printed part — those bills reprint from it.
+    const locked = (editing?.usedOnBills ?? 0) > 0;
 
     const cancel = () => {
         setAdding(false);
@@ -75,10 +107,13 @@ export default function InventoryWarrantyTermsPage() {
             toast.error("Name is required");
             return;
         }
-        const dd = form.durationDays.trim();
-        const durationDays = dd === "" ? null : parseInt(dd, 10);
-        if (durationDays != null && (!Number.isFinite(durationDays) || durationDays < 0)) {
-            toast.error("Duration days must be a non-negative number");
+        const shape = checkWarrantyShape({
+            warrantyType: form.warrantyType,
+            durationDays: toDays(form.durationDays),
+            sellerDays:   toDays(form.sellerDays),
+        });
+        if ("error" in shape) {
+            toast.error(shape.error);
             return;
         }
         setSaving(true);
@@ -86,8 +121,12 @@ export default function InventoryWarrantyTermsPage() {
             const payload = {
                 name: form.name.trim(),
                 description: form.description.trim() === "" ? null : form.description.trim(),
-                durationDays,
                 isActive: form.isActive,
+                // A used term sends only what it may still change.
+                ...(locked ? {} : {
+                    ...shape.value,
+                    extraCondition: form.extraCondition.trim() === "" ? null : form.extraCondition.trim(),
+                }),
             };
             if (adding) {
                 await axios.post("/api/inventory/warranty-terms", payload);
@@ -112,6 +151,9 @@ export default function InventoryWarrantyTermsPage() {
         onSuccess: () => load(),
     });
 
+    const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => ({ ...f, [k]: v }));
+    const t = form.warrantyType;
+
     return (
         <div className="flex h-full flex-col gap-4 overflow-hidden p-6">
             <div className="flex flex-none flex-wrap items-center justify-between gap-4">
@@ -134,30 +176,98 @@ export default function InventoryWarrantyTermsPage() {
                     <div className="grid gap-3 sm:grid-cols-2">
                         <div className="space-y-2 sm:col-span-2">
                             <Label>Name</Label>
-                            <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+                            <Input value={form.name} onChange={(e) => set("name", e.target.value)} />
                         </div>
+
                         <div className="space-y-2 sm:col-span-2">
-                            <Label>Description</Label>
-                            <Textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={3} />
+                            <Label>Warranty type</Label>
+                            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Warranty type">
+                                {WARRANTY_TYPES.map((wt) => (
+                                    <Button
+                                        key={wt}
+                                        type="button"
+                                        size="sm"
+                                        role="radio"
+                                        aria-checked={t === wt}
+                                        variant={t === wt ? "default" : "outline"}
+                                        disabled={locked}
+                                        onClick={() => set("warrantyType", wt)}
+                                    >
+                                        {WARRANTY_TYPE_LABEL[wt]}
+                                    </Button>
+                                ))}
+                            </div>
+                            <p className="text-xs text-muted-foreground">{TYPE_HINT[t]}</p>
                         </div>
-                        <div className="space-y-2">
-                            <Label>Duration (days)</Label>
-                            <Input
-                                inputMode="numeric"
-                                placeholder="e.g. 7, 30, 365, 1825"
-                                value={form.durationDays}
-                                onChange={(e) => setForm((f) => ({ ...f, durationDays: e.target.value }))}
+
+                        {t === "COMBINED" ? (
+                            <div className="space-y-2">
+                                <Label>Seller period (days)</Label>
+                                <NumericInput
+                                    mode="digits"
+                                    min={1}
+                                    max={36500}
+                                    placeholder="365"
+                                    value={form.sellerDays}
+                                    onValueChange={(v) => set("sellerDays", v)}
+                                    disabled={locked}
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Shop handles claims{form.sellerDays ? ` · ${formatWarrantyDaysLong(toDays(form.sellerDays))}` : ""}.
+                                </p>
+                            </div>
+                        ) : null}
+                        {t !== "NONE" ? (
+                            <div className="space-y-2">
+                                <Label>{t === "COMBINED" ? "Total period (days)" : "Duration (days)"}</Label>
+                                <NumericInput
+                                    mode="digits"
+                                    min={0}
+                                    max={36500}
+                                    placeholder="e.g. 7, 30, 365, 1825"
+                                    value={form.durationDays}
+                                    onValueChange={(v) => set("durationDays", v)}
+                                    disabled={locked}
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    {form.durationDays && toDays(form.durationDays)
+                                        ? `${formatWarrantyDaysLong(toDays(form.durationDays))} from sale.`
+                                        : "Days from sale. Blank = lifetime / no fixed period."}
+                                </p>
+                            </div>
+                        ) : null}
+
+                        <div className="space-y-2 sm:col-span-2">
+                            <Label>Extra condition (optional)</Label>
+                            <Textarea
+                                value={form.extraCondition}
+                                onChange={(e) => set("extraCondition", e.target.value)}
+                                rows={2}
+                                disabled={locked}
+                                placeholder="Printed after the type's standard condition, for this term only."
                             />
                             <p className="text-xs text-muted-foreground">
-                                Days from sale. Leave blank for lifetime / no-warranty / testing-only terms.
+                                The standard condition for each type is set in Settings → Print templates.
                             </p>
                         </div>
-                        <div className="flex items-end">
-                            <label className="flex items-center gap-2 text-sm">
-                                <input type="checkbox" checked={form.isActive} onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))} />
-                                Active
-                            </label>
+
+                        <div className="space-y-2 sm:col-span-2">
+                            <Label>Description (internal)</Label>
+                            <Textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={2} />
                         </div>
+
+                        {locked ? (
+                            <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400 sm:col-span-2">
+                                <Lock className="size-4 shrink-0" aria-hidden />
+                                On {editing?.usedOnBills} bill line{editing?.usedOnBills === 1 ? "" : "s"}: type, days and extra condition are locked.
+                                Create a new term for a new policy.
+                            </div>
+                        ) : null}
+
+                        <label className="flex items-center gap-2 text-sm">
+                            <Checkbox checked={form.isActive} onCheckedChange={(v) => set("isActive", v === true)} />
+                            Active
+                        </label>
                     </div>
                     <div className="flex gap-2">
                         <Button type="button" onClick={save} disabled={saving}>
@@ -175,6 +285,7 @@ export default function InventoryWarrantyTermsPage() {
                     <TableHeader className="sticky top-0 z-20 bg-background [&_th]:bg-background [&_tr]:border-b [&_th]:shadow-[inset_0_-1px_0_var(--border)]">
                         <TableRow>
                             <TableHead>Name</TableHead>
+                            <TableHead>Type</TableHead>
                             <TableHead className="text-right">Duration</TableHead>
                             <TableHead className="text-right"> </TableHead>
                         </TableRow>
@@ -182,25 +293,36 @@ export default function InventoryWarrantyTermsPage() {
                     <TableBody>
                         {loading ? (
                             <TableRow>
-                                <TableCell colSpan={3} className="text-muted-foreground">
+                                <TableCell colSpan={4} className="text-muted-foreground">
                                     Loading…
                                 </TableCell>
                             </TableRow>
                         ) : rows.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={3} className="text-muted-foreground">
+                                <TableCell colSpan={4} className="text-muted-foreground">
                                     No warranty terms yet.
                                 </TableCell>
                             </TableRow>
                         ) : filtered.length === 0 ? (
-                            <TableEmptyRow colSpan={3} message={`No warranty terms match "${query.trim()}".`} />
+                            <TableEmptyRow colSpan={4} message={`No warranty terms match "${query.trim()}".`} />
                         ) : (
                             filtered.map((r) => (
                                 <TableRow key={r.id}>
-                                    <TableCell className="font-medium">{r.name}</TableCell>
+                                    <TableCell className="font-medium">
+                                        {r.name}
+                                        {r.extraCondition ? (
+                                            <span className="ml-2 text-xs font-normal text-muted-foreground">+ {r.extraCondition}</span>
+                                        ) : null}
+                                    </TableCell>
+                                    <TableCell className="text-sm">
+                                        {WARRANTY_TYPE_LABEL[r.warrantyType]}
+                                        {r.usedOnBills > 0 ? (
+                                            <Lock className="ml-1.5 inline size-3 text-muted-foreground" aria-label="Used on bills" />
+                                        ) : null}
+                                    </TableCell>
                                     <TableCell className="text-right text-muted-foreground text-sm">
-                                        {formatDays(r.durationDays)}
-                                        {r.durationDays != null && r.durationDays > 0 ? (
+                                        {r.warrantyType === "NONE" ? "—" : warrantyTermLabel(r)}
+                                        {r.durationDays != null && r.durationDays > 0 && r.warrantyType !== "NONE" ? (
                                             <span className="ml-1 text-xs opacity-70">({r.durationDays}d)</span>
                                         ) : null}
                                     </TableCell>
@@ -217,7 +339,10 @@ export default function InventoryWarrantyTermsPage() {
                                                 setForm({
                                                     name: r.name,
                                                     description: r.description ?? "",
+                                                    warrantyType: r.warrantyType,
                                                     durationDays: r.durationDays == null ? "" : String(r.durationDays),
+                                                    sellerDays: r.sellerDays == null ? "" : String(r.sellerDays),
+                                                    extraCondition: r.extraCondition ?? "",
                                                     isActive: r.isActive,
                                                 });
                                             }}

@@ -49,6 +49,7 @@ import {
     SAMPLE_PAYSLIP,
 } from "@/modules/settings/lib/voucherTemplateSamples";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { buildWarrantyGroups, type WarrantyTermLike } from "@/shared/lib/warranty/warrantyTerms";
 import { useValueChange } from "@/shared/hooks/useValueChange";
 
 interface Props {
@@ -107,7 +108,25 @@ const SHOW_HIDE_ELEMENTS: { label: string; a4: BoolTemplateKey; thermal: BoolTem
     { label: "Barcode",        a4: "showBarcode",       thermal: "showBarcodeThermal" },
     { label: "Bank details",   a4: "showBank",          thermal: "showBankThermal" },
     { label: "Party balance",  a4: "showPartyBalance",  thermal: "showPartyBalanceThermal" },
+    // Sale bills only (WARRANTY_KINDS) — items grouped by warranty type.
+    { label: "Warranty section", a4: "showWarranty",    thermal: "showWarrantyThermal" },
 ];
+
+// Only the customer sale bills freeze a warranty term on their lines.
+const WARRANTY_KINDS = new Set<VoucherTemplateKind>(["SALE", "POS", "ONLINE_INVOICE"]);
+// One of each printed shape, cycled over the preview's sample lines.
+const SAMPLE_WARRANTY_TERMS: WarrantyTermLike[] = [
+    { durationDays: 730, warrantyType: "MANUFACTURER" },
+    { durationDays: 730, warrantyType: "COMBINED", sellerDays: 365 },
+    { durationDays: 365, warrantyType: "SELLER" },
+    { durationDays: null, warrantyType: "NONE" },
+];
+const WARRANTY_TEXT_FIELDS = [
+    { key: "warrantySellerText",       label: "Seller warranty",       hint: "Shop handles the claim." },
+    { key: "warrantyManufacturerText", label: "Manufacturer warranty", hint: "Brand's service centre handles the claim." },
+    { key: "warrantyCombinedText",     label: "Combined (seller, then manufacturer)", hint: "The bill already says how long the seller part is." },
+    { key: "warrantyNoneText",         label: "No warranty",           hint: "Optional, e.g. \"No return or replacement.\"" },
+] as const;
 
 // Service Shipping Label meta fields — its own row set with a switch per format:
 // Sheet (A4/A5/A6) · Thermal (80mm) · TL (Thermal Label 100×50).
@@ -266,12 +285,17 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
     const parcelLabelData = { ...SAMPLE_PARCEL_LABEL,   from: labelSender(mergedPreview), footer: labelFooter(mergedPreview) };
     const labelData       = { ...SAMPLE_SHIPPING_LABEL, from: labelSender(mergedPreview), footer: labelFooter(mergedPreview) };
     const labelFields     = mergedPreview;
+    const isWarrantyKind = WARRANTY_KINDS.has(selectedKind);
     const previewSample = bespokeBody
         ? { ...sample, lines: [], subtotal: null, taxAmount: null, total: null, discounts: null, hsnSummary: null }
-        : sample;
+        : isWarrantyKind
+            // Sample warranty section, from the condition texts being edited.
+            ? { ...sample, warranty: buildWarrantyGroups(sample.lines.map((_, i) => SAMPLE_WARRANTY_TERMS[i % SAMPLE_WARRANTY_TERMS.length]), current) }
+            : sample;
+    const elementsForKind = isWarrantyKind ? SHOW_HIDE_ELEMENTS : SHOW_HIDE_ELEMENTS.filter((e) => e.a4 !== "showWarranty");
     const visibleElements = (() => {
-        if (MONEY_KINDS.has(selectedKind)) return SHOW_HIDE_ELEMENTS.filter((e) => !MONEY_HIDDEN_ELEMENTS.has(e.a4));
-        if (!BESPOKE_KINDS.has(selectedKind)) return SHOW_HIDE_ELEMENTS;
+        if (MONEY_KINDS.has(selectedKind)) return elementsForKind.filter((e) => !MONEY_HIDDEN_ELEMENTS.has(e.a4));
+        if (!BESPOKE_KINDS.has(selectedKind)) return elementsForKind;
         // The parcel label reads no show/hide flag at all (sender, receiver,
         // order, courier and payment always print) — no inert rows.
         if (isParcelLabel) return [];
@@ -287,7 +311,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
         // The slip has its own Sent/Received/Prepared toggles, so drop the
         // generic Signature row for it (it never drove the slip anyway).
         if (isSlip) hidden.add("showSignature");
-        return SHOW_HIDE_ELEMENTS.filter((e) => !hidden.has(e.a4));
+        return elementsForKind.filter((e) => !hidden.has(e.a4));
     })();
 
     function setField<K extends keyof VoucherTemplateDefaults>(
@@ -640,6 +664,25 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
                                     </div>
                                 ))}
                             </div>
+                        </fieldset>
+                    )}
+
+                    {/* Warranty condition per type — printed after each group of
+                        items in the bill's Warranty section. */}
+                    {isWarrantyKind && (
+                        <fieldset className="space-y-2.5">
+                            <legend className="text-xs uppercase tracking-wide font-medium text-muted-foreground">
+                                Warranty conditions
+                            </legend>
+                            {WARRANTY_TEXT_FIELDS.map((f) => (
+                                <Field key={f.key} label={f.label} hint={f.hint}>
+                                    <Textarea
+                                        rows={2}
+                                        value={current[f.key]}
+                                        onChange={(e) => setField(f.key, e.target.value)}
+                                    />
+                                </Field>
+                            ))}
                         </fieldset>
                     )}
 

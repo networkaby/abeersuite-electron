@@ -7,6 +7,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 import { engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
+import { stampWarrantyTerms } from "@/modules/inventory/lib/warrantyStamp";
 
 // POST /api/inventory/vouchers/[id]/duplicate
 //
@@ -92,8 +93,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 select: { id: true, universalVoucher: { select: { voucherNo: true, type: true } } },   // 5D-6 + 5D-11 type
             });
             // Phase 5 5C: goods lines hang off the new spine.
+            // A duplicate is a new bill: today's warranty terms, not the source's.
             await tx.voucherInventoryLine.createMany({
-                data: sourceLines.map((l) => ({
+                data: await stampWarrantyTerms(tx, voucher.universalVoucher?.type, sourceLines.map((l) => ({
                     universalVoucherId: spineId,
                     productId:   l.productId,
                     description: l.description,
@@ -106,7 +108,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     taxRate:     l.taxRate,
                     taxAmount:   l.taxAmount,
                     amount:      l.amount,
-                })),
+                }))),
             });
             return { id: voucher.id, type: voucher.universalVoucher?.type, reference: voucher.universalVoucher?.voucherNo ?? formatUvNo(spineId) };
         });

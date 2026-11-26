@@ -477,6 +477,15 @@ model VoucherPrintTemplate {
   // customer's whole outstanding on a document that may be handed to anyone.
   showPartyBalance         Boolean @default(false)
   showPartyBalanceThermal  Boolean @default(false)
+  // Warranty section under the goods (sale bills): items grouped by warranty
+  // type + condition, by line number. Condition text per type is below; a
+  // term's own extraCondition is appended to it.
+  showWarranty             Boolean @default(true)
+  showWarrantyThermal      Boolean @default(true)
+  warrantySellerText       String  @default("")
+  warrantyManufacturerText String  @default("")
+  warrantyCombinedText     String  @default("")
+  warrantyNoneText         String  @default("")
 
   // Service Shipping Label meta fields — which lines print on the label's bottom
   // strip. Device defaults OFF (naming contents invites courier theft). A4 flag

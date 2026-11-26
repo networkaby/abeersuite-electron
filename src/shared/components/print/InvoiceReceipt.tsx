@@ -17,6 +17,8 @@ import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
 import { round2 } from "@/shared/lib/format";
 import { loadBillSettlementPrint } from "@/modules/accountancy/lib/billSettlementPrint";
 import { readLineText } from "@/shared/lib/print/lineDescription";
+import { buildWarrantyGroups } from "@/shared/lib/warranty/warrantyTerms";
+import { WARRANTY_PRINT_SELECT } from "@/modules/inventory/lib/warrantyStamp";
 
 // Shared invoice-print body for InvVoucher-shaped sales. Extracted so both
 // the staff print surface (`/receipt/invoice/[id]`, any voucher, full paper/
@@ -66,7 +68,11 @@ export default async function InvoiceReceipt({
     // Phase 5 5C: goods lines hang off the spine.
     const invLines = await prisma.voucherInventoryLine.findMany({
         where:   { universalVoucherId: voucherRow.universalVoucherId ?? -1 },
-        include: { product: { select: { sku: true, name: true } } },
+        include: {
+            product: { select: { sku: true, name: true } },
+            // The warranty frozen at sale time → the bill's Warranty section.
+            warrantyTerm: { select: WARRANTY_PRINT_SELECT },
+        },
     });
     // 5D-4: resolve the party ledger from the spine's partyAccountId.
     const account = voucherRow.universalVoucher?.partyAccountId != null
@@ -257,6 +263,10 @@ export default async function InvoiceReceipt({
         )
         : null;
 
+    // Items grouped by the warranty they were sold with; [] on older bills and
+    // non-sale vouchers (no frozen term), so the section simply doesn't print.
+    const warranty = buildWarrantyGroups(voucher.lines.map((l) => l.warrantyTerm), template);
+
     // NOTE: when this POS sale was overpaid, the money (tenders) + how it was
     // applied (old dues / advance) live on the separate Receipt voucher (RV-…,
     // printed via /receipt/voucher/gl/[id]) — NOT on this invoice. The invoice
@@ -311,6 +321,7 @@ export default async function InvoiceReceipt({
               }
             : null,
         hsnSummary: ladder?.hsn ?? null,
+        warranty,
         charges: extraCharges.length > 0
             ? extraCharges.map((c) => {
                 const amt = Number(c.amount);
@@ -367,6 +378,7 @@ export default async function InvoiceReceipt({
         charges:        ladder ? ladder.charges.map((c) => ({ label: c.label, amount: c.amount })) : [],
         savings:        ladder && ladder.savingsTotal > 0 ? { amount: ladder.savingsTotal, pct: ladder.savingsPct } : null,
         hsnSummary:     ladder?.hsn ?? null,
+        warranty,
     } : null;
 
     // Print rule (two ways): the thermal way (`?mode=thermal`, POS reprint /

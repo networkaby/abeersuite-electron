@@ -15,6 +15,7 @@ import { InvProductCombobox, type SelectedProduct } from "@/modules/inventory/co
 import { usePosDraftStore } from "@/store/posDraftStore";
 import { loadProductCatalog } from "@/shared/hooks";
 import { type ProductOption, type PosServiceOption, type CartLine, type Snapshot } from "@/modules/pos/lib/posDraftTypes";
+import { formatWarrantyDays } from "@/shared/lib/warranty/warrantyTerms";
 
 export interface BillProduct { productId: number; sku: string; name: string; qty: number; salePrice: number | null; }
 // `price` is tax-INCLUSIVE ₹ (PosService.defaultPricePaise convention); null = catalogue default.
@@ -51,13 +52,7 @@ function buildProductLine(p: ProductOption, qty: number): CartLine {
     const taxRate = p.taxRate ?? 0;
     const unitPrice = taxRate > 0 ? inclusive / (1 + taxRate / 100) : inclusive;
     const wt = p.warrantyTerm;
-    const warrantyLabel = wt
-        ? (wt.durationDays
-            ? (wt.durationDays % 365 === 0 ? `${wt.durationDays / 365}y`
-                : wt.durationDays % 30 === 0 ? `${wt.durationDays / 30}m`
-                    : `${wt.durationDays}d`)
-            : wt.name)
-        : null;
+    const warrantyLabel = wt ? (wt.durationDays ? formatWarrantyDays(wt.durationDays) : wt.name) : null;
     return {
         productId: p.id, sku: p.sku, name: p.name,
         qty, unitPrice, description: "",

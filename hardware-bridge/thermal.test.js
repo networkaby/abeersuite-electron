@@ -417,3 +417,18 @@ test("cut: feeds only to the cutter, no fixed blank lines before it", async () =
         assert.ok(!slip.includes(Buffer.from([0x1b, 0x64, 0x04])), "no ESC d 4 feed");
     }
 });
+
+test("POS: warranty groups print with numbered lines; off by template or with no groups", async () => {
+    const warranty = [{ items: [1], label: "Manufacturer warranty", condition: "Claim at the brand's service centre." }];
+    const on = text(await buildPosBuffer({ ...posPayload(), warranty }));
+    assert.match(on, /Warranty/);
+    // The printer library word-wraps a long row, so check the start only.
+    assert.match(on, /Item 1 - Manufacturer warranty\. Claim at the/);
+    assert.match(on, /1\. Adapater/);
+    const none = text(await buildPosBuffer(posPayload()));
+    assert.doesNotMatch(none, /Warranty/);
+    assert.doesNotMatch(none, /1\. Adapater/);
+    const off = text(await buildPosBuffer({ ...posPayload({ showWarranty: false }), warranty }));
+    assert.doesNotMatch(off, /Item 1 -/);
+    assert.doesNotMatch(off, /1\. Adapater/);
+});

@@ -244,6 +244,20 @@ const SIGNATURE_LABEL_BY_KIND: Partial<Record<VoucherTemplateKind, string>> = {
     SHIFT_CLOSE: "Cashier Signature",
 };
 
+// Starting warranty condition per type on the customer sale bills — the same
+// wording the 20261126140000_warranty_type migration wrote onto existing rows.
+// Other kinds start blank (they never print a Warranty section).
+const WARRANTY_TEXT_KINDS: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTemplateKind>(["SALE", "POS", "ONLINE_INVOICE"]);
+function warrantyTextDefaults(kind: VoucherTemplateKind) {
+    const on = WARRANTY_TEXT_KINDS.has(kind);
+    return {
+        warrantySellerText:       on ? "Bring the item with this bill to our shop. Physical, liquid and burn damage not covered." : "",
+        warrantyManufacturerText: on ? "Claim at the brand's authorised service centre with this bill." : "",
+        warrantyCombinedText:     on ? "During the seller period bring the item with this bill to our shop; after that, claim at the brand's authorised service centre." : "",
+        warrantyNoneText:         "",
+    };
+}
+
 const TERMS_TEXT_BY_KIND: Partial<Record<VoucherTemplateKind, string>> = {
     REPAIR_TICKET: [
         "1. Please keep this receipt. It is required for device collection.",
@@ -447,6 +461,14 @@ export interface VoucherTemplateDefaults {
     // Party's running ledger balance (Previous / Closing) beside the bill's own
     // balance-due. Off by default — it discloses the customer's whole account.
     showPartyBalance: boolean;       showPartyBalanceThermal: boolean;
+    // Sale bills: the Warranty section — items grouped by warranty type +
+    // condition (src/shared/lib/warranty/warrantyTerms.ts). The four texts are the
+    // standard condition printed per type; a term may append its own.
+    showWarranty: boolean;           showWarrantyThermal: boolean;
+    warrantySellerText: string;
+    warrantyManufacturerText: string;
+    warrantyCombinedText: string;
+    warrantyNoneText: string;
     showQrCode: boolean; // dormant (not yet rendered)
     // Service Shipping Label meta fields (bottom strip). Base flag = A4/A5/A6
     // sheets; Thermal = 80mm roll; Tl = Thermal Label 100×50 (die-cut). Ignored
@@ -506,6 +528,8 @@ export function buildVoucherTemplateDefaults(kind: VoucherTemplateKind): Voucher
         showBarcode: BARCODE_KINDS.has(kind),            showBarcodeThermal: BARCODE_KINDS.has(kind),
         showBank: false,                                 showBankThermal: false,
         showPartyBalance: PARTY_BALANCE_KINDS.has(kind), showPartyBalanceThermal: PARTY_BALANCE_KINDS.has(kind),
+        showWarranty: true,                              showWarrantyThermal: true,
+        ...warrantyTextDefaults(kind),
         showQrCode: false,
         // Label meta — device hidden by default (theft), the rest shown.
         showTicket: true,                                showTicketThermal: true,          showTicketTl: true,
@@ -582,6 +606,9 @@ export type VoucherPrintTemplateRow = {
     showBarcode?: boolean | null;             showBarcodeThermal?: boolean | null;
     showBank?: boolean | null;                showBankThermal?: boolean | null;
     showPartyBalance?: boolean | null;        showPartyBalanceThermal?: boolean | null;
+    showWarranty?: boolean | null;            showWarrantyThermal?: boolean | null;
+    warrantySellerText?: string | null;       warrantyManufacturerText?: string | null;
+    warrantyCombinedText?: string | null;     warrantyNoneText?: string | null;
     // Label meta fields — optional so reads tolerate the pre-`db push` window.
     showTicket?: boolean | null;              showTicketThermal?: boolean | null;              showTicketTl?: boolean | null;
     showDate?: boolean | null;                showDateThermal?: boolean | null;                showDateTl?: boolean | null;
@@ -645,6 +672,12 @@ export function rowToVoucherTemplateDefaults(row: VoucherPrintTemplateRow): Vouc
         showBankThermal:          row.showBankThermal          ?? f.showBankThermal,
         showPartyBalance:         row.showPartyBalance         ?? f.showPartyBalance,
         showPartyBalanceThermal:  row.showPartyBalanceThermal  ?? f.showPartyBalanceThermal,
+        showWarranty:             row.showWarranty             ?? f.showWarranty,
+        showWarrantyThermal:      row.showWarrantyThermal      ?? f.showWarrantyThermal,
+        warrantySellerText:       row.warrantySellerText       ?? f.warrantySellerText,
+        warrantyManufacturerText: row.warrantyManufacturerText ?? f.warrantyManufacturerText,
+        warrantyCombinedText:     row.warrantyCombinedText     ?? f.warrantyCombinedText,
+        warrantyNoneText:         row.warrantyNoneText         ?? f.warrantyNoneText,
         showTicket:               row.showTicket               ?? f.showTicket,
         showTicketThermal:        row.showTicketThermal        ?? f.showTicketThermal,
         showTicketTl:             row.showTicketTl             ?? f.showTicketTl,
@@ -710,6 +743,7 @@ export function resolveTemplateForFormat(
         showBarcode:       t.showBarcodeThermal,
         showBank:          t.showBankThermal,
         showPartyBalance:  t.showPartyBalanceThermal,
+        showWarranty:      t.showWarrantyThermal,
         showSentBy:        t.showSentByThermal,
         showReceivedBy:    t.showReceivedByThermal,
         showPreparedBy:    t.showPreparedByThermal,

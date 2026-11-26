@@ -23,6 +23,7 @@ import SetDocumentTitle from "@/shared/components/print/SetDocumentTitle";
 import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";
 import { rupeesInWords } from "@/shared/lib/format/numberToWords";
 import { formatAmount } from "@/shared/lib/format/moneyInr";
+import { warrantyItemsLabel, type WarrantyGroup } from "@/shared/lib/warranty/warrantyTerms";
 
 export interface ThermalReceiptLine {
     description: string;
@@ -149,6 +150,10 @@ export interface ThermalReceiptSample {
     /// "incl. GST" note on the total — the slip has no rate-wise table, so
     /// nothing here is toggleable.
     hsnSummary?: ReceiptHsnRow[] | null;
+    /// Sale bills: items grouped by the warranty frozen on their lines
+    /// (buildWarrantyGroups). Printed behind the template's showWarranty; empty
+    /// or absent → no section, and the slip's lines stay unnumbered.
+    warranty?: WarrantyGroup[] | null;
     /// Buyer GSTIN — printed on the receipt for B2B tax invoices.
     partyGstin?: string | null;
     /// Buyer's state + code ("Assam, Code : 18") — printed under the Bill-To
@@ -461,6 +466,8 @@ function DefaultThermalMiddle({ template, sample }: { template: VoucherTemplateD
                     {sample.lines.map((l, i) => (
                         <tr key={i}>
                             <td>
+                                {/* Numbered only when the Warranty section refers to the lines. */}
+                                {template.showWarranty && sample.warranty?.length ? `${i + 1}. ` : ""}
                                 {l.description}
                                 {template.showLineNote && l.note && <div className="small">{l.note}</div>}
                                 {template.showMrp && sample.discounts && l.mrp != null && l.mrp > l.amount + 0.005 && (
@@ -556,6 +563,20 @@ function DefaultThermalMiddle({ template, sample }: { template: VoucherTemplateD
 function ThermalFooter({ template, sample }: { template: VoucherTemplateDefaults; sample: ThermalReceiptSample }) {
     return (
         <>
+            {template.showWarranty && sample.warranty && sample.warranty.length > 0 && (
+                <>
+                    <div className="hr" />
+                    <div className="terms">
+                        <b>Warranty</b>
+                        {sample.warranty.map((g) => (
+                            <div key={g.items.join(",")}>
+                                <b>{warrantyItemsLabel(g.items)}</b> — {g.label}.{g.condition ? ` ${g.condition}` : ""}
+                            </div>
+                        ))}
+                    </div>
+                </>
+            )}
+
             {template.termsText && (
                 <>
                     <div className="hr" />

@@ -40,6 +40,7 @@ import { parseAmt, type EditBill } from "@/modules/pos/hooks/posBilling/types";
 import { usePosShift } from "@/modules/pos/hooks/posBilling/usePosShift";
 import { usePosCatalogue } from "@/modules/pos/hooks/posBilling/usePosCatalogue";
 import { lineFloorExcl, lineHeadroom, loyaltyRedemption } from "@/modules/pos/hooks/posBilling/billMath";
+import { formatWarrantyDays } from "@/shared/lib/warranty/warrantyTerms";
 
 /** How many rows the product dropdown shows — kept constant so the list does
  *  not change height between a good query and a poor one. */
@@ -1154,13 +1155,7 @@ export function usePosBilling(opts: {
         const taxRate = p.taxRate ?? 0;
         const defaultPrice = taxRate > 0 ? inclusivePrice / (1 + taxRate / 100) : inclusivePrice;
         const warrantyLabel = p.warrantyTerm
-            ? (p.warrantyTerm.durationDays
-                ? (p.warrantyTerm.durationDays % 365 === 0
-                    ? `${p.warrantyTerm.durationDays / 365}y`
-                    : p.warrantyTerm.durationDays % 30 === 0
-                        ? `${p.warrantyTerm.durationDays / 30}m`
-                        : `${p.warrantyTerm.durationDays}d`)
-                : p.warrantyTerm.name)
+            ? (p.warrantyTerm.durationDays ? formatWarrantyDays(p.warrantyTerm.durationDays) : p.warrantyTerm.name)
             : null;
         setCart((prev) => {
             const exist = prev.find((l) => l.productId === p.id);

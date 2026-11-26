@@ -37,6 +37,7 @@ import { formatInr, round2, todayIso, toDateOnly } from "@/shared/lib/format";
 import { cleanLineNote, composeLineDescription, readLineText } from "@/shared/lib/print/lineDescription";
 import type { PartySearchAndCreateHandle } from "@/shared/components/PartySearchAndCreate";
 import { usePosDraftStore } from "@/store/posDraftStore";
+import { buildWarrantyGroups, type WarrantyTermLike } from "@/shared/lib/warranty/warrantyTerms";
 
 // The saved charge rows an edit sends back as they were — manual charges and the
 // coupon. Service rows stay on the server (the PATCH keeps the stored ones when no
@@ -400,7 +401,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             // leftover = customer advance) so the bank/UPI statement matches 1:1.
 
             const validCharges = b.charges.filter((c) => c.accountId !== null && Math.abs(parseAmt(c.amount)) >= 0.005);
-            const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; milestoneBonus: number; milestoneCoupons: string[]; loyaltyBalance: number; couponDiscount: number; couponCode: string | null; freeCouponId: number | null; freeCouponCode: string | null; freeItems: { productId: number; freeQty: number; productName: string }[]; posTemplate: VoucherTemplateDefaults; receiptPrint: VoucherBridgePayload | null; surplusCollected: number; arrearCleared: number; advanceCredited: number; receiptVoucherId: number | null; receiptVoucherRef: string | null; partyBalance: { before: string; after: string } | null } | AlreadySavedReply>("/api/pos/sale", {
+            const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; milestoneBonus: number; milestoneCoupons: string[]; loyaltyBalance: number; couponDiscount: number; couponCode: string | null; freeCouponId: number | null; freeCouponCode: string | null; freeItems: { productId: number; freeQty: number; productName: string }[]; posTemplate: VoucherTemplateDefaults; receiptPrint: VoucherBridgePayload | null; surplusCollected: number; arrearCleared: number; advanceCredited: number; receiptVoucherId: number | null; receiptVoucherRef: string | null; partyBalance: { before: string; after: string } | null; warrantyTerms: Record<number, WarrantyTermLike | null> | null } | AlreadySavedReply>("/api/pos/sale", {
                 // Same key on every Save of this bill (posDraftStore `billKey`).
                 requestKey: usePosDraftStore.getState().takeBillKey(),
                 accountId: snapshot.account.id,
@@ -579,6 +580,11 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                         charges: printLadder.charges.map((c) => ({ label: c.label, amount: c.amount })),
                         savings: printLadder.savingsTotal > 0 ? { amount: printLadder.savingsTotal, pct: printLadder.savingsPct } : null,
                         hsnSummary: printLadder.hsn,
+                        // Items grouped by the warranty the sale froze on them
+                        // (numbered on the slip) — the same groups a reprint shows.
+                        warranty: data.warrantyTerms
+                            ? buildWarrantyGroups(cart.map((l) => data.warrantyTerms?.[l.productId] ?? null), data.posTemplate)
+                            : null,
                         // Total GST embedded in the bill (goods + shipping/tax-bearing
                         // charges) — additive field, older relays ignore it.
                         taxTotal: printLadder.taxTotal,

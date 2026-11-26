@@ -233,6 +233,31 @@ function printLineNote(printer, t, note) {
     printer.tableCustom([{ text: `  ${text}`, align: "LEFT", width: 1 }]);
 }
 
+// Sale bills: the Warranty section — items grouped by the warranty frozen on
+// their lines, already built by the server (buildWarrantyGroups in
+// src/shared/lib/warranty/warrantyTerms.ts). Mirrors ThermalFooter. A template from
+// a server older than the flag carries no key — read as on; such a server also
+// sends no groups, so nothing prints.
+function hasWarranty(t, groups) {
+    return t.showWarranty !== false && Array.isArray(groups) && groups.length > 0;
+}
+function printWarranty(printer, t, groups) {
+    if (!hasWarranty(t, groups)) return;
+    printer.drawLine();
+    printer.alignLeft();
+    printer.bold(true);
+    printer.println("Warranty");
+    printer.bold(false);
+    for (const g of groups) {
+        const items = `${g.items.length === 1 ? "Item" : "Items"} ${g.items.join(", ")}`;
+        printer.println(`${items} - ${g.label}.${g.condition ? ` ${g.condition}` : ""}`);
+    }
+}
+// "1. " before each item name, only when the Warranty section refers to them.
+function lineNo(numbered, i) {
+    return numbered ? `${i + 1}. ` : "";
+}
+
 function displayDate(d) {
     return d == null ? "" : String(d);
 }
@@ -542,7 +567,7 @@ function newSlipPrinter(width, opts) {
 const PRINT_PARTY_GSTIN = false;
 
 async function buildPosBuffer(data, opts) {
-    const { invoiceNumber, date, customerName, customerPhone, customerAddress, customerGstin, lines, subtotal, discountPct, discountAmount, tax, total, receipts, balanceDue, balanceBefore, balanceAfter, branchAddress, grossAtTag, discounts, charges, savings, hsnSummary, taxTotal, template: tpl } = data;
+    const { invoiceNumber, date, customerName, customerPhone, customerAddress, customerGstin, lines, subtotal, discountPct, discountAmount, tax, total, receipts, balanceDue, balanceBefore, balanceAfter, branchAddress, grossAtTag, discounts, charges, savings, hsnSummary, taxTotal, warranty, template: tpl } = data;
 
     // Thermal-resolved POS print template (header/address/toggles/terms/footer).
     // Sent by PosScreen (via /api/pos/sale → posTemplate) and by the invoice
@@ -603,9 +628,10 @@ async function buildPosBuffer(data, opts) {
     ]);
     printer.drawLine();
 
-    for (const line of lines || []) {
+    const numbered = hasWarranty(t, warranty);
+    for (const [i, line] of (lines || []).entries()) {
         // Full name — tableCustom wraps it inside the column, like the preview.
-        const name = String(line.name || "");
+        const name = lineNo(numbered, i) + String(line.name || "");
         const qty  = Number(line.qty) || 0;
         // Ladder mode shows the public tag (barcode) total as the line amount; the
         // real per-item price stays pooled in "Counter discount" below.
@@ -706,6 +732,7 @@ async function buildPosBuffer(data, opts) {
     // as the preview.
     printReceiptsBlock(printer, { receipts, balanceDue, balanceBefore, balanceAfter }, fmtAmt, t);
 
+    printWarranty(printer, t, warranty);
     await printFooter(printer, t, invoiceNumber, "pos");
     return printer.getBuffer();
 }
@@ -1174,8 +1201,9 @@ async function buildVoucherBuffer(data, opts) {
         { text: "Amount", align: "RIGHT", width: 0.35 },
     ]);
     printer.drawLine();
-    for (const line of sample.lines || []) {
-        const name = String(line.description || "");
+    const numbered = hasWarranty(t, sample.warranty);
+    for (const [i, line] of (sample.lines || []).entries()) {
+        const name = lineNo(numbered, i) + String(line.description || "");
         printer.tableCustom([
             { text: name,                        align: "LEFT",  width: 0.5 },
             { text: String(line.quantity ?? ""), align: "RIGHT", width: 0.15 },
@@ -1269,6 +1297,7 @@ async function buildVoucherBuffer(data, opts) {
 
     // No narration on the counter slip — internal bookkeeping text (the
     // preview skips it too). Journal / money middles print their own.
+    printWarranty(printer, t, sample.warranty);
     await printFooter(printer, t, sample.reference, "voucher");
     return printer.getBuffer();
 }

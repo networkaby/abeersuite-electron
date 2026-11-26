@@ -58,6 +58,7 @@ import { findHeldRedemptions, executeRedemptions, RedemptionHoldChangedError } f
 import { loadPartyPricing } from "@/modules/pricing-strategy/lib/groupPricingServer";
 import { groupRebatesExcl, rebatedRate, ruleForGroup } from "@/modules/pricing-strategy/lib/groupPricing";
 import { knownApiError } from "@/shared/lib/api";
+import { saleWarrantyTerms, stampWarrantyTerms } from "@/modules/inventory/lib/warrantyStamp";
 // Note: branch context comes from the cashier's active shift, NOT from the
 // session cookie. This allows multiple browsers / users to bill in parallel
 // from different counters without their active-branch cookie interfering.
@@ -858,7 +859,7 @@ export async function POST(req: Request) {
             });
             // Phase 5 5C: goods lines hang off the spine.
             await tx.voucherInventoryLine.createMany({
-                data: computedLines.map((l) => ({
+                data: await stampWarrantyTerms(tx, "POS", computedLines.map((l) => ({
                     universalVoucherId: spineId,
                     productId: l.productId,
                     description: l.description,
@@ -876,7 +877,7 @@ export async function POST(req: Request) {
                     amount: l.amount,
                     mrpPaise: l.mrpPaise,
                     savedSalePricePaise: l.savedSalePricePaise,
-                })),
+                }))),
             });
 
             // ── 2. GL post (Dr Till/Bank + (optional) Dr Customer AR / Cr Sales / Cr GST) ─
@@ -1152,7 +1153,7 @@ export async function POST(req: Request) {
         // overpayment Receipt voucher (RV-…) rides along the same way, built by
         // the same helper as every other Receipt print. Display-only.
         const posTemplateP = getThermalTemplate("POS");
-        const [posTemplate, receiptPrint, ledgerBalance] = await Promise.all([
+        const [posTemplate, receiptPrint, ledgerBalance, warrantyTerms] = await Promise.all([
             posTemplateP,
             result.receiptVoucherId ? buildVoucherBridgePayload("gl", result.receiptVoucherId) : null,
             // The customer's running account for the slip's Previous / Closing
@@ -1164,12 +1165,15 @@ export async function POST(req: Request) {
                     ? partyBalanceAroundVoucher(customerAccount.id, [result.universalVoucherId, ...(result.receiptVoucherId ? [result.receiptVoucherId] : [])])
                     : null)
                 : null,
+            // The warranty each product was frozen with, for the slip's Warranty
+            // section (PosScreen groups the cart by it) — only when it prints.
+            posTemplateP.then((t) => t.showWarranty ? saleWarrantyTerms(result.universalVoucherId) : null),
         ]);
         const partyBalance = ledgerBalance
             ? { before: ledgerBalance.format(ledgerBalance.before), after: ledgerBalance.format(ledgerBalance.after) }
             : null;
         console.log(`[pos-timing] ${result.invoiceNumber}: preTx=${Math.round(_tPreTx - _t0)}ms tx=${Math.round(_tTx - _tPreTx)}ms post=${Math.round(performance.now() - _tTx)}ms total=${Math.round(performance.now() - _t0)}ms (lines=${body.lines.length})`);
-        return NextResponse.json({ ...result, posTemplate, receiptPrint, partyBalance }, { status: 201 });
+        return NextResponse.json({ ...result, posTemplate, receiptPrint, partyBalance, warrantyTerms }, { status: 201 });
     } catch (err) {
         if (err instanceof CreditLimitError) {
             return NextResponse.json({ error: err.message, code: err.code }, { status: 422 });

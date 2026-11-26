@@ -18,7 +18,9 @@ import { parseDenomJson } from "@/shared/lib/accountancy/denomJson";
 import { buildPartyDepositSlip, loadSlipDenominations } from "@/modules/accountancy/lib/partyDepositSlip";
 import { paymentInstrumentText } from "@/shared/lib/constants/accounting";
 import { partyBalanceAroundVoucher } from "@/shared/lib/accountancy/partyLedgerBalance";
-import { getThermalTemplate } from "@/shared/lib/print/voucherTemplate";
+import { getThermalTemplate, getVoucherTemplate } from "@/shared/lib/print/voucherTemplate";
+import { buildWarrantyGroups } from "@/shared/lib/warranty/warrantyTerms";
+import { carriesWarranty, WARRANTY_PRINT_SELECT } from "@/modules/inventory/lib/warrantyStamp";
 import { readLineText } from "@/shared/lib/print/lineDescription";
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
 import { computeGstSplit, gstinDerivedStateCode } from "@/shared/lib/gst/computeGstSplit";
@@ -133,7 +135,11 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
     // Phase 5 5C: goods lines hang off the spine.
     const invLines = await prisma.voucherInventoryLine.findMany({
         where:   { universalVoucherId: vRow.universalVoucherId ?? -1 },
-        include: { product: { select: { id: true, sku: true, name: true, unit: { select: { label: true } } } } },
+        include: {
+            product: { select: { id: true, sku: true, name: true, unit: { select: { label: true } } } },
+            // The warranty frozen at sale time → the bill's Warranty section.
+            warrantyTerm: { select: WARRANTY_PRINT_SELECT },
+        },
     });
     // 5D-4: resolve the party ledger from the spine's partyAccountId.
     const account = vRow.universalVoucher?.partyAccountId != null
@@ -371,6 +377,11 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
     }
     const posReturn = vType === "SALE_RETURN" && v.refVoucher?.universalVoucher?.type === "POS";
     const kind: VoucherTemplateKind = posReturn ? "POS_RETURN" : isVoucherTemplateKind(vType) ? vType : "SALE";
+    // Sale bills group their items by the warranty frozen on each line, with
+    // the kind's condition text per type. Older bills carry no term → no section.
+    if (carriesWarranty(vType) && v.lines.some((l) => l.warrantyTerm)) {
+        sample.warranty = buildWarrantyGroups(v.lines.map((l) => l.warrantyTerm), await getVoucherTemplate(kind));
+    }
     return { kind, sample, docTitle: `${vType} ${voucherDisplayNo(v.universalVoucher?.voucherNo, v.universalVoucherId)}` };
 }
 

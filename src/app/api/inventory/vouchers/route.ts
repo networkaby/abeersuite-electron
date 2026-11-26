@@ -31,6 +31,7 @@ import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recom
 import { GlPostFailedError, postVoucherInTx } from "@/modules/inventory/lib/postVoucherInTx";
 import { CreditLimitError } from "@/shared/lib/accountancy/checkCreditLimit";
 import { cleanLineNote } from "@/shared/lib/print/lineDescription";
+import { stampWarrantyTerms } from "@/modules/inventory/lib/warrantyStamp";
 
 // GET /api/inventory/vouchers?type=PURCHASE|SALE&status=DRAFT|POSTED|CANCELLED&branchId=BR-HQ|all
 //
@@ -687,7 +688,7 @@ export async function POST(req: NextRequest) {
                 // the transaction, instead of reading the same rows straight back out.
                 const createdLines = computedLines.length === 0
                     ? []
-                    : await tx.voucherInventoryLine.createManyAndReturn({ data: lineData(universalVoucherId) });
+                    : await tx.voucherInventoryLine.createManyAndReturn({ data: await stampWarrantyTerms(tx, type, lineData(universalVoucherId)) });
                 const lines = createdLines.map((l) => ({ ...l, product: productById.get(l.productId) ?? null }));
                 // Phase 5 5A: dual-write the order-pipeline link (SALES_ORDER rides
                 // the board). A spine created moments ago has no link to clear, so

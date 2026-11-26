@@ -18,6 +18,14 @@ enum UserScope {
 
 // ── Ticket enums ──────────────────────────────────────────────────────────────
 
+/// Who honours a product warranty (InvWarrantyTerm.warrantyType).
+enum WarrantyType {
+  SELLER
+  MANUFACTURER
+  COMBINED
+  NONE
+}
+
 enum WarrantyStatus {
   NONE
   ACTIVE

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { nameIsActiveSchema } from "./commonSchemas";
+import { WARRANTY_TYPES } from "@/shared/lib/warranty/warrantyTerms";
 
 /** Empty / whitespace-only → null */
 export const zOptStr = (maxLen: number) =>
@@ -117,6 +118,10 @@ export const invWarrantyTermCreateSchema = nameIsActiveSchema.extend({
     description: zOptStr(2000),
     // Days, not months. Max 100y = 36500 days. 0 / null = no fixed duration.
     durationDays: z.number().int().min(0).max(36500).nullish(),
+    warrantyType: z.enum(WARRANTY_TYPES).optional(),
+    // COMBINED only: the shop's own part, shorter than durationDays.
+    sellerDays: z.number().int().min(1).max(36500).nullish(),
+    extraCondition: zOptStr(500),
 });
 
 export const invWarrantyTermUpdateSchema = invWarrantyTermCreateSchema.partial();
