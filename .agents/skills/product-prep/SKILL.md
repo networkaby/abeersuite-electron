@@ -222,7 +222,7 @@ The server tags each line with its part ("Part 3 · …") and **a part that runs
 
 1. **Read everything**: name (the custom part is usually the most reliable), brand, group, collections, SKU, barcodes, model no., specs, title, description, shipping, warranty — and **open every photo**. Never use your own memory of the product.
 2. **Find what is wrong**:
-   - **Self-contradiction**: fields disagree with each other or with what is *printed* on the item / box (brand, model, capacity, wattage, size, count). Unbranded / Premium Unbranded with a small printed name is **not** a conflict.
+   - **Self-contradiction**: fields disagree with each other or with what is *printed* on the item / box (brand, model, capacity, wattage, size, count). Unbranded / Premium Unbranded with a small printed name is **not** a conflict. A maker's own SKU / part code (Foxin FOXCOM0033), its model number (FGK-9991) and a model name (Thunder) can all name **one** product — makers differ — so two codes are **not** a conflict unless the label, box or an accepted page ties them to different products (owner, 2026-11-27).
    - **Wrong photos**: another product, old box version, someone else's watermark (our own stamp is not one).
    - **Poor photos**: blurry, dark, low resolution, bad angle, duplicates.
    - **Wrong text**: a wrong spec row, our support period written as the maker's warranty, a wrong weight / size, a description of another product. Warranty: wrong only when title / description / specs disagree with each other or with a warranty printed on the box — **no warranty on the box is never a problem** (owner, 2026-11-27).

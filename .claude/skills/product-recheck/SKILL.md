@@ -127,7 +127,7 @@ The server tags each line with its part ("Part 3 · …") and **a part that runs
 | Area | Pending when |
 |---|---|
 | **Earlier notes** | Each line in `prep.problems` (Remove this photo, copy model no. X, create brand Y, fix group…) — not carried out |
-| **Text** | Title / description / specs say something not on the label or an accepted saved page; a spec contradicts a photo; our support period shown as the maker's warranty (warranty: see its own row) |
+| **Text** | Title / description / specs say something not on the label or an accepted saved page; a spec contradicts a photo; our support period shown as the maker's warranty (warranty: see its own row). A maker's SKU code and a different model number / name for the same product (Foxin FOXCOM0033 = FGK-9991) is **not** a mismatch, and needs no saved search to pass |
 | **Warranty** | Title, description and specs give **different** warranties (period or who gives it), or the box / label prints a warranty that differs from ours, or our support period is shown as the maker's warranty. A warranty **not printed on the box is never pending and never a note** (owner, 2026-11-27) — most boxes don't print it. A warranty in the title / description but missing from the specs → pending "add Warranty row to specs" |
 | **Brand** | Empty or wrong while the label shows a brand that is now in `masters.brands` |
 | **Collections** | None, or plainly wrong for who buys it |

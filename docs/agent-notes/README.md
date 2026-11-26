@@ -106,6 +106,7 @@ Adding one: a file here named `<type>_<slug>.md` (`project`, `feedback`, `user`,
 - [Say SKU, not product id](feedback_say_sku_not_product_id.md) — name products by SKU/barcode in conversation; id is DB-internal (2026-11-20).
 - [Shipping never blocks prep](feedback_shipping_never_blocks_prep.md) — fill weight/size when possible, never pending/staff; readiness gate catches it (2026-11-23).
 - [Box colour is not proof](feedback_box_colour_not_proof.md) — one box serves all colour variants; never block on box-vs-photo colour (2026-11-23).
+- [Maker SKU vs model no. is not a conflict](feedback_maker_sku_vs_model_no.md) — FOXCOM0033 = FGK-9991; flag only when tied to different products (2026-11-27).
 - [Warranty not on box is fine](feedback_warranty_not_on_box_ok.md) — only a title/description/specs/box mismatch is pending; specs always carry warranty (2026-11-27).
 - [Prep Part 4 → Ready, not Published](project_prep_part4_ready_not_publish.md) — verified products go to Ready until the owner trusts the AI to publish (2026-11-19).
 - [Unnumbered vouchers are imports](project_unnumbered_vouchers_imported.md) — 967 on live, created to 18 Sep 2026; only later ones are suspect (2026-11-25).
