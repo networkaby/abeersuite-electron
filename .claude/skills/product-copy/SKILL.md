@@ -202,7 +202,7 @@ Run this when the product has **fewer than 4 good photos** (after leaving out th
 "photoPicks": [ { "url": "https://www.portronics.com/cdn/shop/files/M8_-_1.png", "kind": "front" } ]
 ```
 
-Only this exact model and colour; no watermark, no other brand's logo, sharp. Prefer the maker's. Fill the `must` kinds first. The server keeps a pick only if an accepted page shows it; staff add them — nothing goes into the gallery by itself.
+Only this exact model and colour; no watermark, no other brand's logo, sharp. **Size first:** download it (`curl -o`) and run `photo-edit.mjs size` (setup: product-prep `photos.md`) — under 500 px on the short side never goes in (page thumbnails often are); prefer the largest copy the page offers (owner, 2026-11-27). Prefer the maker's. Fill the `must` kinds first. The server keeps a pick only if an accepted page shows it; staff add them — nothing goes into the gallery by itself.
 
 ## 8. Mistake check → `notes`
 
@@ -214,7 +214,7 @@ Go through this list for every product and write each problem as one short line 
 - **Collections**: none set, a customer segment or Setup Kit missed (e.g. CCTV parts not in "CCTV & Security Setup"), or one picked only because it repeats the product type.
 - **Group** looks wrong for the product (GST!) — say which fits; never change it yourself.
 - **Primary photo** with any logo, watermark, date stamp or text overlay (our own shop logo too) → "Pick a clean primary photo — Google and Meta reject logos on the main image". Our logo or a camera stamp on the other photos is fine.
-- **Photos**: another model or old box version, someone else's watermark, blurry / dark, duplicates, no plain product front, no size photo, the main photo is not the best.
+- **Photos**: another model or old box version, someone else's watermark, blurry / dark, **too small — measure each with `photo-edit.mjs size`: short side under 500 px → "Photo n is 250×164 — too small, remove and reshoot"**, duplicates, no plain product front, no size photo, the main photo is not the best.
 - **Description already there**: a wrong spec, missing compatibility, our support period written as the maker's warranty.
 - **Shipping**: only a weight / size plainly wrong for the item (a 5 kg mouse). Empty is never a note.
 - **Price / stock**: only if something is plainly off (MRP below price) — say it, never guess a price.
