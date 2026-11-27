@@ -5,6 +5,7 @@ import { setAsideCorrupt, writeJsonAtomic } from "./stateFile";
 import { resolveInstallationId } from "./installationId";
 import { ensureAuthSecret, findMissingEnv, loadCounterEnv } from "./envCheck";
 import { counterSetupFilePath, readCounterSetup, readCounterSetupState, type CounterSetup } from "./counterSetup";
+import { checkPin, hasPin, refreshPin, removePin, setPin } from "./pinVault";
 import { cacheFace, faceDataUrl, forgetFace, loginBackgroundPath, readRoster, ROSTER_MAX, shellQuery, writeRoster, type ShellRosterEntry } from "./shellRoster";
 import { ensureAutoStartMatchesPreference, initAutoStartPreference, isAutoStartEnabled, setAutoStart, writeAutoStartPreference } from "./autoStart";
 
@@ -485,7 +486,16 @@ ipcMain.handle("shell:take-credentials", () => {
 ipcMain.handle("shell:roster", (): ShellRosterEntry[] => readRoster().map((entry) => ({
     ...entry,
     avatarFile: faceDataUrl(entry.avatarFile),
+    // The vault on this PC is the only answer to "has a PIN here".
+    hasPin: hasPin(entry.email),
 })));
+
+// ── Counter PIN — on this PC only (pinVault.ts) ─────────────────────────────
+ipcMain.handle("pin:has", (_, email: unknown) => typeof email === "string" && hasPin(email));
+ipcMain.handle("pin:set", (_, input: { pin?: unknown; password?: unknown }) => setPin(serverUrl, input?.pin, input?.password));
+ipcMain.handle("pin:refresh", (_, input: { email?: unknown; password?: unknown }) => refreshPin(serverUrl, input?.email, input?.password));
+ipcMain.handle("pin:remove", (_, email: unknown) => removePin(email));
+ipcMain.handle("pin:check", (_, input: { email?: unknown; pin?: unknown }) => checkPin(input?.email, input?.pin));
 
 ipcMain.handle("shell:remember-user", async (_, who: {
     email?: unknown; name?: unknown; title?: unknown; avatarUrl?: unknown; hasPin?: unknown;
@@ -537,9 +547,9 @@ ipcMain.handle("shell:remember-user", async (_, who: {
  * Take a face off this screen. LOCAL ONLY — and that is the point.
  *
  * It forgets a name and a photograph on this PC. It does not touch the account, the
- * PIN, or anything the office can see. Removing a PIN everywhere is a signed-in
- * action (`/api/me/counter-pin`); letting an unauthenticated screen reach an account
- * would be a door, not a convenience.
+ * PIN (pinVault.ts), or anything the office can see. Removing a PIN is a signed-in
+ * action; letting an unauthenticated screen reach an account would be a door, not a
+ * convenience.
  */
 ipcMain.handle("shell:forget-user", (_, email: string) => {
     if (typeof email !== "string") return false;
@@ -1559,7 +1569,7 @@ app.whenReady().then(async () => {
 
         // A start never walks onto the last person's screen (owner, 2026-10-16: the lock
         // cover is retired). A login left alive is ended here, and everyone lands on the
-        // photographs: tap a face, type the 4-digit PIN.
+        // photographs: tap a face, type the 4-digit PIN (electron/pinVault.ts).
         removeRetiredLockFile();
         if (await hasStaffSession()) await clearStaffSession();
         notifyServerReady();

@@ -1,9 +1,11 @@
 "use client";
 
 // Password and forwarding for the person or an admin (`users:edit`); the counter
-// PIN only ever for the person themselves — its route has no id to aim elsewhere.
+// PIN only ever for the person themselves, and only in the counter app — it is kept
+// on that PC (electron/pinVault.ts), never in a database.
 
-import { useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { useSession } from "next-auth/react";
 import axios from "axios";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
@@ -15,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useForwardEmail } from "@/shared/hooks/useForwardEmail";
 import { PIN_LENGTH } from "@/shared/lib/constants/session";
+import { isElectronEnvironment } from "@/shared/lib/bridge/bridgeHealth";
 
 const securitySchema = z.object({
     currentPassword: z.string(),
@@ -25,6 +28,8 @@ type SecurityForm = z.infer<typeof securitySchema>;
 
 export default function SecurityTab({ profileId, isSelf }: { profileId: number; isSelf: boolean }) {
     const [saving, setSaving] = useState(false);
+    // The PIN lives in the counter app; the office website has nowhere to keep one.
+    const onCounterApp = useSyncExternalStore(() => () => { }, isElectronEnvironment, () => false);
     const { register, handleSubmit, reset, formState: { errors } } = useForm<SecurityForm>({
         resolver: zodResolver(securitySchema),
         defaultValues: { currentPassword: "", password: "", confirmPassword: "" },
@@ -47,7 +52,7 @@ export default function SecurityTab({ profileId, isSelf }: { profileId: number; 
 
     return (
         <div className="flex flex-wrap items-start gap-4 [&>*]:w-full [&>*]:sm:w-80">
-            {isSelf && <CounterPinCard />}
+            {isSelf && onCounterApp && <CounterPinCard />}
             <form onSubmit={handleSubmit(onSubmit)} className="rounded-lg border border-border bg-card p-5 space-y-4">
                 <div className="flex items-center gap-2 mb-1">
                     <Lock size={14} className="text-muted-foreground" />
@@ -122,38 +127,59 @@ function ForwardEmailCard({ userId, isSelf }: { userId: number; isSelf: boolean 
     );
 }
 
-/** Your own counter PIN — `/api/me/counter-pin` has no user id, so this only ever
- *  touches the signed-in person. Setting works only on a counter (the route says so
- *  when it is not); removing from all counters works anywhere. Both need the line up. */
+/** Your own counter PIN, kept on THIS counter PC only (electron/pinVault.ts). The
+ *  password is retyped and checked by the server; the PIN never leaves the PC. */
 function CounterPinCard() {
+    const { data: session } = useSession();
+    const email = session?.user?.email ?? "";
     const [pin, setPin] = useState("");
     const [pinAgain, setPinAgain] = useState("");
     const [password, setPassword] = useState("");
     const [busy, setBusy] = useState(false);
+    const [hasPin, setHasPin] = useState(false);
     const digits = (v: string) => v.replace(/\D/g, "").slice(0, PIN_LENGTH);
+
+    useEffect(() => {
+        if (!email) return;
+        void window.electronAPI?.pin?.has(email).then(setHasPin).catch(() => { });
+    }, [email]);
 
     const save = async (e: React.FormEvent) => {
         e.preventDefault();
         if (pin !== pinAgain) { toast.error("The two PINs are not the same."); return; }
         setBusy(true);
         try {
-            await axios.put("/api/me/counter-pin", { pin, password });
-            toast.success("PIN saved for this counter");
+            const out = await window.electronAPI?.pin?.set({ pin, password });
+            if (!out) { toast.error("A PIN can only be set in the counter app."); return; }
+            if (!out.ok) { toast.error(out.error); return; }
+            toast.success("PIN saved on this counter");
+            setHasPin(true);
             setPin(""); setPinAgain(""); setPassword("");
-        } catch (e) {
-            toast.error(axios.isAxiosError(e) ? e.response?.data?.error ?? "Could not reach the office" : "Could not save your PIN");
+        } catch {
+            toast.error("Could not save your PIN");
         } finally { setBusy(false); }
     };
 
-    const remove = async (scope: "counter" | "all") => {
-        const where = scope === "all" ? "every counter" : "this counter";
-        if (!confirm(`Remove your PIN from ${where}? You will use your password there.`)) return;
+    const removeHere = async () => {
+        if (!confirm("Remove your PIN from this counter? You will use your password here.")) return;
         setBusy(true);
         try {
-            await axios.delete(`/api/me/counter-pin?scope=${scope}`);
-            toast.success(`PIN removed from ${where}`);
+            await window.electronAPI?.pin?.remove(email);
+            setHasPin(false);
+            toast.success("PIN removed from this counter");
+        } catch {
+            toast.error("Could not remove your PIN");
+        } finally { setBusy(false); }
+    };
+
+    const signOutEverywhere = async () => {
+        if (!confirm("Sign out everywhere? Every login of yours ends — office, phone and every counter — and every PIN needs your password once.")) return;
+        setBusy(true);
+        try {
+            await axios.delete("/api/me/counter-pin");
+            toast.success("Signed out everywhere");
         } catch (e) {
-            toast.error(axios.isAxiosError(e) ? e.response?.data?.error ?? "Could not reach the office" : "Could not remove your PIN");
+            toast.error(axios.isAxiosError(e) ? e.response?.data?.error ?? "Could not reach the office" : "Could not sign out everywhere");
         } finally { setBusy(false); }
     };
 
@@ -163,7 +189,7 @@ function CounterPinCard() {
                 <Lock size={14} className="text-muted-foreground" />
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Counter PIN</h3>
             </div>
-            <p className="text-xs text-muted-foreground">Four digits to unlock this counter when it is locked. Saved only for the counter you are on.</p>
+            <p className="text-xs text-muted-foreground">Four digits to sign back in on this counter — tap your photo, type the PIN. Kept on this PC only. Your password is still asked every 10 days, or after 3 days unused.</p>
             <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                     <Label>New PIN</Label>
@@ -179,12 +205,11 @@ function CounterPinCard() {
                 <Input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Needed to set a PIN" />
             </div>
             <div className="flex justify-end pt-1">
-                <Button type="submit" disabled={busy || pin.length !== PIN_LENGTH || !password}>{busy ? "Saving…" : "Set PIN"}</Button>
+                <Button type="submit" disabled={busy || pin.length !== PIN_LENGTH || !password}>{busy ? "Saving…" : hasPin ? "Change PIN" : "Set PIN"}</Button>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
-                <span className="mr-auto text-xs text-muted-foreground">Remove PIN</span>
-                <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => remove("counter")}>This counter</Button>
-                <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => remove("all")}>All counters</Button>
+                {hasPin && <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void removeHere()}>Remove PIN here</Button>}
+                <Button type="button" variant="outline" size="sm" className="ml-auto" disabled={busy} onClick={() => void signOutEverywhere()}>Sign out everywhere</Button>
             </div>
         </form>
     );

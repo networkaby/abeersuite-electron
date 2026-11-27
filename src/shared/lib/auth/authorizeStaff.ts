@@ -6,12 +6,13 @@ import { isLoginBlocked, recordLoginFailure, clearLoginFailures } from "@/shared
 import { applyPermissionOverrides, normalizeCrudGrants } from "@/shared/lib/auth/crudLadder";
 import { positionScopeLabel } from "@/shared/lib/org/positionScope";
 import { CredentialsSignin } from "next-auth";
-import { pinClocksExpired, stampCounterPin, thisCounterId } from "@/shared/lib/auth/counterPin";
+import { thisCounterId } from "@/shared/lib/auth/counterPin";
 import { isThisPcACounter } from "@/shared/lib/counter/releaseGuard";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { OUTSIDE_COUNTER_SIGNIN_CODE, PIN_LENGTH, UNLOCK_MAX_FAILURES } from "@/shared/lib/constants/session";
+import { LOGIN_MAX_AGE_MS, OUTSIDE_COUNTER_SIGNIN_CODE } from "@/shared/lib/constants/session";
+import { readResumeGrant } from "@/shared/lib/auth/counterResume";
 import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
 import { stampAttendanceIn } from "@/shared/lib/hr/attendanceStamp";
 import { idleLimitMinutesFor } from "@/shared/lib/hr/dutyTime";
@@ -47,8 +48,8 @@ export type StaffAuthUser = {
     /** Signed in off a counter on "Can use Mobile App" alone — the session opens the
      *  phone app and nothing else (auth/phoneOnly.ts, enforced in proxy.ts). */
     phoneOnly?: true;
-    /** When the password was last typed — now for a password sign-in, the counter's
-     *  own stamp for a PIN one. The 10-day rule runs from it (`isStaffTokenRevoked`),
+    /** When the password was last typed — now for a password sign-in, the PIN note's
+     *  time for a PIN one. The 10-day rule runs from it (`isStaffTokenRevoked`),
      *  so signing in by PIN day after day never pushes the password back. */
     passwordAt?: number;
 };
@@ -378,7 +379,6 @@ export async function authorizeStaffCredentials(
                 // Bookkeeping only — a failed stamp must not cost the login.
                 const counterId = thisCounterId();
                 if (counterId) await stampAttendanceIn(prisma, own.id, counterId).catch(() => {});
-                await stampCounterPin(prisma, own.id, "password").catch(() => {});
                 return {
                     ...staff,
                     role: superAdmin.role,
@@ -437,63 +437,34 @@ export async function authorizeStaffCredentials(
 
     // The first sign-in on a till marks the business day PRESENT (HR & People).
     { const counterId = thisCounterId(); if (counterId) await stampAttendanceIn(prisma, user.id, counterId); }
-    // Typing the password is what the PIN's 10-day rule asks for — both clocks go back
-    // to zero. A no-op for anyone with no PIN here, and off a counter.
-    await stampCounterPin(prisma, user.id, "password");
 
     return staff;
 }
 
 /**
- * Sign in with this counter's 4-digit PIN instead of the password (owner, 2026-10-15).
+ * Back in by counter PIN (owner, 2026-11-27). The PIN was checked on the counter PC
+ * (`electron/pinVault.ts`) and never comes here; what comes is the signed note of the
+ * person's last password sign-in on this counter (`counterResume.ts`). Same session,
+ * same authority as the password path; `passwordAt` stays the note's time, so the
+ * 10-day rule is never pushed back by PIN.
  *
- * Same session, same authority — `buildStaffAuthUser` is shared with the password
- * path. What differs is everything BEFORE it: only on a counter, only this counter's
- * PIN, only inside the two clocks (`counterPin.ts`). Past them `null`, and the screen
- * has already asked `/api/counter-pin/status` why.
- *
- * No env super-admin here on purpose: that account has no PIN row and must not be
- * reachable by four digits on a shop floor.
+ * No env super-admin: four digits on a shop floor must not reach that account.
  */
-export async function authorizeStaffPin(
-    prisma: PrismaClient,
-    email: string,
-    pin: string,
-): Promise<StaffAuthUser | null> {
+export async function authorizeStaffResume(prisma: PrismaClient, token: string): Promise<StaffAuthUser | null> {
     const counterId = thisCounterId();
     if (!counterId) return null;
-    if (pin.length !== PIN_LENGTH || !/^\d+$/.test(pin)) return null;
-    if (!isStaffEmailDomainAllowed(email)) return null;
+    const grant = readResumeGrant(token);
+    if (!grant || grant.cid !== counterId) return null;
+    if (Date.now() - grant.at > LOGIN_MAX_AGE_MS || grant.at > Date.now() + 60_000) return null;
 
-    // Its own budget: a fumbled PIN must not eat the password tries still needed.
-    const throttleKey = `pin:${email}`;
-    if (await isLoginBlocked(throttleKey, UNLOCK_MAX_FAILURES)) return null;
-
-    const user = await findStaffUser(prisma, email);
+    const user = await findStaffUser(prisma, { id: grant.uid });
     if (!user || staffHasLeft(user.staffProfile)) return null;
-
-    const row = await prisma.userCounterPin.findUnique({
-        where: { userId_counterId: { userId: user.id, counterId } },
-        select: { pinHash: true, lastPasswordAt: true, lastLoginAt: true },
-    });
-    // No PIN on THIS counter (one on another counter does not count), or password time.
-    if (!row || pinClocksExpired(row)) return null;
-
-    if (!await bcrypt.compare(pin, row.pinHash)) {
-        await recordLoginFailure(throttleKey);
-        // Out of tries: the password is due, the same rule as the lock's.
-        if (await isLoginBlocked(throttleKey, UNLOCK_MAX_FAILURES)) {
-            await stampCounterPin(prisma, user.id, "expire");
-            await clearLoginFailures(throttleKey);
-        }
-        return null;
-    }
-    await clearLoginFailures(throttleKey);
+    // "Sign out everywhere", a password change or a role edit ends every note too.
+    if (user.tokensValidFrom && grant.at < user.tokensValidFrom.getTime()) return null;
 
     const staff = await buildStaffAuthUser(prisma, user);
-    await stampAttendanceIn(prisma, user.id, counterId);
-    await stampCounterPin(prisma, user.id, "used");
-    return { ...staff, passwordAt: row.lastPasswordAt.getTime() };
+    await stampAttendanceIn(prisma, user.id, counterId).catch(() => {});
+    return { ...staff, passwordAt: grant.at };
 }
 
 /**

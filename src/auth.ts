@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { authorizeStaffCredentials, authorizeStaffPin } from "@/shared/lib/auth/authorizeStaff";
+import { authorizeStaffCredentials, authorizeStaffResume } from "@/shared/lib/auth/authorizeStaff";
 import { authorizePortalCredentials } from "@/shared/lib/auth/authorizePortal";
 import { IS_PUBLIC } from "@/shared/lib/appMode";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
@@ -46,7 +46,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
      * request in `isStaffTokenRevoked`. The staff phone app gets 30 / 90 days and a
      * customer 90 days with nobody using it (owner, 2026-10-18); the cookie lives as
      * long as the longest of them, and `token.seenAt` carries the shorter idle clocks. Inside those two
-     * clocks a counter's 4-digit PIN signs a person back in (`counterPin.ts`).
+     * clocks a counter's 4-digit PIN reopens a login already made there (`electron/pinVault.ts`).
      *
      * It replaced a 6-hour lifetime that signed every till out each night, which is
      * what made coming back slow. The idle limit per person ("Sign out after", HR → Job)
@@ -191,19 +191,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     return user && phoneApp ? { ...user, phoneApp: true } : user;
                 },
             }),
-            // Counter PIN — the same staff session, reached by four digits on a tapped
-            // photograph (owner, 2026-10-15). `authorizeStaffPin` refuses anywhere that
-            // is not a counter, so on the office deployment it can never succeed.
+            // Counter PIN: the PIN is checked on the PC (electron/pinVault.ts); this
+            // gets only the signed note of the last password sign-in there.
+            // `authorizeStaffResume` refuses anywhere that is not that counter.
             Credentials({
-                id: "credentials-staff-pin",
+                id: "credentials-staff-resume",
                 name: "Counter PIN",
-                credentials: {
-                    email: { label: "Email", type: "email" },
-                    pin: { label: "PIN", type: "password" },
-                },
+                credentials: { grant: { label: "Grant", type: "text" } },
                 async authorize(credentials) {
-                    if (!credentials?.email || !credentials?.pin) return null;
-                    return authorizeStaffPin(prisma, credentials.email as string, credentials.pin as string);
+                    if (typeof credentials?.grant !== "string") return null;
+                    return authorizeStaffResume(prisma, credentials.grant);
                 },
             }),
         ]),
@@ -269,8 +266,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 export function fillTokenFromUser(token: Record<string, unknown>, user: { id?: string | null }): void {
     token.loginAt = Date.now();   // for server-side revocation
     token.seenAt = token.loginAt; // the idle clock (`isStaffTokenRevoked`)
-    // The 10-day clock. A PIN sign-in carries the counter's stamp of the last password,
-    // so it never restarts the clock; everything else typed the password just now.
+    // The 10-day clock — every sign-in typed the password just now. (A counter PIN puts
+    // the same cookie back, so it never restarts this.)
     token.passwordAt = "passwordAt" in user && typeof user.passwordAt === "number" ? user.passwordAt : token.loginAt;
     token.id = user.id;
     token.role = "role" in user && typeof user.role === "string" ? user.role : "";

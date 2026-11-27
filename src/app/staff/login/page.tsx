@@ -73,30 +73,10 @@ function useRotation(length: number, seconds: number): { index: number; fading: 
     return { index, fading };
 }
 
-/**
- * Can this person use their PIN on this counter now? `/api/counter-pin/status`:
- * "ready", "password-due", "left", "none" — or null when it could not be asked
- * (offline from an older server, not a counter).
- */
-async function counterPinState(email: string): Promise<string | null> {
-    try {
-        const res = await fetch("/api/counter-pin/status", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ email }),
-        });
-        if (!res.ok) return null;
-        const out = await res.json() as { state?: string };
-        return out.state ?? null;
-    } catch {
-        return null;
-    }
-}
-
-/** Does a PIN exist here — so the face card knows, and "Set PIN" reads "Change PIN". */
+/** Does this person have a PIN on this PC? Kept by the desktop app only
+ *  (electron/pinVault.ts) — never asked of the server. */
 async function hasCounterPin(email: string): Promise<boolean> {
-    const state = await counterPinState(email);
-    return state === "ready" || state === "password-due";
+    return await window.electronAPI?.pin?.has(email).catch(() => false) ?? false;
 }
 
 /** The phone-app sign-in shows no photograph — it costs mobile data for nothing. */
@@ -198,24 +178,31 @@ function StaffLoginForm() {
         setError("");
         setPadError("");
 
-        const res = kind === "pin"
-            ? await signIn("credentials-staff-pin", { email: emailValue, pin: secret, redirect: false })
-            : await signIn("credentials-staff", { email: emailValue, password: secret, redirect: false });
-
-        if (res?.error && kind === "pin") {
-            // Wrong digits — or, since the face was tapped, the clocks ran out or the
-            // tries did. Ask once more which, so the screen says the right thing.
-            const state = await counterPinState(emailValue);
-            if (state === "ready") {
+        // A PIN is checked on this PC (electron/pinVault.ts); a right one hands back the
+        // signed note of the last password sign-in here, and THAT goes to the server.
+        let res: Awaited<ReturnType<typeof signIn>> | undefined;
+        if (kind === "pin") {
+            const check = await window.electronAPI?.pin?.check({ email: emailValue, pin: secret })
+                .catch(() => null) ?? null;
+            if (check && !check.ok && check.reason === "wrong") {
                 setPadError("That PIN is not right.");
-            } else {
-                setStage("password");
-                setError(state === "left"
-                    ? "No longer on the staff list."
-                    : "Too many wrong PINs, or a few days since your password — type your password once.");
+                setLoading(false);
+                return;
             }
-            setLoading(false);
-            return;
+            res = check?.ok
+                ? await signIn("credentials-staff-resume", { grant: check.grant, redirect: false })
+                : undefined;
+            if (!check?.ok || res?.error) {
+                // Too many tries, a few idle days, 10 days since the password, or the
+                // note was ended ("Sign out everywhere", a password or role change).
+                if (check?.ok) void window.electronAPI?.pin?.remove(emailValue).catch(() => { });
+                setStage("password");
+                setError("Your PIN needs your password once — type it, and set the PIN again.");
+                setLoading(false);
+                return;
+            }
+        } else {
+            res = await signIn("credentials-staff", { email: emailValue, password: secret, redirect: false });
         }
 
         if (res?.error && res.code === OUTSIDE_COUNTER_SIGNIN_CODE) {
@@ -243,6 +230,12 @@ function StaffLoginForm() {
             // has changed and a counter's badge would stay dark until the next tab focus.
             refreshCounterStatus();
             refreshSyncStatus();
+
+            // A password sign-in renews the PIN note of someone who has a PIN here, so
+            // their 10 days start again. Best-effort, nobody waits on it.
+            if (kind === "password") {
+                void window.electronAPI?.pin?.refresh({ email: emailValue, password: secret }).catch(() => { });
+            }
 
             // One read, two readers: the permission gate below and the face roster at
             // the end. getSession() is a round trip — asking twice on the slowest
@@ -346,24 +339,7 @@ function StaffLoginForm() {
         setTyped("");
         setEmail(entry.email);
         setChosen(entry);
-        const state = await counterPinState(entry.email);
-        if (state === "left") {
-            // HR marked them as left. The card goes (same as the shell's Forget — a
-            // cache, nothing more), and the screen says so once.
-            void window.electronAPI?.forgetShellUser?.(entry.email).catch(() => { });
-            setRoster((was) => was.filter((r) => r.email !== entry.email));
-            setChosen(null);
-            setEmail("");
-            setStage("faces");
-            setError(`${entry.name} is no longer on the staff list.`);
-        } else if (state === "ready" || (state === null && entry.hasPin)) {
-            setStage("keypad");
-        } else {
-            setStage("password");
-            if (state === "password-due") {
-                setError("A few days since your password — type it once, and your PIN works again.");
-            }
-        }
+        setStage(await hasCounterPin(entry.email) ? "keypad" : "password");
     }, [setTyped]);
 
     // ── Credentials typed on the counter's sign-in shell ────────────────────────
@@ -550,6 +526,7 @@ function StaffLoginForm() {
                     </PinPad>
                 ) : pending ? (
                     <ChoosePinCard
+                        email={email}
                         hasPin={pending.hasPin}
                         counterNumber={counterNumber}
                         // The password they typed a moment ago — nothing asked twice.

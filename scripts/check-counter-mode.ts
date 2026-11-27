@@ -219,8 +219,8 @@ async function counterWriteRelayMode(): Promise<Check[]> {
         ["backup and restore never relay", !decide("POST", "/api/settings/restore") && !decide("POST", "/api/settings/backup")],
         // A relayed PIN route runs at the office, which is not a counter, so it refuses
         // the very till that asked. Both must act here.
-        ["the counter-PIN routes never relay", !decide("POST", "/api/counter-pin/status")
-            && !decide("PUT", "/api/me/counter-pin") && !decide("DELETE", "/api/me/counter-pin", 0)],
+        ["the counter-PIN routes never relay", !decide("POST", "/api/me/counter-pin")
+            && !decide("DELETE", "/api/me/counter-pin", 0)],
         // No segment allowlist: a full build in counter mode serves routes the counter build
         // strips, and their writes must reach the office rather than run here against Supabase.
         ["a write outside the counter allowlist still relays", decide("DELETE", "/api/companies/8504", 0) && decide("POST", "/api/accountancy/journal-entries")],

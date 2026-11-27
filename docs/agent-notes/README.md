@@ -119,3 +119,4 @@ Adding one: a file here named `<type>_<slug>.md` (`project`, `feedback`, `user`,
 - [Photo size is measured](feedback_photo_size_rule.md) — short side < 500 px = too small (removed, blocks Part 4), < 800 = weak note; tool refuses edits below 500 (2026-11-27).
 - [Part 4 publish option: not now](project_part4_publish_option_deferred.md) — Part 4 can't publish or keep problem products in Ready; done by hand (2026-11-27).
 - [photo-suggest skill](../../.claude/skills/photo-suggest/SKILL.md) — cyan `tip` problems via `/notes` `tip:true`: never block, never move the stage; prep/recheck clear them with /fixed (2026-11-27).
+- [Counter PIN lives on the PC only](project_counter_pin_on_pc_only.md) — sealed file + signed password note since 2026-11-27; never a DB PIN; user_counter_pins to be dropped after counters update.

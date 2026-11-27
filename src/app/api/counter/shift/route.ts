@@ -6,8 +6,7 @@
 // drawer and every method the counter takes, with what each collected. It is what they check before
 // signing in and accepting the drawer as theirs.
 //
-// Unauthenticated by necessity, and deliberately narrow — the same fence as
-// /api/counter-pin/status:
+// Unauthenticated by necessity, and deliberately narrow:
 //   • it answers only inside a counter shell (`thisCounterId()`), so it does not
 //     exist on the web deployment at all;
 //   • it answers only about the counter the asking PC holds — the figures of the

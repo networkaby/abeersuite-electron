@@ -108,6 +108,20 @@ export interface ElectronAPI {
     shellRoster: () => Promise<ShellRosterEntry[]>;
     rememberShellUser: (who: ShellRosterEntry) => Promise<boolean>;
     forgetShellUser: (email: string) => Promise<boolean>;
+    /**
+     * Counter PIN, kept on THIS PC only (electron/pinVault.ts) — never in a database.
+     * It unlocks a signed note of the person's last password sign-in here.
+     */
+    pin: {
+        has: (email: string) => Promise<boolean>;
+        /** For whoever is signed in now; the password is checked by the server. */
+        set: (input: { pin: string; password: string }) => Promise<{ ok: true } | { ok: false; error: string }>;
+        /** After a password sign-in: renews the 10-day note of someone who has a PIN here. */
+        refresh: (input: { email: string; password: string }) => Promise<boolean>;
+        remove: (email: string) => Promise<boolean>;
+        /** Right PIN → the signed password note for `signIn("credentials-staff-resume")`. */
+        check: (input: { email: string; pin: string }) => Promise<{ ok: true; grant: string } | { ok: false; reason: "wrong" | "password" | "none" }>;
+    };
     /** Keeps a copy of a background the shell fetched, so tomorrow needs no network. */
     cacheLoginBackground: (url: string) => void;
     /**
@@ -187,6 +201,13 @@ const electronAPI: ElectronAPI = {
     shellRoster: () => ipcRenderer.invoke("shell:roster"),
     rememberShellUser: (who) => ipcRenderer.invoke("shell:remember-user", who),
     forgetShellUser: (email) => ipcRenderer.invoke("shell:forget-user", email),
+    pin: {
+        has: (email) => ipcRenderer.invoke("pin:has", email),
+        set: (input) => ipcRenderer.invoke("pin:set", input),
+        refresh: (input) => ipcRenderer.invoke("pin:refresh", input),
+        remove: (email) => ipcRenderer.invoke("pin:remove", email),
+        check: (input) => ipcRenderer.invoke("pin:check", input),
+    },
     cacheLoginBackground: (url) => { void ipcRenderer.invoke("shell:cache-background", url); },
     onSyncApplied: (callback) => {
         ipcRenderer.on("sync:applied", (_event, info: { rows: number; models: string[] }) => callback(info));

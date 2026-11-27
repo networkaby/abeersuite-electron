@@ -2,8 +2,9 @@
 
 /**
  * "Choose your PIN" / "Change your PIN" — the sign-in card asks for it on the way in,
- * password already in hand (`/api/me/counter-pin` asks for it either way, so a till
- * left open is never enough to cut a second key to the account).
+ * password already in hand (the desktop app has the server check it either way, so a
+ * till left open is never enough to cut a second key to the account). The PIN is kept
+ * on this PC only (electron/pinVault.ts), never in a database.
  *
  * `onDone` gets the password that was checked.
  */
@@ -16,8 +17,9 @@ import styles from "./login.module.css";
 const digitsOnly = (value: string) => value.replace(/\D/g, "").slice(0, PIN_LENGTH);
 
 export default function ChoosePinCard({
-    hasPin, counterNumber, password: knownPassword, saveLabel, skipLabel, onDone, onSkip,
+    email, hasPin, counterNumber, password: knownPassword, saveLabel, skipLabel, onDone, onSkip,
 }: {
+    email: string;
     hasPin: boolean;
     counterNumber: number | null;
     /** Already typed (sign-in). Absent → the card asks for it. */
@@ -41,32 +43,25 @@ export default function ChoosePinCard({
         setBusy(true);
         setError("");
         try {
-            const res = await fetch("/api/me/counter-pin", {
-                method: "PUT",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({ pin, password }),
-            });
-            const out = await res.json().catch(() => ({})) as { error?: string };
-            if (!res.ok) { setError(out.error || "Could not save your PIN."); return; }
+            const out = await window.electronAPI?.pin?.set({ pin, password });
+            if (!out) { setError("A PIN can only be set in the counter app."); return; }
+            if (!out.ok) { setError(out.error); return; }
             onDone(password);
         } catch {
-            setError("Could not reach the office. A PIN can only be saved with the line up.");
+            setError("Could not save your PIN.");
         } finally {
             setBusy(false);
         }
     };
 
-    const remove = async (scope: "counter" | "all") => {
-        if (!password) { setError("Type your password first."); return; }
+    const remove = async () => {
         setBusy(true);
         setError("");
         try {
-            const res = await fetch(`/api/me/counter-pin?scope=${scope}`, { method: "DELETE" });
-            const out = await res.json().catch(() => ({})) as { error?: string };
-            if (!res.ok) { setError(out.error || "Could not remove your PIN."); return; }
+            await window.electronAPI?.pin?.remove(email);
             onDone(password);
         } catch {
-            setError("Could not reach the office. A PIN can only be removed with the line up.");
+            setError("Could not remove your PIN.");
         } finally {
             setBusy(false);
         }
@@ -121,12 +116,8 @@ export default function ChoosePinCard({
             {hasPin && (
                 <div className={styles.pinrow}>
                     <button type="button" className={styles.pinlink} disabled={busy}
-                        onClick={() => void remove("counter")}>
+                        onClick={() => void remove()}>
                         Remove from this counter
-                    </button>
-                    <button type="button" className={styles.pinlink} disabled={busy}
-                        onClick={() => void remove("all")}>
-                        Remove from all
                     </button>
                 </div>
             )}
@@ -136,8 +127,8 @@ export default function ChoosePinCard({
             </button>
 
             <p className={styles.pinnote}>
-                The line must be up to save a PIN. Using it works offline, and your password
-                is still asked every few days.
+                Kept on this counter only. Works offline; your password is still asked
+                every 10 days, or after 3 days unused.
             </p>
         </section>
     );

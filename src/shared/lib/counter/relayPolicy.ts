@@ -47,8 +47,7 @@ const NEVER_RELAY: readonly RegExp[] = [
     // here — the write already goes through `prismaAuthoritative`, a direct Supabase
     // connection on a counter, so it still lands in the office books; and the status read
     // stays on the replica, which is what lets a PIN work with the line down.
-    /^\/api\/counter-pin(\/|$)/,                 // "is there a PIN on this counter?"
-    /^\/api\/me\/counter-pin(\/|$)/,             // set or remove one FOR this counter
+    /^\/api\/me\/counter-pin(\/|$)/,             // password check / arrival for this counter's PIN
 ];
 
 /**
