@@ -5,9 +5,10 @@
     ],
     "target": {
       "namespace": "android_app",
-      "package_name": "in.networkservice.staff",
+      "package_name": "in.networkservice.shop",
       "sha256_cert_fingerprints": [
-        "49:36:EA:03:53:13:86:BE:0C:6C:56:0D:C6:CB:4C:4F:E9:43:56:93:B8:E6:4A:3B:06:04:A9:65:FA:C9:A4:07"
+        "39:B9:D4:A0:D5:6B:0B:1A:60:25:69:D3:65:03:0B:F9:C2:D1:0F:6C:66:89:D4:34:15:03:08:8D:24:8E:C4:E4",
+        "F6:50:30:0E:13:EF:56:A8:9A:54:47:74:FB:68:4D:32:9A:2A:09:F4:93:F4:38:99:F1:DF:E0:04:9D:EA:02:1D"
       ]
     }
   },
@@ -17,9 +18,10 @@
     ],
     "target": {
       "namespace": "android_app",
-      "package_name": "in.networkservice.shop",
+      "package_name": "in.networkservice.staff",
       "sha256_cert_fingerprints": [
-        "39:B9:D4:A0:D5:6B:0B:1A:60:25:69:D3:65:03:0B:F9:C2:D1:0F:6C:66:89:D4:34:15:03:08:8D:24:8E:C4:E4"
+        "49:36:EA:03:53:13:86:BE:0C:6C:56:0D:C6:CB:4C:4F:E9:43:56:93:B8:E6:4A:3B:06:04:A9:65:FA:C9:A4:07",
+        "18:4C:CF:31:7E:F2:B0:A4:C4:F6:39:1F:2A:FC:51:99:12:82:83:6E:63:35:EA:7A:69:61:28:DF:8E:71:C0:C4"
       ]
     }
   }

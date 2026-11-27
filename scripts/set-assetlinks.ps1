@@ -4,6 +4,17 @@
 # script that overwrote the whole file would cut the other app off.
 #   . "$PSScriptRoot\..\scripts\set-assetlinks.ps1"
 #   Set-AssetLink -Package in.networkservice.shop -Apk .\app-release-signed.apk
+#
+# Play re-signs what it hands out with its own "app signing key", so a
+# Play-installed copy carries a different certificate than our APK. Each app
+# lists both: our key (read off the APK below) and Play's key (Play Console →
+# Test and release → App integrity → App signing). Missing it = Play's
+# "deep link may be failing" warning, links open in the browser.
+$PlaySigningKeys = @{
+    "in.networkservice.shop"  = "F6:50:30:0E:13:EF:56:A8:9A:54:47:74:FB:68:4D:32:9A:2A:09:F4:93:F4:38:99:F1:DF:E0:04:9D:EA:02:1D"
+    "in.networkservice.staff" = "18:4C:CF:31:7E:F2:B0:A4:C4:F6:39:1F:2A:FC:51:99:12:82:83:6E:63:35:EA:7A:69:61:28:DF:8E:71:C0:C4"
+}
+
 function Set-AssetLink {
     param(
         [Parameter(Mandatory)] [string] $Package,
@@ -24,7 +35,7 @@ function Set-AssetLink {
     }
     $links = @($existing) + @([pscustomobject]@{
         relation = @("delegate_permission/common.handle_all_urls")
-        target = [pscustomobject]@{ namespace = "android_app"; package_name = $Package; sha256_cert_fingerprints = @($fingerprint) }
+        target = [pscustomobject]@{ namespace = "android_app"; package_name = $Package; sha256_cert_fingerprints = @(@($fingerprint, $PlaySigningKeys[$Package]) | Where-Object { $_ }) }
     })
     New-Item -ItemType Directory -Force (Split-Path $file) | Out-Null
     ConvertTo-Json -InputObject $links -Depth 5 | Set-Content $file -Encoding utf8NoBOM
