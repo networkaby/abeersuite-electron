@@ -1,13 +1,13 @@
-# v1.17.18
+# v1.17.19
 
-A small office-side update for the online shop's product preparation and the warranty terms screen. Nothing changes at the billing counter, so counters can take it whenever convenient.
+Every counter should install this one. It changes how the counter PIN works, so counters below this version will update straight away.
 
-## Shop product preparation
+## Counter sign-in
+- Your counter PIN is now kept only on that counter PC, sealed by Windows. It is no longer saved in the database at all.
+- Sign in once with your password on a counter, then your PIN gets you back in quickly on that same counter. Staff who used a PIN before must sign in with their password once and choose their PIN again (Me → Security, or the card on the login screen).
 
-- A new kind of note, **tip** (cyan dot), now shows in the product's AI notes and in the staff phone app's photo guide. A tip says "better to do" — for example, which extra photos of a product would help — but it never blocks the product and never moves it to Attention.
-- Tips have no "temporary pass" tick, since there is nothing to pass. They stay on the product after it goes Ready, until someone does them.
-- Photos are now measured for size. A photo that is too small is taken off and holds the product back from verification; a photo that is only a little small gets a note.
+## Staff and customer apps
+- The Downloads page QR for the staff app now opens it on Google Play.
 
-## Warranty terms
-
-- The warranty term form is now compact, in two rows, so the list of terms stays in view while you add or edit one.
+## Shop website
+- Brand logos keep their proper shape in the brand strip.
