@@ -49,7 +49,7 @@ export default function BrandStripView({
                                 width={96}
                                 height={48}
                                 unoptimized
-                                className="h-10 w-auto max-w-full opacity-70 transition-opacity group-hover:opacity-100"
+                                className="h-10 w-full object-contain opacity-70 transition-opacity group-hover:opacity-100"
                             />
                         );
                         return (

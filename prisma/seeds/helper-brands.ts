@@ -76,7 +76,6 @@ const LOGO_SLUGS: Record<string, string> = {
     Netgear: "netgear",
     "TP-Link": "tplink/4ACBD6",
     Ubiquiti: "ubiquiti",
-    Boat: "boat",
     Nvidia: "nvidia/76B900",
 };
 
