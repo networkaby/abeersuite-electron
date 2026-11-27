@@ -117,4 +117,5 @@ Adding one: a file here named `<type>_<slug>.md` (`project`, `feedback`, `user`,
 - [WA send leftovers deferred](project_wa_send_leftovers_deferred.md) — claim DB error = "already", reminder log after send, UPI double press; owner said ok for now (2026-11-26).
 - [Counter push/email wait for the cron: deferred](project_counter_queue_delay_deferred.md) — up to 30 min, evening bills next morning; owner said no problem for now (2026-11-26).
 - [Photo size is measured](feedback_photo_size_rule.md) — short side < 500 px = too small (removed, blocks Part 4), < 800 = weak note; tool refuses edits below 500 (2026-11-27).
+- [Part 4 publish option: not now](project_part4_publish_option_deferred.md) — Part 4 can't publish or keep problem products in Ready; done by hand; `stage=` needs `need=all` (2026-11-27).
 - [photo-suggest skill](../../.claude/skills/photo-suggest/SKILL.md) — cyan `tip` problems via `/notes` `tip:true`: never block, never move the stage; prep/recheck clear them with /fixed (2026-11-27).
