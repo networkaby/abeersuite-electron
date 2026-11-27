@@ -37,7 +37,7 @@ $env:NS_STAFF_KEY_PASSWORD = if ($keyPlain) { $keyPlain } else { $env:NS_STAFF_K
 
 try {
     Push-Location android
-    .\gradlew.bat assembleRelease --no-daemon
+    .\gradlew.bat assembleRelease bundleRelease --no-daemon
     if ($LASTEXITCODE -ne 0) { throw "gradle build failed ($LASTEXITCODE)" }
 } finally {
     Pop-Location
@@ -50,4 +50,4 @@ Copy-Item $apk "..\public\ns-staff.apk" -Force
 # Keeps the customer app's entry (shop-app-native/) — see scripts/set-assetlinks.ps1.
 . "$PSScriptRoot\..\scripts\set-assetlinks.ps1"
 Set-AssetLink -Package (Get-Content ".\capacitor.config.json" -Raw | ConvertFrom-Json).appId -Apk $apk
-Write-Host "Done: public\ns-staff.apk and public\.well-known\assetlinks.json updated."
+Write-Host "Done: public\ns-staff.apk and public\.well-known\assetlinks.json updated. Play upload (internal test): phone-app\android\app\build\outputs\bundle\release\app-release.aab"
