@@ -42,7 +42,7 @@ Before anything else, ask the owner **which mode** — cloud · local · smart l
 
 ## 1. Pick
 
-Usually the Draft tab: `GET /api/agent/products?stage=draft&limit=20` (or `sku=` / `q=`). Tell the owner the list, then one at a time.
+Usually the Draft tab: `GET /api/agent/products?stage=draft&limit=20` (or `stage=ready`, `sku=` / `q=`; any `stage` lists every product in it, copy written or not). Tell the owner the list, then one at a time.
 
 **"Follow next step"** (owner, 2026-11-22): check only products whose `prep.nextStep.skill` is `product-recheck` (part 4). Any other `nextStep` → skip it and name it in the report with its `text` — a staff step or a product-prep part.
 

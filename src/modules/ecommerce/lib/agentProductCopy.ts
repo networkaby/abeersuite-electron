@@ -41,7 +41,7 @@ export const backlogQuery = z.object({
     q: z.string().trim().min(2).max(100).optional(),
     /** Which shop stage. Default: unpublished, or all when sku / q is sent. */
     stage: z.enum(["unpublished", "waiting", "draft", "attention", "ready", "published", "all"]).optional(),
-    /** copy = no description yet; all = every product. Default: copy, or all when sku / q is sent. */
+    /** copy = no description yet; all = every product. Default: copy, or all when sku / q / stage is sent. */
     need: z.enum(["copy", "all"]).optional(),
     /** At least this many photos usable by AI ("Skip for AI" ones not counted). */
     minPhotos: z.coerce.number().int().min(0).max(30).optional(),
@@ -64,7 +64,9 @@ export async function productBacklog(q: z.infer<typeof backlogQuery>) {
     // A SKU list comes back whole, whatever limit says.
     const limit = q.sku?.length ? Math.max(q.limit, q.sku.length) : q.limit;
     const stage = q.stage ?? (named ? "all" : "unpublished");
-    const need = q.need ?? (named ? "all" : "copy");
+    // "Still needs copy" is only the default for the plain backlog; a named
+    // stage (ready, published, …) means every product in it.
+    const need = q.need ?? (named || q.stage ? "all" : "copy");
     const where: Prisma.InvProductWhereInput = {
         isActive: true,
         ...(q.sku?.length && { sku: { in: q.sku } }),
