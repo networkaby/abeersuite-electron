@@ -3,7 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import QRCode from "qrcode";
-import { CheckCircle2, Download } from "lucide-react";
+import { CheckCircle2, Download, ExternalLink } from "lucide-react";
 import { PHONE_APP_APK, PHONE_APP_HOME } from "@/shared/lib/device/phone";
 import { noSubscribe, readPlace, useApkAvailable } from "@/modules/mobile/components/installPlace";
 import { STAFF_APP_RELEASE, type AppRelease } from "@/shared/lib/constants/appVersions";
@@ -28,6 +28,9 @@ type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Pro
  *     second way — the real app only; Chrome's stays the fallback without it.
  *   • `qrOnComputer` (customer app): a computer gets a QR of this page to scan
  *     with the phone instead of the Chrome steps.
+ *   • `playUrl` (Google Play only, owner 2026-11-27): Android gets the Play listing
+ *     instead of the APK, and a computer's QR has no APK download beside it.
+ *     `joinUrl` (staff app's internal test) adds "join the test" as step 1.
  * Used ONLY on the install pages (staff /m-staff-app/install, customer /app); the
  * apps themselves show no install prompt (owner).
  */
@@ -38,6 +41,8 @@ export default function InstallAppButton({
     release = STAFF_APP_RELEASE,
     apkOnly = false,
     qrOnComputer = false,
+    playUrl,
+    joinUrl,
 }: {
     appName: string;
     /** "Open app" target — the staff app by default; the customer app passes its own. */
@@ -50,13 +55,17 @@ export default function InstallAppButton({
     apkOnly?: boolean;
     /** A computer sees a QR of this page instead of the Chrome steps. */
     qrOnComputer?: boolean;
+    /** The Play listing — replaces the APK everywhere on this button. */
+    playUrl?: string;
+    /** A Play test's join page, shown as step 1 before the listing. */
+    joinUrl?: string;
 }) {
     const [prompt, setPrompt] = useState<InstallPromptEvent | null>(null);
     const [installed, setInstalled] = useState(false);
     // Already installed on this device, while this page is open in the browser.
     const [installedHere, setInstalledHere] = useState(false);
     const place = useSyncExternalStore(noSubscribe, readPlace, () => "server");
-    const apkOk = useApkAvailable(apk, place === "android");
+    const apkOk = useApkAvailable(apk, place === "android" && !playUrl);
     // The version in the address: each release is a new file to Chrome, so it never
     // hands back an old copy or stops on "download this again?".
     const apkHref = `${apk}?v=${release.code}`;
@@ -98,7 +107,30 @@ export default function InstallAppButton({
         </Link>
     );
 
-    if (place === "server" || (place === "android" && apkOk === null)) return null;
+    const playLink = (big: boolean) => playUrl && (
+        <a
+            href={playUrl}
+            target="_blank"
+            rel="noopener"
+            className={big
+                ? "flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-4 text-lg font-semibold text-primary-foreground active:opacity-90"
+                : "flex w-full items-center justify-center gap-2 rounded-xl border py-3 text-sm font-medium active:bg-muted"}
+        >
+            <ExternalLink className={big ? "size-6" : "size-4"} /> {joinUrl ? "2. " : ""}Get it on Google Play
+        </a>
+    );
+    const joinLink = joinUrl && (
+        <a
+            href={joinUrl}
+            target="_blank"
+            rel="noopener"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border py-3 text-base font-semibold active:bg-muted"
+        >
+            1. Join the test (once)
+        </a>
+    );
+
+    if (place === "server" || (place === "android" && !playUrl && apkOk === null)) return null;
     if (!installed && place !== "installed" && installedHere && !prompt) {
         return (
             <div className="space-y-3 text-center">
@@ -108,7 +140,15 @@ export default function InstallAppButton({
                 </p>
                 <p className="text-sm text-muted-foreground">Open it from your home screen (or apps list).</p>
                 {openApp}
-                {place === "android" && apkOk && (
+                {place === "android" && playUrl && (
+                    <>
+                        {playLink(false)}
+                        <p className="text-xs text-muted-foreground">
+                            Installed from our website earlier? Uninstall it, then install from Google Play — you only sign in again.
+                        </p>
+                    </>
+                )}
+                {place === "android" && !playUrl && apkOk && (
                     <>
                         <a
                             href={apkHref}
@@ -135,6 +175,19 @@ export default function InstallAppButton({
                     <CheckCircle2 className="size-5" /> {place === "installed" ? <>This is <b>{appName}</b>.</> : <>Installed — open <b>{appName}</b> from your home screen.</>}
                 </p>
                 {openApp}
+            </div>
+        );
+    }
+    if (place === "android" && playUrl) {
+        return (
+            <div className="space-y-3">
+                {joinLink}
+                {playLink(true)}
+                <ol className="list-decimal space-y-1 rounded-xl border p-4 pl-8 text-sm">
+                    {joinUrl && <li>Tap <b>Join the test</b> with the Google account the shop gave access to, then <b>Become a tester</b>.</li>}
+                    <li>On Google Play tap <b>Install</b>, then <b>Open</b>, and sign in.</li>
+                    <li>Had the app from our website before? Uninstall that one first.</li>
+                </ol>
             </div>
         );
     }
@@ -177,7 +230,8 @@ export default function InstallAppButton({
                 <p className="text-sm">
                     Scan with your <b>phone camera</b> to get the app on your phone.
                 </p>
-                {/* The Android file too — to copy to a phone over USB or share it. */}
+                {playUrl ? <>{joinLink}{playLink(false)}</> : (
+                // The Android file too — to copy to a phone over USB or share it.
                 <a
                     href={apkHref}
                     download
@@ -185,6 +239,7 @@ export default function InstallAppButton({
                 >
                     <Download className="size-4" /> Download for Android ({release.name})
                 </a>
+                )}
             </div>
         );
     }

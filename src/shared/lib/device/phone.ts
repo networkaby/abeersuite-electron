@@ -49,8 +49,17 @@ export const PHONE_APP_INSTALL = `${PHONE_APP_HOME}/install`;
  */
 export const PHONE_APP_ANDROID_PACKAGE = "in.networkservice.staff";
 
-/** The APK, served from `public/` — rebuilt only when the name, icon or address changes. */
+/** Retired 2026-11-27 (owner: Google Play only) — the file is gone from `public/`;
+ *  kept as the path old sideloaded builds still ask their updater for. */
 export const PHONE_APP_APK = "/ns-staff.apk";
+
+/** The staff app's Play listing. Opens only for a Google account on the
+ *  internal-test list ("NS staff" in Play Console) that has joined the test. */
+export const PHONE_APP_PLAY_URL = `https://play.google.com/store/apps/details?id=${PHONE_APP_ANDROID_PACKAGE}`;
+
+/** The internal test's join page — step 1 on a new phone, before the Play listing
+ *  opens for that account. Play Console → NS Staff → Internal testing → Testers → Copy link. */
+export const PHONE_APP_TEST_URL = "https://play.google.com/apps/internaltest/4701303166272995640";
 
 /** The Capacitor shell (phone-app/) appends this to its user agent, followed by
  *  `/<versionCode>` (build-apk.ps1) — read by AppUpdateBar. */

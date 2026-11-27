@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Download, X } from "lucide-react";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
-import { SHOP_APP_APK, SHOP_APP_INSTALL } from "@/shared/lib/device/shopApp";
+import { SHOP_APP_APK, SHOP_APP_INSTALL, SHOP_APP_ON_PLAY, SHOP_APP_PLAY_URL } from "@/shared/lib/device/shopApp";
 import { noSubscribe, readPlace, useApkAvailable } from "@/modules/mobile/components/installPlace";
 
 /** ✕ hides the strip on this phone for this long. */
@@ -28,6 +28,8 @@ function hiddenNow(): boolean {
  *     customer sees ONE offer (what Amazon / Flipkart do). Until the APK is on
  *     the site, the strip points to /app, which offers Chrome's install instead.
  *   • iPhone: no Android app there — the strip points to /app's Add to Home Screen.
+ *   • SHOP_APP_ON_PLAY (Google Play only, owner 2026-11-27): Android's button opens
+ *     the Play listing; no APK.
  */
 export default function GetAppBanner() {
     const place = useSyncExternalStore(noSubscribe, readPlace, () => "server");
@@ -37,19 +39,20 @@ export default function GetAppBanner() {
     const [closed, setClosed] = useState(false);
     const hidden = hiddenSaved || closed;
     const phone = place === "android" || place === "iphone";
-    const apkOk = useApkAvailable(SHOP_APP_APK, place === "android" && !hidden);
+    const apkOk = useApkAvailable(SHOP_APP_APK, place === "android" && !hidden && !SHOP_APP_ON_PLAY);
+    const onPlay = place === "android" && SHOP_APP_ON_PLAY;
 
     // Android with the APK on the site: Chrome's own install popup would be a
     // second, different app — hold it back. /app keeps it (its own script).
     useEffect(() => {
-        if (!apkOk || pathname === SHOP_APP_INSTALL) return;
+        if (!(apkOk || onPlay) || pathname === SHOP_APP_INSTALL) return;
         const hold = (e: Event) => e.preventDefault();
         window.addEventListener("beforeinstallprompt", hold);
         return () => window.removeEventListener("beforeinstallprompt", hold);
-    }, [apkOk, pathname]);
+    }, [apkOk, onPlay, pathname]);
 
     if (!phone || hidden || pathname === SHOP_APP_INSTALL) return null;
-    if (place === "android" && apkOk === null) return null;
+    if (place === "android" && !onPlay && apkOk === null) return null;
 
     const close = () => {
         try {
@@ -69,7 +72,11 @@ export default function GetAppBanner() {
                 <p className="truncate text-sm font-semibold">{COMPANY_DETAILS.brandName} app</p>
                 <p className="truncate text-xs text-muted-foreground">Bills and repair updates as notifications</p>
             </div>
-            {apkOk ? (
+            {onPlay ? (
+                <a href={SHOP_APP_PLAY_URL} target="_blank" rel="noopener" className={button}>
+                    <Download className="size-4" /> Get app
+                </a>
+            ) : apkOk ? (
                 <a href={SHOP_APP_APK} download className={button}>
                     <Download className="size-4" /> Get app
                 </a>

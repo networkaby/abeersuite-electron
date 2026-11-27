@@ -4,7 +4,7 @@ import { chromeLinkTo } from "@/shared/lib/device/openInChrome";
 import StaffLoginPage from "@/app/staff/login/page";
 import { AppVersionLine } from "@/shared/components/AppUpdateBar";
 import { STAFF_APP_RELEASE } from "@/shared/lib/constants/appVersions";
-import { PHONE_APP_APK, PHONE_APP_HOME, PHONE_APP_INSTALL, PHONE_APP_UA } from "@/shared/lib/device/phone";
+import { PHONE_APP_APK, PHONE_APP_HOME, PHONE_APP_INSTALL, PHONE_APP_UA, PHONE_APP_PLAY_URL } from "@/shared/lib/device/phone";
 
 export const metadata: Metadata = {
     title: "Sign in",
@@ -25,7 +25,7 @@ export default function PhoneAppLoginPage() {
     return (
         <>
             <StaffLoginPage />
-            <AppVersionLine uaTag={PHONE_APP_UA} release={STAFF_APP_RELEASE} installUrl={chromeLinkTo(COMPANY_DETAILS.sites.office, PHONE_APP_INSTALL)} apk={PHONE_APP_APK} />
+            <AppVersionLine uaTag={PHONE_APP_UA} release={STAFF_APP_RELEASE} installUrl={chromeLinkTo(COMPANY_DETAILS.sites.office, PHONE_APP_INSTALL)} apk={PHONE_APP_APK} playUrl={PHONE_APP_PLAY_URL} playOnly />
         </>
     );
 }

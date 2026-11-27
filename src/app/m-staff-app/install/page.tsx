@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Image from "next/image";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
-import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
+import { PHONE_APP_HOME, PHONE_APP_PLAY_URL, PHONE_APP_TEST_URL } from "@/shared/lib/device/phone";
 import InstallAppButton from "@/modules/mobile/components/InstallAppButton";
 
 const initials = COMPANY_DETAILS.brandName.split(/\s+/).map((w) => w[0]?.toUpperCase() ?? "").join("");
@@ -21,7 +21,8 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1 };
  * Where the Downloads QR lands (PHONE_APP_INSTALL). Open WITHOUT sign-in (proxy.ts
  * isPublicPath, and outside the signed-in `(app)` layout): installing needs none —
  * the installed app asks for the sign-in when first opened. Shows nothing but the
- * app and its install step.
+ * app and its install step: Google Play only since 2026-11-27 (owner) — join the
+ * internal test, then install from the Play listing. A computer shows a QR of this page.
  */
 export default function InstallPage() {
     return (
@@ -41,7 +42,7 @@ export default function InstallPage() {
                 <p className="text-sm text-muted-foreground">{COMPANY_DETAILS.brandName} staff app</p>
             </div>
             <div className="w-full">
-                <InstallAppButton appName={APP_NAME} />
+                <InstallAppButton appName={APP_NAME} playUrl={PHONE_APP_PLAY_URL} joinUrl={PHONE_APP_TEST_URL} qrOnComputer />
             </div>
         </main>
         </>

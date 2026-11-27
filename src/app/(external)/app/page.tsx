@@ -33,10 +33,11 @@ export default function ShopAppInstallPage() {
                     </p>
                 </div>
                 <div className="w-full">
-                    <InstallAppButton appName={COMPANY_DETAILS.brandName} home={SHOP_APP_START} apk={SHOP_APP_APK} release={SHOP_APP_RELEASE} apkOnly qrOnComputer />
+                    <InstallAppButton appName={COMPANY_DETAILS.brandName} home={SHOP_APP_START} apk={SHOP_APP_APK} release={SHOP_APP_RELEASE} apkOnly qrOnComputer playUrl={SHOP_APP_ON_PLAY ? SHOP_APP_PLAY_URL : undefined} />
                 </div>
                 {/* Until Google approves the listing (SHOP_APP_ON_PLAY) we serve the app
-                    from our own link — the badge downloads our APK (owner, 2026-10-27). */}
+                    from our own link — the badge downloads our APK (owner, 2026-10-27).
+                    After: Google Play only (owner, 2026-11-27). */}
                 {SHOP_APP_ON_PLAY ? (
                     <GooglePlayBadge href={SHOP_APP_PLAY_URL} external />
                 ) : (

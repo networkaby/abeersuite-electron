@@ -1,13 +1,16 @@
-# Builds the signed staff-app APK (Capacitor) and puts it where the website serves it.
+# Builds the signed staff-app bundle (.aab) for Google Play — the only way the app
+# reaches phones since 2026-11-27 (owner). Upload it to Play Console → NS Staff →
+# Internal testing → Create new release. No APK on the website any more: Play signs
+# with its own key, and assetlinks.json already lists it (scripts/set-assetlinks.ps1).
 #   pwsh -File phone-app\build-apk.ps1
 #
 # Asks for the signing key's passwords — only the owner types those; they live in
 # this process's environment for the build and are never written down.
 # Rebuild only when the native side changes (name, icon, a new plugin or
 # permission): the screens are the live website, so a deploy reaches installed
-# phones without a new APK. Bump versionCode in android/app/build.gradle first, or
-# phones refuse it as "not an update" — then deploy, and older phones see
-# "New version available" (appVersions.ts, AppUpdateBar).
+# phones without a new build. Bump versionCode in android/app/build.gradle first —
+# Play refuses a code it has already seen — then deploy, and older phones see
+# "New version available" (appVersions.ts, AppUpdateBar → the Play listing).
 #
 # Toolchain on D: (owner, 2026-10-05): JDK 21 (Capacitor 8), Android SDK, Gradle cache.
 $ErrorActionPreference = "Stop"
@@ -37,17 +40,11 @@ $env:NS_STAFF_KEY_PASSWORD = if ($keyPlain) { $keyPlain } else { $env:NS_STAFF_K
 
 try {
     Push-Location android
-    .\gradlew.bat assembleRelease bundleRelease --no-daemon
+    .\gradlew.bat bundleRelease --no-daemon
     if ($LASTEXITCODE -ne 0) { throw "gradle build failed ($LASTEXITCODE)" }
 } finally {
     Pop-Location
     Remove-Item Env:NS_STAFF_KEYSTORE_PASSWORD, Env:NS_STAFF_KEY_PASSWORD -ErrorAction SilentlyContinue
 }
 
-$apk = ".\android\app\build\outputs\apk\release\app-release.apk"
-Copy-Item $apk "..\public\ns-staff.apk" -Force
-
-# Keeps the customer app's entry (shop-app-native/) — see scripts/set-assetlinks.ps1.
-. "$PSScriptRoot\..\scripts\set-assetlinks.ps1"
-Set-AssetLink -Package (Get-Content ".\capacitor.config.json" -Raw | ConvertFrom-Json).appId -Apk $apk
-Write-Host "Done: public\ns-staff.apk and public\.well-known\assetlinks.json updated. Play upload (internal test): phone-app\android\app\build\outputs\bundle\release\app-release.aab"
+Write-Host "Done. Play upload (Internal testing): phone-app\android\app\build\outputs\bundle\release\app-release.aab"

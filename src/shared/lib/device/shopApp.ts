@@ -33,7 +33,12 @@ export const SHOP_APP_APK = "/ns-shop.apk";
 export const SHOP_APP_PLAY_URL = `https://play.google.com/store/apps/details?id=${SHOP_APP_ANDROID_PACKAGE}`;
 
 /** Turn on once the Play listing is public (production): until then the link
- *  shows "item not found" to everyone outside the closed test. */
+ *  shows "item not found" to everyone outside the closed test.
+ *  On = Google Play only (owner, 2026-11-27): /app, the "Get our app" strip and
+ *  the footer point to Play, and an app sideloaded from the website is told to
+ *  reinstall from Play (AppUpdateBar `playOnly`). The same day: make
+ *  shop-app-native/build-apk.ps1 build the play bundle only and delete
+ *  public/ns-shop.apk, as phone-app's did. */
 export const SHOP_APP_ON_PLAY = false;
 
 /**

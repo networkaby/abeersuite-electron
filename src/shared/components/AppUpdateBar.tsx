@@ -24,10 +24,13 @@ const PLAY_UA_MARK = "PlayStore";
 const isPlayBuild = () => navigator.userAgent.includes(PLAY_UA_MARK);
 
 /** Where the download tap goes: the Play listing for a Play build that has one,
- *  else the site's install page. */
-function useUpdateTarget(installUrl: string, playUrl: string | undefined): { href: string; play: boolean } {
-    const play = useSyncExternalStore(noSubscribe, () => !!playUrl && isPlayBuild(), () => false);
-    return { href: play && playUrl ? playUrl : installUrl, play };
+ *  else the site's install page. `playOnly` (the app is on Google Play only, owner
+ *  2026-11-27): a build sideloaded from the website is told to MOVE — Play signs
+ *  with its own key, so it cannot update over it; the install page has the steps. */
+function useUpdateTarget(installUrl: string, playUrl: string | undefined, playOnly = false): { href: string; play: boolean; move: boolean } {
+    const fromPlay = useSyncExternalStore(noSubscribe, () => !!playUrl && isPlayBuild(), () => false);
+    const move = useSyncExternalStore(noSubscribe, () => playOnly && !isPlayBuild(), () => false);
+    return { href: fromPlay && playUrl ? playUrl : installUrl, play: fromPlay || move, move };
 }
 
 /** Older APKs send only `percent`; newer ones add bytes, and drop `percent` when the size is unknown. */
@@ -114,19 +117,21 @@ function useAppUpdate(release: AppRelease, apk: string, play: boolean) {
  * `playUrl`: the app's Play listing. A Play build (PLAY_UA_MARK) is sent there
  * instead — Play does the update, and that build has no self-install permission.
  */
-type UpdateProps = { uaTag: string; release: AppRelease; installUrl: string; apk: string; playUrl?: string };
+type UpdateProps = { uaTag: string; release: AppRelease; installUrl: string; apk: string; playUrl?: string; playOnly?: boolean };
 
-export default function AppUpdateBar({ uaTag, release, installUrl, apk, playUrl }: UpdateProps) {
+export default function AppUpdateBar({ uaTag, release, installUrl, apk, playUrl, playOnly }: UpdateProps) {
     const [dismissed, setDismissed] = useState(false);
-    const target = useUpdateTarget(installUrl, playUrl);
+    const target = useUpdateTarget(installUrl, playUrl, playOnly);
     const update = useAppUpdate(release, apk, target.play);
     const laterKey = `app-update-later:${uaTag}:${release.code}`;
     // Read once per visit, never on the server — the user agent and a "Later" tap
     // from an earlier visit do not change while the page is open.
     const due = useSyncExternalStore(noSubscribe, () => {
         const installed = installedAppCode(uaTag);
-        if (installed === null || installed >= release.code) return false;
-        if (release.urgent) return true;
+        if (installed === null) return false;
+        const moving = playOnly && !isPlayBuild();
+        if (!moving && installed >= release.code) return false;
+        if (release.urgent && !moving) return true;
         try {
             return Date.now() - Number(localStorage.getItem(laterKey) ?? 0) >= LATER_MS;
         } catch { return true; /* storage blocked — just show it */ }
@@ -141,11 +146,13 @@ export default function AppUpdateBar({ uaTag, release, installUrl, apk, playUrl 
     const download = (
         <Button asChild size="sm" className="gap-1.5">
             <a href={target.href} target="_blank" rel="noopener" onClick={update.start} aria-disabled={update.busy}>
-                <Download className="size-4" /> {update.native || target.play ? "Update now" : "Download update"}
+                <Download className="size-4" /> {target.move ? "Get it on Google Play" : update.native || target.play ? "Update now" : "Download update"}
             </a>
         </Button>
     );
-    const help = update.status ?? (target.play
+    const help = update.status ?? (target.move
+        ? "Uninstall this app, then install it from Google Play. You only sign in again."
+        : target.play
         ? "Opens Google Play: tap Update. You stay signed in."
         : update.native
           ? "Downloads inside the app, then tap Install. You stay signed in."
@@ -171,7 +178,7 @@ export default function AppUpdateBar({ uaTag, release, installUrl, apk, playUrl 
         <div className="fixed inset-x-0 top-0 z-[100] border-b bg-primary/10 px-4 pb-2 pt-[calc(env(safe-area-inset-top)+0.5rem)] backdrop-blur">
             <div className="flex items-start gap-3">
                 <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">New version {release.name} available</p>
+                    <p className="text-sm font-medium">{target.move ? "Our app is now on Google Play" : `New version ${release.name} available`}</p>
                     <p className="text-xs text-muted-foreground">{help}</p>
                 </div>
                 <button onClick={later} className="text-muted-foreground" aria-label="Later">
@@ -192,16 +199,18 @@ export default function AppUpdateBar({ uaTag, release, installUrl, apk, playUrl 
  * whether this phone is up to date, with the download always on hand when it is
  * not (even after "Later" hid the bar). Shown only inside the app.
  */
-export function AppVersionLine({ uaTag, release, installUrl, apk, playUrl }: UpdateProps) {
+export function AppVersionLine({ uaTag, release, installUrl, apk, playUrl, playOnly }: UpdateProps) {
     const installed = useSyncExternalStore(noSubscribe, () => installedAppCode(uaTag), () => null);
-    const target = useUpdateTarget(installUrl, playUrl);
+    const target = useUpdateTarget(installUrl, playUrl, playOnly);
     const update = useAppUpdate(release, apk, target.play);
     if (installed === null) return null;
     const old = installed < release.code;
     return (
         <p className="py-3 text-center text-xs text-muted-foreground">
             App build {installed} · latest {release.name} (build {release.code})
-            {old ? (
+            {target.move ? (
+                <> · <a href={target.href} target="_blank" rel="noopener" className="font-medium text-primary underline">from our website — get it on Google Play</a></>
+            ) : old ? (
                 <> · <a href={target.href} target="_blank" rel="noopener" onClick={update.start} className="font-medium text-primary underline">{update.native || target.play ? "Update now" : "Download update"}</a></>
             ) : " · up to date"}
             {update.status && <span className="block">{update.status}</span>}

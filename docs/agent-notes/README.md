@@ -79,7 +79,7 @@ Adding one: a file here named `<type>_<slug>.md` (`project`, `feedback`, `user`,
 - [Bills: push AND WhatsApp, both, for now](project_bill_notify_push_and_whatsapp_both.md) — owner 2026-10-06: observe push behaviour first; skip-WhatsApp-on-shown stays behind a switch, off.
 - [Customer app is Capacitor now](project_customer_app_twa_push.md) — shop-app-native since 2026-10-08, native FCM; TWA retired, its keystore still signs.
 - [No full seed without permission](feedback_no_full_seed_without_permission.md) — bootstrap/personal seed only on owner's yes; existing DBs restore from backup, changes via targeted seed files (2026-10-07).
-- [App update prompt built](project_app_update_prompt.md) — UA version vs appVersions.ts; APK link on the other host (2026-10-17).
+- [App update prompt built](project_app_update_prompt.md) — UA version vs appVersions.ts; Google Play only since 2026-11-27 (staff now, customer on SHOP_APP_ON_PLAY).
 - [2nd WhatsApp number + R2 attachments](project_wa_second_number_r2.md) — 96996 conversation-only, coexistence blocked by Meta review; files in private R2 bucket; ids in constants — SUPERSEDED: ids go in .env or DB (2026-11-12).
 - [Attendance segment edit deferred](project_attendance_segment_edit_deferred.md) — "count Off duty gap as duty" (meeting) planned 2026-10-13, needs new table; owner said later.
 - [Warranty types: manufacturer, seller, combined](project_warranty_shop_vs_manufacturer.md) — existing terms are Manufacturer (seller not involved); seller = shop repairs undamaged items, 15 days; combined = brand + shop's extra part, either; sale lines freeze the term (2026-11-26).

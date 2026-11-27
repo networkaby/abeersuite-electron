@@ -18,12 +18,19 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(NsPushPlugin.class);
         registerPlugin(NsSharePlugin.class);
-        registerPlugin(NsUpdatePlugin.class);
         super.onCreate(savedInstanceState);
+        markPlayBuild();
         NsMessagingService.ensureChannel(this);
         askForNotifications();
         openFromNotification(getIntent());
         backStepsThroughPages();
+    }
+
+    /** Google Play is the only way in (owner, 2026-11-27): " PlayStore" in the user
+     *  agent makes AppUpdateBar send updates to the Play listing. */
+    private void markPlayBuild() {
+        WebView web = getBridge().getWebView();
+        web.getSettings().setUserAgentString(web.getSettings().getUserAgentString() + " PlayStore");
     }
 
     /**

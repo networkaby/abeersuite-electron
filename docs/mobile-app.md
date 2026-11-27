@@ -142,7 +142,20 @@ replace it with a sharper source when there is one). Manifest route:
 [`manifest.webmanifest`](../src/app/m-staff-app/manifest.webmanifest/route.ts), scope
 the app path only, so the office site and shop stay plain websites.
 
-### Android APK (Capacitor, sideloaded, 2026-10-05)
+### Android app (Capacitor, 2026-10-05; Google Play only since 2026-11-27)
+
+> **Google Play only (owner, 2026-11-27).** The staff app reaches phones through Play
+> Console → NS Staff → **Internal testing** (testers = email list "NS staff"); the
+> website APK, the in-app updater (`NsUpdatePlugin`) and `REQUEST_INSTALL_PACKAGES`
+> are gone. Every build appends ` PlayStore` to its user agent, so
+> [`AppUpdateBar`](../src/shared/components/AppUpdateBar.tsx) sends updates to the
+> Play listing (`PHONE_APP_PLAY_URL`). A phone still on the old website APK sees
+> "Our app is now on Google Play" (`playOnly`): Play signs with its own key, so it
+> cannot update over a sideloaded copy — uninstall, then install from Play. The
+> install page (`/m-staff-app/install`) shows **1. Join the test**
+> (`PHONE_APP_TEST_URL`) and **2. Get it on Google Play**; a computer gets a QR.
+> [`phone-app/build-apk.ps1`](../phone-app/build-apk.ps1) builds only the `.aab`.
+> The bullets below are the history of the sideloaded era.
 
 Owner: *"i need full phone access like native app"* — so the first wrapper (a Bubblewrap
 TWA, which is only Chrome and showed Chrome's address bar until the site vouched for it)
@@ -555,7 +568,9 @@ Pages are in `src/app/m-staff-app`, APIs in `src/app/api/mobile`.
 
 - The 512 px icon is upscaled from `build/icon.png`.
 - The narrow rider / salesman permission is not built (§1).
-- Play Store listing is future work; both APKs are sideloaded.
+- Google Play: staff app on Internal testing only (never production, owner); customer app
+  waiting for production approval — then flip `SHOP_APP_ON_PLAY` (see its comment in
+  `shopApp.ts`) and the customer side goes Play-only the same way.
 - **Customer app (`shop-app-native/`, Capacitor) offer:** on an Android/iPhone browser the shop + portal
   show a "Get our app" strip ([`GetAppBanner`](../src/modules/external/pwa/GetAppBanner.tsx));
   ✕ hides it for 14 days on that phone (localStorage). Android with `public/ns-shop.apk`

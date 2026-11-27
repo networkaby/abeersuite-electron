@@ -53,8 +53,6 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- In-app update (NsUpdatePlugin): open Android's Install screen for the new APK. -->
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Posts share straight into WhatsApp (NsSharePlugin): Android 11+ hides other
          apps unless they are named here. The camera too: without IMAGE_CAPTURE,
