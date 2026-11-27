@@ -1,6 +1,6 @@
 ---
 name: photo-suggest
-description: Look at an AbeerSuite shop product's office name and its few existing photos, work out what the product is (type, shape, packing) and ask staff for the photos still needed for that kind of product — as cyan tips (non-blocking open problems, stage never moves) that show in AI notes and the staff phone app's "Shoot these". No search, no text, no removals. Use when the owner says "photo suggest", "what photos are missing", "ask staff for more photos", "suggest photos for SKU …", or runs /photo-suggest.
+description: Look at an AbeerSuite shop product's office name and its few existing photos, work out what the product is (type, shape, packing) and ask staff for the photos still needed for that kind of product — as cyan tips (non-blocking open problems; tips never move the stage) that show in AI notes and the staff phone app's "Shoot these". No search, no text, no removals; on request ("photo suggest and start") it moves a product that already has every must photo to Start. Use when the owner says "photo suggest", "what photos are missing", "ask staff for more photos", "suggest photos for SKU …", or runs /photo-suggest.
 ---
 
 > **Talk in SKUs.** Name products by SKU + name to people; the `id` is for API calls only.
@@ -9,7 +9,7 @@ description: Look at an AbeerSuite shop product's office name and its few existi
 
 A first **guide** for staff, before the regular product-prep stages: which photos to shoot for this kind of product. It writes **cyan tips** — open problems of the "better to do" level (owner, 2026-11-27): they show in AI notes and in the phone app's **Shoot these**, **never block, never move the stage**, and any later part / agent reads them and clears them with `/fixed` once the photo is there.
 
-Key and run modes: product-prep `SKILL.md` Setup. No search, no text, no removals, no Part 1 call.
+Key and run modes: product-prep `SKILL.md` Setup. No search, no text, no removals. No Part 1 call, except the Start check in step 7.
 
 ## Steps (one product at a time)
 
@@ -46,9 +46,22 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
    - Nothing missing → send nothing.
 6. Running again: judge the tips already there — a view now shot or not needed → leave it out of the new list (`replace: true` drops it). Product-prep later finds the photos there → it sends those tips in `/fixed` (or staff clear them).
 
+7. **Start - only when the owner asks** ("photo suggest and start", "start the ones that have all photos"). For each product where step 5 sent **nothing** (every must view is there, each 500 px or more, main photo a clean product photo) and the stage is **Unpublished or Attention**: move it to Start with a Part 1 **check** call - no removals, `then: "waiting"` (the same `startAi` as the Start button):
+
+```bash
+curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json"   "$PRODUCT_COPY_WRITE_URL/api/agent/prep/<id>/part1" -d '{ "enough": true, "then": "waiting",
+  "photos": { "box": "carton", "shape": "palm-size mouse", "tags": [{"url": "...", "kind": "front"}, ...],
+              "must": ["front","top","left","bottom","box_front","box_back"], "nice": [], "mainClean": true } }'
+```
+
+   - Leave `removals` / `fix` / `stop` empty: this is a check, not Part 1's clean-up (the real Part 1 runs again when the next prep run takes it from Start).
+   - `enough: true` only when brand + model / part code / barcode / clear box text is there to search; not sure → do not call, report "not started: not enough to search".
+   - Anything missing → **never** call Part 1 (it would park the product in Attention, red). Send the tips as above and report "not started: <views> missing".
+   - Reply not `waiting` (Part 1 found a must missing or the main photo not clean) → report it as it is; the product is in Attention with Part 1's line.
+
 ## Report
 
-| SKU · name | Identified as | Has | Asked for |
-|---|---|---|---|
+| SKU · name | Identified as | Has | Asked for | Start |
+|---|---|---|---|---|
 
-Then: "Staff: shoot the photos in the phone app (Shoot these), then press **Start** so product-prep runs again."
+Start column only when asked: "Started", or "not started: <why>". Then: "Staff: shoot the photos in the phone app (Shoot these), then press **Start** so product-prep runs again."
