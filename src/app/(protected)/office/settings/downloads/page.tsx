@@ -6,13 +6,12 @@ import { Download, MonitorDown, Printer, QrCode, Smartphone } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { QrSvg } from "@/shared/components/print/QrSvg";
-import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
-import { PHONE_APP_INSTALL } from "@/shared/lib/device/phone";
+import { PHONE_APP_PLAY_URL, PHONE_APP_TEST_URL } from "@/shared/lib/device/phone";
 
-// Always the LIVE office site, wherever this page is opened (a till's localhost
-// would give phones an address they cannot reach): https, so Chrome offers to
-// install it as an app. For a test on the shop Wi-Fi, type the PC's address.
-const PHONE_APP_URL = `${COMPANY_DETAILS.sites.office}${PHONE_APP_INSTALL}`;
+// The staff app comes from Google Play only (owner, 2026-11-27): the QR opens the
+// internal test's join page — the first time it asks "Become a tester", then it
+// links to the Play listing; Play installs and auto-updates from there. Every
+// staff Google account must be on the "NS staff" testers list in Play Console.
 
 // Shared Downloads hub. The Counter Bridge powers both the thermal printer and
 // the QR display (and may carry other tools later), so its downloads live here
@@ -97,12 +96,18 @@ export default function DownloadsPage() {
                             <Smartphone size={16} /> Staff Phone App
                         </h2>
                         <p className="text-xs text-muted-foreground">
-                            Scan with the phone camera. Android: tap Download, open the file and Install. iPhone: Share → Add to Home Screen. Sign in when the app first opens.
+                            Scan with the Android phone camera, signed in to Google Play with the staff member&apos;s Gmail (it must be on the testers list). First time: tap <b>Become a tester</b>, then <b>Download it on Google Play</b> → Install. Play updates it by itself after that. Had the app from our website before? Uninstall that one first.
                         </p>
                     </div>
                     <div className="rounded-lg border border-border bg-card p-4 flex items-center gap-4">
-                        <QrSvg value={PHONE_APP_URL} size={160} className="shrink-0 rounded bg-white" />
-                        <p className="text-xs text-muted-foreground break-all">{PHONE_APP_URL}</p>
+                        <QrSvg value={PHONE_APP_TEST_URL} size={160} className="shrink-0 rounded bg-white" />
+                        <div className="space-y-2 text-xs text-muted-foreground">
+                            <p className="break-all">{PHONE_APP_TEST_URL}</p>
+                            <p>
+                                Already a tester? Straight to the app:{" "}
+                                <a href={PHONE_APP_PLAY_URL} target="_blank" rel="noopener" className="font-medium text-primary underline">Google Play listing</a>
+                            </p>
+                        </div>
                     </div>
                 </section>
 
