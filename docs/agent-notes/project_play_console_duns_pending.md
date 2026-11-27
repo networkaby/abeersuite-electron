@@ -20,3 +20,5 @@ Interim (2026-10-26): Personal Play account created on akramuljakir, developer n
 
 **Why:** Play Organization signup is blocked until the 9-digit number arrives; declaring "none" while points show would be a misrepresentation risk to the whole account.
 **How to apply:** when the number arrives, resume play.google.com/console/signup as akramuljakir, Organization; payment profile "Network Service2" or a new one matching D&B exactly. After conversion: set SHOP_APP_PLAY_REVIEW=false, re-declare Rewards/points in Financial features, resubmit. Its old Cloud debt was paid 2026-10-26; an expired card left in place (cannot remove while primary on closed billing accounts). Three 2020 projects shut down same day.
+
+**2026-11-27 ~16:11 IST:** applied for production access for in.networkservice.shop (closed test Alpha, build 2.2.3 / code 9, 25 testers, 12x14 met). Google review up to 7 days, email to account owner. On approval: create a production release from 2.2.3 (points/wallet stay hidden). Staff app is NOT in this Play account yet — owner wants it test-track only (no public release).
