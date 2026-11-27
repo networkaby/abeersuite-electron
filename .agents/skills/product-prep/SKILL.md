@@ -14,6 +14,7 @@ it shop-ready in parts, and **never writes from bad data**:
 
 | Part | Does | Major problem → | Pass → |
 |---|---|---|---|
+| **0 Photo suggest** | separate skill: **photo-suggest** — a first guide before the loop: cyan "Photo needed" tips for staff; on request, a fully-shot product goes to Start | never (tips do not block) | stage kept; Start only when asked |
 | **1 Prepare seed** | Read everything; remove what is wrong; add nothing. Then: is what is left enough to search? | Attention | stage kept, Last run line |
 | **2 Search** | The **one** internet search for this product; the pages are saved | technical failure → Attention (no good page = go on from the label) | stage kept, Last run line |
 | **3 Process** | Everything from the saved pages — no new search | anything for staff → Attention | Draft |

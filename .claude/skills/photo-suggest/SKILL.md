@@ -1,13 +1,13 @@
 ---
 name: photo-suggest
-description: Look at an AbeerSuite shop product's office name and its few existing photos, work out what the product is (type, shape, packing) and ask staff for the photos still needed for that kind of product — as cyan tips (non-blocking open problems; tips never move the stage) that show in AI notes and the staff phone app's "Shoot these". No search, no text, no removals; on request ("photo suggest and start") it moves a product that already has every must photo to Start. Use when the owner says "photo suggest", "what photos are missing", "ask staff for more photos", "suggest photos for SKU …", or runs /photo-suggest.
+description: Look at an AbeerSuite shop product's office name and its few existing photos, work out what the product is (type, shape, packing) and ask staff for the photos still needed for that kind of product — as cyan tips (non-blocking open problems; tips never move the stage) that show in AI notes and the staff phone app's "Shoot these". No search, no text, no removals; on request ("photo suggest and start") it moves a product that already has every must photo to Start. Use when the owner says "part 0", "photo suggest", "what photos are missing", "ask staff for more photos", "suggest photos for SKU …", or runs /photo-suggest.
 ---
 
 > **Talk in SKUs.** Name products by SKU + name to people; the `id` is for API calls only.
 
-# Photo suggest
+# Photo suggest (Part 0)
 
-A first **guide** for staff, before the regular product-prep stages: which photos to shoot for this kind of product. It writes **cyan tips** — open problems of the "better to do" level (owner, 2026-11-27): they show in AI notes and in the phone app's **Shoot these**, **never block, never move the stage**, and any later part / agent reads them and clears them with `/fixed` once the photo is there.
+**Part 0** of product prep (owner, 2026-11-27) - a first **guide** for staff, before Part 1: which photos to shoot for this kind of product. It writes **cyan tips** — open problems of the "better to do" level (owner, 2026-11-27): they show in AI notes and in the phone app's **Shoot these**, **never block, never move the stage**, and any later part / agent reads them and clears them with `/fixed` once the photo is there.
 
 Key and run modes: product-prep `SKILL.md` Setup. No search, no text, no removals. No Part 1 call, except the Start check in step 7.
 
